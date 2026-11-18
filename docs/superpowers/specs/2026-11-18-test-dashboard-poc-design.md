@@ -465,7 +465,7 @@ E2E는 `pipeline/run-all.sh petclinic`을 실제로 실행한 뒤 산출물과 �
   - 정성: 비용 추정 근거(가격표 출처, 리전, 기준일, 가정, 식), 운영 부담, 장애 영향 범위
 
 ### 13.9 v3.1 보정 (요구사항 재리뷰 역전파)
-- **빈 스토어**: pjacoco는 커버 클래스 0개인 TC의 `.exec`를 쓰지 않는다. 수량 게이트는 "하네스가 센 SUT 요청이 1회 이상인 TC 수 = `.exec` 수"다. 하네스는 testId별 요청 수를 `scenario-results.json`에 기록한다. S01은 기존 확장이 요청 수를 세지 않으므로, JUnit TC 수와 비교하되 `.exec`가 없는 TC를 사유와 함께 보고한다.
+- **빈 스토어**: pjacoco는 커버 클래스 0개인 TC의 `.exec`를 쓰지 않는다. 수량 게이트는 "하네스가 센 SUT 요청이 1회 이상인 TC 수 = `.exec` 수"다. 하네스는 testId별 요청 수를 `scenario-results.json`에 기록한다. S01은 기존 확장이 요청 수를 세지 않으므로, JUnit TC 수와 비교하되 `.exec`가 없는 TC를 사유와 함께 보고한다. 귀속 한계: pjacoco는 `HttpServlet#service`에서만 테스트 컨텍스트를 묶으므로(ServletInboundActivator) Spring Security 필터 체인에서 거부된 요청은 귀속되지 않아 해당 TC는 구조적으로 `.exec`가 없고, 필터 코드의 커버리지는 `aggregate.exec`에만 나타난다. 이런 TC는 SUT 설명 디렉터리의 `expected-tests.yaml` `no_attribution`에 사유와 함께 문서화하며, 문서화되지 않은 누락은 `failed`, 문서화된 TC가 `.exec`를 가지면 `degraded`다.
 - **시나리오 단위**: pickle(Scenario Outline은 Examples 행 단위). testId의 `L<line>`은 pickle 위치다. featureSlug가 겹치면 상대 경로 순서로 `_2`, `_3`을 붙인다. 결과 기준 파일은 generation별 `scenario-results.json`이다.
 - **재게시**: `_COMPLETE`가 있고 manifest 체크섬이 모두 같으면 업로드를 건너뛰고 인덱스만 재생성한다. 하나라도 다르면 실패한다.
 - **게시 결과**: Lightsail만 실패하면 S13은 `degraded`, S3나 인덱스가 실패하면 `failed`다. 최종 결과는 `suts/<sut>/publish-log/<runId>.json`(run별, 갱신 가능)에 둔다. 게시된 `run.json`은 로컬과 바이트 단위로 같고 S13은 `publishing`이다.

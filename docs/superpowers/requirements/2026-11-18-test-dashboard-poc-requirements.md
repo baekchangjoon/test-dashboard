@@ -94,7 +94,7 @@
 
 #### REQ-008 — TC 수와 .exec 수 일치 게이트
 - 유형: Functional / 우선순위: Must
-- 수용기준: Given S01 완료, Then JUnit XML에서 skipped를 뺀 TC 수가 `aggregate*.exec`를 뺀 `.exec` 수와 같다(기준 커밋 참고값 35, `suts/petclinic/expected-tests.yaml`). Given 제어 URL을 잘못 주는 주입, Then S01은 `failed`다.
+- 수용기준: Given S01 완료, Then JUnit XML에서 skipped를 뺀 TC 수 − 문서화된 무귀속 TC 수(`suts/petclinic/expected-tests.yaml`의 `no_attribution`) = `aggregate*.exec`를 뺀 `.exec` 수다(기준 커밋 참고값 35 − 8 = 27). 문서화되지 않은 누락은 `failed`다. Given 제어 URL을 잘못 주는 주입, Then S01은 `failed`다.
 - 검증 레벨: E2E, E2E-inj
 
 #### REQ-009 — Docker 자원 누수 0 (외부 관측)

@@ -46,22 +46,46 @@ def test_display_name_restored_and_skipped_excluded(tmp_path):
     assert blackbox.junit_test_ids(junit, src) == ["SampleIT#getA", "SampleIT#plain", "SampleIT#noted"]
 
 
-def test_passed_when_counts_match_and_aggregate_present(tmp_path):
-    junit, exec_dir, src = _setup(tmp_path, ["SampleIT#getA.exec", "SampleIT#plain.exec", "SampleIT#noted.exec", "aggregate.exec"], CASES)
+def _expected(tmp_path, tests):
+    import yaml
+    path = tmp_path / "expected-tests.yaml"
+    path.write_text(yaml.safe_dump({"no_attribution": {"reason": "r", "tests": tests}}))
+    return path
+
+
+ALL = ["SampleIT#getA.exec", "SampleIT#plain.exec", "SampleIT#noted.exec", "aggregate.exec"]
+
+
+def test_passed_when_all_have_exec_and_aggregate_present(tmp_path):
+    junit, exec_dir, src = _setup(tmp_path, ALL, CASES)
     result = blackbox.evaluate(junit, exec_dir, src)
     assert result["status"] == "passed" and result["tcCount"] == result["execCount"] == 3
     assert result["missingExec"] == [] and result["aggregateExec"] is True
 
 
-def test_failed_reports_missing_exec(tmp_path):
+def test_passed_when_missing_is_documented(tmp_path):
     junit, exec_dir, src = _setup(tmp_path, ["SampleIT#getA.exec", "aggregate.exec"], CASES)
-    result = blackbox.evaluate(junit, exec_dir, src)
-    assert result["status"] == "failed" and result["missingExec"] == ["SampleIT#noted", "SampleIT#plain"]
-    assert "tcCount(3) != execCount(1)" in result["reason"]
+    expected = _expected(tmp_path, ["SampleIT#noted", "SampleIT#plain"])
+    result = blackbox.evaluate(junit, exec_dir, src, expected)
+    assert result["status"] == "passed" and result["missingExec"] == ["SampleIT#noted", "SampleIT#plain"]
+    assert result["noAttribution"] == ["SampleIT#noted", "SampleIT#plain"]
+
+
+def test_failed_on_undocumented_missing(tmp_path):
+    junit, exec_dir, src = _setup(tmp_path, ["SampleIT#getA.exec", "aggregate.exec"], CASES)
+    result = blackbox.evaluate(junit, exec_dir, src, _expected(tmp_path, ["SampleIT#noted"]))
+    assert result["status"] == "failed" and "SampleIT#plain" in result["reason"]
+    assert "SampleIT#noted" not in result["reason"]
+
+
+def test_degraded_when_documented_has_exec(tmp_path):
+    junit, exec_dir, src = _setup(tmp_path, ALL, CASES)
+    result = blackbox.evaluate(junit, exec_dir, src, _expected(tmp_path, ["SampleIT#plain"]))
+    assert result["status"] == "degraded" and result["reason"] == "expectation stale: SampleIT#plain"
 
 
 def test_failed_without_aggregate_or_tcs(tmp_path):
-    junit, exec_dir, src = _setup(tmp_path, ["SampleIT#getA.exec", "SampleIT#plain.exec", "SampleIT#noted.exec"], CASES)
+    junit, exec_dir, src = _setup(tmp_path, ALL[:3], CASES)
     assert "aggregate.exec" in blackbox.evaluate(junit, exec_dir, src)["reason"]
-    empty = _junit(tmp_path / "e", "") if (tmp_path / "e").mkdir() is None else None
-    assert blackbox.evaluate(empty, exec_dir, src)["status"] == "failed"
+    (tmp_path / "e").mkdir()
+    assert blackbox.evaluate(_junit(tmp_path / "e", ""), exec_dir, src)["status"] == "failed"

@@ -325,7 +325,7 @@ Python 모듈은 `uv run --project site-gen python -m td.<module> …`로 부른
   - `test_req008_exec_count_gate`(tcCount = execCount = `expected-tests.yaml`의 35. `TD_CONTROL_URL_OVERRIDE=http://127.0.0.1:1` 주입 → `failed`)
   - 이 Task부터 `baseline_run`이 없으면 `run-all.sh petclinic --only S00,S01`로 만든 `m1_run` fixture를 쓴다.
 - [ ] **Step 2:** 실행해 FAIL을 확인한다.
-- [ ] **Step 3:** 구현한다. SUT clone에서 `sut.blackbox.cmd`를 실행하고(`--no-daemon`), JUnit XML을 복사하고, 게이트를 판정한다. 설계 §13.9에 따라 요청 0회인 TC는 `missingExec`로 보고한다. 단, 이 SUT의 35개는 모두 요청이 있으므로 불일치는 실패다.
+- [ ] **Step 3:** 구현한다. SUT clone에서 `sut.blackbox.cmd`를 실행하고(`--no-daemon`), JUnit XML을 복사하고, 게이트를 판정한다. 설계 §13.9에 따라 요청 0회인 TC는 `missingExec`로 보고한다. pjacoco는 서블릿 계층(`HttpServlet#service`)에서만 귀속하므로 보안 필터에서 거부되는 TC는 `.exec`가 없다. `expected-tests.yaml`의 `no_attribution`에 문서화된 TC만 허용하고(이 SUT: 35 TC, 8 무귀속, `.exec` 27), 문서화되지 않은 누락은 `failed`, 문서화된 TC에 `.exec`가 생기면 `degraded`("expectation stale")다.
 - [ ] **Step 4:** 실행해 PASS를 확인한다.
 - [ ] **Step 5:** 커밋 `feat: S01 blackbox run with exec gate`
 

@@ -59,9 +59,9 @@ GRADLE_RC=0
 td_sut_down
 
 if compgen -G "$SUT_JUNIT_DIR/*.xml" >/dev/null; then cp "$SUT_JUNIT_DIR"/*.xml "$JUNIT_DIR/"; fi
-EVAL="$(td_py -m td.blackbox evaluate "$JUNIT_DIR" "$OUT_DIR/exec" "$TD_SUT_SRC/src/test/java" 2>&1)" || s01_fail "게이트 판정 실패: $EVAL"
+EVAL="$(td_py -m td.blackbox evaluate "$JUNIT_DIR" "$OUT_DIR/exec" "$TD_SUT_SRC/src/test/java" "$(dirname "$TD_SUT_FILE")/expected-tests.yaml" 2>&1)" || s01_fail "게이트 판정 실패: $EVAL"
 echo "$EVAL" > "$OUT_DIR/summary.json"
-EXTRA="$(jq -c '{tcCount, execCount, missingExec}' <<< "$EVAL")"
+EXTRA="$(jq -c '{tcCount, execCount, missingExec, noAttribution}' <<< "$EVAL")"
 STATUS="$(jq -r '.status' <<< "$EVAL")"
 REASON="$(jq -r '.reason // empty' <<< "$EVAL")"
 if [[ "$GRADLE_RC" -ne 0 ]]; then
@@ -70,6 +70,8 @@ if [[ "$GRADLE_RC" -ne 0 ]]; then
 fi
 if [[ "$STATUS" == "passed" ]]; then
   td_stage_end S01 passed --outputs-json "$(jq -cn --arg dir "$OUT_DIR" '{blackbox: $dir}')" --extra-json "$EXTRA"
+elif [[ "$STATUS" == "degraded" ]]; then
+  td_stage_end S01 degraded "${REASON:0:1500}" --outputs-json "$(jq -cn --arg dir "$OUT_DIR" '{blackbox: $dir}')" --extra-json "$EXTRA"
 else
   td_stage_end S01 failed "${REASON:0:1500}" --extra-json "$EXTRA"
   exit 1
