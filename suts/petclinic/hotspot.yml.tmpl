@@ -1,0 +1,31 @@
+# hotspot-analysis 설정 템플릿. td.hotspot.render_config가 ${...}를 채운다.
+# 상대 경로는 실행 디렉터리(cwd) 기준으로 해석되므로 모든 경로를 절대 경로로 채운다.
+# JACOCO_LINE 자리: S08 병합 XML이 있으면 jacocoReportPath 줄이 들어가고, 없으면 줄 전체가 빠진다.
+analysis:
+  target:
+    type: local-git
+    path: ${TARGET_PATH}
+  window:
+    since: "${SINCE}"
+    until: "${UNTIL}"
+  scope:
+    granularity: [file, method]
+    include:
+      - "${SOURCES}/**/*.java"
+    exclude:
+      - "**/generated/**"
+      - "**/test/**"
+      - "**/build/**"
+  scoring:
+    decayHalfLifeDays: 90
+  apiAnalysis:
+    enabled: true
+    sharedComponentMode: BOTH
+    classpathDirectories:
+${CLASSPATH_LINES}
+${JACOCO_LINE}
+output:
+  formats: [csv, yaml, md, html]
+  apiLayout: BOTH
+  path: ${OUTPUT_PATH}
+  topN: 50

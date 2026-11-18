@@ -12,11 +12,13 @@ from typing import Callable
 
 SITE_LAYOUT: dict[str, str] = {
     "S08/coverage": "coverage/",
+    "S09/hotspot": "hotspot/",
 }
 
 # run 페이지의 링크: 사이트 경로(SITE_LAYOUT 값) -> (표시 이름, 진입 파일)
 REPORTS: dict[str, tuple[str, str]] = {
     "coverage/": ("커버리지", "coverage.html"),
+    "hotspot/": ("hotspot", "hotspots.html"),
 }
 
 # 게시하지 않는 파일 패턴(.exec는 크고 사이트에서 쓰지 않는다)
