@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# S11 sonar: 전용 프로젝트(spring-petclinic-td, 주입 실행은 -test-<sessionId>)를 스캔하고 결과를 export한다.
+# S11 sonar: 전용 프로젝트(sut.yaml sonar.projectKey, 주입 실행은 -test-<sessionId>)를 스캔하고 결과를 export한다.
 # 흐름: 사전 점검(HTTP, SSH) -> 스키마 확인 -> 만료 토큰 청소 -> 빌드 -> 토큰 발급 -> 스캔 -> CE 폴링 -> export -> 토큰 정리.
 # 입력: S00(SUT 소스, JDK), S08/merged/aggregate.xml(선택). 품질 게이트 ERROR는 단계 실패가 아니다.
 # 산출물: S11/sonar/{sonar.json,sonar.html}, S11/{build,scan}.log. 토큰은 환경 변수 SONAR_TOKEN으로만 다룬다.

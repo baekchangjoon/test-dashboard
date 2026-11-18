@@ -175,3 +175,56 @@ def test_render_run_ignores_outputs_of_failed_stage(tmp_path):
     out = pages.render_run(run_dir, run_dir).parent
     assert not (out / "coverage").exists()
     assert "coverage/coverage.html" not in (out / "index.html").read_text()
+
+
+# --- REQ-050 멀티 SUT(E2E-inj) ---------------------------------------------------------------------
+import subprocess
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SUT_NEUTRAL_DIRS = ("pipeline", "site-gen", "e2e/harness", "e2e/runner", "ontology", "prompts", "env")
+
+
+def _s3_bytes(s3, bucket, key):
+    return s3.get_object(Bucket=bucket, Key=key)["Body"].read()
+
+
+def test_req050_multi_sut(injected_petclinic_run, mini_sut_run, s3_client, bucket, site_prefix):
+    """같은 접두에 petclinic run이 먼저 게시된 상태에서 mini-sut(설명 파일만 다름)를 게시하면 홈에 SUT 2개가 나온다."""
+    pet, mini = injected_petclinic_run, mini_sut_run
+    for label, result in (("petclinic", pet), ("mini-sut", mini)):
+        assert result.returncode == 0, f"{label} run 실패(exit {result.returncode}): {result.stderr[-2000:]}"
+        stages = result.stages()
+        for stage_id in ("S00", "S01", "S08", "S13"):
+            assert stages[stage_id]["status"] in ("passed", "degraded"), (label, stage_id, stages[stage_id].get("reason"))
+        assert stages["S01"]["status"] == "passed", (label, stages["S01"].get("reason"))
+    assert pet.run_json["sut"] == "petclinic" and mini.run_json["sut"] == "mini-sut"
+
+    summary = json.loads(_s3_bytes(s3_client, bucket, f"{site_prefix}suts.json"))
+    assert {entry["name"] for entry in summary} >= {"petclinic", "mini-sut"}
+    for sut, result in (("petclinic", pet), ("mini-sut", mini)):
+        assert _s3_bytes(s3_client, bucket, f"{site_prefix}suts/{sut}/runs/{result.run_id}/_COMPLETE")
+    home = _s3_bytes(s3_client, bucket, f"{site_prefix}index.html").decode()
+    assert 'href="suts/petclinic/index.html"' in home and 'href="suts/mini-sut/index.html"' in home
+    assert home.count('class="kpi-item"') == 2 * 4 or home.count('class="kpi-item"') >= 8, "SUT마다 KPI 4칸"
+    mini_page = _s3_bytes(s3_client, bucket, f"{site_prefix}suts/mini-sut/index.html").decode()
+    assert mini.run_id in mini_page and pet.run_id not in mini_page
+
+
+def test_req050_no_sut_hardcode_in_pipeline_code():
+    """파이프라인 코드에는 특정 SUT(petclinic)의 이름과 패키지가 없다. 값은 설명 파일에서만 온다."""
+    existing = [d for d in SUT_NEUTRAL_DIRS if (REPO_ROOT / d).is_dir()]
+    found = subprocess.run(
+        ["grep", "-rIlE", "--exclude-dir=.venv", "--exclude-dir=__pycache__", "--exclude-dir=build", "--exclude-dir=.gradle",
+         "--exclude-dir=node_modules", "petclinic|org\\.springframework\\.samples", *existing],
+        cwd=REPO_ROOT, capture_output=True, text=True)
+    assert found.returncode == 1 and found.stdout == "", f"SUT 하드코딩: {found.stdout}"
+
+
+def test_mini_sut_descriptor_is_valid_and_uses_own_values():
+    from td import sut_config
+    config = sut_config.load(REPO_ROOT / "tests/fixtures/mini-sut/sut.yaml")
+    assert config.name == "mini-sut" and config.sonar_project_key == "minisut-td-test"
+    assert len(config.coverage_probes) >= 2 and len({p.controller for p in config.coverage_probes}) >= 2
+    assert config.auth_login == "POST /api/auth/login" and config.auth_type == "bearer"
+    assert "petclinic" not in config.packages and "org.springframework.samples" not in config.packages

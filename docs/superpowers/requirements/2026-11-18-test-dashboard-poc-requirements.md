@@ -570,7 +570,7 @@
 | REQ-070 | Lightsail 따라잡기 | test_publish.py::test_req070_lightsail_catch_up | E2E-inj | 🔴 planned |
 | REQ-071 | 게시 상태 기준 파일 | test_publish.py::test_req071_publish_status_files | E2E | 🔴 planned |
 | REQ-049 | 홈·SUT 페이지 | test_site.py::test_req049_home_sut_run_pages | E2E | 🔴 planned |
-| REQ-050 | 멀티 SUT | test_site.py::test_req050_multi_sut | E2E-inj | 🔴 planned |
+| REQ-050 | 멀티 SUT | test_site.py::test_req050_multi_sut, test_site.py::test_req050_no_sut_hardcode_in_pipeline_code | E2E-inj | 🔴 planned |
 | REQ-072 | 설명 파일 값 사용 | test_unit_config.py::test_req072_descriptor_driven | Unit | 🔴 planned |
 | REQ-051 | 호스팅 정량 비교 | test_hosting.py::test_req051_quantitative | E2E | 🔴 planned |
 | REQ-073 | 호스팅 정성 비교 | test_hosting.py::test_req073_qualitative | E2E | 🔴 planned |
