@@ -194,8 +194,11 @@ def _started_after_registration(pid: int, registered_at: float) -> bool:
     return begun > registered_at + 2
 
 
-def reap_pids(run_dir, term_wait: float = 10.0) -> list[int]:
+def reap_pids(run_dir, term_wait: float = 10.0, names: list[str] | None = None) -> list[int]:
     """`<run_dir>/pids/*.pid`의 살아 있는 프로세스를 TERM → 유예 → KILL로 정리한다. 정리한 PID를 돌려준다.
+
+    names를 주면 그 이름(`<name>.pid`)만 대상으로 하고, 정리가 끝난 뒤 그 pid 파일을 지운다(단계가 자기 PID만 내릴 때).
+    names가 없으면 전부 대상이고 파일은 남긴다(종료 검증이 파일로 PID를 확인한다).
 
     pid가 프로세스 그룹 리더면 그룹 전체에, 아니면 그 pid에만 신호를 보낸다(서브셸에서 등록한 PID도 파일로 찾는다).
     """
@@ -204,10 +207,15 @@ def reap_pids(run_dir, term_wait: float = 10.0) -> list[int]:
     if not os.path.isdir(pids_dir):
         return reaped
     targets = []
+    scoped_files = []
     for name in sorted(os.listdir(pids_dir)):
         path = os.path.join(pids_dir, name)
         if not name.endswith(".pid"):
             continue
+        if names is not None:
+            if name[: -len(".pid")] not in names:
+                continue
+            scoped_files.append(path)
         try:
             pid = int(open(path).read().split()[0])
             registered_at = os.path.getmtime(path)
@@ -228,13 +236,17 @@ def reap_pids(run_dir, term_wait: float = 10.0) -> list[int]:
             except (ProcessLookupError, PermissionError):
                 pass
 
-    if not targets:
-        return reaped
-    send(signal.SIGTERM)
-    deadline = time.time() + term_wait
-    while time.time() < deadline and any(_pid_alive(pid) for pid, _ in targets):
-        time.sleep(0.2)
-    send(signal.SIGKILL)
+    if targets:
+        send(signal.SIGTERM)
+        deadline = time.time() + term_wait
+        while time.time() < deadline and any(_pid_alive(pid) for pid, _ in targets):
+            time.sleep(0.2)
+        send(signal.SIGKILL)
+    for path in scoped_files:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
     return [pid for pid, _ in targets]
 
 
@@ -272,8 +284,8 @@ def main(argv: list[str] | None = None) -> int:
     if len(args) == 2 and args[0] == "cap":
         print(cap_chars(sys.stdin.read(), int(args[1])), end="")
         return 0
-    if len(args) == 2 and args[0] == "reap-pids":
-        reap_pids(args[1])
+    if len(args) >= 2 and args[0] == "reap-pids":
+        reap_pids(args[1], names=args[2:] or None)
         return 0
     print("usage: td.envctl check-labels <labelValue> | leak-gate <runId> | failure-reason <msg> <log> <rel> | reap-pids <runDir>", file=sys.stderr)
     return 2

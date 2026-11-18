@@ -160,9 +160,21 @@ td_pid_register() { # <name> <pid>
 }
 
 # pids/*.pid의 살아 있는 프로세스를 TERM → 10초 → KILL. 그룹 리더면 그룹 전체에, 아니면 그 pid에만 보낸다.
+# TD_PIDS_SCOPE(공백으로 구분한 이름)가 있으면 그 이름의 PID만 정리하고 파일을 지운다(다른 단계의 PID를 건드리지 않는 단계용).
 td_pids_reap() {
   [[ -n "${TD_RUN_DIR:-}" && -d "$TD_RUN_DIR/pids" ]] || return 0
+  if [[ -n "${TD_PIDS_SCOPE:-}" ]]; then
+    td_pids_reap_named $TD_PIDS_SCOPE
+    return 0
+  fi
   td_py -m td.envctl reap-pids "$TD_RUN_DIR" || td_log "경고: PID 정리 실패"
+  return 0
+}
+
+# 이름을 준 PID(`pids/<name>.pid`)만 정리하고 그 파일을 지운다. 다른 단계가 등록한 PID는 건드리지 않는다.
+td_pids_reap_named() { # <name>...
+  [[ -n "${TD_RUN_DIR:-}" && -d "$TD_RUN_DIR/pids" ]] || return 0
+  td_py -m td.envctl reap-pids "$TD_RUN_DIR" "$@" || td_log "경고: PID 정리 실패($*)"
   return 0
 }
 

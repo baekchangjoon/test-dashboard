@@ -20,7 +20,7 @@ import pytest
 import yaml
 
 from helpers import find_leaked_resources, pid_alive
-from td import ontology_jqa
+from td import envctl, ontology_jqa, prepare
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 S03_SCRIPT = REPO_ROOT / "pipeline" / "S03-jqa.sh"
@@ -38,6 +38,7 @@ class S03Run:
     stdout: str
     stderr: str
     run_dir: Path
+    bystander_alive_after: bool | None = None
 
     @property
     def stage(self) -> dict:
@@ -87,8 +88,21 @@ def _run_s03(base: Path, tools_dir: Path = TOOLS_DIR, **extra_env: str) -> S03Ru
 
 @pytest.fixture(scope="module")
 def s03_run(tmp_path_factory) -> S03Run:
+    """S03 한 번. 다른 단계가 등록한 PID(other.pid)가 S03 종료 때 건드려지지 않는지 보려고 살아 있는 프로세스를 미리 등록해 둔다."""
     _require_prerequisites()
-    return _run_s03(tmp_path_factory.mktemp("s03-default"))
+    base = tmp_path_factory.mktemp("s03-default")
+    run_dir, env = _prepare_run(base, TOOLS_DIR)
+    bystander = subprocess.Popen(["sleep", "600"])
+    (run_dir / "pids" / "other.pid").write_text(f"{bystander.pid}\n")
+    try:
+        done = subprocess.run(["bash", str(S03_SCRIPT), "petclinic", run_dir.name], capture_output=True, text=True,
+                              env=env, timeout=1200)
+        run = S03Run(done.returncode, done.stdout, done.stderr, run_dir)
+        run.bystander_alive_after = bystander.poll() is None
+        yield run
+    finally:
+        bystander.kill()
+        bystander.wait(timeout=10)
 
 
 def _expected() -> dict:
@@ -140,6 +154,17 @@ def test_req015_schema_and_kinds(s03_run):
     assert s03_run.stage["outputs"]["ontology"] == str(s03_run.ontology_path)
 
 
+def test_req015_server_listens_on_loopback_only_and_pids_scoped(s03_run):
+    """server의 LISTEN 소켓은 루프백뿐이다(HTTP 브라우저 포트는 꺼져 있다). 종료 때 S03 PID만 정리하고 파일을 지운다."""
+    assert s03_run.returncode == 0, s03_run.stderr[-3000:]
+    listeners = s03_run.stage["listeners"]
+    assert listeners and ontology_jqa.non_loopback(listeners) == [], listeners
+    assert len(listeners) == 1, f"Bolt 외의 포트가 열렸다: {listeners}"  # HTTP 포트 -1이면 Bolt 하나뿐이다
+    pids_dir = s03_run.run_dir / "pids"
+    assert not (pids_dir / "jqa-server.pid").exists() and not (pids_dir / "jqa-server-java.pid").exists()
+    assert (pids_dir / "other.pid").exists() and s03_run.bystander_alive_after, "다른 단계의 PID가 정리되었다"
+
+
 def test_req015_schema_rejects_bad_documents():
     schema = json.loads(SCHEMA_FILE.read_text())
     good = {"nodes": [{"id": "a", "kind": "Service", "label": "A", "props": {}}], "edges": [],
@@ -172,6 +197,31 @@ def test_req015_schema_rejects_bad_documents():
 ])
 def test_unit_normalize_path(class_paths, method_paths, expected):
     assert ontology_jqa.normalize_path(class_paths, method_paths) == expected
+
+
+def test_unit_listener_parsing_flags_non_loopback():
+    lsof = "p123\nf494\nn127.0.0.1:17687\nf495\nn*:59518\nn[::1]:1234\n"
+    listeners = ontology_jqa.parse_listeners(lsof)
+    assert listeners == ["127.0.0.1:17687", "*:59518", "[::1]:1234"]
+    assert ontology_jqa.non_loopback(listeners) == ["*:59518"]
+
+
+def test_unit_free_ports_are_distinct_and_bindable():
+    ports = ontology_jqa.free_ports(5)
+    assert len(set(ports)) == 5
+
+
+def test_unit_request_mapping_without_method_is_marked_any(tmp_path):
+    queries = tmp_path / "queries"
+    queries.mkdir()
+    for name in ("endpoints", "call_paths", "entities", "exceptions", "dtos"):
+        (queries / f"{name}.cypher").write_text(f"// primary {name}\nRETURN 1")
+    row = {"controller": "a.B", "rest": True, "classPaths": ["/api"], "methodPaths": ["/x"], "handlerName": "h",
+           "annotation": "org.springframework.web.bind.annotation.RequestMapping", "httpMethods": []}
+    ontology = ontology_jqa.export_with_runner(_fake_runner({"primary endpoints": [row]}), queries, commit="c",
+                                               version="2.9.1", api_include="/api/**")
+    (endpoint,) = [n for n in ontology["nodes"] if n["kind"] == "Endpoint"]
+    assert endpoint["props"]["anyMethod"] is True and endpoint["props"]["method"] == "GET"
 
 
 def test_unit_queries_dir_has_five_cypher_files():
@@ -227,8 +277,15 @@ def test_unit_verify_plugin_detects_tampered_jar(tmp_path):
     jar = next(repo.rglob("jqassistant-spring-plugin-*.jar"))
     ontology_jqa.verify_plugin(repo)  # 원본은 통과한다
     jar.write_bytes(jar.read_bytes() + b"x")
-    with pytest.raises(Exception, match="sha256"):
+    with pytest.raises(prepare.PrepareError, match="sha256이 pin과 다르다"):
         ontology_jqa.verify_plugin(repo)
+
+
+def test_unit_verify_plugin_detects_config_version_mismatch(tmp_path):
+    config = tmp_path / ".jqassistant.yml"
+    config.write_text((REPO_ROOT / "ontology" / "jqa" / ".jqassistant.yml").read_text().replace("version: 2.9.0", "version: 2.8.0"))
+    with pytest.raises(prepare.PrepareError, match=r"2\.8\.0.*pin"):
+        ontology_jqa.verify_plugin(TOOLS_DIR / "jqa-repo", config)
 
 
 def test_req015_tampered_plugin_jar_fails_stage_before_scan(tmp_path):
@@ -304,4 +361,23 @@ def test_req010_s03_sigint_cleanup(tmp_path, test_run_label):
     assert registered, "등록된 PID가 없다"
     assert [pid for pid in registered if pid_alive(pid)] == []
     assert _jqa_processes(str(run_dir)) == [], "이 run의 jQA 프로세스가 남았다"
-    assert find_leaked_resources(test_run_label) == {} or not any(find_leaked_resources(test_run_label).values())
+    leaked = find_leaked_resources(test_run_label)
+    assert not any(leaked.values()), leaked
+
+
+def test_unit_reap_pids_by_name_removes_only_those_files(tmp_path):
+    run_dir = tmp_path / "run"
+    (run_dir / "pids").mkdir(parents=True)
+    mine = subprocess.Popen(["sleep", "600"])
+    other = subprocess.Popen(["sleep", "600"])
+    try:
+        time.sleep(0.3)
+        (run_dir / "pids" / "mine.pid").write_text(f"{mine.pid}\n")
+        (run_dir / "pids" / "other.pid").write_text(f"{other.pid}\n")
+        envctl.reap_pids(run_dir, term_wait=5, names=["mine"])
+        mine.wait(timeout=10)
+        assert other.poll() is None
+        assert not (run_dir / "pids" / "mine.pid").exists() and (run_dir / "pids" / "other.pid").exists()
+    finally:
+        other.kill()
+        other.wait(timeout=10)
