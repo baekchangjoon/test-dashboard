@@ -246,3 +246,22 @@ def test_s00_same_run_dir_retry_keeps_identical_lock(s00):
     done = subprocess.run(["bash", str(S00), "petclinic", s00.run_dir.name], capture_output=True, text=True, env=env, timeout=1800)
     assert done.returncode == 0, done.stderr[-2000:]
     assert (s00.run_dir / "tools.lock").read_text() == before
+
+
+def test_s00_measures_unauthenticated_status(s00):
+    """S00이 SUT를 띄워 비인증 응답 코드를 실측하고 sut.yaml 값과 같음을 확인한다(Task 4 개정)."""
+    expected = yaml.safe_load((REPO_ROOT / "suts" / "petclinic" / "sut.yaml").read_text())["auth"]["unauthenticated_status"]
+    assert s00.stage["outputs"]["unauthenticatedStatus"] == expected
+    assert (s00.run_dir / "S00" / "probe" / "compose-up.log").exists()
+
+
+def test_s00_unauthenticated_status_mismatch_fails_with_measured_value(tmp_path):
+    descriptor = yaml.safe_load((REPO_ROOT / "suts" / "petclinic" / "sut.yaml").read_text())
+    descriptor["auth"]["unauthenticated_status"] = 401
+    sut_file = tmp_path / "sut.yaml"
+    sut_file.write_text(yaml.safe_dump(descriptor, sort_keys=False))
+    result = _run_s00(_isolated_work(tmp_path), sut_file)
+    assert result.returncode == 1, result.stderr[-2000:]
+    assert result.stage["status"] == "failed"
+    reason = result.stage["reason"]
+    assert "실측 403" in reason and "기대 401" in reason, reason

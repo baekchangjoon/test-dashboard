@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # S00 prepare: 입력 점검, SUT 커밋 고정, 도구 확보(tools.pin.yaml 기준), SUT 빌드, tools.lock 작성.
 # 사용: S00-prepare.sh <sut> <runId>   (run-all.sh가 TD_RUN_DIR, TD_SUT_SRC, TD_SUT_COMMIT, TD_SUT_FILE을 export한다)
-# 비인증 상태 실측은 Task 4가 이 단계에 추가한다.
+# SUT를 한 번 띄워 비인증 응답 코드를 실측하고 sut.yaml auth.unauthenticated_status와 대조한다(Task 4).
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/common.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/env.sh"
 
 TOOLS_DIR="$TD_WORK_DIR/tools"
 SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/td-s00.XXXXXX")"
-trap 'rm -rf "$SCRATCH"' EXIT
+td_on_exit 'rm -rf "$SCRATCH"'
 
 td_stage_begin S00
 td_hook S00
@@ -140,6 +141,20 @@ shopt -u nullglob
 CLASSES_DIR="$TD_SUT_SRC/$(sut_get classes)"
 [[ -d "$CLASSES_DIR" ]] || s00_fail "SUT classes 디렉터리가 없다: $CLASSES_DIR"
 
+# --- 5b. 비인증 상태 실측 ---------------------------------------------------------------------------
+# 설계 시점의 기대값(sut.yaml)을 믿지 않고 SUT를 실제로 띄워 토큰 없이 auth.probe를 호출해 본다.
+# 항상 td_sut_down으로 내리며(실패 경로는 종료 trap이 내린다), 값이 다르면 단계는 failed다.
+export TD_SUT_JAR="${jars[0]}" TD_AGENT_JAR="$TOOLS_DIR/pjacoco-agent.jar"
+td_sut_up "$TD_RUN_DIR" S00 probe || s00_fail "SUT 기동 실패(비인증 실측): $TD_SUT_FAIL_REASON"
+PROBE_SPEC="$(sut_get auth.probe)"
+probe_method="${PROBE_SPEC%% *}"; probe_path="${PROBE_SPEC#* }"
+measured_status="$(td_run 30 -- curl -s -o /dev/null -w '%{http_code}' --max-time 20 -X "$probe_method" "$TD_BASE_URL$probe_path")"
+td_sut_down
+expected_status="$(sut_get auth.unauthenticated_status)"
+td_log "S00 비인증 실측: $PROBE_SPEC -> $measured_status (sut.yaml 기대 $expected_status)"
+[[ "$measured_status" == "$expected_status" ]] \
+  || s00_fail "비인증 응답 코드가 sut.yaml과 다르다: 실측 $measured_status, 기대 $expected_status ($PROBE_SPEC). sut.yaml auth.unauthenticated_status를 실측값으로 고친다."
+
 # --- 6. tools.lock과 run.json -------------------------------------------------------------------------
 s00_py write-lock --run-dir "$TD_RUN_DIR" --run-id "$TD_RUN_ID" --sut "$TD_SUT_NAME" --sut-commit "$TD_SUT_COMMIT" \
   --artifacts "$TD_RUN_DIR/S00/artifacts.json" --tia-commit "$TIA_COMMIT" --bbtg-commit "$BBTG_COMMIT" \
@@ -154,6 +169,6 @@ TOOLS_SUMMARY="$(jq -c --arg tia "${TIA_COMMIT:0:7}" --arg bbtg "${BBTG_COMMIT:0
 td_py -m td.state set "$TD_RUN_DIR" tools "$TOOLS_SUMMARY" || s00_fail "run.json tools 기록 실패"
 
 OUTPUTS="$(jq -cn --arg jar "${jars[0]}" --arg classes "$CLASSES_DIR" --arg lock "$LOCK_FILE" --arg tools "$TOOLS_DIR" \
-  --arg commit "$TD_SUT_COMMIT" --arg src "$TD_SUT_SRC" \
-  '{jar: $jar, classes: $classes, toolsLock: $lock, toolsDir: $tools, commit: $commit, src: $src}')"
+  --arg commit "$TD_SUT_COMMIT" --arg src "$TD_SUT_SRC" --argjson unauth "$measured_status" \
+  '{jar: $jar, classes: $classes, toolsLock: $lock, toolsDir: $tools, commit: $commit, src: $src, unauthenticatedStatus: $unauth}')"
 td_stage_end S00 passed --outputs-json "$OUTPUTS"

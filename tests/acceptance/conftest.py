@@ -189,6 +189,49 @@ def repo_snapshot() -> dict[str, bytes]:
     }
 
 
+# --- SUT 컨테이너 환경(Task 4) -------------------------------------------------------------
+class SutEnv:
+    """env.sh 함수를 부르는 bash 구동기. 프로젝트·라벨은 테스트 세션 규칙(td-test-<sessionId>)을 따른다."""
+
+    def __init__(self, tmp_path: Path, session_id: str, name: str):
+        from helpers import AGENT_JAR, SUT_PACKAGES, petclinic_jar
+        self.tmp_path = tmp_path
+        self.label = f"td-test-{session_id}"
+        self.project = f"td-test-{session_id}-{name}"
+        self.run_dir = tmp_path / "runs" / f"test-{session_id}-{name}"
+        (self.run_dir / "pids").mkdir(parents=True)
+        self.env = {k: v for k, v in os.environ.items() if not k.startswith("TD_")}
+        self.env.update(
+            TD_ROOT=str(REPO_ROOT), TD_WORK_DIR=str(REPO_ROOT / "work"), TD_RUN_DIR=str(self.run_dir),
+            TD_RUN_LABEL=self.label, TD_PROJECT_NAME=self.project,
+            TD_SUT_JAR=str(petclinic_jar()), TD_AGENT_JAR=str(AGENT_JAR), TD_SUT_PACKAGES=SUT_PACKAGES,
+            TD_SUT_PORT="8080", TD_SUT_HEALTH="/actuator/health",
+        )
+
+    def bash(self, script: str, timeout: int = 300, **extra_env: str) -> subprocess.CompletedProcess:
+        header = f'source "{REPO_ROOT}/pipeline/lib/common.sh"\nsource "{REPO_ROOT}/pipeline/lib/env.sh"\n'
+        return subprocess.run(["bash", "-c", header + script], capture_output=True, text=True,
+                              env={**self.env, **extra_env}, timeout=timeout)
+
+    def cleanup(self) -> None:
+        subprocess.run(["docker", "compose", "-p", self.project, "down", "-v", "--remove-orphans"],
+                       capture_output=True, timeout=180)
+
+
+@pytest.fixture
+def sut_env(tmp_path, session_id, request):
+    created: list[SutEnv] = []
+
+    def make(name: str) -> SutEnv:
+        sut = SutEnv(tmp_path, session_id, name)
+        created.append(sut)
+        return sut
+
+    yield make
+    for sut in created:
+        sut.cleanup()
+
+
 # --- 이후 Task가 채우는 fixture ----------------------------------------------------------
 @pytest.fixture(scope="session")
 def m1_run():

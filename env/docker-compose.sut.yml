@@ -1,0 +1,50 @@
+# SUT 컨테이너(설계 §6.0 "컨테이너 SUT"). pipeline/lib/env.sh의 td_sut_up이 아래 변수를 export해서 띄운다.
+#   TD_RUN_LABEL  test-run 라벨 값(td-<runId>, 테스트는 td-test-<sessionId>)
+#   TD_EXEC_DIR   호스트의 .exec 출력 디렉터리(/cov에 bind mount)
+#   TD_SUT_JAR    SUT bootJar 절대 경로(읽기 전용)
+#   TD_AGENT_JAR  pjacoco-agent 절대 경로(읽기 전용)
+#   TD_AGENT_ARGS destfile=/cov,address=0.0.0.0,port=6310,includes=<packages>
+#   TD_SUT_PORT   SUT 포트(기본 8080)
+# 제어 엔드포인트(6310)는 무인증이므로 호스트 포트는 항상 루프백에만 게시한다.
+# 서비스, 네트워크, 볼륨 모두에 test-run 라벨을 달아 누수 검사(REQ-009)가 잔존 자원을 찾을 수 있게 한다.
+services:
+  sut:
+    image: eclipse-temurin:17-jre
+    labels:
+      test-run: "${TD_RUN_LABEL:?TD_RUN_LABEL이 필요하다}"
+    entrypoint: ["java", "-javaagent:/agent.jar=${TD_AGENT_ARGS:?TD_AGENT_ARGS가 필요하다}", "-jar", "/app.jar"]
+    environment:
+      TZ: Asia/Seoul
+    ports:
+      - "127.0.0.1::${TD_SUT_PORT:-8080}"
+      - "127.0.0.1::6310"
+    volumes:
+      # 원본이 없을 때 호스트에 빈 디렉터리를 만들지 않도록 create_host_path를 끈다(없으면 기동 오류).
+      - type: bind
+        source: "${TD_SUT_JAR:?TD_SUT_JAR가 필요하다}"
+        target: /app.jar
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: "${TD_AGENT_JAR:?TD_AGENT_JAR가 필요하다}"
+        target: /agent.jar
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: "${TD_EXEC_DIR:?TD_EXEC_DIR가 필요하다}"
+        target: /cov
+      - type: volume
+        source: sut-tmp
+        target: /tmp
+    networks:
+      - default
+
+networks:
+  default:
+    labels:
+      test-run: "${TD_RUN_LABEL:?TD_RUN_LABEL이 필요하다}"
+
+volumes:
+  sut-tmp:
+    labels:
+      test-run: "${TD_RUN_LABEL:?TD_RUN_LABEL이 필요하다}"
