@@ -192,22 +192,95 @@ def repo_snapshot() -> dict[str, bytes]:
 # --- 이후 Task가 채우는 fixture ----------------------------------------------------------
 @pytest.fixture(scope="session")
 def m1_run():
-    pytest.fail("requires Task 2 (run-all.sh --only S00,S01 실행 helper)", pytrace=False)
+    pytest.fail("requires Task 5 (run-all.sh --only S00,S01 실행 helper)", pytrace=False)
 
 
 @pytest.fixture(scope="session")
 def injected_petclinic_run():
-    pytest.fail("requires Task 2 (run-all.sh --only S00,S01,S08,S13 + TD_SITE_PREFIX)", pytrace=False)
+    pytest.fail("requires Task 15 (run-all.sh --only S00,S01,S08,S13 + TD_SITE_PREFIX)", pytrace=False)
 
 
 @pytest.fixture(scope="session")
 def run_under_test():
-    pytest.fail("requires Task 2 (세션 파일이 있으면 기준 run, 없으면 m1_run)", pytrace=False)
+    pytest.fail("requires Task 25 (세션 파일이 있으면 기준 run, 없으면 m1_run)", pytrace=False)
+
+
+STUB_STAGE_DIR = REPO_ROOT / "tests" / "fixtures" / "stub-stages"
+RUN_ALL = REPO_ROOT / "pipeline" / "run-all.sh"
+GIT_IDENTITY = ["-c", "user.name=td-test", "-c", "user.email=td-test@example.invalid"]
+
+
+@dataclass
+class RunResult:
+    returncode: int
+    stdout: str
+    stderr: str
+    work_dir: Path
+
+    @property
+    def run_dir(self) -> Path:
+        runs = sorted(p for p in (self.work_dir / "runs").glob("*") if p.is_dir()) if (self.work_dir / "runs").exists() else []
+        assert len(runs) == 1, f"run 디렉터리가 정확히 1개여야 한다: {runs}\n{self.stderr}"
+        return runs[0]
+
+    @property
+    def run_id(self) -> str:
+        return self.run_dir.name
+
+    @property
+    def run_json(self) -> dict:
+        return json.loads((self.run_dir / "run.json").read_text())
+
+    def stage(self, stage_id: str) -> dict:
+        return json.loads((self.run_dir / "stages" / f"{stage_id}.json").read_text())
+
+    def stages(self) -> dict[str, dict]:
+        return {p.stem: json.loads(p.read_text()) for p in sorted((self.run_dir / "stages").glob("S*.json"))}
+
+
+@pytest.fixture(scope="session")
+def mini_sut_repo(tmp_path_factory) -> Path:
+    """스텁 run용 작은 로컬 git 저장소(원격 clone 없이 SUT 커밋을 해석한다)."""
+    repo = tmp_path_factory.mktemp("stub-sut-repo")
+    git = lambda *a: subprocess.run(["git", *GIT_IDENTITY, *a], cwd=repo, check=True, capture_output=True)
+    git("init", "-b", "main")
+    (repo / "README.md").write_text("stub sut\n")
+    git("add", ".")
+    git("commit", "-m", "init")
+    return repo
+
+
+class StubRunner:
+    """tests/fixtures/stub-stages로 run-all.sh를 돌린다. 호출마다 work 디렉터리를 새로 만든다."""
+
+    def __init__(self, tmp_path: Path, sut_repo: Path, site_prefix: str):
+        self.tmp_path = tmp_path
+        self.sut_repo = sut_repo
+        self.site_prefix = site_prefix
+        self.sut_file = tmp_path / "sut.yaml"
+        self.sut_file.write_text(f"name: stub\nrepo: {sut_repo}\nref: main\n")
+        self.calls = 0
+
+    def run(self, *args: str, sut: str = "stub", use_prefix: bool = True, use_stub_dir: bool = True,
+            **env: str) -> RunResult:
+        self.calls += 1
+        work_dir = self.tmp_path / f"work{self.calls}"
+        full_env = {k: v for k, v in os.environ.items()
+                    if k not in ("TD_FAIL_STAGE", "TD_NOW", "TD_NOW_FINISHED", "TD_SITE_PREFIX", "TD_STAGE_DIR")}
+        full_env.update(TD_WORK_DIR=str(work_dir), TD_ROOT=str(REPO_ROOT))
+        if use_stub_dir:
+            full_env["TD_STAGE_DIR"] = str(STUB_STAGE_DIR)
+        if use_prefix:
+            full_env["TD_SITE_PREFIX"] = self.site_prefix
+        full_env.update(env)
+        done = subprocess.run(["bash", str(RUN_ALL), sut, "--sut-file", str(self.sut_file), *args],
+                              capture_output=True, text=True, env=full_env, timeout=300)
+        return RunResult(done.returncode, done.stdout, done.stderr, work_dir)
 
 
 @pytest.fixture
-def stub_stages():
-    pytest.fail("requires Task 2 (TD_STAGE_DIR=tests/fixtures/stub-stages, TD_SITE_PREFIX 필요)", pytrace=False)
+def stub_stages(tmp_path, mini_sut_repo, site_prefix) -> StubRunner:
+    return StubRunner(tmp_path, mini_sut_repo, site_prefix)
 
 
 @pytest.fixture(scope="session")
@@ -221,5 +294,12 @@ def second_run():
 
 
 @pytest.fixture
-def injected_run():
-    pytest.fail("requires Task 2 (injected_run(stage_spec, **env))", pytrace=False)
+def injected_run(stub_stages):
+    """injected_run("S05", args=(...), **env): TD_FAIL_STAGE=<stage_spec>으로 스텁 run을 돌린다."""
+
+    def run(stage_spec: str, *, args=(), **env: str) -> RunResult:
+        if stage_spec:
+            env["TD_FAIL_STAGE"] = stage_spec
+        return stub_stages.run(*args, **env)
+
+    return run
