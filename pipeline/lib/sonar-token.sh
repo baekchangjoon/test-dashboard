@@ -56,11 +56,22 @@ td_sonar_preclean() {
 # 정리 trap용: 발급을 시도한 뒤 어떤 경로로 끝나든 자기 행을 지운다. 이미 끝났으면 아무것도 하지 않는다.
 _td_sonar_revoke_on_exit() {
   [[ "$_TD_SONAR_REVOKE_STATE" == "failed" ]] && return 0  # 명시 정리가 이미 실패를 기록하고 경고했다
-  td_sonar_token_revoke && return 0
-  td_log "S11 정리 실패: $TD_SONAR_FAIL_REASON"
   local previous
   previous="$(jq -r '.reason // empty' "$TD_RUN_DIR/stages/S11.json" 2>/dev/null)"
-  td_stage_end S11 failed "${previous:+$previous; }$TD_SONAR_FAIL_REASON"
+  td_sonar_revoke_redact "$previous" && return 0
+  td_log "S11 정리 실패: ${TD_SONAR_REASON_OUT:0:300}"
+  td_stage_end S11 failed "${TD_SONAR_REASON_OUT:0:1500}"
+}
+
+# 정리(revoke)는 SONAR_TOKEN을 unset하므로, 사유의 토큰 가리기는 정리 전에 복사해 둔 값으로 한다.
+# 정리가 덧붙인 문구까지 가린 최종 사유를 TD_SONAR_REASON_OUT에 두고, 정리가 실패했으면 return 1.
+TD_SONAR_REASON_OUT=""
+td_sonar_revoke_redact() { # <reason>
+  local token_copy="${SONAR_TOKEN:-}" reason="${1:-}" rc=0
+  td_sonar_token_revoke || { rc=1; reason="${reason:+$reason; }$TD_SONAR_FAIL_REASON"; }
+  [[ -z "$token_copy" ]] || reason="${reason//"$token_copy"/<token>}"
+  TD_SONAR_REASON_OUT="$reason"
+  return $rc
 }
 
 td_sonar_token_issue() { # <runId>

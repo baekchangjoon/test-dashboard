@@ -17,11 +17,8 @@ s11_done() { # <status> [reason] [outputs-json] [extra-json]
   local status="$1" reason="${2:-}" outputs="${3:-}" extra="${4:-}"
   [[ -n "$outputs" ]] || outputs='{}'
   [[ -n "$extra" ]] || extra='{}'
-  if ! td_sonar_token_revoke; then
-    status=failed
-    reason="${reason:+$reason; }$TD_SONAR_FAIL_REASON"
-  fi
-  [[ -z "${SONAR_TOKEN:-}" ]] || reason="${reason//$SONAR_TOKEN/<token>}"
+  td_sonar_revoke_redact "$reason" || status=failed  # 정리 전 복사한 토큰으로 사유를 가린다
+  reason="$TD_SONAR_REASON_OUT"
   local args=(S11 "$status")
   [[ -z "$reason" ]] || args+=("${reason:0:1500}")
   [[ "$status" == "passed" ]] && td_log "S11 passed" || td_log "S11 $status: ${reason:0:300}"
@@ -43,7 +40,7 @@ mkdir -p "$S11_DIR"
 preflight_reason="$(td_py -m td.sonar preflight --url "$TD_SONAR_URL" 2>&1)" \
   || s11_fail "Sonar 사전 점검 실패(HTTP): $preflight_reason"
 td_sonar_psql "select 1" >/dev/null 2>"$S11_DIR/preflight-ssh.log" \
-  || s11_fail "Sonar 사전 점검 실패(ssh로 DB에 닿지 않는다): $(log_tail "$S11_DIR/preflight-ssh.log")"
+  || s11_fail "Sonar 사전 점검 실패(ssh로 DB에 닿지 않는다; 상세는 S11/preflight-ssh.log)"
 td_sonar_verify_schema || s11_fail "Sonar 토큰 스키마 확인 실패: $TD_SONAR_FAIL_REASON"
 td_sonar_preclean || s11_fail "Sonar 토큰 사전 청소 실패: $TD_SONAR_FAIL_REASON"
 
@@ -71,15 +68,16 @@ rm -f "$REPORT_TASK"  # 이전 스캔의 낡은 파일을 CE 폴링에 쓰지 �
 # Gradle은 sonar 태스크 입력(SONAR_TOKEN에서 온 sonar.token 포함)을 프로젝트 캐시의 executionHistory.bin에 남긴다.
 # SUT의 .gradle에 토큰이 남지 않게 스캔 전용 캐시 디렉터리를 쓰고 끝나면 지운다(REQ-066).
 SCAN_CACHE="$S11_DIR/gradle-cache"
+td_on_exit "rm -rf '$SCAN_CACHE'"  # 시그널·실패 종료에서도 토큰이 든 캐시를 지운다
 scan_rc=0
 (cd "$TD_SUT_SRC" && JAVA_HOME="$SUT_JAVA_HOME" td_run 1800 -- "${SCAN_CMD[@]}" "${SCAN_ARGS[@]}" --project-cache-dir "$SCAN_CACHE") >"$S11_DIR/scan.log" 2>&1 || scan_rc=$?
 rm -rf "$SCAN_CACHE"
 [[ $scan_rc -eq 0 ]] || s11_fail "Sonar 스캔 실패(종료 코드 $scan_rc): $(log_tail "$S11_DIR/scan.log")"
 
 TASK_ID="$(td_py -m td.sonar report-task "$REPORT_TASK" 2>&1)" || s11_fail "Sonar 스캔 결과를 알 수 없다: $TASK_ID"
-CE_STATUS="$(td_py -m td.sonar wait-ce --url "$TD_SONAR_URL" --task-id "$TASK_ID" --timeout 600 2>/dev/null)" || true
+CE_STATUS="$(td_py -m td.sonar wait-ce --url "$TD_SONAR_URL" --task-id "$TASK_ID" --timeout 600 2>"$S11_DIR/wait-ce.log")" || true
 if [[ "$CE_STATUS" != "SUCCESS" ]]; then
-  s11_fail "$(td_py -c 'import sys;from td.sonar import ce_failure_reason;print(ce_failure_reason(sys.argv[1], sys.argv[2]))' "$TASK_ID" "${CE_STATUS:-TIMEOUT}")"
+  s11_fail "$(td_py -c 'import sys;from td.sonar import ce_failure_reason;print(ce_failure_reason(sys.argv[1], sys.argv[2], sys.argv[3]))' "$TASK_ID" "${CE_STATUS:-TIMEOUT}" "$(log_tail "$S11_DIR/wait-ce.log")")"
 fi
 
 RESULT="$(td_py -m td.sonar finish "$TD_RUN_DIR" --url "$TD_SONAR_URL" --key "$PROJECT_KEY" --task-id "$TASK_ID" 2>"$S11_DIR/finish.log")" \

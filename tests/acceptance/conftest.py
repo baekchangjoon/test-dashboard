@@ -247,7 +247,7 @@ def real_pipeline_run(tmp_path_factory, site_prefix):
     real_work = REPO_ROOT / "work"
     counter = {"n": 0}
 
-    def run(only: str, **env: str) -> "RunResult":
+    def run(only: str, sut_file: str | None = None, **env: str) -> "RunResult":
         counter["n"] += 1
         work = tmp_path_factory.mktemp(f"real-run{counter['n']}")
         for shared in ("tools", "suts"):
@@ -256,7 +256,8 @@ def real_pipeline_run(tmp_path_factory, site_prefix):
         full_env = {k: v for k, v in os.environ.items() if not k.startswith("TD_")}
         full_env.update(TD_WORK_DIR=str(work), TD_ROOT=str(REPO_ROOT), TD_SITE_PREFIX=site_prefix, **env)
         # 새 세션(프로세스 그룹)으로 띄우고, 시간이 넘으면 그룹에 TERM을 보내 파이프라인 trap이 컨테이너를 정리하게 한다.
-        proc = subprocess.Popen(["bash", str(RUN_ALL), "petclinic", "--only", only], env=full_env, text=True,
+        sut_args = ["--sut-file", sut_file] if sut_file else []
+        proc = subprocess.Popen(["bash", str(RUN_ALL), "petclinic", *sut_args, "--only", only], env=full_env, text=True,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
         try:
             try:

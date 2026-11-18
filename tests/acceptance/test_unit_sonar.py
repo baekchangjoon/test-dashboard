@@ -1,114 +1,26 @@
 """td.sonar 단위 테스트(REQ-037 Unit): 가짜 Sonar API(로컬 HTTP 서버)로 페이지 순회, 상한, CE 폴링, 프로젝트 보장, 렌더링을 본다."""
 import json
-import socketserver
-import threading
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import os
+import stat
+import subprocess
 from pathlib import Path
-from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from jsonschema import Draft202012Validator
 
 from td import sonar
 
-FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "sonar-api"
+from fake_sonar import FIXTURES, KEY, FakeSonar, start_fake_sonar  # noqa: F401
+
 SCHEMA = Path(__file__).resolve().parents[2] / "site-gen" / "td" / "schemas" / "sonar.schema.json"
-KEY = "spring-petclinic-td"
-
-
-class FakeSonar:
-    """상태를 가진 가짜 Sonar. issues/hotspots는 total 건을 즉석에서 만들어 페이지 단위로 돌려준다."""
-
-    def __init__(self):
-        self.status = "UP"
-        self.projects: set[str] = set()
-        self.issue_total = 0
-        self.hotspot_total = 0
-        self.ce_sequence: dict[str, list[str]] = {}
-        self.requests: list[tuple[str, str, dict, str | None]] = []  # (method, path, query, authorization)
-        self.max_ps_seen = 0
-
-    def handle(self, method: str, path: str, query: dict, auth: str | None, body: dict) -> tuple[int, dict]:
-        self.requests.append((method, path, query, auth))
-        if path == "/api/system/status":
-            return 200, {"id": "x", "version": "26.5", "status": self.status}
-        if path == "/api/projects/search":
-            wanted = query.get("projects", [""])[0]
-            return 200, {"components": [{"key": wanted}] if wanted in self.projects else []}
-        if path == "/api/projects/create" and method == "POST":
-            self.projects.add(body["project"][0])
-            return 200, {"project": {"key": body["project"][0]}}
-        if path == "/api/ce/task":
-            task_id = query["id"][0]
-            states = self.ce_sequence.get(task_id, ["SUCCESS"])
-            status = states.pop(0) if len(states) > 1 else states[0]
-            return 200, {"task": {"id": task_id, "status": status, "analysisId": "AN-1", "componentKey": KEY}}
-        if path == "/api/qualitygates/project_status":
-            return 200, json.loads((FIXTURES / "project_status.json").read_text())
-        if path == "/api/measures/component":
-            return 200, json.loads((FIXTURES / "measures.json").read_text())
-        if path in ("/api/issues/search", "/api/hotspots/search"):
-            return 200, self._page(path, query)
-        return 404, {"errors": [{"msg": f"unknown {path}"}]}
-
-    def _page(self, path: str, query: dict) -> dict:
-        page, size = int(query.get("p", ["1"])[0]), int(query.get("ps", ["100"])[0])
-        self.max_ps_seen = max(self.max_ps_seen, size)
-        issues = path.endswith("issues/search")
-        total = self.issue_total if issues else self.hotspot_total
-        if page * size > 10000 and page > 20 or size > 500:
-            return {"errors": [{"msg": "Can return only the first 10000 results"}]}
-        start = (page - 1) * size
-        rows = []
-        for index in range(start, min(total, start + size, 10000)):
-            if issues:
-                rows.append({"key": f"ISS-{index}", "rule": "java:S1135", "severity": "MINOR", "type": "CODE_SMELL",
-                             "component": f"{KEY}:src/main/java/A{index % 7}.java", "line": index % 300 + 1,
-                             "message": f"issue {index}", "status": "OPEN"})
-            else:
-                rows.append({"key": f"HS-{index}", "ruleKey": "java:S5122", "vulnerabilityProbability": "MEDIUM",
-                             "component": f"{KEY}:src/main/java/B.java", "line": index % 50 + 1,
-                             "message": f"hotspot {index}", "status": "TO_REVIEW"})
-        paging = {"pageIndex": page, "pageSize": size, "total": total}
-        return {"total": total, "p": page, "ps": size, "paging": paging, ("issues" if issues else "hotspots"): rows}
 
 
 @pytest.fixture
 def fake():
-    state = FakeSonar()
-
-    class Handler(BaseHTTPRequestHandler):
-        def _serve(self, method):
-            parts = urlsplit(self.path)
-            length = int(self.headers.get("Content-Length") or 0)
-            body = parse_qs(self.rfile.read(length).decode()) if length else {}
-            status, payload = state.handle(method, parts.path, parse_qs(parts.query), self.headers.get("Authorization"), body)
-            data = json.dumps(payload).encode()
-            self.send_response(status)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(data)))
-            self.end_headers()
-            self.wfile.write(data)
-
-        do_GET = lambda self: self._serve("GET")  # noqa: E731
-        do_POST = lambda self: self._serve("POST")  # noqa: E731
-
-        def log_message(self, *args):
-            pass
-
-    class QuickServer(ThreadingHTTPServer):
-        def server_bind(self):  # HTTPServer.server_bind의 getfqdn(역방향 DNS)이 macOS에서 수십 초 걸린다
-            socketserver.TCPServer.server_bind(self)
-            self.server_name, self.server_port = "127.0.0.1", self.server_address[1]
-
-    server = QuickServer(("127.0.0.1", 0), Handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    state.url = f"http://127.0.0.1:{server.server_address[1]}"
+    state, stop = start_fake_sonar()
     state.client = sonar.SonarClient(state.url, token="squ_unit_token_value")
     yield state
-    server.shutdown()
-    server.server_close()
+    stop()
 
 
 def _invariants(doc: dict) -> None:
@@ -264,3 +176,74 @@ def test_render_marks_truncation(fake, tmp_path):
     doc = sonar.export(KEY, client=fake.client)
     text = sonar.render(doc, tmp_path, css_href="../x.css", copy_css=False).read_text()
     assert "10050" in text and "10000" in text and 'href="../x.css"' in text and not (tmp_path / "site.css").exists()
+
+
+# --- 리뷰 보강: 4xx 즉시 실패, 5xx 재시도, resolved=false ---------------------------------------------
+def test_wait_ce_4xx_fails_immediately_with_error(fake):
+    fake.ce_errors["T4"] = 401
+    calls = []
+    with pytest.raises(sonar.SonarError, match="HTTP 401") as info:
+        sonar.wait_ce("T4", timeout=600, client=fake.client, sleep=calls.append)
+    assert info.value.http_status == 401 and calls == [], "4xx는 재시도하지 않는다"
+    assert len([r for r in fake.requests if r[1] == "/api/ce/task"]) == 1
+
+
+def test_wait_ce_5xx_is_retried_until_timeout(fake):
+    fake.ce_errors["T5"] = 503
+    clock = {"now": 0.0}
+    status = sonar.wait_ce("T5", timeout=20, client=fake.client, interval=5,
+                           sleep=lambda s: clock.__setitem__("now", clock["now"] + s), clock=lambda: clock["now"])
+    assert status == "TIMEOUT" and len([r for r in fake.requests if r[1] == "/api/ce/task"]) > 2
+
+
+def test_ce_failure_reason_for_poll_error_has_task_and_detail():
+    reason = sonar.ce_failure_reason("AZ-9", "ERROR", "HTTP 401 GET /api/ce/task")
+    assert "AZ-9" in reason and "HTTP 401" in reason
+
+
+def test_export_issue_search_excludes_resolved(fake):
+    fake.issue_total = 2
+    sonar.export(KEY, client=fake.client)
+    issue_calls = [q for _m, p, q, _a in fake.requests if p == "/api/issues/search"]
+    assert issue_calls and all(q.get("resolved") == ["false"] for q in issue_calls)
+
+
+# --- 리뷰 보강: 정리가 SONAR_TOKEN을 지워도 사유에 토큰이 남지 않는다(S11 사유 가리기) -------------------------
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _bash_with_fake_ssh(tmp_path, script: str, ssh_ok: bool = True) -> subprocess.CompletedProcess:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    ssh = bin_dir / "ssh"
+    ssh.write_text("#!/usr/bin/env bash\n" + ("echo 0\n" if ssh_ok else "exit 255\n"))
+    ssh.chmod(ssh.stat().st_mode | stat.S_IXUSR)
+    env = {k: v for k, v in os.environ.items() if not k.startswith("TD_")}
+    env.update(PATH=f"{bin_dir}:{os.environ['PATH']}", TD_ROOT=str(REPO_ROOT), TD_WORK_DIR=str(tmp_path),
+               TD_RUN_DIR=str(tmp_path), TD_LIGHTSAIL_IP="203.0.113.1", TD_SSH_KEY_PATH="/nonexistent")
+    header = (f'source "{REPO_ROOT}/pipeline/lib/common.sh"\nsource "{REPO_ROOT}/pipeline/lib/env.sh"\n'
+              f'source "{REPO_ROOT}/pipeline/lib/sonar-token.sh"\n')
+    return subprocess.run(["bash", "-c", header + script], capture_output=True, text=True, env=env, timeout=60)
+
+
+def test_revoke_unsets_token_but_reason_stays_redacted(tmp_path):
+    done = _bash_with_fake_ssh(tmp_path, '''
+_TD_SONAR_ISSUED_RUN=r1
+export SONAR_TOKEN=squ_secretvalue123
+td_sonar_revoke_redact "scan failed: bad squ_secretvalue123 here"; echo "rc=$?"
+echo "token_after=[${SONAR_TOKEN:-}]"
+echo "reason=$TD_SONAR_REASON_OUT"
+''')
+    assert "rc=0" in done.stdout and "token_after=[]" in done.stdout, done.stdout + done.stderr
+    assert "squ_secretvalue123" not in done.stdout and "reason=scan failed: bad <token> here" in done.stdout
+
+
+def test_failed_revoke_text_is_redacted_too(tmp_path):
+    done = _bash_with_fake_ssh(tmp_path, '''
+_TD_SONAR_ISSUED_RUN=r1
+export SONAR_TOKEN=squ_secretvalue123
+td_sonar_revoke_redact "reason squ_secretvalue123"; echo "rc=$?"
+echo "reason=$TD_SONAR_REASON_OUT"
+''', ssh_ok=False)
+    out = done.stdout + done.stderr
+    assert "rc=1" in done.stdout and "토큰 잔존 가능" in done.stdout and "squ_secretvalue123" not in out, out

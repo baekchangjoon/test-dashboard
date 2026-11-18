@@ -99,6 +99,17 @@ def test_req063_merged_aggregate(s08_run):
     assert _xml_lines(root / "blackbox" / "aggregate" / "jacoco.xml", covered_only=True) <= _xml_lines(merged, covered_only=True)
 
 
+def test_req063_s11_scans_the_merged_aggregate(s11_run):
+    """REQ-063: Sonar(S11)에 넘긴 커버리지 XML은 S08 병합 집계 하나이고, 그 해시를 단계 기록에 남긴다."""
+    run = s11_run.result
+    stage = run.stage("S11")
+    assert stage["status"] == "passed", stage
+    merged = run.run_dir / "S08" / "merged" / "aggregate.xml"
+    manifest = json.loads((run.run_dir / "S08" / "merged" / "manifest.json").read_text())
+    digest = hashlib.sha256(merged.read_bytes()).hexdigest()
+    assert stage["coverageXmlSha256"] == digest == manifest["xmlSha256"]
+
+
 def test_req031_tc_results_match_junit(s08_run):
     """결과 열: JUnit XML의 모든 TC(귀속 없는 TC 포함)가 JUnit과 같은 결과로 나온다."""
     from td.blackbox import junit_results

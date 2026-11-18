@@ -557,8 +557,8 @@ def log_key(prefix: str, sut: str, run_id: str) -> str:
 
 def home_path_variants() -> list[str]:
     """홈 경로의 원본·resolve 표기(긴 것 먼저). 게시물에 남으면 안 되는 문자열이다."""
-    from td.site.pages import _path_variants
-    return _path_variants(Path.home())
+    from td.site.pages import path_variants
+    return path_variants(Path.home())
 
 
 def redact_home(text: str) -> str:
