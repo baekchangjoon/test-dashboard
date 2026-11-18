@@ -46,6 +46,7 @@ td_hook() {
   case "$rc" in
     0) return 0 ;;
     10) td_stage_end "$stage_id" failed "injected failure (TD_FAIL_STAGE=$spec)"; exit 1 ;;
-    *) td_stage_end "$stage_id" failed "hook refused: TD_FAIL_STAGE requires TD_SITE_PREFIX"; exit 1 ;;
+    3) td_stage_end "$stage_id" failed "hook refused: TD_FAIL_STAGE requires TD_SITE_PREFIX"; exit 1 ;;
+    *) td_stage_end "$stage_id" failed "hook error: td.hooks exited $rc"; exit 1 ;;
   esac
 }

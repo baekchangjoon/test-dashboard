@@ -14,7 +14,12 @@ REQUIRED = ("name", "repo", "ref")
 
 
 def read_minimal(sut_file: Path) -> dict[str, str]:
-    data = yaml.safe_load(Path(sut_file).read_text()) or {}
+    try:
+        data = yaml.safe_load(Path(sut_file).read_text()) or {}
+    except yaml.YAMLError as exc:
+        raise ValueError(f"{sut_file}: YAML 파싱 실패: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ValueError(f"{sut_file}: 최상위가 매핑이 아니다")
     missing = [key for key in REQUIRED if not data.get(key)]
     if missing:
         raise ValueError(f"{sut_file}: 필수 키 누락 {missing}")
