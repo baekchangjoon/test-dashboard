@@ -372,8 +372,7 @@ PATH_SHAPE_RE = re.compile(r"^/[\w\-./{}*?&=%:,]+$")  # HTTP 경로(질의 문�
 TYPE_SHAPE_RE = re.compile(r"^[\w.$<>\[\],? ]+$")
 # user=/username=은 URL·JDBC 질의 문맥(`?`, `&`, `;` 뒤)에서만 본다: bbtg가 만드는 "username=admin 경로" 같은 분기 설명은 자격 증명이 아니다.
 CREDENTIAL_RE = re.compile(r"(?i)(?:password|passwd|pwd|secret|token|api[_-]?key)\s*=|[?&;]\s*(?:user(?:name)?|uid)\s*=|://[^/\s:@]+:[^/\s@]*@")
-# 사람이 쓴 테스트 표시 이름(@DisplayName 문장)은 메타데이터라서 A1 관문에서 뺀다(설계 6.6: scan-test-assets 메타데이터는 포함).
-A1_EXEMPT_SUFFIXES = (".display_name",)
+
 
 
 def _normalize_ws(text: str) -> str:
@@ -411,7 +410,7 @@ def a1_violations(document, corpus: str) -> list[str]:
         return []
     found = []
     for path, text in _string_leaves(document):
-        if len(text) < A1_MIN_LENGTH or not EXPRESSION_CHARS & set(text) or path.endswith(A1_EXEMPT_SUFFIXES):
+        if len(text) < A1_MIN_LENGTH or not EXPRESSION_CHARS & set(text):
             continue
         if PATH_SHAPE_RE.match(text) or (EXPRESSION_CHARS & set(text) <= {"<", ">"} and TYPE_SHAPE_RE.match(text)):
             continue
@@ -452,7 +451,16 @@ def _plan_flags(data):
     return data
 
 
-TRANSFORMS = {"derive-test-data": _derive_flags, "plan-tests": _plan_flags}
+def _scan_structure_only(data):
+    """scan-test-assets: 사람이 쓴 기존 IT의 의도(@DisplayName, 테스트 메서드 이름 목록, 이름에서 뽑은 토큰)는 생성 입력이 아니다.
+    엔드포인트별 커버리지는 개수만 남기고, 클래스별 메서드 목록(`test_classes[].methods`)은 스키마가 금지한다(개수 `test_method_count`는 남는다)."""
+    if isinstance(data, dict) and isinstance(data.get("endpoint_coverage"), dict):
+        data["endpoint_coverage"] = {key: len(value) if isinstance(value, list) else value
+                                     for key, value in data["endpoint_coverage"].items()}
+    return data
+
+
+TRANSFORMS = {"derive-test-data": _derive_flags, "plan-tests": _plan_flags, "scan-test-assets": _scan_structure_only}
 
 
 def sanitize(raw_dir, out_dir, sut_root=None) -> Sanitized:
