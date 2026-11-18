@@ -29,11 +29,11 @@ def test_req035_hotspot(s09_run):
     assert stage["status"] == "passed", stage
     root = s09_run.run_dir / "S09"
     hotspot = root / "hotspot"
-    for name in ("hotspots.html", "api_report.html", "hotspot.yml"):
+    for name in ("hotspots.html", "api_report.html", "hotspot.config.yml"):
         assert (hotspot / name).is_file(), name
         assert (hotspot / name).stat().st_size > 0, name
     # 렌더링된 설정의 jacocoReportPath가 S08 병합 XML을 가리키고 파일 해시가 같다
-    config = yaml.safe_load((hotspot / "hotspot.yml").read_text())
+    config = yaml.safe_load((hotspot / "hotspot.config.yml").read_text())
     jacoco_path = Path(config["analysis"]["jacocoReportPath"])
     merged = s09_run.run_dir / "S08" / "merged" / "aggregate.xml"
     assert jacoco_path.is_absolute() and hashlib.sha256(jacoco_path.read_bytes()).hexdigest() == hashlib.sha256(merged.read_bytes()).hexdigest()
@@ -47,6 +47,14 @@ def test_req035_hotspot(s09_run):
     site_dir = pages.render_run(s09_run.run_dir, s09_run.run_dir).parent
     assert 'href="hotspot/hotspots.html"' in (site_dir / "index.html").read_text()
     assert (site_dir / "hotspot" / "hotspots.html").is_file() and (site_dir / "hotspot" / "api_report.html").is_file()
+    # 게시 사본에는 run 디렉터리와 홈 경로가 없다(로컬 렌더 설정은 절대 경로 그대로다)
+    home = str(Path.home())
+    for path in (site_dir / "hotspot").rglob("*"):
+        if path.is_file() and path.suffix in {".html", ".yml", ".csv", ".md"}:
+            text = path.read_text()
+            assert str(s09_run.run_dir) not in text and home not in text, path
+    published_config = yaml.safe_load((site_dir / "hotspot" / "hotspot.config.yml").read_text())
+    assert published_config["analysis"]["jacocoReportPath"].startswith("<run>/S08/merged/")
 
 
 def test_req035_hotspot_degraded_without_merged_coverage(s09_without_coverage_run):
@@ -55,6 +63,8 @@ def test_req035_hotspot_degraded_without_merged_coverage(s09_without_coverage_ru
     assert stage["status"] == "degraded" and "S08" in stage["reason"] and "aggregate.xml" in stage["reason"], stage
     hotspot = run.run_dir / "S09" / "hotspot"
     assert (hotspot / "hotspots.html").is_file() and (hotspot / "api_report.html").is_file()
-    config = yaml.safe_load((hotspot / "hotspot.yml").read_text())
+    config = yaml.safe_load((hotspot / "hotspot.config.yml").read_text())
     assert "jacocoReportPath" not in config["analysis"]
-    assert json.loads((run.run_dir / "S09" / "top10.json").read_text())
+    top10 = json.loads((run.run_dir / "S09" / "top10.json").read_text())
+    assert 1 <= len(top10) <= 10 and stage["top10"] == top10
+    assert all(set(row) >= {"name", "file", "score"} for row in top10)

@@ -10,6 +10,7 @@ import argparse
 import json
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 import zipfile
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -33,24 +34,47 @@ def window_for(commit_iso: str) -> tuple[str, str]:
     return (commit_day - timedelta(days=WINDOW_DAYS)).isoformat(), (commit_day + timedelta(days=1)).isoformat()
 
 
+def _fill(node, values: dict):
+    """템플릿 트리의 "${NAME}" 문자열을 값으로 바꾼다. 값이 None인 키는 뺀다. 리스트 값은 그 자리에 펼친다."""
+    if isinstance(node, dict):
+        filled = {key: _fill(value, values) for key, value in node.items()}
+        return {key: value for key, value in filled.items() if value is not None}
+    if isinstance(node, list):
+        out = []
+        for item in node:
+            value = _fill(item, values)
+            out.extend(value) if isinstance(value, list) else out.append(value)
+        return out
+    if isinstance(node, str):
+        whole = node.startswith("${") and node.endswith("}") and node.count("${") == 1
+        if whole:
+            return values[node[2:-1]]
+        for key, value in values.items():
+            node = node.replace("${" + key + "}", str(value))
+    return node
+
+
 def render_config(template: Path, *, target: Path, sources: str, since: str, until: str,
                   classpath_dirs: list[Path], jacoco_xml: Path | None, output: Path) -> str:
-    """템플릿의 ${NAME}을 채운다. jacoco_xml이 None이면 jacocoReportPath 줄을 뺀다."""
-    jacoco_line = f"  jacocoReportPath: {jacoco_xml}" if jacoco_xml else None
-    values = {
-        "TARGET_PATH": str(target), "SOURCES": sources.strip("/"), "SINCE": since, "UNTIL": until, "OUTPUT_PATH": str(output),
-        "CLASSPATH_LINES": "\n".join(f"      - {path}" for path in classpath_dirs),
-    }
-    lines = []
-    for line in Path(template).read_text().splitlines():
-        if "${JACOCO_LINE}" in line:
-            if jacoco_line:
-                lines.append(jacoco_line)
-            continue
-        for key, value in values.items():
-            line = line.replace("${" + key + "}", value)
-        lines.append(line)
-    return "\n".join(lines) + "\n"
+    """템플릿(YAML)을 채워 yaml.safe_dump로 쓴다. jacoco_xml이 None이면 jacocoReportPath 키가 빠진다."""
+    values = {"TARGET_PATH": str(target), "SOURCES": sources.strip("/"), "SINCE": since, "UNTIL": until,
+              "OUTPUT_PATH": str(output), "CLASSPATH_DIRS": [str(path) for path in classpath_dirs],
+              "JACOCO_XML": str(jacoco_xml) if jacoco_xml else None}
+    filled = _fill(yaml.safe_load(Path(template).read_text()), values)
+    return yaml.safe_dump(filled, allow_unicode=True, sort_keys=False)
+
+
+def xml_problem(xml_path: Path | None) -> str | None:
+    """병합 JaCoCo XML을 쓸 수 없으면 사유, 쓸 수 있으면 None(있고, 파싱되고, package가 하나 이상)."""
+    if xml_path is None or not Path(xml_path).is_file():
+        return "파일이 없다"
+    try:
+        root = ET.parse(xml_path).getroot()
+    except (ET.ParseError, OSError) as exc:
+        return f"파싱할 수 없다({exc})"
+    if root.tag != "report" or root.find(".//package") is None:
+        return "비어 있다(package 없음)"
+    return None
 
 
 def extract_dependencies(jar: Path, dest: Path) -> Path:
@@ -99,8 +123,8 @@ def prepare(run_dir: Path, sut_file: Path, src: Path, template: Path, merged_xml
     output = root / "hotspot"
     output.mkdir(parents=True, exist_ok=True)
     lib_dir = extract_dependencies(jars[-1], root / "deps")
-    use_xml = merged_xml is not None and merged_xml.is_file()
-    config = output / "hotspot.yml"
+    use_xml = xml_problem(merged_xml) is None
+    config = output / "hotspot.config.yml"
     config.write_text(render_config(template, target=src, sources=sut.sources, since=since, until=until,
                                     classpath_dirs=[sut.classes_dir(src), lib_dir], jacoco_xml=merged_xml if use_xml else None,
                                     output=output))
@@ -118,7 +142,8 @@ def finish(run_dir: Path, jacoco: bool, merged_xml: str | None) -> dict:
     result = {"status": "passed", "extra": {"top10": rows, "coverageApplied": jacoco}}
     if not jacoco:
         result["status"] = "degraded"
-        result["reason"] = f"S08 병합 커버리지(merged/aggregate.xml)가 없어 커버리지 배수 없이 분석했다: {merged_xml or 'S08 not run'}"
+        result["reason"] = (f"S08 병합 커버리지(merged/aggregate.xml)를 쓸 수 없어 커버리지 배수 없이 분석했다: "
+                            f"{xml_problem(Path(merged_xml) if merged_xml else None)} ({merged_xml or 'S08 not run'})")
     return result
 
 

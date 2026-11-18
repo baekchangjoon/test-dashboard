@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 from pathlib import Path
 
@@ -54,6 +55,62 @@ def publishable_stage(stage: dict, run_dir: Path) -> dict:
     return {**stage, "outputs": outputs}
 
 
+TEXT_SUFFIXES = {".html", ".htm", ".json", ".yml", ".yaml", ".xml", ".csv", ".txt", ".md", ".js", ".css", ".svg"}
+PUBLISHABLE_STATUSES = ("passed", "degraded")
+
+
+class SanitizeError(RuntimeError):
+    pass
+
+
+def _path_variants(path) -> list[str]:
+    """경로의 원본·resolve 표기(중복 제거, 긴 것 먼저)."""
+    path = Path(path)
+    variants = {str(path), str(path.resolve())}
+    return sorted((v for v in variants if len(v) > 1), key=len, reverse=True)
+
+
+def sanitize_site(out_dir, run_dir, repo_root=None) -> list[Path]:
+    """게시 전 텍스트 파일의 로컬 절대 경로를 치환한다: run 디렉터리 -> <run>, 저장소 루트 -> <repo>, 홈 -> ~.
+    치환 뒤에도 홈 경로가 남으면 SanitizeError(게이트). 바이너리는 건드리지 않는다. 바뀐 파일 목록을 돌려준다."""
+    repo_root = Path(repo_root or os.environ.get("TD_ROOT") or SITE_DIR.parents[2])
+    rules = ([(v, "<run>") for v in _path_variants(run_dir)] + [(v, "<repo>") for v in _path_variants(repo_root)]
+             + [(v, "~") for v in _path_variants(Path.home())])
+    changed = []
+    for path in _text_files(out_dir):
+        try:
+            text = path.read_text()
+        except UnicodeDecodeError:
+            continue
+        new = text
+        for old, replacement in rules:
+            new = new.replace(old, replacement)
+        if new != text:
+            path.write_text(new)
+            changed.append(path)
+    check_no_home(out_dir)
+    return changed
+
+
+def _text_files(out_dir) -> list[Path]:
+    return [p for p in sorted(Path(out_dir).rglob("*")) if p.is_file() and p.suffix.lower() in TEXT_SUFFIXES]
+
+
+def check_no_home(out_dir) -> None:
+    """게이트: 텍스트 파일에 홈 경로가 남아 있으면 SanitizeError."""
+    home_variants = _path_variants(Path.home())
+    leaked = []
+    for path in _text_files(out_dir):
+        try:
+            text = path.read_text()
+        except UnicodeDecodeError:
+            continue
+        if any(v in text for v in home_variants):
+            leaked.append(path)
+    if leaked:
+        raise SanitizeError(f"게시 사본에 홈 경로가 남았다: {', '.join(str(p) for p in leaked[:5])}")
+
+
 def render_run(run_dir, out_dir) -> Path:
     """run 디렉터리의 정적 파일(index.html, run.json, stages/, 리포트)을 out_dir에 만든다. index.html 경로를 돌려준다.
     SITE_LAYOUT에 매핑된 산출물만 복사하고(매핑 밖 단계 디렉터리는 복사하지 않는다) 링크도 산출물이 있는 것만 단다.
@@ -69,7 +126,10 @@ def render_run(run_dir, out_dir) -> Path:
     links = []
     for key, site_rel in SITE_LAYOUT.items():
         stage_id, output_key = key.split("/", 1)
-        src = (stages.get(stage_id) or {}).get("outputs", {}).get(output_key)
+        stage = stages.get(stage_id) or {}
+        if stage.get("status") not in PUBLISHABLE_STATUSES:  # 실패·건너뜀 단계의 부분 산출물은 게시하지 않는다
+            continue
+        src = (stage.get("outputs") or {}).get(output_key)
         if not src or not Path(src).is_dir():
             continue
         target = out_dir / site_rel.rstrip("/")
@@ -90,4 +150,5 @@ def render_run(run_dir, out_dir) -> Path:
         sut_href="../../index.html", publish_log_url=f"../../publish-log/{run.get('runId', '')}.json")
     target = out_dir / "index.html"
     target.write_text(html)
+    sanitize_site(out_dir, run_dir)
     return target
