@@ -5,6 +5,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+import helpers
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PUBLIC_VALUES_FILE = Path(__file__).with_name("public-values.yaml")
 
@@ -85,6 +87,9 @@ class CaddyFixture:
             "DASH_HOST=dash.fixture.test:18080",
             "DASH_DIR=%s" % (self.dir / "srv-dashboard"),
             "COMPOSE_PROJECT=%s" % self.project, ""]))
+        (self.dir / "srv-dashboard").mkdir()
+        (self.dir / "srv-dashboard" / ".env").write_text("SECRET=1\n")  # hide 규칙 검증용
+        (self.dir / "srv-dashboard" / "x.bak").write_text("old\n")
         self._compose("up", "-d")
 
     def _compose(self, *args: str) -> subprocess.CompletedProcess:
@@ -94,6 +99,13 @@ class CaddyFixture:
     def apply(self, **extra: str) -> subprocess.CompletedProcess:
         return subprocess.run(["bash", str(APPLY_SH), "--local", str(self.dir)], cwd=REPO_ROOT,
                               env={**self.env, **extra}, capture_output=True, text=True, timeout=400)
+
+    def container_id(self) -> str:
+        return self._compose("ps", "-q", "caddy").stdout.strip()
+
+    def backups(self) -> list[str]:
+        root = self.dir / ".td-backup"
+        return sorted(p.name for p in root.glob("2*")) if root.exists() else []
 
     def read(self, name: str) -> bytes:
         return (self.dir / name).read_bytes()
@@ -132,9 +144,30 @@ def test_req074_caddy_apply_success(caddy_fixture):
     assert status == 200 and "준비 중".encode() in body
     assert b'"status":"UP"' in fixture.http("sonar.fixture.test:18080", "/api/system/status")[1]
     assert b"/srv/dashboard" in fixture.read("docker-compose.yml")
+    assert fixture.http("dash.fixture.test:18080", "/.env")[0] == 404  # hide .*  *.env
+    assert fixture.http("dash.fixture.test:18080", "/x.bak")[0] == 404  # hide *.bak
+    assert (fixture.dir / ".td-backup" / "original-pre-dashboard" / "Caddyfile").exists()
+    container, backups = fixture.container_id(), fixture.backups()
     rerun = fixture.apply()
     assert rerun.returncode == 0, rerun.stderr[-2000:]
     assert fixture.http("dash.fixture.test:18080")[0] == 200
+    # 이미 적용된 설정이면 백업도 재생성도 하지 않는다(무중단 재실행).
+    assert fixture.container_id() == container and fixture.backups() == backups
+
+
+def test_req074_caddy_backups_pruned_to_five(caddy_fixture):
+    """REQ-074: 타임스탬프 백업은 최근 5개만 남고 원본 보존본은 유지된다."""
+    fixture = caddy_fixture("prune")
+    assert fixture.apply().returncode == 0
+    root = fixture.dir / ".td-backup"
+    for index in range(8):
+        (root / f"2000010{index}T000000Z").mkdir()
+    # 설정을 바꿔야 백업 경로를 탄다: 블록을 gzip 없는 변형으로 교체.
+    variant = fixture.dir / "variant.block"
+    variant.write_text("__DASH_ADDR__ {\n\troot * /srv/dashboard\n\tfile_server {\n\t\thide .* *.env *.bak\n\t}\n}\n")
+    assert fixture.apply(TD_LIGHTSAIL_BLOCK_FILE=str(variant)).returncode == 0
+    assert len(fixture.backups()) == 5
+    assert (root / "original-pre-dashboard").is_dir()
 
 
 def test_req074_caddy_apply_invalid_block_restores_bytes(caddy_fixture, tmp_path):
@@ -155,11 +188,86 @@ def test_req074_caddy_apply_failure_after_mutation_rolls_back(caddy_fixture, fai
     """REQ-074: 변경 후(recreate/health) 실패하면 파일을 바이트 그대로 복원하고 이전 설정으로 Caddy를 재생성한다."""
     fixture = caddy_fixture(fail_after)
     before = {name: fixture.read(name) for name in ("Caddyfile", "docker-compose.yml")}
-    result = fixture.apply(TD_LIGHTSAIL_FAIL_AFTER=fail_after)
-    assert result.returncode != 0
+    result = fixture.apply(TD_LIGHTSAIL_FAIL_AFTER=fail_after, TD_LIGHTSAIL_WAIT_SECONDS="6")
+    assert result.returncode == 30, result.stderr[-1500:]
+    # recreate는 확인 이전 단계, health는 확인 단계에서 실패해야 서로 다른 경로를 검증한다.
+    assert ("주입 실패(recreate)" in result.stderr) == (fail_after == "recreate")
+    assert ("dash 확인 실패(6초)" in result.stderr) == (fail_after == "health")
     assert {name: fixture.read(name) for name in before} == before
     assert b'"status":"UP"' in fixture.http("sonar.fixture.test:18080", "/api/system/status")[1]
     assert "준비 중".encode() not in fixture.http("dash.fixture.test:18080")[1]  # 이전 설정으로 재생성됨
+
+
+def test_req074_caddy_apply_sigterm_after_mutation_restores(caddy_fixture):
+    """REQ-074: 변경 후 확인 대기 중 TERM을 받아도 서버 쪽 trap이 바이트 그대로 복원한다."""
+    import signal
+    fixture = caddy_fixture("sigterm")
+    before = {name: fixture.read(name) for name in ("Caddyfile", "docker-compose.yml")}
+    proc = subprocess.Popen(["bash", str(APPLY_SH), "--local", str(fixture.dir)], cwd=REPO_ROOT, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, text=True,
+                            env={**fixture.env, "TD_LIGHTSAIL_FAIL_AFTER": "health", "TD_LIGHTSAIL_WAIT_SECONDS": "90"})
+    deadline = time.monotonic() + 120
+    while fixture.read("Caddyfile") == before["Caddyfile"]:  # 교체가 일어난 뒤(= health 대기 구간)에 신호를 보낸다
+        assert proc.poll() is None and time.monotonic() < deadline, "교체 전에 끝났다"
+        time.sleep(0.2)
+    time.sleep(8)  # recreate와 sonar 확인을 지나 dash 대기에 들어가도록
+    proc.send_signal(signal.SIGTERM)
+    proc.communicate(timeout=120)
+    assert proc.returncode != 0
+    assert {name: fixture.read(name) for name in before} == before
+    assert b'"status":"UP"' in fixture.http("sonar.fixture.test:18080", "/api/system/status")[1]
+
+
+def test_req074_apply_rolls_back_created_dns_record(tmp_path):
+    """REQ-074: 원격 모드에서 서버 단계가 실패하면 우리가 만든 dash A 레코드를 DELETE한다(스텁 ssh/boto3)."""
+    stub_bin, stub_py, calls = tmp_path / "bin", tmp_path / "py", tmp_path / "route53-calls.jsonl"
+    stub_bin.mkdir(); stub_py.mkdir()
+    (tmp_path / "Caddyfile").write_text("sonar.example.test {\n\treverse_proxy sonarqube:9000\n}\n")
+    (tmp_path / "docker-compose.yml").write_text(
+        "services:\n  caddy:\n    volumes:\n      - ./Caddyfile:/etc/caddy/Caddyfile:ro\n")
+    ssh = stub_bin / "ssh"
+    ssh.write_text(f"""#!/usr/bin/env bash
+last="${{@: -1}}"
+case "$last" in
+  *Caddyfile*) cat "{tmp_path}/Caddyfile" ;;
+  *docker-compose.yml*) cat "{tmp_path}/docker-compose.yml" ;;
+  *) cat >/dev/null; exit 30 ;;   # 서버 단계(bash -s) 실패
+esac
+""")
+    scp = stub_bin / "scp"
+    scp.write_text("#!/usr/bin/env bash\nexit 0\n")
+    for script in (ssh, scp):
+        script.chmod(0o755)
+    (stub_py / "sitecustomize.py").write_text(f"""
+import json, boto3
+class _Pager:
+    def __init__(self, op): self.op = op
+    def paginate(self, **kw):
+        if self.op == "list_hosted_zones":
+            yield {{"HostedZones": [{{"Id": "/hostedzone/Z1", "Name": "example.test.", "Config": {{}}}}]}}
+        else:
+            yield {{"ResourceRecordSets": []}}
+class _Client:
+    def get_paginator(self, op): return _Pager(op)
+    def get_hosted_zone(self, Id): return {{"HostedZone": {{"Name": "example.test."}}}}
+    def change_resource_record_sets(self, HostedZoneId, ChangeBatch):
+        with open({str(calls)!r}, "a") as fh:
+            fh.write(json.dumps([c["Action"] for c in ChangeBatch["Changes"]]) + "\\n")
+boto3.client = lambda *a, **k: _Client()
+""")
+    env_file = tmp_path / "local.env"
+    env_file.write_text("TD_DOMAIN=example.test\nTD_LIGHTSAIL_IP=192.0.2.7\nTD_SSH_KEY_PATH=/nonexistent\n")
+    apply_copy = tmp_path / "repo"
+    shutil.copytree(REPO_ROOT / "infra" / "lightsail", apply_copy / "infra" / "lightsail")
+    (apply_copy / "infra" / "local.env").write_text(env_file.read_text())
+    (apply_copy / "pipeline").symlink_to(REPO_ROOT / "pipeline")
+    (apply_copy / "site-gen").symlink_to(REPO_ROOT / "site-gen")
+    result = subprocess.run(["bash", str(apply_copy / "infra" / "lightsail" / "apply.sh")], cwd=tmp_path, capture_output=True,
+                            text=True, timeout=120, env={**os.environ, "PATH": f"{stub_bin}:{os.environ['PATH']}",
+                                                         "PYTHONPATH": str(stub_py), "TD_WORK_DIR": str(tmp_path / "work")})
+    assert result.returncode == 30, result.stderr[-1500:]
+    recorded = [json.loads(line) for line in calls.read_text().splitlines()]
+    assert recorded == [["CREATE"], ["DELETE"]]
 
 
 # --- 실제 서버 (REQ-055, REQ-052, REQ-074 live) --------------------------------------------
@@ -186,25 +294,31 @@ def _get(url: str, retry_seconds: int = 120) -> tuple[int, bytes]:
 
 
 def test_req074_dash_site_live(local_env):
-    """REQ-074: https://dash.<domain>/ 가 서버 디렉터리(/srv/dashboard)를 HTTPS 200으로 서빙한다."""
-    status, _ = _get(f"https://dash.{local_env['TD_DOMAIN']}/")
+    """REQ-074: https://dash.<domain>/ 가 서버 디렉터리(/srv/dashboard)를 HTTPS 200으로 서빙한다.
+
+    로컬 리졸버가 NXDOMAIN을 캐시했으면 Route53 권한 응답 IP로 연결한다(TLS 검증은 호스트 이름 기준)."""
+    domain = local_env["TD_DOMAIN"]
+    status, _ = helpers.https_get(f"dash.{domain}", domain)
     assert status == 200
     assert "/srv/dashboard" in _ssh(local_env, "cat ~/sonarqube/docker-compose.yml")
     assert _ssh(local_env, "stat -c %U /srv/dashboard").strip() == "ubuntu"
 
 
 def test_req055_arc_repo_synced(local_env):
-    """REQ-055: 서버의 Caddyfile·compose가 aws-resource-controller 레포 복사본과 같고 origin/main에 포함돼 있다."""
+    """REQ-055: 서버 파일이 origin/main에 push된 커밋의 sonarqube/ 파일과 바이트 단위로 같다(작업 트리가 아니라 커밋 기준)."""
+    def git(*args: str) -> str:
+        result = subprocess.run(["git", "-C", str(ARC_REPO), *args], capture_output=True, text=True, timeout=120)
+        assert result.returncode == 0, f"git {args[0]} 실패"
+        return result.stdout
+
+    git("fetch", "origin", "main")
+    commit = git("log", "-1", "--format=%H", "origin/main", "--", "sonarqube/Caddyfile", "sonarqube/docker-compose.yml").strip()
+    assert commit, "origin/main에 sonarqube 변경 커밋이 없다"
+    assert "origin/main" in git("branch", "-r", "--contains", commit).split()
     for name in ("Caddyfile", "docker-compose.yml"):
-        server_text = _ssh(local_env, f"cat ~/sonarqube/{name}")
-        assert server_text == (ARC_REPO / "sonarqube" / name).read_text(), f"{name}가 서버와 다르다"
-    commit = subprocess.run(["git", "-C", str(ARC_REPO), "log", "-1", "--format=%H", "--", "sonarqube/Caddyfile",
-                             "sonarqube/docker-compose.yml"], capture_output=True, text=True).stdout.strip()
-    assert commit, "arc 레포에 sonarqube 변경 커밋이 없다"
-    remote = subprocess.run(["git", "-C", str(ARC_REPO), "branch", "-r", "--contains", commit],
-                            capture_output=True, text=True).stdout
-    assert "origin/main" in remote.split(), "커밋이 origin/main에 없다(push 필요)"
-    assert "dash." in (ARC_REPO / "sonarqube" / "Caddyfile").read_text()
+        assert _ssh(local_env, f"cat ~/sonarqube/{name}") == git("show", f"{commit}:sonarqube/{name}"), f"{name}가 push된 커밋과 다르다"
+    assert "dash." in git("show", f"{commit}:sonarqube/Caddyfile")
+    assert git("status", "--porcelain", "--", "sonarqube/") == "", "sonarqube/에 미커밋 변경이 있다"
 
 
 def test_req052_sonar_healthy(local_env):
