@@ -1,0 +1,10 @@
+{"component": {"key": "spring-petclinic-td", "name": "spring-petclinic-td", "qualifier": "TRK", "measures": [
+  {"metric": "coverage", "value": "41.7", "bestValue": false},
+  {"metric": "bugs", "value": "2", "bestValue": false},
+  {"metric": "vulnerabilities", "value": "0", "bestValue": true},
+  {"metric": "code_smells", "value": "37", "bestValue": false},
+  {"metric": "duplicated_lines_density", "value": "1.2", "bestValue": false},
+  {"metric": "ncloc", "value": "2100", "bestValue": false},
+  {"metric": "sqale_rating", "value": "1.0", "bestValue": true},
+  {"metric": "reliability_rating", "value": "3.0", "bestValue": false},
+  {"metric": "security_rating", "value": "1.0", "bestValue": true}]}}

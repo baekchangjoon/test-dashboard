@@ -1,0 +1,49 @@
+{% extends "base.html.j2" %}
+{% block title %}Sonar 품질 결과{% endblock %}
+{% macro sev(value) %}{{ value if value else "—" }}{% endmacro %}
+{% block content %}
+<h1>Sonar 품질 결과</h1>
+<p class="muted">프로젝트 <a href="{{ doc.dashboardUrl }}">{{ doc.projectKey }}</a>{% if doc.ceTaskId %} · CE 태스크 {{ doc.ceTaskId }}{% endif %}. 항목은 Sonar 서버 페이지로 연결된다.</p>
+
+<section class="cards">
+  <div class="card" id="quality-gate" data-gate="{{ doc.qualityGate.status }}">
+    <h3>품질 게이트</h3>
+    <div class="kpi"><div><span class="muted">상태</span><b class="{{ 'st-failed' if doc.qualityGate.status == 'ERROR' else 'st-passed' if doc.qualityGate.status == 'OK' else '' }}">{{ doc.qualityGate.status }}</b></div></div>
+    {% if doc.qualityGate.conditions %}
+    <ul>{% for c in doc.qualityGate.conditions %}<li>{{ c.metricKey }}: {{ c.status }}{% if c.actualValue is defined %} (실제 {{ c.actualValue }}{% if c.errorThreshold is defined %}, 기준 {{ c.comparator }} {{ c.errorThreshold }}{% endif %}){% endif %}</li>{% endfor %}</ul>
+    {% endif %}
+  </div>
+  <div class="card" id="measures">
+    <h3>지표</h3>
+    <div class="kpi">
+    {% for name, value in doc.measures.items() %}<div><span class="muted">{{ name }}</span><b>{{ value if value is not none else "—" }}</b></div>{% endfor %}
+    </div>
+  </div>
+</section>
+
+<h2>이슈 ({{ doc.issues.fetched }} / {{ doc.issues.total }})</h2>
+{% if doc.issues.truncated %}<p class="note">전체 {{ doc.issues.total }}건 중 상한 {{ max_items }}건만 가져왔다(sonar.json 기준).</p>{% endif %}
+{% if doc.issues['items']|length > rows %}<p class="muted">표에는 처음 {{ rows }}건만 보인다. 전체는 sonar.json에 있다.</p>{% endif %}
+<div class="scroll"><table id="issues">
+<thead><tr><th>키</th><th>규칙</th><th>심각도</th><th>유형</th><th>위치</th><th>메시지</th></tr></thead>
+<tbody>
+{% for item in doc.issues['items'][:rows] %}
+  <tr><td><a href="{{ item.link }}">{{ item.key }}</a></td><td>{{ item.rule }}</td><td>{{ sev(item.severity) }}</td><td>{{ sev(item.type) }}</td><td>{{ item.component }}{% if item.line %}:{{ item.line }}{% endif %}</td><td style="white-space: normal">{{ item.message }}</td></tr>
+{% else %}
+  <tr><td colspan="6" class="muted">이슈 없음</td></tr>
+{% endfor %}
+</tbody></table></div>
+
+<h2>보안 핫스팟 ({{ doc.hotspots.fetched }} / {{ doc.hotspots.total }})</h2>
+{% if doc.hotspots.truncated %}<p class="note">전체 {{ doc.hotspots.total }}건 중 상한 {{ max_items }}건만 가져왔다(sonar.json 기준).</p>{% endif %}
+{% if doc.hotspots['items']|length > rows %}<p class="muted">표에는 처음 {{ rows }}건만 보인다. 전체는 sonar.json에 있다.</p>{% endif %}
+<div class="scroll"><table id="hotspots">
+<thead><tr><th>키</th><th>규칙</th><th>가능성</th><th>상태</th><th>위치</th><th>메시지</th></tr></thead>
+<tbody>
+{% for item in doc.hotspots['items'][:rows] %}
+  <tr><td><a href="{{ item.link }}">{{ item.key }}</a></td><td>{{ item.rule }}</td><td>{{ sev(item.probability) }}</td><td>{{ sev(item.status) }}</td><td>{{ item.component }}{% if item.line %}:{{ item.line }}{% endif %}</td><td style="white-space: normal">{{ item.message }}</td></tr>
+{% else %}
+  <tr><td colspan="6" class="muted">핫스팟 없음</td></tr>
+{% endfor %}
+</tbody></table></div>
+{% endblock %}

@@ -1,0 +1,6 @@
+projectKey=spring-petclinic-td
+serverUrl=http://localhost:9999
+serverVersion=26.5.0.122743
+dashboardUrl=http://localhost:9999/dashboard?id=spring-petclinic-td
+ceTaskId=AZ-task-1
+ceTaskUrl=http://localhost:9999/api/ce/task?id=AZ-task-1

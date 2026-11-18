@@ -555,10 +555,29 @@ def log_key(prefix: str, sut: str, run_id: str) -> str:
     return f"{prefix}suts/{sut}/publish-log/{run_id}.json"
 
 
+def home_path_variants() -> list[str]:
+    """홈 경로의 원본·resolve 표기(긴 것 먼저). 게시물에 남으면 안 되는 문자열이다."""
+    from td.site.pages import _path_variants
+    return _path_variants(Path.home())
+
+
+def redact_home(text: str) -> str:
+    for variant in home_path_variants():
+        text = text.replace(variant, "~")
+    return text
+
+
+def check_no_home_in_file(path, label: str) -> None:
+    """업로드 전 게이트: 올릴 파일에 홈 경로가 있으면 PublishError(사유에는 경로 값을 쓰지 않는다)."""
+    text = Path(path).read_text(errors="replace")
+    if any(variant in text for variant in home_path_variants()):
+        raise PublishError(f"{label}에 로컬 홈 경로가 들어 있어 게시하지 않는다(업로드 전 게이트)")
+
+
 def write_log(s3, bucket: str, mirror_dir, prefix: str, sut: str, run_id: str, result: dict, to_mirror: bool = True) -> str:
-    """`suts/<sut>/publish-log/<runId>.json`(갱신 가능한 인덱스 파일)을 S3에, 그리고 미러에 쓴다."""
+    """`suts/<sut>/publish-log/<runId>.json`(갱신 가능한 인덱스 파일)을 S3에, 그리고 미러에 쓴다. 홈 경로는 `~`로 가린다."""
     key = log_key(prefix, sut, run_id)
-    text = json.dumps({"runId": run_id, "sut": sut, **result}, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    text = redact_home(json.dumps({"runId": run_id, "sut": sut, **result}, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
     if to_mirror:
         path = Path(mirror_dir) / key
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -681,6 +700,7 @@ class Publication:
         site_dir = self.run_dir / pages.PUBLISH_SUBDIR
         shutil.rmtree(site_dir, ignore_errors=True)  # 이전 시도의 낡은 파일이 manifest에 섞이지 않게
         pages.render_run(self.run_dir, self.run_dir)
+        check_no_home_in_file(self.run_dir / "run.json", "run.json")  # run.json은 로컬 원본이 그대로 올라간다
         manifest = build_manifest(site_dir, self.key_prefix, self.run_dir / "run.json")
         self.size_bytes = manifest.total_bytes
         return manifest

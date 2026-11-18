@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "S11 Sonar export (sonar.json)",
+  "type": "object",
+  "required": ["schemaVersion", "projectKey", "serverUrl", "qualityGate", "measures", "issues", "hotspots"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "projectKey": {"type": "string", "minLength": 1},
+    "serverUrl": {"type": "string", "minLength": 1},
+    "ceTaskId": {"type": ["string", "null"]},
+    "dashboardUrl": {"type": "string"},
+    "qualityGate": {
+      "type": "object",
+      "required": ["status", "conditions"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {"enum": ["OK", "WARN", "ERROR", "NONE"]},
+        "conditions": {"type": "array", "items": {"type": "object",
+          "properties": {"status": {"type": "string"}, "metricKey": {"type": "string"}, "comparator": {"type": "string"},
+                         "errorThreshold": {"type": "string"}, "actualValue": {"type": "string"}}}}
+      }
+    },
+    "measures": {
+      "type": "object",
+      "required": ["coverage", "bugs", "vulnerabilities", "code_smells", "duplicated_lines_density", "ncloc",
+                   "sqale_rating", "reliability_rating", "security_rating"],
+      "additionalProperties": {"type": ["string", "null"]}
+    },
+    "issues": {"$ref": "#/$defs/part"},
+    "hotspots": {"$ref": "#/$defs/part"}
+  },
+  "$defs": {
+    "part": {
+      "type": "object",
+      "required": ["total", "fetched", "truncated", "items"],
+      "additionalProperties": false,
+      "properties": {
+        "total": {"type": "integer", "minimum": 0},
+        "fetched": {"type": "integer", "minimum": 0, "maximum": 10000},
+        "truncated": {"type": "boolean"},
+        "items": {"type": "array", "maxItems": 10000, "items": {
+          "type": "object", "required": ["key", "link"],
+          "properties": {"key": {"type": "string", "minLength": 1}, "link": {"type": "string", "minLength": 1}}}}
+      }
+    }
+  }
+}
