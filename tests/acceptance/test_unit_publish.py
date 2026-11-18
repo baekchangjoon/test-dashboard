@@ -443,3 +443,60 @@ def test_execute_lock_release_failure_is_recorded_in_log(exec_env):
     assert "--force-unlock" in result["hosts"]["s3"]["warning"]
     log = json.loads(s3.objects[f"_test/u/suts/sutx/publish-log/{run_id}.json"]["data"])
     assert log["reason"] == result["reason"] and "warning" in log["hosts"]["s3"]
+
+
+# --- 미러 경로 표기(상대, 심볼릭 링크)에서도 prune이 받은 파일을 지우지 않는다 ---------------------------------
+def _seeded_s3():
+    s3 = FakeS3()
+    for key in ("suts.json", "suts/s/runs/r1/index.html", "suts/s/runs/r1/_COMPLETE"):
+        s3.put_object(Bucket=BUCKET, Key=key, Body=b"x")
+    return s3
+
+
+def test_sync_mirror_relative_path_keeps_files(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    publish.sync_mirror(_seeded_s3(), BUCKET, "rel-mirror")
+    assert (tmp_path / "rel-mirror/suts.json").exists() and (tmp_path / "rel-mirror/suts/s/runs/r1/_COMPLETE").exists()
+    stats = publish.sync_mirror(_seeded_s3(), BUCKET, "rel-mirror")  # 두 번째 동기화(prune 경로)도 유지
+    assert stats.pruned == 0 and (tmp_path / "rel-mirror/suts.json").exists()
+
+
+def test_sync_mirror_symlinked_dir_keeps_files(tmp_path):
+    real = tmp_path / "real"
+    real.mkdir()
+    link = tmp_path / "link"
+    link.symlink_to(real)
+    publish.sync_mirror(_seeded_s3(), BUCKET, link)
+    stats = publish.sync_mirror(_seeded_s3(), BUCKET, link)
+    assert stats.pruned == 0 and (real / "suts.json").exists() and (real / "suts/s/runs/r1/index.html").exists()
+
+
+# --- release()가 False일 때와 publish-log 재기록 후 후속 동기화 ---------------------------------------------------
+def test_release_returns_false_when_lock_object_is_gone():
+    s3 = FakeS3()
+    lock = publish.acquire_lock(s3, BUCKET, "", "att-1")
+    del s3.objects["locks/publish"]
+    assert publish.release(s3, lock) is False
+
+
+def test_release_false_is_recorded_and_log_resynced_and_reinvalidated(exec_env):
+    run_id, run_dir, env, tmp_path = exec_env
+    rsync_log = tmp_path / "rsync.calls"
+    (tmp_path / "bin" / "rsync").write_text(f'#!/usr/bin/env bash\necho x >> {rsync_log}\nexit 0\n')
+
+    class LockStolen(FakeS3):
+        def delete_object(self, Bucket, Key, IfMatch=None):
+            if Key.endswith("locks/publish"):
+                self.objects.pop(Key, None)
+                raise_not_found = publish.ClientError({"Error": {"Code": "PreconditionFailed"}}, "DeleteObject")
+                raise raise_not_found
+            return super().delete_object(Bucket, Key, IfMatch)
+
+    cf = OkCloudFront()
+    s3 = LockStolen()
+    result = execute(run_id, run_dir, env, s3, cf)
+    assert result["status"] == "passed" and "잠금이 이미" in result["reason"]
+    assert cf.paths[-1] == [f"/_test/u/suts/sutx/publish-log/{run_id}.json"] and len(cf.paths) == 3
+    assert len(rsync_log.read_text().splitlines()) == 2 + 1 + 1 + 1 - 1  # A, B, 로그 B, 재기록 B
+    mirror_log = json.loads((tmp_path / "work/site-mirror/_test/u/suts/sutx/publish-log" / f"{run_id}.json").read_text())
+    assert "warning" in mirror_log["hosts"]["s3"]
