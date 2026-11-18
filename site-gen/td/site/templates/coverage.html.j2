@@ -34,7 +34,7 @@ pjacoco는 HttpServlet#service부터 귀속을 시작하므로, 그 코드는 �
 {% endif %}
 
 <h2>TC × 클래스 히트맵</h2>
-<p class="muted">셀 색의 진하기는 그 TC가 그 클래스에서 커버한 라인 수에 비례한다.</p>
+<p class="muted">셀 색의 진하기는 그 TC가 그 클래스에서 커버한 라인 수에 비례한다. 열에는 적어도 한 TC가 커버한 클래스만 나온다.</p>
 <div class="scroll" id="heatmap">
 <table>
   <thead><tr><th>TC</th>{% for src in coverage.classes %}<th class="col" title="{{ src }}">{{ short(src) }}</th>{% endfor %}</tr></thead>
@@ -54,11 +54,14 @@ pjacoco는 HttpServlet#service부터 귀속을 시작하므로, 그 코드는 �
   <input type="search" id="tc-filter" placeholder="TC 이름 필터" aria-label="TC 이름 필터">
   <select id="suite-filter" aria-label="스위트 필터"><option value="">모든 스위트</option>
   {% for name in coverage.suites %}<option value="{{ name }}">{{ name }}</option>{% endfor %}</select>
+  <select id="result-filter" aria-label="결과 필터"><option value="">모든 결과</option>
+  {% for value in ["passed", "failed", "skipped", "undefined", "uncompilable", "unknown"] %}<option value="{{ value }}">{{ value }}</option>{% endfor %}</select>
 </div>
 <div class="scroll">
 <table id="tc-table">
   <thead><tr>
     <th><button class="sort" data-key="name">TC</button></th>
+    <th><button class="sort" data-key="result">결과</button></th>
     <th class="num"><button class="sort" data-key="line">라인</button></th>
     <th class="num"><button class="sort" data-key="branch">브랜치</button></th>
     <th class="num"><button class="sort" data-key="method">메서드</button></th>
@@ -68,8 +71,9 @@ pjacoco는 HttpServlet#service부터 귀속을 시작하므로, 그 코드는 �
   </tr></thead>
   <tbody>
   {% for name, suite in coverage.suites.items() %}{% for tc in suite.tcs %}
-    <tr class="tc-row{{ ' unattributed' if not tc.attributed }}" tabindex="0" data-testid="{{ tc.testId }}" data-slug="{{ tc.slug }}" data-suite="{{ name }}" data-attributed="{{ 1 if tc.attributed else 0 }}">
+    <tr class="tc-row{{ ' unattributed' if not tc.attributed }}" tabindex="0" data-testid="{{ tc.testId }}" data-slug="{{ tc.slug }}" data-suite="{{ name }}" data-attributed="{{ 1 if tc.attributed else 0 }}" data-result="{{ tc.result or 'unknown' }}">
       <td data-key="name" data-value="{{ tc.testId }}">{{ tc.testId }}{% if not tc.attributed %} <span class="muted">(귀속 없음)</span>{% endif %}</td>
+      <td data-key="result" data-value="{{ tc.result or 'unknown' }}">{{ tc.result or 'unknown' }}</td>
       <td class="num" data-key="line" data-value="{{ tc.line }}">{{ pct(tc.line) }}</td>
       <td class="num" data-key="branch" data-value="{{ tc.branch }}">{{ pct(tc.branch) }}</td>
       <td class="num" data-key="method" data-value="{{ tc.method }}">{{ pct(tc.method) }}</td>
@@ -94,7 +98,7 @@ pjacoco는 HttpServlet#service부터 귀속을 시작하므로, 그 코드는 �
   let sortKey = null, sortDir = 1;
   function value(row, key) {
     const cell = row.querySelector('td[data-key="' + key + '"]');
-    return key === 'name' ? cell.dataset.value : Number(cell.dataset.value);
+    return (key === 'name' || key === 'result') ? cell.dataset.value : Number(cell.dataset.value);
   }
   table.querySelectorAll('button.sort').forEach(function (button) {
     button.addEventListener('click', function () {
@@ -110,14 +114,16 @@ pjacoco는 HttpServlet#service부터 귀속을 시작하므로, 그 코드는 �
   });
   const filterInput = document.getElementById('tc-filter');
   const suiteSelect = document.getElementById('suite-filter');
+  const resultSelect = document.getElementById('result-filter');
   function applyFilter() {
-    const text = filterInput.value.trim().toLowerCase(), suite = suiteSelect.value;
+    const text = filterInput.value.trim().toLowerCase(), suite = suiteSelect.value, result = resultSelect.value;
     Array.from(body.rows).forEach(function (row) {
-      row.hidden = !(row.dataset.testid.toLowerCase().includes(text) && (!suite || row.dataset.suite === suite));
+      row.hidden = !(row.dataset.testid.toLowerCase().includes(text) && (!suite || row.dataset.suite === suite) && (!result || row.dataset.result === result));
     });
   }
   filterInput.addEventListener('input', applyFilter);
   suiteSelect.addEventListener('change', applyFilter);
+  resultSelect.addEventListener('change', applyFilter);
 
   const detail = document.getElementById('detail');
   const sourceCache = {};

@@ -17,6 +17,9 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SUT_YAML = yaml.safe_load((REPO_ROOT / "suts" / "petclinic" / "sut.yaml").read_text())
 PROBES = SUT_YAML["coverage"]["probes"]
+_EXPECTED = yaml.safe_load((REPO_ROOT / "suts" / "petclinic" / "expected-tests.yaml").read_text())
+TC_TOTAL = _EXPECTED["blackbox"]["total"]
+TC_ATTRIBUTED = _EXPECTED["expected_exec"]
 
 
 @pytest.fixture(scope="session")
@@ -76,8 +79,8 @@ def test_req031_suite_coverage(s08_run):
     assert kpis["aggregate"]["branch"] == pytest.approx(_counter_ratio(root / "blackbox" / "aggregate" / "jacoco.xml", "BRANCH"))
     assert kpis["aggregate"]["line"] >= kpis["line"]
     suite = _coverage(s08_run)["suites"]["blackbox"]
-    assert suite["tcCount"] == 35 and suite["attributedCount"] == 27
-    assert sum(1 for tc in suite["tcs"] if tc["attributed"]) == 27
+    assert suite["tcCount"] == TC_TOTAL and suite["attributedCount"] == TC_ATTRIBUTED
+    assert sum(1 for tc in suite["tcs"] if tc["attributed"]) == TC_ATTRIBUTED
     assert (root / "coverage.html").is_file() and list((root / "src").rglob("*.java"))
 
 
@@ -94,6 +97,20 @@ def test_req063_merged_aggregate(s08_run):
     assert len(manifest["execFiles"]) == 1 and Path(manifest["execFiles"][0]["path"]).name == "aggregate.exec"
     # 병합본은 스위트 aggregate를 포함한다
     assert _xml_lines(root / "blackbox" / "aggregate" / "jacoco.xml", covered_only=True) <= _xml_lines(merged, covered_only=True)
+
+
+def test_req031_tc_results_match_junit(s08_run):
+    """결과 열: JUnit XML의 모든 TC(귀속 없는 TC 포함)가 JUnit과 같은 결과로 나온다."""
+    from td.blackbox import junit_results
+    root = s08_run.run_dir / "S01" / "blackbox"
+    sources = REPO_ROOT / "work" / "suts" / "petclinic" / "src" / SUT_YAML["blackbox"].get("test_sources", "src/test/java")
+    expected = junit_results(root / "junit", sources)
+    assert len(expected) == TC_TOTAL
+    actual = {tc["testId"]: tc["result"] for tc in _coverage(s08_run)["suites"]["blackbox"]["tcs"]}
+    assert actual == expected
+    assert set(actual.values()) <= {"passed", "failed", "skipped"}
+    for test_id in _EXPECTED["no_attribution"]["tests"]:
+        assert actual[test_id] == "passed", test_id  # .exec가 없어도 결과가 나온다
 
 
 def test_req032_integrity(s08_run):
@@ -156,19 +173,32 @@ def test_req033_per_tc_view(s08_run, coverage_url, browser):
         page.wait_for_selector("tr.tc-row")
         assert page.locator("#heatmap td.hm-cell").count() > 0, "TC x 클래스 히트맵이 없다"
         assert page.locator("th", has_text="고유 라인").count() >= 1
-        assert page.locator("tr.tc-row").count() == 35
+        assert page.locator("tr.tc-row").count() == TC_TOTAL
         # 행 클릭 -> 소스 뷰어에 하이라이트
         page.locator(f'tr.tc-row[data-testid="{probe_test}"]').click()
         page.wait_for_selector("#detail .src-line.hit")
         page.wait_for_function(f"document.querySelectorAll('#detail .src-line.hit').length === {expected_hits}")
         assert page.locator("#detail .src-line.hit").count() == expected_hits
-        # 정렬: 고유 라인 내림차순
-        page.locator('button.sort[data-key="unique"]').click()
-        values = page.locator("tr.tc-row:not([hidden]) td[data-key='unique']").evaluate_all("els => els.map(e => Number(e.dataset.value))")
-        assert values == sorted(values) or values == sorted(values, reverse=True)
-        page.locator('button.sort[data-key="unique"]').click()
-        values_again = page.locator("tr.tc-row:not([hidden]) td[data-key='unique']").evaluate_all("els => els.map(e => Number(e.dataset.value))")
-        assert values_again == list(reversed(values)) or values_again != values
+        # 정렬: 값이 일정하지 않은 열에서 첫 클릭은 오름차순, 두 번째 클릭은 내림차순(동률이 있는 열이라 비감소/비증가로 비교한다)
+        def column(key):
+            return page.locator(f"tr.tc-row:not([hidden]) td[data-key='{key}']").evaluate_all(
+                "els => els.map(e => e.dataset.value)")
+        for key, cast in (("lines", float), ("name", str)):
+            page.locator(f'button.sort[data-key="{key}"]').click()
+            ascending = [cast(v) for v in column(key)]
+            assert len(set(ascending)) > 1, f"{key} 열 값이 모두 같다"
+            assert ascending == sorted(ascending), key
+            page.locator(f'button.sort[data-key="{key}"]').click()
+            descending = [cast(v) for v in column(key)]
+            assert descending == sorted(descending, reverse=True), key
+            assert descending != ascending
+        # 결과 열과 결과 필터
+        assert page.locator("th", has_text="결과").count() >= 1
+        page.select_option("#result-filter", "passed")
+        passed_rows = page.locator("tr.tc-row:not([hidden])").count()
+        assert passed_rows == sum(1 for tc in _coverage(s08_run)["suites"]["blackbox"]["tcs"] if tc["result"] == "passed") > 0
+        page.select_option("#result-filter", "")
+        assert page.locator("tr.tc-row:not([hidden])").count() == TC_TOTAL
         # 필터
         page.fill("#tc-filter", "OwnerApi")
         shown = page.locator("tr.tc-row:not([hidden])").evaluate_all("els => els.map(e => e.dataset.testid)")

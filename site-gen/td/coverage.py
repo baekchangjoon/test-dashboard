@@ -61,7 +61,7 @@ class TcCoverage:
     branch: float
     method: float
     unique_lines: dict[str, list[int]] = field(default_factory=dict)
-    class_id_warnings: int = 0
+    class_id_mismatches: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -70,8 +70,8 @@ class SuiteCoverage:
     attributed_xml: Path | None
     aggregate_xml: Path
     kpis: dict
-    aggregate_exec: Path
-    class_id_warnings: int = 0
+    aggregate_execs: list[Path]
+    class_id_mismatches: set[str] = field(default_factory=set)
     tc_exec_files: list[Path] = field(default_factory=list)
 
 
@@ -92,12 +92,25 @@ def run_jacococli(cli_jar, args: list[str], log_path: Path) -> int:
     return completed.returncode
 
 
+_CLASS_ID_RE = re.compile(r"class (\S+) does not match")
+
+
+def class_id_mismatches(log_path: Path) -> set[str]:
+    """jacococli 로그에서 classId가 맞지 않는 클래스 이름 집합(같은 클래스의 반복 경고는 한 번만 센다)."""
+    found: set[str] = set()
+    for line in log_path.read_text(errors="replace").splitlines():
+        if CLASS_ID_MARK in line:
+            match = _CLASS_ID_RE.search(line)
+            found.add(match.group(1) if match else line.strip())
+    return found
+
+
 def count_class_id_warnings(log_path: Path) -> int:
-    return sum(1 for line in log_path.read_text(errors="replace").splitlines() if CLASS_ID_MARK in line)
+    return len(class_id_mismatches(log_path))
 
 
-def _report(cli_jar, exec_files, classes, out_dir: Path, *, xml=None, csv=None, html=None, sources=None) -> int:
-    """리포트를 만들고 classId 불일치 경고 수를 돌려준다. 실패하면 CoverageError."""
+def _report(cli_jar, exec_files, classes, out_dir: Path, *, xml=None, csv=None, html=None, sources=None) -> set[str]:
+    """리포트를 만들고 classId가 불일치한 클래스 집합을 돌려준다. 실패하면 CoverageError."""
     args = ["report", *map(str, exec_files), "--classfiles", str(classes)]
     if sources:
         args += ["--sourcefiles", str(sources)]
@@ -108,9 +121,9 @@ def _report(cli_jar, exec_files, classes, out_dir: Path, *, xml=None, csv=None, 
     rc = run_jacococli(cli_jar, args, log)
     if rc != 0:
         raise CoverageError(f"jacococli report 실패(rc={rc}): {log.read_text(errors='replace')[-600:]}")
-    warnings = count_class_id_warnings(log)
+    mismatches = class_id_mismatches(log)
     log.unlink()
-    return warnings
+    return mismatches
 
 
 # --- XML 파싱 ----------------------------------------------------------------------------
@@ -144,11 +157,11 @@ def per_tc(exec_files, classes, out_dir, cli_jar) -> dict[str, TcCoverage]:
 
     def one(exec_file: Path) -> tuple[str, TcCoverage]:
         xml_path = tmp / f"{slug(exec_file.stem)}.xml"
-        warnings = _report(cli_jar, [exec_file], classes, tmp, xml=xml_path)
+        mismatches = _report(cli_jar, [exec_file], classes, tmp, xml=xml_path)
         parsed = parse_report(xml_path)
         xml_path.unlink()
         return exec_file.stem, TcCoverage(parsed.covered, parsed.ratios["line"], parsed.ratios["branch"],
-                                          parsed.ratios["method"], class_id_warnings=warnings)
+                                          parsed.ratios["method"], class_id_mismatches=mismatches)
 
     with ThreadPoolExecutor(max_workers=4) as pool:
         results = dict(pool.map(one, sorted(Path(p) for p in exec_files)))
@@ -178,24 +191,24 @@ def report_suite(exec_dir, classes, sources, out_dir, cli_jar, name: str = "blac
     aggregate_execs = sorted(exec_dir.glob(f"{AGGREGATE_PREFIX}*.exec"))
     if not aggregate_execs:
         raise CoverageError(f"{name}: aggregate*.exec가 없다({exec_dir})")
-    warnings = 0
+    mismatches: set[str] = set()
     kpis: dict = {"line": 0.0, "branch": 0.0}
     attributed_xml = None
     if tc_execs:
         base = out_dir / "attributed"
         base.mkdir(parents=True, exist_ok=True)
-        warnings += _report(cli_jar, tc_execs, classes, base, xml=base / "jacoco.xml", csv=base / "jacoco.csv",
+        mismatches |= _report(cli_jar, tc_execs, classes, base, xml=base / "jacoco.xml", csv=base / "jacoco.csv",
                             html=base / "html", sources=sources)
         attributed_xml = base / "jacoco.xml"
         parsed = parse_report(attributed_xml)
         kpis = {"line": parsed.ratios["line"], "branch": parsed.ratios["branch"]}
     base = out_dir / "aggregate"
     base.mkdir(parents=True, exist_ok=True)
-    warnings += _report(cli_jar, aggregate_execs, classes, base, xml=base / "jacoco.xml", csv=base / "jacoco.csv",
+    mismatches |= _report(cli_jar, aggregate_execs, classes, base, xml=base / "jacoco.xml", csv=base / "jacoco.csv",
                         html=base / "html", sources=sources)
     aggregate = parse_report(base / "jacoco.xml")
     kpis["aggregate"] = {"line": aggregate.ratios["line"], "branch": aggregate.ratios["branch"]}
-    return SuiteCoverage(name, attributed_xml, base / "jacoco.xml", kpis, aggregate_execs[0], warnings, tc_execs)
+    return SuiteCoverage(name, attributed_xml, base / "jacoco.xml", kpis, aggregate_execs, mismatches, tc_execs)
 
 
 def _digest_tree(root: Path) -> str:
@@ -211,12 +224,13 @@ def merge_aggregate(suites: list[SuiteCoverage], out, classes, cli_jar, commit: 
     S09(hotspot)와 S11(Sonar)이 이 파일 하나를 쓴다(REQ-063)."""
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    execs = [s.aggregate_exec for s in suites]
-    _report(cli_jar, execs, classes, out.parent, xml=out)
+    execs = [path for s in suites for path in s.aggregate_execs]
+    mismatches = _report(cli_jar, execs, classes, out.parent, xml=out)
     manifest = {
         "suites": [s.name for s in suites], "commit": commit, "classes": str(classes), "classesDigest": _digest_tree(Path(classes)),
-        "execFiles": [{"suite": s.name, "path": str(s.aggregate_exec), "sha256": hashlib.sha256(s.aggregate_exec.read_bytes()).hexdigest()}
-                      for s in suites],
+        "execFiles": [{"suite": s.name, "path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+                      for s in suites for path in s.aggregate_execs],
+        "classIdMismatches": sorted(mismatches),
         "xml": out.name, "xmlSha256": hashlib.sha256(out.read_bytes()).hexdigest(),
     }
     (out.parent / "manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False))
@@ -224,14 +238,24 @@ def merge_aggregate(suites: list[SuiteCoverage], out, classes, cli_jar, commit: 
 
 
 # --- 무결성 -------------------------------------------------------------------------------
-def integrity(attributed, aggregate, class_id_warnings: int, tc_lines, probes: list[Probe], controller_lines) -> list[Violation]:
-    """순수 함수. attributed/aggregate: 소스 경로 -> 커버 라인. controller_lines: 컨트롤러 -> {소스 경로 -> 실행 가능 라인}."""
-    violations: list[Violation] = []
+def check_containment(attributed, aggregate) -> list[Violation]:
+    """귀속 커버 라인은 집계 커버 라인에 포함돼야 한다. 인자: 소스 경로 -> 커버 라인."""
+    violations = []
     for src, numbers in attributed.items():
         extra = sorted(set(numbers) - set(aggregate.get(src, [])))
         if extra:
             violations.append(Violation("containment", f"{src}: attributed에만 있는 라인 {extra[:10]}"))
-    violations += [Violation("classId", f"classId 불일치 경고 #{n + 1}") for n in range(class_id_warnings)]
+    return violations
+
+
+def check_class_id(mismatched_classes) -> list[Violation]:
+    """classId가 불일치한 클래스마다 위반 1건."""
+    return [Violation("classId", f"classId 불일치: {name}") for name in sorted(mismatched_classes)]
+
+
+def check_probes(tc_lines, probes: list[Probe], controller_lines) -> list[Violation]:
+    """교차 오염 탐침. controller_lines: 컨트롤러 -> {소스 경로 -> 실행 가능 라인}. 각 TC는 자기 컨트롤러만 커버해야 한다."""
+    violations = []
     for probe in probes:
         covered = {(src, n) for src, numbers in tc_lines.get(probe.test, {}).items() for n in numbers}
         for controller, by_src in controller_lines.items():
@@ -259,17 +283,9 @@ def discover_suites(run_dir) -> dict[str, Path]:
     return suites
 
 
-def _suite_dir_name(name: str) -> str:
-    return name
-
-
 def _summary_for(exec_dir: Path) -> dict:
     summary = exec_dir.parent / "summary.json"
     return json.loads(summary.read_text()) if summary.is_file() else {}
-
-
-def _rel(path: Path, root: Path) -> str:
-    return str(Path(path).relative_to(root))
 
 
 def copy_sources(source_keys, sources_dir, out_dir: Path) -> int:
@@ -284,7 +300,33 @@ def copy_sources(source_keys, sources_dir, out_dir: Path) -> int:
     return count
 
 
-def build(run_dir, *, classes, sources, cli_jar, commit: str, probes: list[Probe]) -> dict:
+RESULT_VALUES = ("passed", "failed", "skipped", "undefined", "uncompilable")
+
+
+def load_results(run_dir, suite_name: str, test_sources=None) -> dict[str, str]:
+    """스위트의 TC별 결과(testId -> 결과). 스위트 종류별 결과 소스를 여기서 고른다.
+    - blackbox: S01 JUnit XML(passed|failed|skipped)
+    - e2e-<genId>: S07/<genId>/scenario-results.json(`{testId: status}` 또는 `[{testId, status}]`, status는 passed|failed|undefined|uncompilable)
+    소스가 없으면 빈 dict(그 TC의 결과는 알 수 없음으로 표시한다)."""
+    run_dir = Path(run_dir)
+    if suite_name == "blackbox":
+        from td.blackbox import junit_results
+        junit_dir = run_dir / "S01" / "blackbox" / "junit"
+        return junit_results(junit_dir, test_sources) if junit_dir.is_dir() else {}
+    if suite_name.startswith("e2e-"):
+        path = run_dir / "S07" / suite_name[len("e2e-"):] / "scenario-results.json"
+        if not path.is_file():
+            return {}
+        data = json.loads(path.read_text())
+        if isinstance(data, dict) and isinstance(data.get("results"), (dict, list)):
+            data = data["results"]
+        if isinstance(data, list):
+            data = {item["testId"]: item["status"] for item in data}
+        return {str(k): str(v) for k, v in data.items()}
+    return {}
+
+
+def build(run_dir, *, classes, sources, cli_jar, commit: str, probes: list[Probe], test_sources=None) -> dict:
     """S08 전체 실행: 스위트별 리포트, TC JSON, 병합 집계, 무결성 검사, coverage.json. 결과 요약을 돌려준다."""
     run_dir = Path(run_dir)
     out = run_dir / "S08"
@@ -296,21 +338,23 @@ def build(run_dir, *, classes, sources, cli_jar, commit: str, probes: list[Probe
     suite_json: dict[str, dict] = {}
     all_tc_lines: dict[str, dict[str, list[int]]] = {}
     violations: list[Violation] = []
-    warnings_total = 0
+    mismatched: set[str] = set()
     all_sources: set[str] = set()
     all_classes: set[str] = set()
     tc_dir = out / "tc"
     tc_dir.mkdir(exist_ok=True)
     for name, exec_dir in suite_dirs.items():
-        suite_out = out / _suite_dir_name(name)
+        suite_out = out / name
         suite = report_suite(exec_dir, classes, sources, suite_out, cli_jar, name)
         suites.append(suite)
         tcs = per_tc(suite.tc_exec_files, classes, suite_out, cli_jar)
-        warnings_total += suite.class_id_warnings + sum(tc.class_id_warnings for tc in tcs.values())
+        mismatched |= suite.class_id_mismatches
+        for tc in tcs.values():
+            mismatched |= tc.class_id_mismatches
         aggregate = parse_report(suite.aggregate_xml)
         all_sources |= set(aggregate.executable)
         attributed_lines = parse_report(suite.attributed_xml).covered if suite.attributed_xml else {}
-        violations += [v for v in integrity(attributed_lines, aggregate.covered, 0, {}, [], {})]
+        violations += check_containment(attributed_lines, aggregate.covered)
         tc_entries = []
         for test_id, tc in sorted(tcs.items()):
             line_count = sum(len(v) for v in tc.lines.values())
@@ -325,19 +369,25 @@ def build(run_dir, *, classes, sources, cli_jar, commit: str, probes: list[Probe
                                "classes": sorted(tc.lines), "classCounts": {k: len(v) for k, v in sorted(tc.lines.items())}})
         summary = _summary_for(exec_dir)
         no_attribution = set(summary.get("noAttribution") or [])
-        for test_id in sorted(summary.get("missingExec") or []):
-            tc_entries.append({"testId": test_id, "slug": slug(test_id), "attributed": False,
-                               "reason": "no-attribution" if test_id in no_attribution else "missing-exec",
+        missing = set(summary.get("missingExec") or [])
+        results = load_results(run_dir, name, test_sources)
+        for entry in tc_entries:
+            entry["result"] = results.get(entry["testId"])
+        for test_id in sorted((missing | set(results)) - set(tcs)):
+            reason = "no-attribution" if test_id in no_attribution else "missing-exec" if test_id in missing else "no-exec"
+            tc_entries.append({"testId": test_id, "slug": slug(test_id), "attributed": False, "reason": reason,
+                               "result": results.get(test_id),
                                "line": 0.0, "branch": 0.0, "method": 0.0, "lineCount": 0, "uniqueLines": 0,
                                "classes": [], "classCounts": {}})
         all_tc_lines.update({t: c.lines for t, c in tcs.items()})
         suite_json[name] = {
             "kpis": suite.kpis, "tcCount": len(tc_entries), "attributedCount": len(tcs), "tcs": tc_entries,
-            "paths": {kind: {"html": f"{_suite_dir_name(name)}/{kind}/html/index.html", "xml": f"{_suite_dir_name(name)}/{kind}/jacoco.xml",
-                             "csv": f"{_suite_dir_name(name)}/{kind}/jacoco.csv"}
+            "paths": {kind: {"html": f"{name}/{kind}/html/index.html", "xml": f"{name}/{kind}/jacoco.xml",
+                             "csv": f"{name}/{kind}/jacoco.csv"}
                       for kind in (["attributed"] if suite.attributed_xml else []) + ["aggregate"]},
         }
     merged = merge_aggregate(suites, out / "merged" / "aggregate.xml", classes, cli_jar, commit)
+    mismatched |= set(json.loads((merged.parent / "manifest.json").read_text())["classIdMismatches"])
     merged_report = parse_report(merged)
     all_sources |= set(merged_report.executable)
     copy_sources(all_sources, sources, out)
@@ -355,7 +405,7 @@ def build(run_dir, *, classes, sources, cli_jar, commit: str, probes: list[Probe
                 if not controller_lines[probe.controller]:
                     violations.append(Violation("probe-own", f"컨트롤러 {probe.controller} 소스를 리포트에서 찾지 못했다"))
             if all(p.test in all_tc_lines for p in probes):
-                violations += integrity({}, {}, 0, all_tc_lines, probes, controller_lines)
+                violations += check_probes(all_tc_lines, probes, controller_lines)
                 probe_results = [{"test": p.test, "controller": p.controller,
                                   "ownLines": sum(len(set(v) & set(controller_lines[p.controller].get(k, [])))
                                                   for k, v in all_tc_lines[p.test].items()),
@@ -364,7 +414,8 @@ def build(run_dir, *, classes, sources, cli_jar, commit: str, probes: list[Probe
                                                     for k, v in all_tc_lines[p.test].items())} for p in probes]
             else:
                 violations += [Violation("probe-own", f"탐침 TC {p.test}의 .exec가 없다") for p in probes if p.test not in all_tc_lines]
-    violations += integrity({}, {}, warnings_total, {}, [], {})
+    violations += check_class_id(mismatched)
+    warnings_total = len(mismatched)
     coverage = {"suites": suite_json, "classes": sorted(all_classes),
                 "integrity": {"violations": [v.as_dict() for v in violations], "classIdWarnings": warnings_total, "probes": probe_results},
                 "merged": {"xml": "merged/aggregate.xml", "manifest": "merged/manifest.json"}}
@@ -375,10 +426,10 @@ def build(run_dir, *, classes, sources, cli_jar, commit: str, probes: list[Probe
 
 
 # --- 화면 ---------------------------------------------------------------------------------
-def render_page(out_dir, coverage: dict, css_href: str = "site.css") -> Path:
+def render_page(out_dir, coverage: dict, css_href: str = "site.css", copy_css: bool = True) -> Path:
     """coverage.json 내용으로 `coverage.html`을 만든다. 데이터는 페이지에 내장하고 TC 상세와 소스는 지연 로드한다."""
     out_dir = Path(out_dir)
-    if css_href == "site.css":
+    if copy_css:  # 단독 열람용: 같은 디렉터리의 site.css를 참조한다. 사이트 조립(Task 7)은 copy_css=False와 css_href를 넘긴다.
         shutil.copy2(STATIC_DIR / "site.css", out_dir / "site.css")
     template = jinja_env().get_template("coverage.html.j2")
     heat_max = max((n for suite in coverage["suites"].values() for tc in suite["tcs"] for n in tc["classCounts"].values()), default=1)
@@ -400,12 +451,14 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--sources", required=True)
     run.add_argument("--cli", required=True)
     run.add_argument("--commit", required=True)
+    run.add_argument("--test-sources")
     args = parser.parse_args(argv)
     from td import sut_config, state
     config = sut_config.load(args.sut_file)
     probes = [Probe(p.test, p.controller) for p in config.coverage_probes]
     try:
-        result = build(args.run_dir, classes=args.classes, sources=args.sources, cli_jar=args.cli, commit=args.commit, probes=probes)
+        result = build(args.run_dir, classes=args.classes, sources=args.sources, cli_jar=args.cli, commit=args.commit, probes=probes,
+                        test_sources=args.test_sources)
     except CoverageError as exc:
         print(json.dumps({"status": "failed", "reason": str(exc)[:1500]}, ensure_ascii=False))
         return 0
