@@ -1,0 +1,518 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "bbtg scan-test-assets 정제 산출물(허용 목록)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "skill",
+    "results"
+  ],
+  "x-forbidden-paths": [
+    "_artifact",
+    "project_root"
+  ],
+  "properties": {
+    "skill": {
+      "const": "scan-test-assets"
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source",
+          "data"
+        ],
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "base_package": {
+                "type": "string"
+              },
+              "build": {
+                "type": "object",
+                "properties": {
+                  "system": {
+                    "type": "string"
+                  },
+                  "systems": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "tasks": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "exclude_patterns": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "exclude_tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "execution": {
+                          "type": "null"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "include_patterns": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "include_tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "profile": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
+                        "source": {
+                          "type": "string"
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "warnings": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              },
+              "conventions": {
+                "type": "object",
+                "properties": {
+                  "blackbox": {
+                    "type": "object",
+                    "properties": {
+                      "equivalent_tasks": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "evidence": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "member_classes": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "recommended_class_suffix": {
+                        "type": "string"
+                      },
+                      "recommended_package": {
+                        "type": "string"
+                      },
+                      "required_tags": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "task": {
+                        "type": "string"
+                      },
+                      "task_id": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "class_suffixes": {
+                    "type": "object",
+                    "patternProperties": {
+                      "^.+$": {
+                        "type": "integer"
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "tags": {
+                    "type": "object",
+                    "patternProperties": {
+                      "^.+$": {
+                        "type": "integer"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "additionalProperties": false
+              },
+              "endpoint_coverage": {
+                "type": "object",
+                "patternProperties": {
+                  "^.+$": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "certain": {
+                          "type": "boolean"
+                        },
+                        "class": {
+                          "type": "string"
+                        },
+                        "fqn": {
+                          "type": "string"
+                        },
+                        "intent_tokens": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "method": {
+                          "type": "string"
+                        },
+                        "query_keys": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "scenario_class": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "additionalProperties": false
+              },
+              "environment_warnings": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "schema_version": {
+                "type": "string"
+              },
+              "support_classes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "black_box_safe": {
+                      "type": "boolean"
+                    },
+                    "black_box_violations": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "extensions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "fqn": {
+                      "type": "string"
+                    },
+                    "is_abstract": {
+                      "type": "boolean"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "package": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "reusable_members": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "modifiers": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "parameters": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "return_type": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "subclass_count": {
+                      "type": "integer"
+                    },
+                    "tags": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "visibility": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "test_classes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "all_tags": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "declared_tags": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "effective_tags": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "extends": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "fqn": {
+                      "type": "string"
+                    },
+                    "http_style": {
+                      "type": "string"
+                    },
+                    "in_process": {
+                      "type": "boolean"
+                    },
+                    "in_process_markers": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "is_abstract": {
+                      "type": "boolean"
+                    },
+                    "methods": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "display_name": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "endpoints": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "expected_status": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "integer"
+                                  }
+                                },
+                                "http_method": {
+                                  "type": "string"
+                                },
+                                "path": {
+                                  "type": "string"
+                                },
+                                "pos": {
+                                  "type": "integer"
+                                },
+                                "query_keys": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "raw_path": {
+                                  "type": "string"
+                                },
+                                "status_certain": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "additionalProperties": false
+                            }
+                          },
+                          "expected_status": {
+                            "type": "array",
+                            "items": {
+                              "type": "integer"
+                            }
+                          },
+                          "intent_tokens": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "scenario_class": {
+                            "type": "string"
+                          },
+                          "signatures": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "status_certain": {
+                            "type": "boolean"
+                          },
+                          "tags": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "not_selected_by": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "package": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "root_rel": {
+                      "type": "string"
+                    },
+                    "selected_by": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "selection_reasons": {
+                      "type": "object",
+                      "patternProperties": {
+                        "^.+$": {
+                          "type": "string"
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "super_chain": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "tag_sources": {
+                      "type": "object",
+                      "patternProperties": {
+                        "^.+$": {
+                          "type": "string"
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "test_method_count": {
+                      "type": "integer"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "test_roots": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "warnings": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    }
+  }
+}

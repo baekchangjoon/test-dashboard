@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "bbtg dependency-map 정제 산출물(허용 목록)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "skill",
+    "results"
+  ],
+  "x-forbidden-paths": [],
+  "properties": {
+    "skill": {
+      "const": "dependency-map"
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source",
+          "data"
+        ],
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "sections": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "heading": {
+                      "type": "string"
+                    },
+                    "level": {
+                      "type": "integer"
+                    },
+                    "tables": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "columns": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "rows": {
+                            "type": "array",
+                            "items": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    }
+  }
+}

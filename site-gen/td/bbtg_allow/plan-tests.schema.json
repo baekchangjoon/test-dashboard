@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "bbtg plan-tests 정제 산출물(허용 목록)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "skill",
+    "results"
+  ],
+  "x-forbidden-paths": [
+    "artifact_path",
+    "key_params_path"
+  ],
+  "properties": {
+    "skill": {
+      "const": "plan-tests"
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source",
+          "data"
+        ],
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "class": {
+                "type": "string"
+              },
+              "cross_check_warnings": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "method": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "object",
+                "properties": {
+                  "errorPath": {
+                    "type": "integer"
+                  },
+                  "happyPath": {
+                    "type": "integer"
+                  },
+                  "invalidInput": {
+                    "type": "integer"
+                  },
+                  "total": {
+                    "type": "integer"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "test_cases": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "branch_value": {
+                      "type": "string"
+                    },
+                    "condition": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "expected": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "param": {
+                      "type": "string"
+                    },
+                    "prefix": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    }
+  }
+}

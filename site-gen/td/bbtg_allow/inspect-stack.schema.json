@@ -1,0 +1,349 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "bbtg inspect-stack 정제 산출물(허용 목록)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "skill",
+    "results"
+  ],
+  "x-forbidden-paths": [
+    "analysis_meta.timestamp",
+    "analysis_meta.scan_duration_ms",
+    "test_env.database.username",
+    "test_env.database.password"
+  ],
+  "properties": {
+    "skill": {
+      "const": "inspect-stack"
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source",
+          "data"
+        ],
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "analysis_meta": {
+                "type": "object",
+                "properties": {
+                  "scanned_files": {
+                    "type": "integer"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "api_layer": {
+                "type": "object",
+                "properties": {
+                  "documentation": {
+                    "type": "object",
+                    "properties": {
+                      "tool": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "serialization": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "style": {
+                    "type": "string"
+                  },
+                  "validation": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "communication": {
+                "type": "object",
+                "properties": {
+                  "async": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "sync": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              },
+              "database": {
+                "type": "object",
+                "properties": {
+                  "migration_tool": {
+                    "type": "null"
+                  },
+                  "nosql": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "orm": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "provider": {
+                          "type": "string"
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "rdbms": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "artifact": {
+                          "type": "string"
+                        },
+                        "driver_class": {
+                          "type": "string"
+                        },
+                        "group": {
+                          "type": "string"
+                        },
+                        "source": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "string"
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "additionalProperties": false
+              },
+              "framework": {
+                "type": "object",
+                "properties": {
+                  "cloud_version": {
+                    "type": "string"
+                  },
+                  "core": {
+                    "type": "string"
+                  },
+                  "is_webflux": {
+                    "type": "boolean"
+                  },
+                  "version": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "observability": {
+                "type": "object",
+                "properties": {
+                  "actuator": {
+                    "type": "boolean"
+                  },
+                  "metrics": {
+                    "type": "null"
+                  },
+                  "tracing": {
+                    "type": "null"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "productivity": {
+                "type": "object",
+                "properties": {
+                  "tools": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              },
+              "project_info": {
+                "type": "object",
+                "properties": {
+                  "build_system": {
+                    "type": "string"
+                  },
+                  "language": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "version": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "security": {
+                "type": "object",
+                "properties": {
+                  "auth_type": {
+                    "type": "string"
+                  },
+                  "framework": {
+                    "type": "string"
+                  },
+                  "libraries": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              },
+              "test_env": {
+                "type": "object",
+                "properties": {
+                  "context_path": {
+                    "type": "null"
+                  },
+                  "database": {
+                    "type": "object",
+                    "properties": {
+                      "driver_class_name": {
+                        "type": "null"
+                      },
+                      "url": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "infrastructure": {
+                    "type": "object",
+                    "properties": {
+                      "docker_compose": {
+                        "type": "string"
+                      },
+                      "services": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "server": {
+                    "type": "object",
+                    "properties": {
+                      "start_cmd": {
+                        "type": "string"
+                      },
+                      "type": {
+                        "type": "string"
+                      },
+                      "url": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "wiremock_ports": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              },
+              "test_env_compat": {
+                "type": "object",
+                "properties": {
+                  "junit": {
+                    "type": "string"
+                  },
+                  "logback": {
+                    "type": "string"
+                  },
+                  "rest_assured": {
+                    "type": "string"
+                  },
+                  "surefire": {
+                    "type": "string"
+                  },
+                  "wiremock": {
+                    "type": "object",
+                    "properties": {
+                      "artifact": {
+                        "type": "string"
+                      },
+                      "group": {
+                        "type": "string"
+                      },
+                      "version": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "additionalProperties": false
+              },
+              "testing": {
+                "type": "object",
+                "properties": {
+                  "api_testing": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "bdd_tools": {
+                    "type": "null"
+                  },
+                  "framework": {
+                    "type": "string"
+                  },
+                  "mocking": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    }
+  }
+}
