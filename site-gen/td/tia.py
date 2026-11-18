@@ -66,13 +66,28 @@ def precheck(base_dir) -> list[str]:
 MAX_DIFF_LINES = 400  # 리포트에 싣는 diff 상한(전체는 base-head.diff에 있다)
 
 
+def lost_attribution(testwise) -> list[str]:
+    """testwise.json에서 in-process 귀속 손실 TC(`incompleteAttribution: true` 또는 `droppedProbes > 0`).
+    tia convert의 stderr 대신 기계가 읽는 이 필드를 쓴다(tia의 isLoss 판정과 같은 기준)."""
+    tests = testwise.get("tests") if isinstance(testwise, dict) else None
+    if not isinstance(tests, list):
+        raise TiaError("testwise.json에 tests 배열이 없다")
+    return sorted(t["uniformPath"] for t in tests
+                  if isinstance(t, dict) and (t.get("incompleteAttribution") is True or (t.get("droppedProbes") or 0) > 0))
+
+
 def impact_summary(doc, indexed_tests: int) -> dict:
-    """`tia impact --format json` 출력(`tests[{id, confidence}]`, `warnings[]`)에서 선택 현황을 뽑는다."""
-    tests = doc.get("tests") if isinstance(doc, dict) else None
+    """`tia impact --format json` 출력(`tests[{id, confidence}]`, `warnings[]`)에서 선택 현황을 뽑는다.
+    allSelectedConservative: 선택된 테스트가 모두 CONSERVATIVE(= tia의 보수적 전체 선택 신호, 선택이 0개면 false)."""
+    if not isinstance(doc, dict):
+        raise TiaError(f"impact.json 최상위가 객체가 아니다: {type(doc).__name__}")
+    tests = doc.get("tests")
+    if not isinstance(tests, list):
+        raise TiaError("impact.json에 tests 배열이 없다(tia impact --format json 출력이 아니다)")
     tests = tests if isinstance(tests, list) else []
     conservative = [t for t in tests if t.get("confidence") == "CONSERVATIVE"]
     return {"selected": len(tests), "indexedTests": indexed_tests, "deterministic": len(tests) - len(conservative),
-            "conservative": len(conservative), "conservativeSelectAll": bool(tests) and len(conservative) == len(tests)}
+            "conservative": len(conservative), "allSelectedConservative": bool(tests) and len(conservative) == len(tests)}
 
 
 def build_scenarios(doc, diff_text: str, indexed_tests: int, base: str, head: str) -> list[dict]:
@@ -85,7 +100,7 @@ def build_scenarios(doc, diff_text: str, indexed_tests: int, base: str, head: st
         shown += f"\n… (diff {len(lines)}줄 중 {MAX_DIFF_LINES}줄만 표시, 전체는 base-head.diff)"
     selected = [{"confidence": t.get("confidence"), "testId": t.get("id")} for t in (doc.get("tests") or [])]
     return [{"id": "R", "title": f"range {base[:7]}..{head[:7]} (base→HEAD 전체 변경)", "kind": "range",
-             "diff": shown, "selected": selected, "conservative": summary["conservativeSelectAll"],
+             "diff": shown, "selected": selected, "conservative": summary["allSelectedConservative"],
              "total": indexed_tests, "count": len(selected), "reasons": list(doc.get("warnings") or [])}]
 
 
@@ -116,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
             total = len(testwise.get("tests") or [])
             scenarios = build_scenarios(doc, Path(args.diff).read_text(errors="replace"), total, args.base, args.head)
             Path(args.out).write_text(json.dumps(scenarios, ensure_ascii=False, indent=1))
-            print(json.dumps(impact_summary(doc, total)))
+            print(json.dumps({**impact_summary(doc, total), "incompleteAttribution": lost_attribution(testwise)}))
         else:
             for reason in precheck(args.base_dir):
                 print(reason)
