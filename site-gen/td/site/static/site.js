@@ -17,5 +17,13 @@
       item(name + ': ' + (host && typeof host === 'object' ? (host.status || JSON.stringify(host)) : String(host)));
     });
     box.appendChild(list);
+    // run.json과 같은 값(publishing)으로 렌더된 S13 행을 최종 결과(publish-log)로 바꾼다.
+    var row = document.querySelector('#stages tr[data-stage="S13"]');
+    if (row && log.status) {
+      var cells = row.querySelectorAll('td');
+      cells[1].textContent = log.status;
+      cells[1].className = 'st-' + log.status;
+      cells[2].textContent = log.reason || '';
+    }
   }).catch(function () { /* 게시 결과 없음 유지 */ });
 })();
