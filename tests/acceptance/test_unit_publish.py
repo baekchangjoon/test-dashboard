@@ -500,3 +500,24 @@ def test_release_false_is_recorded_and_log_resynced_and_reinvalidated(exec_env):
     assert len(rsync_log.read_text().splitlines()) == 2 + 1 + 1 + 1 - 1  # A, B, 로그 B, 재기록 B
     mirror_log = json.loads((tmp_path / "work/site-mirror/_test/u/suts/sutx/publish-log" / f"{run_id}.json").read_text())
     assert "warning" in mirror_log["hosts"]["s3"]
+
+
+# --- S13 홈 경로 게이트(Task 12 이월): 업로드되는 run.json과 publish-log에 Path.home()이 없다 ---------------------------
+def test_execute_fails_before_upload_when_run_json_contains_home(exec_env):
+    run_id, run_dir, env, _ = exec_env
+    state.set_run_field(run_dir, "kpis.note", f"built in {Path.home()}/work")
+    s3 = FakeS3()
+    result = execute(run_id, run_dir, env, s3, OkCloudFront())
+    assert result["status"] == "failed" and "홈 경로" in result["reason"] and "run.json" in result["reason"], result
+    assert str(Path.home()) not in result["reason"]
+    assert not [k for k in s3.objects if "/runs/" in k and not k.endswith("publish-log.json")], "업로드가 일어나면 안 된다"
+
+
+def test_publish_log_redacts_home_path(exec_env):
+    run_id, run_dir, env, _ = exec_env
+    s3 = FakeS3()
+    key = publish.write_log(s3, BUCKET, run_dir / "mirror", "_test/u/", "sutx", run_id,
+                            publish.build_result("failed", f"boom at {Path.home()}/x", {"s3": {"status": "failed"}}, {}, 0))
+    text = s3.objects[key]["data"].decode()
+    assert str(Path.home()) not in text and "~/x" in text
+    assert str(Path.home()) not in (run_dir / "mirror" / key).read_text()

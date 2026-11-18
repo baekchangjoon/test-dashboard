@@ -68,3 +68,38 @@ def test_req035_hotspot_degraded_without_merged_coverage(s09_without_coverage_ru
     top10 = json.loads((run.run_dir / "S09" / "top10.json").read_text())
     assert 1 <= len(top10) <= 10 and stage["top10"] == top10
     assert all(set(row) >= {"name", "file", "score"} for row in top10)
+
+
+# --- S11 Sonar(REQ-037, REQ-063 보강) ---------------------------------------------------------------
+def test_req037_sonar_export(s11_run):
+    from jsonschema import Draft202012Validator
+    run = s11_run.result
+    assert run.returncode in (0, 2), run.stderr[-3000:]
+    stage = run.stage("S11")
+    assert stage["status"] == "passed", stage
+    sonar_dir = run.run_dir / "S11" / "sonar"
+    doc = json.loads((sonar_dir / "sonar.json").read_text())
+    schema = json.loads((Path(pages.__file__).parents[1] / "schemas" / "sonar.schema.json").read_text())
+    assert not list(Draft202012Validator(schema).iter_errors(doc))
+    assert doc["projectKey"].startswith("spring-petclinic-td-test-")  # 주입 실행은 세션 전용 프로젝트를 쓴다
+    assert doc["qualityGate"]["status"] in ("OK", "ERROR", "WARN", "NONE")
+    for name in ("issues", "hotspots"):
+        part = doc[name]
+        assert part["fetched"] == len(part["items"]) == min(part["total"], 10000)
+        assert part["truncated"] == (part["total"] > part["fetched"])
+        assert all(item["key"] and item["link"].startswith(doc["serverUrl"]) for item in part["items"])
+    assert (sonar_dir / "sonar.html").is_file()
+    # run 페이지가 링크하고, 게시 사본에 sonar.html이 있다
+    site_dir = pages.render_run(run.run_dir, run.run_dir).parent
+    assert 'href="sonar/sonar.html"' in (site_dir / "index.html").read_text()
+    assert (site_dir / "sonar" / "sonar.html").is_file() and (site_dir / "sonar" / "sonar.json").is_file()
+    # KPI와 스캔 입력(REQ-063: S11은 S08 병합 XML을 그대로 썼다)
+    assert run.run_json["kpis"]["sonar"]["gate"] == doc["qualityGate"]["status"]
+    merged = run.run_dir / "S08" / "merged" / "aggregate.xml"
+    assert stage["coverageXmlSha256"] == hashlib.sha256(merged.read_bytes()).hexdigest()
+    assert stage["ceTaskId"] and stage["projectKey"] == doc["projectKey"]
+    # 게시 사본에는 로컬 홈 경로가 없다
+    home = str(Path.home())
+    for path in site_dir.rglob("*"):
+        if path.is_file() and path.suffix in {".html", ".json"}:
+            assert home not in path.read_text(), path
