@@ -9,3 +9,16 @@ blackbox:
     ReservationApiBlackBoxIT: 6
     TokenRejectionBlackBoxIT: 5
     VetApiBlackBoxIT: 5
+# pjacoco는 HttpServlet#service에서만 테스트를 귀속한다. 보안 필터 체인에서 거부되는 TC는 .exec가 없다(구조적).
+expected_exec: 27
+no_attribution:
+  reason: "rejected in security filter chain before HttpServlet#service; pjacoco attributes at servlet layer"
+  tests:
+    - OwnerApiBlackBoxIT#listingOwnersRequiresAuthentication
+    - PetApiBlackBoxIT#readingPetsRequiresAuthentication
+    - ReservationApiBlackBoxIT#listingRequiresAuthentication
+    - VetApiBlackBoxIT#listingVetsRequiresAuthentication
+    - TokenRejectionBlackBoxIT#garbageTokenIsRejected
+    - TokenRejectionBlackBoxIT#malformedTokenStructureIsRejected
+    - TokenRejectionBlackBoxIT#tokenSignedWithWrongSecretIsRejected
+    - TokenRejectionBlackBoxIT#tokenWithoutBearerSchemeIsRejected

@@ -64,35 +64,51 @@ def exec_names(exec_dir) -> set[str]:
     return {p.stem for p in Path(exec_dir).glob("*.exec") if not p.name.startswith(AGGREGATE_PREFIX)}
 
 
-def evaluate(junit_dir, exec_dir, sources_dir=None) -> dict:
-    """게이트 판정에 쓰는 수치. status는 passed|failed, reason은 failed일 때만 있다."""
+def load_no_attribution(expected_file) -> list[str]:
+    """SUT 설명 디렉터리의 expected-tests.yaml `no_attribution.tests`(없으면 빈 목록)."""
+    if not expected_file or not Path(expected_file).is_file():
+        return []
+    import yaml
+    data = yaml.safe_load(Path(expected_file).read_text()) or {}
+    return list((data.get("no_attribution") or {}).get("tests") or [])
+
+
+def evaluate(junit_dir, exec_dir, sources_dir=None, expected_file=None) -> dict:
+    """게이트 판정. 누락(.exec 없는 TC) 중 문서화되지 않은 것이 있으면 failed, 문서화된 TC가 .exec를 가지면 degraded,
+    정확히 일치하면 passed. missingExec는 실제 누락 전부, noAttribution은 문서화된 목록이다."""
     test_ids = junit_test_ids(junit_dir, sources_dir)
     names = exec_names(exec_dir)
+    documented = load_no_attribution(expected_file)
     missing = sorted({t for t in test_ids if exec_file_key(t) not in names})
     aggregate = any(Path(exec_dir).glob(f"{AGGREGATE_PREFIX}*.exec"))
-    result = {"tcCount": len(test_ids), "execCount": len(names), "missingExec": missing, "aggregateExec": aggregate}
+    undocumented = [t for t in missing if t not in documented]
+    stale = sorted(t for t in documented if t in set(test_ids) and exec_file_key(t) in names)
+    result = {"tcCount": len(test_ids), "execCount": len(names), "missingExec": missing,
+              "noAttribution": documented, "aggregateExec": aggregate}
     problems = []
     if not test_ids:
         problems.append("JUnit XML에 실행된 TC가 없다")
-    if len(test_ids) != len(names):
-        problems.append(f"tcCount({len(test_ids)}) != execCount({len(names)})")
-    if missing:
-        problems.append(f"missingExec {len(missing)}건: {', '.join(missing[:5])}{' …' if len(missing) > 5 else ''}")
+    if undocumented:
+        problems.append(f"tcCount({len(test_ids)}) execCount({len(names)}): 문서화되지 않은 missingExec {len(undocumented)}건: "
+                        f"{', '.join(undocumented[:5])}{' …' if len(undocumented) > 5 else ''}")
     if not aggregate:
         problems.append("aggregate.exec가 없다")
-    result["status"] = "failed" if problems else "passed"
     if problems:
-        result["reason"] = "; ".join(problems)
+        result["status"], result["reason"] = "failed", "; ".join(problems)
+    elif stale:
+        result["status"], result["reason"] = "degraded", f"expectation stale: {', '.join(stale)}"
+    else:
+        result["status"] = "passed"
     return result
 
 
 def main(argv: list[str] | None = None) -> int:
-    """`python -m td.blackbox evaluate <junit_dir> <exec_dir> [<test_sources_dir>]`: 판정 JSON을 stdout에 낸다."""
+    """`python -m td.blackbox evaluate <junit_dir> <exec_dir> [<test_sources_dir> [<expected_tests.yaml>]]`: 판정 JSON을 stdout에 낸다."""
     args = sys.argv[1:] if argv is None else argv
-    if len(args) not in (3, 4) or args[0] != "evaluate":
-        print("usage: td.blackbox evaluate <junit_dir> <exec_dir> [<test_sources_dir>]", file=sys.stderr)
+    if len(args) not in (3, 4, 5) or args[0] != "evaluate":
+        print("usage: td.blackbox evaluate <junit_dir> <exec_dir> [<test_sources_dir> [<expected_tests.yaml>]]", file=sys.stderr)
         return 2
-    print(json.dumps(evaluate(args[1], args[2], args[3] if len(args) == 4 else None), ensure_ascii=False))
+    print(json.dumps(evaluate(args[1], args[2], args[3] if len(args) > 3 else None, args[4] if len(args) > 4 else None), ensure_ascii=False))
     return 0
 
 

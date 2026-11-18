@@ -11,7 +11,10 @@ import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-EXPECTED = yaml.safe_load((REPO_ROOT / "suts" / "petclinic" / "expected-tests.yaml").read_text())["blackbox"]["total"]
+_SPEC = yaml.safe_load((REPO_ROOT / "suts" / "petclinic" / "expected-tests.yaml").read_text())
+EXPECTED = _SPEC["blackbox"]["total"]
+EXPECTED_EXEC = _SPEC["expected_exec"]
+NO_ATTRIBUTION = sorted(_SPEC["no_attribution"]["tests"])
 
 
 def _blackbox_dir(run) -> Path:
@@ -40,18 +43,18 @@ def test_req012_blackbox_artifacts(m1_run):
     assert stage["status"] == "passed", stage
     root = _blackbox_dir(m1_run)
     assert (root / "exec" / "aggregate.exec").is_file(), "SUT 정지 시 쓰이는 aggregate.exec가 없다"
-    assert len(_exec_files(m1_run)) == EXPECTED
+    assert len(_exec_files(m1_run)) == EXPECTED_EXEC == EXPECTED - len(NO_ATTRIBUTION)
     assert list((root / "junit").glob("*.xml")), "JUnit XML이 복사되지 않았다"
     summary = json.loads((root / "summary.json").read_text())
-    assert summary["tcCount"] == summary["execCount"] == EXPECTED
+    assert summary["tcCount"] == EXPECTED and summary["execCount"] == EXPECTED_EXEC
     assert summary["aggregateExec"] is True
     assert (root / "gradle.log").is_file()
 
 
 def test_req008_exec_count_gate(m1_run, injected_gate_run):
     stage = m1_run.stage("S01")
-    assert stage["tcCount"] == stage["execCount"] == EXPECTED
-    assert stage["missingExec"] == []
+    assert stage["tcCount"] == EXPECTED and stage["execCount"] == EXPECTED_EXEC
+    assert sorted(stage["missingExec"]) == NO_ATTRIBUTION == sorted(stage["noAttribution"])
     assert len(_junit_testcases(m1_run)) == EXPECTED  # JUnit XML에서도 skipped 제외 35개
 
     bad = injected_gate_run
@@ -60,5 +63,5 @@ def test_req008_exec_count_gate(m1_run, injected_gate_run):
     assert bad_stage["tcCount"] == EXPECTED and bad_stage["execCount"] == 0
     assert len(bad_stage["missingExec"]) == EXPECTED
     assert all("#" in test_id for test_id in bad_stage["missingExec"])
-    assert "tcCount" in bad_stage["reason"] and "execCount" in bad_stage["reason"]
+    assert "tcCount(35)" in bad_stage["reason"] and "execCount(0)" in bad_stage["reason"]
     assert bad.returncode == 2  # S01만 실패: 종료 코드 2
