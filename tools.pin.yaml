@@ -36,12 +36,12 @@ hotspot:
   sha256: '216f4195f7d941cc219d5e0e76a66890708213b8b8def5388364c1fd55c2ef67'
 tia:
   repo: baekchangjoon/test-impact-analysis
-  commit: 634a4a3
+  commit: 634a4a3f160fd3e338f101fb984221ed6173b45f
   jdk: 17
   gradleTask: ':tia-cli:installDist'
 bbtg:
   repo: baekchangjoon/bbtg   # 비공개: gh 인증이 필요하다
-  commit: 83ea6fd
+  commit: 83ea6fdb51934a6202084aeb660d92de8e0e9b56
   python: '3.12'
 libraries:
   cucumber: 8.1.0

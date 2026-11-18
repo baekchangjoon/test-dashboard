@@ -145,3 +145,83 @@ def test_claude_version_parsing():
     assert prepare.parse_claude_version("2.1.327 (Claude Code)\n") == "2.1.327"
     with pytest.raises(prepare.PrepareError):
         prepare.parse_claude_version("")
+
+
+# --- fix round 1 ---------------------------------------------------------------------------------
+def _spec():
+    return {"group": "org.jqassistant.plugin", "artifact": "jqassistant-spring-plugin", "version": "2.9.0"}
+
+
+def test_resolved_plugin_jar_check_fails_closed(tmp_path):
+    spec = _spec()
+    with pytest.raises(prepare.PrepareError) as excinfo:  # 해석된 jar가 없으면 실패
+        prepare.check_resolved_plugin_jar(spec, "0" * 64, tmp_path)
+    assert "찾지 못" in str(excinfo.value)
+    jar = prepare.resolved_plugin_jar(spec, tmp_path)
+    jar.parent.mkdir(parents=True)
+    jar.write_bytes(b"plugin")
+    with pytest.raises(prepare.PrepareError) as excinfo:  # sha 불일치도 실패
+        prepare.check_resolved_plugin_jar(spec, "0" * 64, tmp_path)
+    assert "sha256" in str(excinfo.value)
+    assert prepare.check_resolved_plugin_jar(spec, _sha(b"plugin"), tmp_path) == str(jar)
+
+
+def test_claude_model_check_fails_when_unverifiable():
+    prepare.check_claude_model({"result": "OK", "models": ["m1"]}, "m1")
+    with pytest.raises(prepare.PrepareError):
+        prepare.check_claude_model({"result": "OK", "models": []}, "m1")
+    with pytest.raises(prepare.PrepareError):
+        prepare.check_claude_model({"result": "OK", "models": ["other"]}, "m1")
+
+
+def test_claude_flags_have_single_definition():
+    argv = prepare.claude_argv("/tmp/mcp.json", "sys prompt", "m1")
+    assert argv[:6] == ["-p", "--tools", "", "--strict-mcp-config", "--mcp-config", "/tmp/mcp.json"]
+    assert argv[-2:] == ["--model", "m1"] and "--bare" not in argv
+    described = " ".join(prepare.CLAUDE_FLAGS)
+    for name in prepare.CLAUDE_FLAG_NAMES:
+        assert name in described
+
+
+def test_load_pin_requires_full_sha(tmp_path):
+    text = (REPO_ROOT / "tools.pin.yaml").read_text()
+    assert len(prepare.load_pin(REPO_ROOT / "tools.pin.yaml")["tia"]["commit"]) == 40
+    short = tmp_path / "pin.yaml"
+    short.write_text(text.replace(yaml.safe_load(text)["tia"]["commit"], "634a4a3"))
+    with pytest.raises(prepare.PrepareError) as excinfo:
+        prepare.load_pin(short)
+    assert "40" in str(excinfo.value)
+
+
+def _lock(**override):
+    pin = prepare.load_pin(REPO_ROOT / "tools.pin.yaml")
+    artifacts = {k: {"version": "1", "sha256": "a" * 64, "path": "/x"} for k in
+                 ("pjacoco", "jacococli", "jqassistant", "jqassistantSpring", "hotspot")}
+    artifacts["jacocoCoreEmbedded"] = "0.8.12"
+    kwargs = dict(run_id="r", sut_name="s", sut_commit="c" * 40, tia_commit=pin["tia"]["commit"],
+                  bbtg_commit=pin["bbtg"]["commit"], bbtg_requirements_sha256="b" * 64, claude_version="2.1.327",
+                  model="m", jqa_plugins=["x"], jqa_resolved_jar="/j", jqa_spring_verified=True,
+                  claude_verified=True, python_version="3.12")
+    kwargs.update(override)
+    return prepare.build_lock(pin, artifacts, **kwargs)
+
+
+def test_build_lock_requires_full_commit_equality_and_derives_flags():
+    pin = prepare.load_pin(REPO_ROOT / "tools.pin.yaml")
+    with pytest.raises(prepare.PrepareError):  # 접두사만 같은 커밋은 거부
+        _lock(tia_commit=pin["tia"]["commit"][:7] + "0" * 33)
+    lock = _lock(jqa_spring_verified=False, claude_verified=False)
+    assert lock["jqassistantSpring"]["verified"] is False and lock["claude"]["verified"] is False
+    lock = _lock()
+    assert lock["jqassistantSpring"]["verified"] is True and lock["jqassistantSpring"]["resolvedJar"] == "/j"
+
+
+def test_write_lock_same_run_retry_allows_identical_only(tmp_path):
+    lock = _lock()
+    path = prepare.write_lock(tmp_path, lock)
+    assert not path.stat().st_mode & 0o222
+    again = prepare.write_lock(tmp_path, {**lock, "generatedAt": "2099-01-01T00:00:00Z"})  # 시각만 다름
+    assert again == path
+    with pytest.raises(prepare.PrepareError) as excinfo:
+        prepare.write_lock(tmp_path, _lock(model="different"))
+    assert "이미 있고 내용이 다르다" in str(excinfo.value)
