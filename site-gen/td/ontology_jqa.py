@@ -8,7 +8,8 @@
 
 사용:
   python -m td.ontology_jqa verify-plugin --repo <jqa-repo> [--config ontology/jqa/.jqassistant.yml]
-  python -m td.ontology_jqa free-port
+  python -m td.ontology_jqa free-ports [count]
+  python -m td.ontology_jqa check-loopback --pid <pid> [--pid ...]
   python -m td.ontology_jqa wait-bolt --port <p> --pid <pid> --timeout <sec>
   python -m td.ontology_jqa export --bolt-port <p> --queries <dir> --run-dir <dir> --sut-file <sut.yaml> --out <file>
 """
@@ -105,19 +106,20 @@ class _Graph:
         return nodes, edges
 
 
-def _http_methods(row: Row) -> list[str]:
-    simple_annotation = _simple(row["annotation"])
-    fixed = MAPPING_HTTP_METHODS.get(simple_annotation)
+def _http_methods(row: Row) -> tuple[list[str], bool]:
+    """(HTTP 메서드 목록, any 여부). @RequestMapping에 method가 없으면 모든 메서드를 받으므로 대표로 GET을 쓰고 any=True로 표시한다."""
+    fixed = MAPPING_HTTP_METHODS.get(_simple(row["annotation"]))
     if fixed:
-        return [fixed]
+        return [fixed], False
     methods = [m.upper() for m in (row.get("httpMethods") or [])]
-    return methods or ["GET"]  # @RequestMapping에 method가 없으면 모든 메서드를 받는다. 대표로 GET으로 기록한다.
+    return (methods, False) if methods else (["GET"], True)
 
 
 def _add_endpoints(graph: _Graph, rows: list[Row], api_include: str) -> None:
     in_api = _api_matcher(api_include)
     for row in rows:
-        for method in _http_methods(row):
+        methods, any_method = _http_methods(row)
+        for method in methods:
             for path in normalize_path(row.get("classPaths") or [], row.get("methodPaths") or []):
                 handler = f"{row['controller']}#{row['handlerName']}"
                 view = not (row.get("rest") is True and in_api(path))
@@ -125,7 +127,7 @@ def _add_endpoints(graph: _Graph, rows: list[Row], api_include: str) -> None:
                 if node_id in graph.nodes and graph.nodes[node_id]["props"]["handler"] != handler:
                     node_id = f"{node_id} [{handler}]"
                 graph.node(node_id, "Endpoint", f"{method} {path}",
-                           {"method": method, "path": path, "handler": handler, "view": view})
+                           {"method": method, "path": path, "handler": handler, "view": view, "anyMethod": any_method})
                 controller_id = f"controller:{row['controller']}"
                 graph.node(controller_id, "Controller", _simple(row["controller"]),
                            {"fqn": row["controller"], "rest": row.get("rest") is True})
@@ -270,10 +272,49 @@ def verify_plugin(repo: Path, config: Path = DEFAULT_CONFIG) -> str:
     return prepare.check_resolved_plugin_jar(spec, spec["sha256"], Path(repo))
 
 
+def free_ports(count: int = 1) -> list[int]:
+    """루프백의 빈 포트 count개를 서로 다르게 고른다(전부 연 채로 고르므로 같은 포트가 두 번 나오지 않는다)."""
+    socks = []
+    try:
+        for _ in range(count):
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            socks.append(sock)
+            sock.bind(("127.0.0.1", 0))
+        return [sock.getsockname()[1] for sock in socks]
+    finally:
+        for sock in socks:
+            sock.close()
+
+
 def free_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
+    return free_ports(1)[0]
+
+
+LOOPBACK_HOSTS = {"127.0.0.1", "[::1]", "localhost"}
+
+
+def parse_listeners(lsof_field_output: str) -> list[str]:
+    """`lsof -Fn` 출력에서 LISTEN 주소(`host:port`)만 뽑는다."""
+    return [line[1:] for line in lsof_field_output.splitlines() if line.startswith("n")]
+
+
+def non_loopback(listeners: list[str]) -> list[str]:
+    return [addr for addr in listeners if addr.rsplit(":", 1)[0] not in LOOPBACK_HOSTS]
+
+
+def check_loopback_only(pids: list[int]) -> list[str]:
+    """pids의 TCP LISTEN 소켓이 모두 루프백이면 그 목록을, 아니면 OntologyError를 낸다. 목록이 비면 서버가 안 떠 있는 것이다."""
+    import subprocess
+
+    done = subprocess.run(["lsof", "-nP", "-iTCP", "-sTCP:LISTEN", "-a", "-p", ",".join(str(p) for p in pids), "-Fn"],
+                          capture_output=True, text=True, timeout=30)
+    listeners = parse_listeners(done.stdout)
+    if not listeners:
+        raise OntologyError(f"PID {pids}의 LISTEN 소켓을 찾지 못했다(lsof rc={done.returncode})")
+    exposed = non_loopback(listeners)
+    if exposed:
+        raise OntologyError(f"jQA server가 루프백이 아닌 주소에서 LISTEN한다: {exposed}")
+    return listeners
 
 
 def _alive(pid: int) -> bool:
@@ -317,6 +358,16 @@ def _cmd_verify_plugin(args) -> int:
     return 0
 
 
+def _cmd_check_loopback(args) -> int:
+    try:
+        listeners = check_loopback_only(args.pid)
+    except OntologyError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    print(json.dumps(sorted(set(listeners))))
+    return 0
+
+
 def _cmd_wait_bolt(args) -> int:
     reason = wait_bolt(args.port, args.pid, args.timeout)
     if reason:
@@ -352,8 +403,12 @@ def main(argv: list[str] | None = None) -> int:
     verify.add_argument("--repo", required=True)
     verify.add_argument("--config", default=str(DEFAULT_CONFIG))
     verify.set_defaults(func=_cmd_verify_plugin)
-    port = sub.add_parser("free-port")
-    port.set_defaults(func=lambda _a: print(free_port()) or 0)
+    port = sub.add_parser("free-ports")
+    port.add_argument("count", type=int, nargs="?", default=2)
+    port.set_defaults(func=lambda a: print(*free_ports(a.count)) or 0)
+    loop = sub.add_parser("check-loopback")
+    loop.add_argument("--pid", type=int, action="append", required=True)
+    loop.set_defaults(func=_cmd_check_loopback)
     wait = sub.add_parser("wait-bolt")
     wait.add_argument("--port", type=int, required=True)
     wait.add_argument("--pid", type=int, required=True)

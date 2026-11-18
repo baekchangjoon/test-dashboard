@@ -1,6 +1,6 @@
 # bbtg 스킬별 산출 형식 (S02 드라이버 기준)
 
-bbtg 고정 커밋(`tools.pin.yaml`)의 7개 스킬 `cli.py --help`와 `SKILL.md`, 그리고 petclinic 기준 SUT에서 실제로 실행해
+bbtg 고정 커밋(`tools.pin.yaml`)의 7개 스킬 `cli.py --help`와 `SKILL.md`, 그리고 기준 SUT(<SUT>)에서 실제로 실행해
 확인한 값이다. 모든 호출은 cwd = SUT 루트에서 bbtg venv 파이썬으로 실행하므로 `.bbtg/artifacts/`는 SUT 루트 아래에 생긴다.
 
 | 스킬 | 호출 단위 | stdout | 아티팩트(`.bbtg/artifacts/` 아래) | raw의 기준 | 소스 원문이 들어갈 수 있는 필드 |

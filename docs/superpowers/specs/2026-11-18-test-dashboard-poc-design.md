@@ -175,15 +175,17 @@ sonar: { projectKey: spring-petclinic-td, cmd_build: "./gradlew --no-daemon buil
 ### 6.5 S03 jQAssistant 온톨로지와 S05 OWL 온톨로지
 
 **S03 jQA**
-- `jqassistant scan`(classes 디렉터리와 jar) 다음에 `analyze`(Spring 개념 적용)를 실행한다. 저장소는 `work/runs/<runId>/jqa/store`다.
-- export: `jqassistant server`를 백그라운드로 띄운다. PID를 캡처하고 `trap`으로 그 PID만 종료한다. 고정 Cypher 묶음(`ontology/jqa/queries/*.cypher`)을 HTTP 트랜잭션 API로 실행해 JSON을 얻는다.
-  - 대체 경로: server 모드가 안 되면 같은 Neo4j 버전 컨테이너에 store를 마운트해 질의한다(라벨, 누수 게이트 적용).
+- `jqassistant scan`(classes 디렉터리만. Boot fat jar는 중첩 `BOOT-INF`가 타입을 중복시켜 제외한다) 다음에 `analyze`(Spring 개념 적용)를 실행한다. 저장소는 `work/runs/<runId>/S03/store`다. 모든 jQA 호출은 전용 로컬 저장소(`-Djqassistant.repositories.local=work/tools/jqa-repo`)를 쓰고, 시작 전에 Spring 플러그인 jar의 sha256을 `tools.pin.yaml`과 대조한다.
+- export: `jqassistant server`를 백그라운드로 띄운다(stdin을 fifo로 붙든다: jQA 2.9.1 server는 Enter를 기다린다). PID를 `pids/jqa-server.pid`에 등록하고 종료 때 그 PID만 정리한다. 고정 Cypher 묶음(`ontology/jqa/queries/*.cypher`)을 **루프백 Bolt**로 실행해 JSON을 얻는다.
+  - jQA 2.9.1 server의 HTTP 포트는 Neo4j 브라우저 정적 파일만 서빙하고 트랜잭션 API(`tx/commit`)가 없으며 와일드카드에 바인드된다. 그래서 HTTP 포트는 `http-port=-1`로 꺼 두고 Bolt(`listen-address=127.0.0.1`, 동적 포트)만 연다. S03은 기동 후 `lsof`로 LISTEN 소켓이 모두 루프백인지 확인하고, 아니면 failed다.
+  - 컨테이너 대체 경로는 필요하지 않아 두지 않는다.
 - 추출 대상:
   - Endpoint: `@RestController`와 `api.include` 범위의 핸들러. 클래스 수준 경로와 메서드 수준 경로를 결합하고, 배열 값은 펼치고, path variable은 `{name}`으로 표기한다. HTTP `@Controller` 핸들러도 넣되 `props.view=true`로 표시하고 분모에서 뺀다.
   - Controller → Service → Repository 호출 경로
   - JPA 엔티티, 연관관계, 검증 애노테이션
   - 예외와 `@ExceptionHandler` → HTTP 상태
-- Spring 개념이 Boot 4에서 비면 원시 애노테이션 노드(`:Annotation`, `:Value`) 쿼리로 대체하고 그 사실을 기록한다.
+- Spring 개념이 Boot 4에서 비면 원시 애노테이션 노드(`:Annotation`, `:Value`) 쿼리로 대체하고 그 사실을 `meta.fallbacks`에 기록한다(단계 `degraded`).
+- 한계와 휴리스틱: DTO는 Controller가 의존하는 스캔 타입 중 이름이 Request/Response/Dto로 끝나는 것이다. `@ExceptionHandler`의 HTTP 상태는 `ResponseEntity` 본문에서 정해져 그래프에 없으므로 Exception 노드에는 처리하는 핸들러 메서드 이름(`props.handlers`)만 담는다. `@RequestMapping`에 method가 없는 핸들러는 대표로 GET을 쓰고 `props.anyMethod=true`로 표시한다.
 - 스키마: `{nodes:[{id,kind,label,props}], edges:[{source,target,kind}], meta:{tool,version,commit,fallbacks}}`. kind는 `Endpoint|Controller|Service|Repository|Entity|Field|Exception|DTO`이고, OWL 결과도 같은 스키마로 변환한다.
 
 **S05 OWL**
