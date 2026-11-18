@@ -392,3 +392,80 @@ def injected_run(stub_stages):
         return stub_stages.run(*args, **env)
 
     return run
+
+
+# --- S13 게시 하네스(Task 10) --------------------------------------------------------------------
+S13_SCRIPT = REPO_ROOT / "pipeline" / "S13-publish.sh"
+
+
+@pytest.fixture(scope="session")
+def infra_outputs() -> dict:
+    state_file = REPO_ROOT / "work" / "infra" / "terraform.tfstate"
+    if not state_file.exists():
+        pytest.fail("work/infra/terraform.tfstate가 없다(infra/static/apply.sh를 먼저 실행한다)", pytrace=False)
+    return {k: v["value"] for k, v in json.loads(state_file.read_text())["outputs"].items()}
+
+
+@pytest.fixture(scope="session")
+def s3_client():
+    import boto3
+    return boto3.client("s3", region_name=os.environ.get("AWS_REGION", "ap-northeast-2"))
+
+
+@pytest.fixture(scope="session")
+def bucket(infra_outputs) -> str:
+    return infra_outputs["bucket"]
+
+
+class Publisher:
+    """local run 디렉터리를 만들고 실제 S13-publish.sh를 돌린다(TD_SITE_PREFIX=_test/<sessionId>/, 실제 S3·CloudFront·Lightsail)."""
+
+    def __init__(self, base: Path, site_prefix: str):
+        self.base = base
+        self.prefix = site_prefix
+        self.counter = 0
+
+    def new_run(self, sut: str, **kwargs) -> tuple[str, Path]:
+        from helpers import make_local_run
+        self.counter += 1
+        run_id = f"20261119-{self.counter:06d}Z-b6f9393-manual-{uuid.uuid4().hex[:8]}"
+        return run_id, make_local_run(self.base, sut, run_id, **kwargs)
+
+    def env(self, run_dir: Path, **extra: str) -> dict[str, str]:
+        env = {k: v for k, v in os.environ.items() if not k.startswith("TD_")}
+        env.update(TD_ROOT=str(REPO_ROOT), TD_WORK_DIR=str(REPO_ROOT / "work"), TD_RUN_DIR=str(run_dir),
+                   TD_SITE_PREFIX=self.prefix, **extra)
+        return env
+
+    def s13(self, run_dir: Path, *args: str, timeout: int = 1200, **extra: str) -> subprocess.CompletedProcess:
+        run = json.loads((run_dir / "run.json").read_text())
+        return subprocess.run(["bash", str(S13_SCRIPT), run["sut"], run["runId"], *args], capture_output=True, text=True,
+                              env=self.env(run_dir, **extra), timeout=timeout)
+
+    def popen(self, run_dir: Path, **extra: str) -> subprocess.Popen:
+        run = json.loads((run_dir / "run.json").read_text())
+        return subprocess.Popen(["bash", str(S13_SCRIPT), run["sut"], run["runId"]], env=self.env(run_dir, **extra), text=True,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+
+    @staticmethod
+    def stage13(run_dir: Path) -> dict:
+        return json.loads((run_dir / "stages" / "S13.json").read_text())
+
+
+@pytest.fixture(scope="session")
+def publisher(tmp_path_factory, site_prefix) -> Publisher:
+    return Publisher(tmp_path_factory.mktemp("s13-runs"), site_prefix)
+
+
+@pytest.fixture(scope="session")
+def published_runs(publisher, site_prefix):
+    """세션 접두에 실제로 두 run을 게시한다(REQ-044/047/048/068/071이 공유). dict(sut, runs=[(runId, run_dir, result)...])."""
+    sut = "td-pub"
+    runs = []
+    for _ in range(2):
+        run_id, run_dir = publisher.new_run(sut)
+        done = publisher.s13(run_dir)
+        runs.append((run_id, run_dir, done))
+    for run_id, run_dir, done in runs:
+        assert done.returncode == 0, f"S13 실패: {done.stderr[-1500:]}"
+    return {"sut": sut, "runs": runs, "prefix": site_prefix}

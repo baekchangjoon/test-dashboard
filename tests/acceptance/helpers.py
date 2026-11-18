@@ -177,6 +177,59 @@ def https_get(host: str, domain: str, path: str = "/", timeout: int = 30) -> tup
     return response.status, response.read()
 
 
+def https_fetch(host: str, domain: str, path: str = "/", timeout: int = 30) -> tuple[int, dict[str, str], bytes]:
+    """https_get과 같은 DNS 우회로 (상태, 소문자 헤더 dict, 본문)을 돌려준다(리다이렉트는 따라가지 않는다)."""
+    from td import route53
+    try:
+        socket.getaddrinfo(host, 443)
+        connection = http.client.HTTPSConnection(host, timeout=timeout)
+    except socket.gaierror:
+        connection = PinnedHTTPSConnection(host, resolve_authoritative(host, route53.find_zone_id(domain)), timeout=timeout)
+    try:
+        connection.request("GET", path)
+        response = connection.getresponse()
+        return response.status, {k.lower(): v for k, v in response.getheaders()}, response.read()
+    finally:
+        connection.close()
+
+
+def crawl(host: str, domain: str, start_path: str, scope_prefixes: tuple[str, ...], limit: int = 400) -> dict[str, int]:
+    """같은 호스트 링크 BFS. scope_prefixes로 시작하는 경로만 따라간다. 경로 -> 상태 코드(HTML만 링크를 읽는다)."""
+    from html.parser import HTMLParser
+    from urllib.parse import urljoin, urlsplit
+
+    class Links(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.found: list[str] = []
+
+        def handle_starttag(self, tag, attrs):
+            for name, value in attrs:
+                if name in ("href", "src") and value:
+                    self.found.append(value)
+
+    seen: dict[str, int] = {}
+    queue = [start_path]
+    while queue and len(seen) < limit:
+        path = queue.pop(0)
+        if path in seen:
+            continue
+        status, headers, body = https_fetch(host, domain, path)
+        seen[path] = status
+        if status != 200 or "text/html" not in headers.get("content-type", ""):
+            continue
+        parser = Links()
+        parser.feed(body.decode("utf-8", "replace"))
+        for link in parser.found:
+            joined = urlsplit(urljoin(f"https://{host}{path}", link))
+            if joined.scheme not in ("http", "https") or joined.netloc != host:
+                continue
+            target = joined.path or "/"
+            if target not in seen and any(target.startswith(prefix) for prefix in scope_prefixes):
+                queue.append(target)
+    return seen
+
+
 # --- S13 게시 테스트 보조(Task 10) ---------------------------------------------------------
 import hashlib
 import io
