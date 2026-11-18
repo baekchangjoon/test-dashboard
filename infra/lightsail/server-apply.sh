@@ -59,6 +59,7 @@ on_exit() {
   rm -f "$STACK_DIR/Caddyfile.td-new" "$STACK_DIR/docker-compose.yml.td-new"
   if (( MUTATED == 1 && VERIFIED == 0 && ROLLING_BACK == 0 )); then
     ROLLING_BACK=1
+    trap '' HUP INT TERM  # 복원 도중에는 신호를 무시한다
     restore || exit 31
     (( rc == 0 )) && rc=30
     exit "$rc"
@@ -90,10 +91,16 @@ fi
 mkdir -p "$BACKUP_DIR"
 cp -p Caddyfile docker-compose.yml "$BACKUP_DIR/"
 log "백업: $BACKUP_DIR"
-# 최초 변경 전 원본은 정리 대상에서 빠지도록 따로 보존한다(teardown이 쓴다).
-if [[ ! -d "$STACK_DIR/.td-backup/original-pre-dashboard" ]] && ! grep -q "/srv/dashboard" docker-compose.yml; then
-  mkdir -p "$STACK_DIR/.td-backup/original-pre-dashboard"
-  cp -p Caddyfile docker-compose.yml "$STACK_DIR/.td-backup/original-pre-dashboard/"
+# 최초 변경 전 원본은 정리 대상에서 빠지도록 따로 보존한다(teardown이 쓴다). 없으면 대시보드 마운트가 없는
+# 가장 오래된 타임스탬프 백업에서 만든다(정리하기 전에 해야 원본이 사라지지 않는다).
+ORIGINAL_DIR="$STACK_DIR/.td-backup/original-pre-dashboard"
+if [[ ! -d "$ORIGINAL_DIR" ]]; then
+  for candidate in $(ls -1d "$STACK_DIR"/.td-backup/2* 2>/dev/null | sort); do
+    if [[ -f "$candidate/docker-compose.yml" ]] && ! grep -q "/srv/dashboard" "$candidate/docker-compose.yml"; then
+      mkdir -p "$ORIGINAL_DIR" && cp -p "$candidate/Caddyfile" "$candidate/docker-compose.yml" "$ORIGINAL_DIR/"
+      break
+    fi
+  done
 fi
 # 타임스탬프 백업은 최근 5개만 남긴다.
 ls -1d "$STACK_DIR"/.td-backup/2* 2>/dev/null | sort -r | tail -n +6 | while read -r old; do rm -rf "$old"; done

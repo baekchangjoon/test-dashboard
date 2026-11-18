@@ -35,22 +35,24 @@ if [[ -n "$LOCAL_DIR" ]]; then
               DASH_URL="$DASH_URL" DASH_HOST="$DASH_HOST" COMPOSE_PROJECT="$COMPOSE_PROJECT"
               TEST_LABEL="$TD_TEST_LABEL" FAIL_AFTER="${TD_LIGHTSAIL_FAIL_AFTER:-}"
               WAIT_SECONDS="${TD_LIGHTSAIL_WAIT_SECONDS:-120}")
-  remote_stage() { td_run 600 -- env "${SERVER_ENV[@]}" bash "$HERE/server-apply.sh"; }
+  STAGE_ARGV=(env "${SERVER_ENV[@]}" bash "$HERE/server-apply.sh")
   put_files() { cp "$SCRATCH/Caddyfile.new" "$STACK_DIR/Caddyfile.td-new"; cp "$SCRATCH/docker-compose.yml.new" "$STACK_DIR/docker-compose.yml.td-new"; }
 else
   set -a; source "$TD_ROOT/infra/local.env"; set +a
   export AWS_REGION="${AWS_REGION:-ap-northeast-2}"
   DASH_ADDR="dash.$TD_DOMAIN"
   DASH_DIR="/srv/dashboard"
-  SSH_OPTS=(-i "$TD_SSH_KEY_PATH" -o BatchMode=yes -o ConnectTimeout=20)
+  SSH_OPTS=(-i "$TD_SSH_KEY_PATH" -o BatchMode=yes -o ConnectTimeout=20 -o LogLevel=ERROR)
   SSH_TARGET="ubuntu@$TD_LIGHTSAIL_IP"
   td_run 120 -- ssh "${SSH_OPTS[@]}" "$SSH_TARGET" 'cat ~/sonarqube/Caddyfile' > "$SCRATCH/Caddyfile.cur"
   td_run 120 -- ssh "${SSH_OPTS[@]}" "$SSH_TARGET" 'cat ~/sonarqube/docker-compose.yml' > "$SCRATCH/docker-compose.yml.cur"
   SERVER_ENV=(STACK_DIR='$HOME/sonarqube' DASH_DIR="$DASH_DIR" SUDO=sudo
               SONAR_URL="https://sonar.$TD_DOMAIN/api/system/status" DASH_URL="https://$DASH_ADDR/")
-  # 서버 단계는 120초 재시도(2회)와 컨테이너 재생성을 포함하므로 SSH 기본 120초보다 길게 둔다.
-  remote_stage() { td_run 600 -- ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "env ${SERVER_ENV[*]} bash -s" < "$HERE/server-apply.sh"; }
+  # 서버 단계는 120초 재시도(2회)와 컨테이너 재생성을 포함하므로 SSH 기본 120초보다 길게(td.proc 600초) 둔다.
+  # -tt: 로컬 ssh가 TERM으로 죽으면 원격 pty가 끊겨 원격 bash에 SIGHUP이 가고, server-apply.sh의 trap이 복원한다.
+  STAGE_ARGV=(ssh -tt "${SSH_OPTS[@]}" "$SSH_TARGET" "env ${SERVER_ENV[*]} bash ~/sonarqube/.td-server-apply.sh")
   put_files() {
+    td_run 120 -- scp "${SSH_OPTS[@]}" -q "$HERE/server-apply.sh" "$SSH_TARGET:sonarqube/.td-server-apply.sh"
     td_run 120 -- scp "${SSH_OPTS[@]}" -q "$SCRATCH/Caddyfile.new" "$SSH_TARGET:sonarqube/Caddyfile.td-new"
     td_run 120 -- scp "${SSH_OPTS[@]}" -q "$SCRATCH/docker-compose.yml.new" "$SSH_TARGET:sonarqube/docker-compose.yml.td-new"
   }
@@ -85,16 +87,23 @@ rollback_dns() {  # 우리가 만든 레코드만 지운다(이미 있던 같은
   fi
 }
 
-# 3. 서버 단계(변경 이후 실패·시그널 복원은 server-apply.sh의 trap이 담당, DNS 복원은 여기서)
-# 서버 단계는 백그라운드로 돌리고 HUP/INT/TERM을 그쪽으로 넘겨, 중단돼도 서버 쪽 trap이 복원하게 한다.
+# 3. 서버 단계. td.proc을 직접 백그라운드로 띄워 $!가 td.proc의 PID가 되게 한다(td.proc이 TERM/INT를 자식 프로세스
+# 그룹에 전달한다). 신호를 받으면 td.proc에만 전달하고, 서버 단계가 복원을 끝내고 끝날 때까지 기다린 뒤에야 DNS를 되돌린다.
+if [[ -x "$TD_ROOT/site-gen/.venv/bin/python" ]]; then
+  PY=("$TD_ROOT/site-gen/.venv/bin/python")
+else
+  PY=(uv run --project "$TD_ROOT/site-gen" --quiet python)
+fi
 rc=0
 put_files || rc=$?
 if (( rc == 0 )); then
-  remote_stage &
+  PYTHONPATH="$TD_ROOT/site-gen${PYTHONPATH:+:$PYTHONPATH}" "${PY[@]}" -m td.proc run 600 -- "${STAGE_ARGV[@]}" < /dev/null &
   STAGE_PID=$!
-  trap 'kill -TERM "$STAGE_PID" 2>/dev/null' HUP INT TERM
-  wait "$STAGE_PID" || rc=$?
-  if (( rc > 128 )); then rc=0; wait "$STAGE_PID" || rc=$?; fi  # 시그널로 깨어났으면 실제 종료까지 기다린다
+  trap 'td_log "신호 수신: 서버 단계에 전달하고 복원 완료를 기다린다"; kill -TERM "$STAGE_PID" 2>/dev/null' HUP INT TERM
+  while :; do
+    rc=0; wait "$STAGE_PID" || rc=$?  # set -e로 죽지 않게 || 로 받는다
+    kill -0 "$STAGE_PID" 2>/dev/null || break  # 신호로 wait가 깨어난 것이면 계속 기다린다
+  done
   trap - HUP INT TERM
 fi
 if (( rc != 0 )); then
