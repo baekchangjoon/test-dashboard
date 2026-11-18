@@ -1,0 +1,27 @@
+name: petclinic
+repo: https://github.com/baekchangjoon/spring-petclinic.git
+ref: main
+# 기준 SUT 커밋 고정. HEAD를 따라가려면 이 키를 지운다. 다르면 S00이 failed다.
+expected_commit: b6f939355e8790202ddfc71e3f3507252745ed37
+java: 17
+build: { system: gradle, cmd: "./gradlew --no-daemon -q bootJar -x test" }
+jar: build/libs/spring-petclinic-*-SNAPSHOT.jar
+classes: build/classes/java/main
+sources: src/main/java
+packages: org.springframework.samples.petclinic.*
+runtime: { profile: default, db: h2, ddl: src/main/resources/db/h2/schema.sql }
+port: 8080
+health: /actuator/health
+api: { include: "/api/**" }
+# unauthenticated_status는 S00(Task 4)이 SUT를 띄워 실측해 확정한다. 지금 값은 설계 시점의 기대값이다.
+auth: { type: bearer, login: "POST /api/auth/login", user_env: TD_SUT_USER, pass_env: TD_SUT_PASS, probe: "GET /api/vets", unauthenticated_status: 403 }
+coverage:
+  probes:
+    - { test: "VetApiBlackBoxIT#listAllVets", controller: VetRestController }
+    - { test: "OwnerApiBlackBoxIT#listAllOwners", controller: OwnerRestController }
+blackbox:
+  cmd: "./gradlew --no-daemon blackboxTest"
+  props: { petclinic.base-url: "{baseUrl}", pjacoco.control-url: "{controlUrl}" }
+  junit_xml: build/test-results/blackboxTest
+tia: { range: "HEAD~10..HEAD", first_parent: true }
+sonar: { projectKey: spring-petclinic-td, cmd_build: "./gradlew --no-daemon build -x test", cmd_scan: "./gradlew --no-daemon sonar" }

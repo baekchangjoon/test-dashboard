@@ -1,0 +1,3 @@
+# 파이프라인 설정. TD_LLM_MODEL 환경 변수가 있으면 llm.model을 덮어쓴다.
+llm:
+  model: claude-opus-5-5

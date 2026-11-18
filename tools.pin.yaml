@@ -1,0 +1,48 @@
+# 도구 고정 파일(기준). S00은 이 값으로 받아 sha256을 검증하고 run별 tools.lock(불변 사본)을 쓴다.
+# sha256은 첫 fetch 때 `TD_PIN_RECORD=1`로 S00을 돌려 기록한다. 이후에는 값이 다르면 S00이 failed다.
+schema: 1
+pjacoco:
+  group: io.github.beltian.pjacoco
+  artifact: pjacoco-agent
+  version: 2.0.0
+  sha256: '522602da12c9eed2a481b6fdd2bd625e326e4002e33563219bf6fd93cc5c73dd'
+# jacococli 버전은 pjacoco agent에 내장된 jacoco-core 버전을 따른다(tools.lock.jacocoCoreEmbedded).
+# expectedVersion은 그 내장 버전의 기대값이고, 다르면 S00이 failed다.
+jacococli:
+  group: org.jacoco
+  artifact: org.jacoco.cli
+  classifier: nodeps
+  expectedVersion: 0.8.12
+  sha256: '594c01125b84864a7fc5a9efab19b71b7de36b27346863f6d7cd0cd45400ceb0'
+jqassistant:
+  group: com.buschmais.jqassistant.cli
+  artifact: jqassistant-commandline-neo4jv5
+  version: 2.9.1
+  classifier: distribution
+  type: zip
+  sha256: 'f51fc0b6ffe7ecf0492cec20e71a17fce8b5be64eeed875ae878c28f69bea9be'
+# jQA 2.x의 Spring 플러그인은 org.jqassistant.plugin 그룹이다(1.x의 com.buschmais.jqassistant.plugin:spring과 다름).
+# 2.9.0이 CLI 2.9.1과 호환되는 최신이다(Maven Central에 2.9.1은 없음, S00이 로딩을 실제로 검증한다).
+jqassistantSpring:
+  group: org.jqassistant.plugin
+  artifact: jqassistant-spring-plugin
+  version: 2.9.0
+  sha256: '404148151a7ca9ea2a4c946911c9abf420b7182ae65b20c0ef550c90003914fb'
+hotspot:
+  repo: baekchangjoon/hotspot-analysis
+  version: 0.1.6
+  tag: v0.1.6
+  asset: hotspot-0.1.6.jar
+  sha256: '216f4195f7d941cc219d5e0e76a66890708213b8b8def5388364c1fd55c2ef67'
+tia:
+  repo: baekchangjoon/test-impact-analysis
+  commit: 634a4a3
+  jdk: 17
+  gradleTask: ':tia-cli:installDist'
+bbtg:
+  repo: baekchangjoon/bbtg   # 비공개: gh 인증이 필요하다
+  commit: 83ea6fd
+  python: '3.12'
+libraries:
+  cucumber: 8.1.0
+  restAssured: 5.5.1
