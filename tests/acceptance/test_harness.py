@@ -49,8 +49,21 @@ def test_shim_logs_flags_without_prompt_and_execs_real(tmp_path):
     assert "real:-p SECRET PROMPT --output-format json" in out.stdout
     record = json.loads(log.read_text().splitlines()[0])
     assert "SECRET PROMPT" not in log.read_text()
-    assert record["argv"] == ["-p", "--output-format"]
+    assert record["argv"] == ["-p", "<other>", "--output-format"]
     assert record["cwd"] and record["ts"]
+
+
+def test_shim_does_not_log_inline_values_or_dash_prompts(tmp_path):
+    real = tmp_path / "real-claude"
+    real.write_text("#!/usr/bin/env bash\nexit 0\n")
+    real.chmod(0o755)
+    log = tmp_path / "calls.jsonl"
+    env = {"PATH": "/usr/bin:/bin", "TD_REAL_CLAUDE": str(real), "TD_LLM_CALL_LOG": str(log)}
+    subprocess.run([str(SHIM), "--model=SECRETMODEL", "--system-prompt", "SECRETSYS", "--evil=SECRETX",
+                    "-p", "--SECRET-dash-prompt"], env=env, cwd=tmp_path, check=True)
+    text = log.read_text()
+    assert "SECRET" not in text
+    assert json.loads(text)["argv"] == ["--model", "--system-prompt", "<other>", "-p", "<other>"]
 
 
 def test_shim_skips_itself_on_path(tmp_path):
@@ -106,3 +119,19 @@ def test_baseline_marker_passes_with_session_file(monkeypatch, tmp_path):
 def test_pending_fixtures_fail_with_clear_message(name, request):
     with pytest.raises(pytest.fail.Exception, match="requires Task"):
         request.getfixturevalue(name)
+
+
+def test_gate_detects_labeled_container(session_id):
+    from helpers import find_leaked_resources
+    label_value = f"td-test-{session_id}"
+    run = subprocess.run(["docker", "run", "--rm", "-d", "--label", f"test-run={label_value}",
+                          "busybox", "sleep", "30"], capture_output=True, text=True)
+    container_id = run.stdout.strip()
+    try:
+        assert run.returncode == 0, f"docker run 실패: {run.stderr.strip()[:200]}"
+        leaked = find_leaked_resources(label_value)
+        assert any(cid.startswith(container_id[:12]) for cid in leaked.get("containers", []))
+    finally:
+        if container_id:
+            subprocess.run(["docker", "rm", "-f", container_id], capture_output=True)
+    assert find_leaked_resources(label_value) == {}
