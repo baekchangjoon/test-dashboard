@@ -9,14 +9,10 @@ import shutil
 import sys
 from pathlib import Path
 
-from td.site.pages import STATIC_DIR, jinja_env
+from td.site.pages import STATIC_DIR, jinja_env, read_json as _read
 
 CHART_W, CHART_H = 520, 190
 PAD_L, PAD_R, PAD_T, PAD_B = 44, 12, 12, 34
-
-
-def _read(path: Path, default=None):
-    return json.loads(path.read_text()) if path.exists() else default
 
 
 def _write(path: Path, text: str, written: list[Path]) -> None:
