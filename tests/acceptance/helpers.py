@@ -35,3 +35,64 @@ def find_leaked_resources(label_value: str) -> dict[str, list[str]]:
         "volumes": docker_ids("volume", "ls", "-q", "--filter", flt),
     }
     return {kind: sorted(ids) for kind, ids in found.items() if ids}
+
+
+# --- SUT 컨테이너 환경(Task 4) ------------------------------------------------------------
+import glob
+import os
+import shutil
+import stat
+import textwrap
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+STUB_STAGE_SOURCE = REPO_ROOT / "tests" / "fixtures" / "stub-stages"
+PETCLINIC_SRC = REPO_ROOT / "work" / "suts" / "petclinic" / "src"
+AGENT_JAR = REPO_ROOT / "work" / "tools" / "pjacoco-agent.jar"
+SUT_PACKAGES = "org.springframework.samples.petclinic.*"
+
+
+def petclinic_jar() -> Path:
+    """S00이 빌드해 둔 petclinic jar. 없으면 테스트가 실패한다(전제 누락)."""
+    jars = sorted(glob.glob(str(PETCLINIC_SRC / "build" / "libs" / "spring-petclinic-*-SNAPSHOT.jar")))
+    if len(jars) != 1 or not AGENT_JAR.exists():
+        pytest.fail(f"S00이 빌드한 SUT jar와 pjacoco agent가 필요하다(jar={jars}, agent={AGENT_JAR.exists()})",
+                    pytrace=False)
+    return Path(jars[0])
+
+
+def make_stage_dir(tmp_path: Path, stage_id: str, body: str, *, prologue: bool = True) -> Path:
+    """스텁 단계 디렉터리를 복사하고 한 단계만 `body`로 바꾼 스크립트로 교체한다(S01 스텁: SUT를 띄우고 body 실행)."""
+    stage_dir = tmp_path / "stages"
+    shutil.copytree(STUB_STAGE_SOURCE, stage_dir)
+    target = next(stage_dir.glob(f"{stage_id}-*.sh"))
+    script = textwrap.dedent(f"""\
+        #!/usr/bin/env bash
+        source "$TD_ROOT/pipeline/lib/common.sh"
+        source "$TD_ROOT/pipeline/lib/env.sh"
+        td_stage_begin {stage_id}
+        """)
+    if prologue:
+        script += textwrap.dedent(f"""\
+            td_sut_up "$TD_RUN_DIR" {stage_id} blackbox || {{ td_stage_end {stage_id} failed "$TD_SUT_FAIL_REASON"; exit 1; }}
+            """)
+    script += textwrap.dedent(body) + f"\ntd_stage_end {stage_id} passed\n"
+    target.write_text(script)
+    target.chmod(target.stat().st_mode | stat.S_IXUSR)
+    return stage_dir
+
+
+def pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def run_pids(run_dir: Path) -> dict[str, int]:
+    pids_dir = Path(run_dir) / "pids"
+    if not pids_dir.exists():
+        return {}
+    return {p.stem: int(p.read_text().strip()) for p in pids_dir.glob("*.pid")}

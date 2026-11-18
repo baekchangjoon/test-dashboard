@@ -13,7 +13,7 @@ runtime: { profile: default, db: h2, ddl: src/main/resources/db/h2/schema.sql }
 port: 8080
 health: /actuator/health
 api: { include: "/api/**" }
-# unauthenticated_status는 S00(Task 4)이 SUT를 띄워 실측해 확정한다. 지금 값은 설계 시점의 기대값이다.
+# unauthenticated_status는 S00이 SUT를 띄워 토큰 없이 probe를 호출해 실측하고 이 값과 대조한다(실측 403 확인, Task 4).
 auth: { type: bearer, login: "POST /api/auth/login", user_env: TD_SUT_USER, pass_env: TD_SUT_PASS, probe: "GET /api/vets", unauthenticated_status: 403 }
 coverage:
   probes:

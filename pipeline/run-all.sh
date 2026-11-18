@@ -96,6 +96,10 @@ state_failed() { # <stage_id> <what> <message>
     || { echo "run-all: run.json을 쓸 수 없어 run을 중단한다 ($msg)" >&2; exit 1; }
 }
 
+# Ctrl-C/TERM: 단계 스크립트(같은 프로세스 그룹)가 컨테이너와 PID를 정리할 때까지 기다린 뒤 종료한다.
+# (bash는 전경 자식이 끝난 뒤에 trap을 실행하므로 정리 중에 run-all이 먼저 빠져나가지 않는다)
+trap 'echo "run-all: interrupted, 단계 정리 후 종료" >&2; exit 130' INT TERM
+
 ABORTED=""
 for stage_id in "${ORDER[@]}"; do
   if ! requested "$stage_id"; then
