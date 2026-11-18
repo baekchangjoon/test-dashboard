@@ -1,6 +1,6 @@
 # test-dashboard 실증(PoC) 설계
 
-- 작성일: 2026-11-18 (v2: 3-벤더 리뷰와 빌더 점검 반영)
+- 작성일: 2026-11-18 (v2: 3-벤더 리뷰와 빌더 점검 반영, v3: 요구사항명세 2-벤더 리뷰의 역전파. §13이 앞 절과 충돌하면 §13이 우선한다)
 - 상태: 승인됨 (2026-11-18)
 - 저장소: `baekchangjoon/test-dashboard` (공개, 로컬 `/Users/changjoonbaek/test-dashboard`)
 - 첫 대상 SUT: `baekchangjoon/spring-petclinic` (`ref: main`. 각 run이 실제로 쓴 커밋은 `run.json`의 `commit`이 기준이다. 작성 시점 HEAD는 `b6f9393`)
@@ -73,7 +73,7 @@ E2E 테스트를 만들고 그 결과와 품질 지표를 한 화면에서 보�
 세부 선택(작성자 판단):
 - 오케스트레이션은 bash로 한다(단계 실행, `trap` 정리). 데이터 가공과 사이트 생성은 Python 3.12(uv, Jinja2)로 한다.
 - 시각화는 단일 HTML과 vanilla JS로 한다. Cytoscape.js 3.30.x는 레포에 벤더링한다.
-- 정적 호스팅 인프라는 Terraform(`infra/static/`, 로컬 state, gitignore)으로 만든다.
+- 정적 호스팅 인프라는 Terraform(`infra/static/`, 로컬 state, gitignore)으로 만든다. ACM은 DNS 검증이므로 `_*.reports.<domain>` CNAME이 추가된다.
 - E2E 테스트는 Cucumber-JVM으로 한다(§6.8). 대체 경로는 순수 JUnit이다.
 - Gradle은 파이프라인의 모든 호출에 `--no-daemon`을 붙인다(누수 방지).
 
@@ -97,9 +97,9 @@ E2E 테스트를 만들고 그 결과와 품질 지표를 한 화면에서 보�
 | S13 | publish | run.json | 모든 리포트 | 항상 실행 |
 
 - 상태값은 `passed | failed | degraded | skipped`이고, 모두 `reason`과 산출물 경로를 함께 기록한다. 기록 위치는 `work/runs/<runId>/stages/<ID>.json`이다.
-- `run-all.sh`의 종료 코드는 S00, S13이 실패하면 1, 그 밖의 단계가 실패하면 2(게시는 됨), 전부 passed나 degraded면 0이다.
+- `run-all.sh`의 종료 코드는 S00이나 S13이 실패하면 1(우선), 그 밖의 단계가 실패하면 2(게시는 됨), 실패가 없으면 0이다(passed, degraded, skipped 허용).
 - 각 단계는 `pipeline/<ID>-<name>.sh <sut> <runId>`로 따로 실행할 수 있다. `run-all.sh <sut> [--arms base,jqa,owl] [--reps 3] [--only S01,S08]`를 지원한다. 요청하지 않은 단계는 `skipped`(사유 `not-requested`)로 기록한다.
-- runId는 `YYYYMMDD-HHMMSS-<sha7>-<trigger>-<4hex 난수>`이고, trigger는 이번에는 `manual`만 쓴다.
+- runId는 `YYYYMMDD-HHMMSSZ-<sha7>-<trigger>-<8hex 난수>`(UTC)이고, `work/runs/<runId>`를 `O_EXCL`로 예약하며 충돌하면 다시 만든다. trigger는 이번에는 `manual`만 쓴다.
 
 ## 6. 단계별 설계
 
@@ -119,7 +119,8 @@ runtime: { profile: default, db: h2, ddl: src/main/resources/db/h2/schema.sql }
 port: 8080
 health: /actuator/health             # 확인됨: actuator 존재, permitAll
 api: { include: "/api/**" }           # 엔드포인트 분모의 범위
-auth: { type: bearer, login: "POST /api/auth/login", user_env: TD_SUT_USER, pass_env: TD_SUT_PASS }
+auth: { type: bearer, login: "POST /api/auth/login", user_env: TD_SUT_USER, pass_env: TD_SUT_PASS, probe: "GET /api/vets", unauthenticated_status: 403 }  # 401/403은 S00에서 실측해 확정
+coverage: { probes: [ { test: "VetApiBlackBoxIT#<method>", controller: VetRestController }, { test: "OwnerApiBlackBoxIT#<method>", controller: OwnerRestController } ] }
 blackbox:
   cmd: "./gradlew --no-daemon blackboxTest"
   props: { petclinic.base-url: "{baseUrl}", pjacoco.control-url: "{controlUrl}" }  # -D로 전달
@@ -282,7 +283,7 @@ sonar: { projectKey: spring-petclinic-td, cmd_build: "./gradlew --no-daemon buil
 - 스캔: `cmd_build`와 `cmd_scan`을 따로 호출한다(Gradle 9 implicit-dependency 문제 회피). 인자는 다음과 같다.
   - `-Dsonar.host.url`, `-Dsonar.token`(환경 변수 `SONAR_TOKEN`), `-Dsonar.projectKey=spring-petclinic-td`
   - `-Dsonar.coverage.jacoco.xmlReportPaths=<S08 aggregate 병합 XML>`
-  - `-Dsonar.qualitygate.wait=true`
+  - 품질 게이트는 기다리지 않는다(`qualitygate.wait` 미사용). `report-task.txt`의 ceTaskId로 `api/ce/task`를 폴링해 SUCCESS 후 export한다. 품질 게이트 ERROR는 단계 실패가 아니다.
 - export: CE 태스크가 끝난 뒤 실행한다.
   - `api/qualitygates/project_status`
   - `api/measures/component`(coverage, bugs, vulnerabilities, code_smells, duplicated_lines_density, ncloc, sqale_rating, reliability_rating, security_rating)
@@ -414,3 +415,51 @@ E2E는 `pipeline/run-all.sh petclinic`을 실제로 실행한 뒤 산출물과 �
 - OWL 클래스·속성 이름 세부와 SHACL 범위
 - `oracle.yaml`의 규칙 목록 세부(§6.12의 예시는 최소 포함)
 - 두 번째 SUT fixture의 구성
+
+## 13. v3 보정: 운영 계약 (요구사항명세 v2 리뷰 역전파)
+
+### 13.1 게시 원자성과 잠금 (§6.14 대체)
+- 업로드 순서: ① run 파일을 `suts/<sut>/runs/<runId>/`에 객체별 `If-None-Match: *`로 올린다. 이미 있는 객체는 체크섬이 같으면 건너뛰고(재시도 허용), 다르면 실패한다. ② 모든 객체를 체크섬 manifest와 대조한다. ③ `_COMPLETE` 표식을 조건부로 만든다. ④ 인덱스를 재생성한다.
+- 인덱스는 `_COMPLETE`가 있는 run만 읽는다. 표식 없이 남은 run은 같은 runId로 재시도하면 이어서 완료할 수 있다. 표식이 있는 runId를 다시 게시하면 실패한다.
+- 잠금: `locks/publish` 객체에 `{attemptId, owner(host,pid), acquiredAt}`를 조건부 PUT한다. 자동 만료는 없다. 남은 잠금은 `--force-unlock <attemptId>`로만 지우고, 지우기 전에 attemptId 일치를 확인한다. 지금은 수동 실행이라 자동 회수는 범위 밖이다.
+- 게시된 `run.json`의 S13 상태는 `publishing`이다. 최종 S13 결과는 로컬 `stages/S13.json`과 `publish-log.json`이 기준이다. S13은 `--only`에 없으면 실행하지 않는다.
+
+### 13.2 수용 테스트 격리
+- `TD_SITE_PREFIX`가 있으면 S3 `<prefix>`와 Lightsail `/srv/dashboard/<prefix>` 아래에만 게시한다. 운영 인덱스는 `_test/`를 무시한다. 주입 실행과 mini-sut은 `_test/<sessionId>/`에만 게시하고, 테스트가 끝나면 지운다.
+- 장애 주입 훅: `TD_FAIL_STAGE=<ID>[:<point>]`(예: `S11:scan`, `S13:upload-mid`, `S13:lightsail`). 운영 경로에서는 쓰지 않는다.
+- mini-sut: `tests/fixtures/mini-sut`. 테스트 시점에 `work/fixtures/`로 복사해 `git init` 후 `--sut-file`로 지정한다.
+
+### 13.3 Sonar 토큰 (§6.13 보정)
+- 사전 청소는 `name LIKE 'td-%' AND expiration_date < now()`인 **만료된** 행만 지운다. 다른 run의 활성 토큰은 건드리지 않는다.
+- 종료 정리는 자기 토큰 `td-<runId>`만 지운다. 정리 SSH가 실패하면 S11은 `failed`이고, 토큰은 발급 2시간 뒤 서버에서 만료된다.
+
+### 13.4 LLM 격리 (§6.5 S05, §6.6 공통)
+- S05와 S06의 모든 `claude` 호출(수리 포함)은 같은 래퍼 `pipeline/lib/llm.sh`를 거친다. 래퍼는 다음을 지킨다.
+  - 번들 임시 디렉터리를 cwd로 한다.
+  - 모든 도구를 비활성화한다.
+  - MCP 설정을 비운다.
+  - 사용자·프로젝트 설정과 CLAUDE.md를 로드하지 않는다.
+  - 프롬프트는 stdin으로 넘긴다.
+- 정확한 플래그는 S00에서 `claude --help`로 확인해 `tools.lock`에 기록한다. 검증은 가짜 `claude` 캡처와 실제 카나리 호출(tool_use 0건)로 한다.
+- 번들 내용 검사의 정규화는 요구사항명세 REQ-020의 절차를 따른다. bbtg 산출물은 스킬별 허용 JSON Schema(`additionalProperties: false`)로 정제한다.
+
+### 13.5 식별·경로 규약
+- genId: `<arm>-<inputHash8>-r<rep>`. `--regenerate`를 쓰면 `-g<n>`을 붙인다. 같은 입력 해시의 스냅샷이 있으면 기본으로 재사용한다(두 번째 run은 LLM을 부르지 않음).
+- testId: `E2E_<arm>_<inputHash8>r<rep>[g<n>]_<featureSlug>#L<line>`
+- 백그라운드 PID 기록: `work/runs/<runId>/pids/<name>.pid`
+- 병합 집계 XML: `S08/merged/aggregate.xml`(blackbox와 모든 e2e 스위트). S09와 S11은 이 파일 하나를 쓴다.
+- 엔드포인트 기대 목록: `suts/<sut>/expected-endpoints.yaml`(사람이 검토, 커밋 고정). AT-02의 독립 기준이다.
+- 시간: `startedAt`, `finishedAt`은 UTC이고, `sutDate`는 SUT TZ 기준 날짜다. run 도중 날짜가 바뀌면 `clockShift=true`로 기록하고 비교 화면에 경고를 띄운다. SUT 시계를 주입하는 기능은 SUT 변경이 필요해서 범위 밖이다.
+
+### 13.6 Route53 (§6.14 보정)
+- 기준: 적용 직전 스냅샷의 RRSet은 모두 그대로여야 하고, 새 RRSet은 허용 목록(`reports`, `dash`, ACM 검증 `_*.reports.<domain>` CNAME)만 가능하다.
+
+### 13.7 Lightsail 적용 (§6.14 보정)
+- `caddy validate`는 실행 중인 컨테이너가 아니라, 새 Caddyfile을 마운트한 일회성 컨테이너로 실행한다(`docker compose run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile`).
+- Caddy를 재생성한 뒤 `dash` HTTPS 응답은 최대 120초 재시도로 확인한다(인증서 최초 발급 대기).
+- validate가 실패하면 변경 전 Caddyfile과 compose로 바이트 단위 복원한다.
+
+### 13.8 호스팅 비교 데이터
+- `hosting.json`(스키마 고정)에 정량값과 정성값을 나눠 담는다.
+  - 정량: 배포 초, TTFB 중앙값 ms(표본 10, 실패 수, URL, warm), 홈 전송 ms, 메모리 MB
+  - 정성: 비용 추정 근거(가격표 출처, 리전, 기준일, 가정, 식), 운영 부담, 장애 영향 범위
