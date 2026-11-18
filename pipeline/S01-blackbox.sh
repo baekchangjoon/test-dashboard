@@ -23,11 +23,12 @@ s01_fail() { # <사유> [extra-json]
 }
 sut_get() { td_py -m td.sut_config get "$TD_SUT_FILE" "$1"; }
 
-SUT_JAVA_HOME="$(/usr/libexec/java_home -v "$(sut_get java)" 2>/dev/null)" || true
+SUT_JAVA_HOME="$(td_java_home "$(sut_get java)")" || true
 [[ -n "$SUT_JAVA_HOME" ]] || s01_fail "SUT가 요구하는 JDK $(sut_get java)를 찾지 못했다"
 BLACKBOX_CMD="$(sut_get blackbox.cmd)" || s01_fail "sut.yaml blackbox.cmd를 읽지 못했다"
 JUNIT_REL="$(sut_get blackbox.junit_xml)" || s01_fail "sut.yaml blackbox.junit_xml을 읽지 못했다"
 SUT_JUNIT_DIR="$TD_SUT_SRC/$JUNIT_REL"
+TEST_SOURCES_REL="$(sut_get blackbox.test_sources)" || s01_fail "sut.yaml blackbox.test_sources를 읽지 못했다"
 
 td_sut_up "$TD_RUN_DIR" S01 blackbox || s01_fail "SUT 기동 실패: $TD_SUT_FAIL_REASON"
 
@@ -59,7 +60,10 @@ GRADLE_RC=0
 td_sut_down
 
 if compgen -G "$SUT_JUNIT_DIR/*.xml" >/dev/null; then cp "$SUT_JUNIT_DIR"/*.xml "$JUNIT_DIR/"; fi
-EVAL="$(td_py -m td.blackbox evaluate "$JUNIT_DIR" "$OUT_DIR/exec" "$TD_SUT_SRC/src/test/java" "$(dirname "$TD_SUT_FILE")/expected-tests.yaml" 2>&1)" || s01_fail "게이트 판정 실패: $EVAL"
+# stdout만 JSON으로 파싱한다. stderr(경고 등)는 evaluate.log에 두고 실패 사유에만 붙인다.
+EVAL="$(td_py -m td.blackbox evaluate "$JUNIT_DIR" "$OUT_DIR/exec" "$TD_SUT_SRC/$TEST_SOURCES_REL" "$(dirname "$TD_SUT_FILE")/expected-tests.yaml" 2>"$OUT_DIR/evaluate.log")" \
+  || s01_fail "게이트 판정 실패: $(tail -c 600 "$OUT_DIR/evaluate.log")"
+jq -e . >/dev/null 2>&1 <<< "$EVAL" || s01_fail "게이트 판정 출력이 JSON이 아니다: $(head -c 300 <<< "$EVAL") / $(tail -c 300 "$OUT_DIR/evaluate.log")"
 echo "$EVAL" > "$OUT_DIR/summary.json"
 EXTRA="$(jq -c '{tcCount, execCount, missingExec, noAttribution}' <<< "$EVAL")"
 STATUS="$(jq -r '.status' <<< "$EVAL")"

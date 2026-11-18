@@ -22,7 +22,7 @@ s00_fail() { # <사유>  — 단계를 failed로 기록하고 끝낸다(사유�
 # 결과는 서브셸 없이 S00_OUT에 담는다(서브셸에서 실패하면 exit가 단계를 끝내지 못한다).
 S00_OUT=""
 s00_py() { local rc=0; S00_OUT="$(td_py -m td.prepare "$@" 2>&1)" || rc=$?; [[ $rc -eq 0 ]] || s00_fail "$S00_OUT"; }
-java_home() { /usr/libexec/java_home -v "$1" 2>/dev/null; }
+java_home() { td_java_home "$1"; }
 
 : "${TD_RUN_DIR:?}" "${TD_SUT_SRC:?}" "${TD_SUT_COMMIT:?}" "${TD_SUT_FILE:?}"
 mkdir -p "$TOOLS_DIR" "$TD_RUN_DIR/S00"

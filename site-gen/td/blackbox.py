@@ -82,7 +82,11 @@ def evaluate(junit_dir, exec_dir, sources_dir=None, expected_file=None) -> dict:
     missing = sorted({t for t in test_ids if exec_file_key(t) not in names})
     aggregate = any(Path(exec_dir).glob(f"{AGGREGATE_PREFIX}*.exec"))
     undocumented = [t for t in missing if t not in documented]
+    known_keys = {exec_file_key(t) for t in test_ids}
+    orphans = sorted(names - known_keys)
+    duplicates = sorted({t for t in test_ids if test_ids.count(t) > 1})
     stale = sorted(t for t in documented if t in set(test_ids) and exec_file_key(t) in names)
+    absent = sorted(t for t in documented if t not in set(test_ids))
     result = {"tcCount": len(test_ids), "execCount": len(names), "missingExec": missing,
               "noAttribution": documented, "aggregateExec": aggregate}
     problems = []
@@ -91,12 +95,23 @@ def evaluate(junit_dir, exec_dir, sources_dir=None, expected_file=None) -> dict:
     if undocumented:
         problems.append(f"tcCount({len(test_ids)}) execCount({len(names)}): 문서화되지 않은 missingExec {len(undocumented)}건: "
                         f"{', '.join(undocumented[:5])}{' …' if len(undocumented) > 5 else ''}")
+    if orphans:
+        problems.append(f"TC가 없는 .exec(orphan) {len(orphans)}건: {', '.join(orphans[:5])}{' …' if len(orphans) > 5 else ''}")
     if not aggregate:
         problems.append("aggregate.exec가 없다")
+    result["orphanExec"] = orphans
+    result["duplicateTestIds"] = duplicates
     if problems:
         result["status"], result["reason"] = "failed", "; ".join(problems)
-    elif stale:
-        result["status"], result["reason"] = "degraded", f"expectation stale: {', '.join(stale)}"
+    elif stale or absent or duplicates:
+        parts = []
+        if stale:
+            parts.append(f"documented but has exec: {', '.join(stale)}")
+        if absent:
+            parts.append(f"documented but not in JUnit: {', '.join(absent)}")
+        if duplicates:
+            parts.append(f"duplicate testIds: {', '.join(duplicates)}")
+        result["status"], result["reason"] = "degraded", "expectation stale: " + "; ".join(parts)
     else:
         result["status"] = "passed"
     return result

@@ -60,7 +60,8 @@
       "properties": {
         "cmd": {"type": "string", "minLength": 1},
         "props": {"type": "object", "additionalProperties": {"type": "string"}},
-        "junit_xml": {"type": "string", "minLength": 1}
+        "junit_xml": {"type": "string", "minLength": 1},
+        "test_sources": {"type": "string", "minLength": 1}
       }
     },
     "tia": {

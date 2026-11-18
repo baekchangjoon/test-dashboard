@@ -16,6 +16,9 @@ from jsonschema import Draft202012Validator
 SCHEMA_PATH = Path(__file__).parent / "schemas" / "sut.schema.json"
 
 
+DEFAULT_TEST_SOURCES = "src/test/java"
+
+
 class SutConfigError(ValueError):
     pass
 
@@ -54,6 +57,7 @@ class SutConfig:
     blackbox_cmd: str
     blackbox_props: dict[str, str]
     blackbox_junit_xml: str
+    blackbox_test_sources: str
     tia_range_spec: str
     tia_first_parent: bool
     sonar_project_key: str
@@ -138,6 +142,7 @@ def load(path) -> SutConfig:
         raise SutConfigError(f"{path}: 최상위가 매핑이 아니다")
     _validate(data, path)
     _extra_rules(data, path)
+    data["blackbox"].setdefault("test_sources", DEFAULT_TEST_SOURCES)  # 선택 키의 기본값(sut_config get에서도 보이게)
     return SutConfig(
         name=data["name"], repo=data["repo"], ref=data["ref"], java=data["java"],
         build_system=data["build"]["system"], build_cmd=data["build"]["cmd"],
@@ -152,6 +157,7 @@ def load(path) -> SutConfig:
         coverage_probes=tuple(CoverageProbe(p["test"], p["controller"]) for p in data["coverage"]["probes"]),
         blackbox_cmd=data["blackbox"]["cmd"], blackbox_props=dict(data["blackbox"]["props"]),
         blackbox_junit_xml=data["blackbox"]["junit_xml"],
+        blackbox_test_sources=data["blackbox"].get("test_sources", DEFAULT_TEST_SOURCES),
         tia_range_spec=data["tia"]["range"], tia_first_parent=bool(data["tia"].get("first_parent", True)),
         sonar_project_key=data["sonar"]["projectKey"], sonar_cmd_build=data["sonar"]["cmd_build"],
         sonar_cmd_scan=data["sonar"]["cmd_scan"],

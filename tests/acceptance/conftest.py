@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import stat
 import subprocess
 import sys
@@ -25,6 +26,7 @@ SESSION_FILE = REPO_ROOT / "work" / "acceptance-session.json"
 LOCAL_ENV_PATH = REPO_ROOT / "infra" / "local.env"
 
 _SESSION_ID = os.environ.get("TD_TEST_SESSION_ID") or uuid.uuid4().hex[:8]
+_SESSION_RUN_IDS: list[str] = []  # 이 세션의 fixture가 시작한 실제 run의 runId(td-<runId> 라벨 누수 검사용)
 
 
 # --- baseline 마커 (개정 A) ---------------------------------------------------
@@ -167,8 +169,12 @@ def session_resources_gate(test_run_label):
     """세션 종료 시 `test-run=td-test-<sessionId>` 라벨 자원이 0인지 확인한다. 남으면 세션 실패."""
     yield
     remaining = find_leaked_resources(test_run_label)
+    for run_id in _SESSION_RUN_IDS:
+        leaked = find_leaked_resources(f"td-{run_id}")
+        if leaked:
+            remaining[f"td-{run_id}"] = leaked
     if remaining:
-        pytest.fail(f"테스트 자원 누수(라벨 {test_run_label}): {remaining}", pytrace=False)
+        pytest.fail(f"테스트 자원 누수(라벨 {test_run_label} 및 이 세션의 td-<runId>): {remaining}", pytrace=False)
 
 
 @pytest.fixture(scope="session")
@@ -232,7 +238,6 @@ def sut_env(tmp_path, session_id, request):
         sut.cleanup()
 
 
-# --- 이후 Task가 채우는 fixture ----------------------------------------------------------
 # --- 실제 파이프라인 run(Task 5) ---------------------------------------------------------------
 @pytest.fixture(scope="session")
 def real_pipeline_run(tmp_path_factory, site_prefix):
@@ -249,9 +254,25 @@ def real_pipeline_run(tmp_path_factory, site_prefix):
             (work / shared).symlink_to(real_work / shared)
         full_env = {k: v for k, v in os.environ.items() if not k.startswith("TD_")}
         full_env.update(TD_WORK_DIR=str(work), TD_ROOT=str(REPO_ROOT), TD_SITE_PREFIX=site_prefix, **env)
-        done = subprocess.run(["bash", str(RUN_ALL), "petclinic", "--only", only],
-                              capture_output=True, text=True, env=full_env, timeout=3300)
-        return RunResult(done.returncode, done.stdout, done.stderr, work)
+        # 새 세션(프로세스 그룹)으로 띄우고, 시간이 넘으면 그룹에 TERM을 보내 파이프라인 trap이 컨테이너를 정리하게 한다.
+        proc = subprocess.Popen(["bash", str(RUN_ALL), "petclinic", "--only", only], env=full_env, text=True,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        try:
+            try:
+                stdout, stderr = proc.communicate(timeout=3300)
+            except subprocess.TimeoutExpired:
+                os.killpg(proc.pid, signal.SIGTERM)
+                try:
+                    proc.communicate(timeout=120)
+                except subprocess.TimeoutExpired:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                    proc.communicate()
+                pytest.fail(f"real pipeline run timed out (only={only})", pytrace=False)
+        finally:
+            runs_dir = work / "runs"
+            if runs_dir.exists():  # 세션 종료 시 라벨 td-<runId> 누수를 검사한다
+                _SESSION_RUN_IDS.extend(p.name for p in runs_dir.iterdir() if p.is_dir())
+        return RunResult(proc.returncode, stdout, stderr, work)
 
     return run
 
@@ -262,6 +283,7 @@ def m1_run(real_pipeline_run):
     return real_pipeline_run("S00,S01")
 
 
+# --- 이후 Task가 채우는 fixture ----------------------------------------------------------
 @pytest.fixture(scope="session")
 def injected_petclinic_run():
     pytest.fail("requires Task 15 (run-all.sh --only S00,S01,S08,S13 + TD_SITE_PREFIX)", pytrace=False)

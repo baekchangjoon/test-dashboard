@@ -81,7 +81,7 @@ def test_failed_on_undocumented_missing(tmp_path):
 def test_degraded_when_documented_has_exec(tmp_path):
     junit, exec_dir, src = _setup(tmp_path, ALL, CASES)
     result = blackbox.evaluate(junit, exec_dir, src, _expected(tmp_path, ["SampleIT#plain"]))
-    assert result["status"] == "degraded" and result["reason"] == "expectation stale: SampleIT#plain"
+    assert result["status"] == "degraded" and result["reason"].startswith("expectation stale:") and "SampleIT#plain" in result["reason"]
 
 
 def test_failed_without_aggregate_or_tcs(tmp_path):
@@ -89,3 +89,35 @@ def test_failed_without_aggregate_or_tcs(tmp_path):
     assert "aggregate.exec" in blackbox.evaluate(junit, exec_dir, src)["reason"]
     (tmp_path / "e").mkdir()
     assert blackbox.evaluate(_junit(tmp_path / "e", ""), exec_dir, src)["status"] == "failed"
+
+
+def test_degraded_when_documented_id_absent_from_junit(tmp_path):
+    junit, exec_dir, src = _setup(tmp_path, ALL, CASES)
+    result = blackbox.evaluate(junit, exec_dir, src, _expected(tmp_path, ["SampleIT#renamedAway"]))
+    assert result["status"] == "degraded" and "not in JUnit: SampleIT#renamedAway" in result["reason"]
+
+
+def test_degraded_on_duplicate_test_ids(tmp_path):
+    cases = CASES + '<testcase name="plain()" classname="x.SampleIT"/>'
+    junit, exec_dir, src = _setup(tmp_path, ALL, cases)
+    result = blackbox.evaluate(junit, exec_dir, src)
+    assert result["status"] == "degraded" and "duplicate testIds: SampleIT#plain" in result["reason"]
+
+
+def test_failed_on_orphan_exec(tmp_path):
+    junit, exec_dir, src = _setup(tmp_path, ALL + ["SampleIT#ghost.exec"], CASES)
+    result = blackbox.evaluate(junit, exec_dir, src)
+    assert result["status"] == "failed" and result["orphanExec"] == ["SampleIT#ghost"]
+    assert "orphan" in result["reason"]
+
+
+def test_test_sources_default_and_override(tmp_path):
+    from td import sut_config
+    import yaml
+    base = yaml.safe_load((Path(__file__).resolve().parents[2] / "suts" / "petclinic" / "sut.yaml").read_text())
+    path = tmp_path / "sut.yaml"
+    path.write_text(yaml.safe_dump(base))
+    assert sut_config.load(path).blackbox_test_sources == "src/test/java"
+    base["blackbox"]["test_sources"] = "tests/it"
+    path.write_text(yaml.safe_dump(base))
+    assert sut_config.load(path).blackbox_test_sources == "tests/it"

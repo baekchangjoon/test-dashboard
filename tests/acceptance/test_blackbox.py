@@ -63,5 +63,19 @@ def test_req008_exec_count_gate(m1_run, injected_gate_run):
     assert bad_stage["tcCount"] == EXPECTED and bad_stage["execCount"] == 0
     assert len(bad_stage["missingExec"]) == EXPECTED
     assert all("#" in test_id for test_id in bad_stage["missingExec"])
-    assert "tcCount(35)" in bad_stage["reason"] and "execCount(0)" in bad_stage["reason"]
+    assert f"tcCount({EXPECTED})" in bad_stage["reason"] and "execCount(0)" in bad_stage["reason"]
     assert bad.returncode == 2  # S01만 실패: 종료 코드 2
+
+
+def test_req012_evaluate_stderr_does_not_corrupt_summary(real_pipeline_run, tmp_path_factory):
+    """evaluate 단계가 stderr에 경고를 내도 summary.json은 stdout JSON만 담고 S01은 passed다(경고는 evaluate.log)."""
+    hook = tmp_path_factory.mktemp("stderr-hook")
+    (hook / "sitecustomize.py").write_text(
+        "import sys\nif 'evaluate' in sys.argv:\n    sys.stderr.write('WARNING: injected evaluate warning\\n')\n")
+    run = real_pipeline_run("S00,S01", PYTHONPATH=str(hook))
+    assert run.returncode == 0, run.stderr[-2000:]
+    assert run.stage("S01")["status"] == "passed"
+    root = _blackbox_dir(run)
+    summary = json.loads((root / "summary.json").read_text())
+    assert summary["status"] == "passed" and summary["tcCount"] == EXPECTED
+    assert "injected evaluate warning" in (root / "evaluate.log").read_text()
