@@ -30,7 +30,7 @@
         "label": {"$ref": "#/$defs/text"},
         "quantitative": {
           "type": "object",
-          "required": ["deploy", "ttfb", "homeTransfer", "memory"],
+          "required": ["deploy", "ttfb", "homeTransfer", "memory", "connection"],
           "additionalProperties": false,
           "properties": {
             "deploy": {
@@ -60,13 +60,23 @@
             },
             "homeTransfer": {
               "type": "object",
-              "required": ["ms", "unit", "bytes", "url"],
+              "required": ["ms", "unit", "bytes", "url", "basis"],
               "additionalProperties": false,
               "properties": {
                 "ms": {"anyOf": [{"$ref": "#/$defs/number"}, {"type": "null"}]},
                 "unit": {"const": "ms"},
                 "bytes": {"anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]},
-                "url": {"$ref": "#/$defs/text"}
+                "url": {"$ref": "#/$defs/text"},
+                "basis": {"$ref": "#/$defs/text"}
+              }
+            },
+            "connection": {
+              "type": "object",
+              "required": ["pinned", "source"],
+              "additionalProperties": false,
+              "properties": {
+                "pinned": {"type": "boolean"},
+                "source": {"anyOf": [{"const": "route53-authoritative"}, {"type": "null"}]}
               }
             },
             "memory": {

@@ -1,5 +1,8 @@
 """Task 11 단위: TTFB 측정(중앙값 규칙, 첫 바이트 시각, 실패 표본), hosting 문서 조립과 스키마, S13 상태 규칙."""
+import datetime
 import json
+import re
+import socket
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -126,7 +129,8 @@ def test_unit_measure_unreachable_is_failures_not_exception():
 def _measures(ok=10, failed=0, median=42.0):
     ttfb = hosting.Ttfb(median_ms=median, ok=ok, failed=failed)
     home = hosting.HomeTransfer(ms=120.5, bytes=2048)
-    return {name: {"url": f"https://{name}.example.com/p/index.html", "ttfb": ttfb, "home": home} for name in ("reports", "dash")}
+    return {name: {"url": f"https://{name}.example.com/p/index.html", "ttfb": ttfb, "home": home, "pinned": True}
+            for name in ("reports", "dash")}
 
 
 def _build(measures=None, **kw):
@@ -147,6 +151,11 @@ def test_unit_document_matches_schema():
     assert ttfb["ok"] == 10 and ttfb["failed"] == 0 and ttfb["timeoutSeconds"] == 10 and ttfb["url"].startswith("https://dash.")
     assert doc["hosts"]["dash"]["quantitative"]["memory"] == {"beforeMb": 900, "afterMb": 880, "unit": "MB", "metric": "available"}
     assert doc["hosts"]["reports"]["quantitative"]["memory"] is None, "메모리는 Lightsail만"
+    for name in ("reports", "dash"):
+        quant = doc["hosts"][name]["quantitative"]
+        assert quant["connection"] == {"pinned": True, "source": "route53-authoritative"}
+        assert "단일 표본" in quant["homeTransfer"]["basis"] and "실패" in quant["homeTransfer"]["basis"]
+    assert not re.search(r"\b\d{1,3}(\.\d{1,3}){3}\b", json.dumps(doc)), "IP 값은 게시하지 않는다"
 
 
 def test_unit_document_null_ttfb_valid_and_degraded():
@@ -179,10 +188,11 @@ def test_unit_qualitative_yaml_complete():
     for host in ("reports", "dash"):
         item = raw["hosts"][host]
         cost = item["cost"]
-        assert cost["asOf"] == "2026-11-19"
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", cost["asOf"]) and datetime.date.fromisoformat(cost["asOf"])
         for field in ("region", "formula", "priceBasis"):
             assert str(cost[field]).strip(), (host, field)
-        assert cost["source"] and all(s["url"].startswith("https://aws.amazon.com/") for s in cost["source"])
+        assert cost["source"] and all(s["url"].startswith("https://") for s in cost["source"])
+        assert any(s["url"].startswith("https://aws.amazon.com/") for s in cost["source"])
         assert cost["assumptions"]
         assert str(item["operations"]).strip() and str(item["failureScope"]).strip()
     assert "Sonar" in raw["hosts"]["dash"]["failureScope"], "Lightsail은 Sonar와 장애 영역을 공유한다"
@@ -193,11 +203,47 @@ def test_unit_html_shows_values_and_follows_site_style():
     doc = _build()
     html = hosting.render_html(doc)
     assert "<title>호스팅 방식 비교</title>" in html
-    for needle in ("42.0", "120.5", "3.21", "900", "880", "Sonar", "2026-11-19", 'href="static/site.css"', "viewport"):
+    for needle in ("42.0", "120.5", "3.21", "900", "880", "Sonar", doc["hosts"]["dash"]["qualitative"]["cost"]["asOf"],
+                   'href="static/site.css"', "viewport", "단일 표본", "route53-authoritative"):
         assert needle in html, needle
     assert "var(--" in (REPO_ROOT / "site-gen/td/site/static/site.css").read_text()
     null_html = hosting.render_html(_build(_measures(ok=6, failed=4, median=None)))
     assert "측정 실패" in null_html or "—" in null_html
+
+
+# --- resolve_ip(항상 Route53 권한 응답, boto3 스텁) --------------------------------------------
+class StubRoute53:
+    def __init__(self, record_data, code="NOERROR"):
+        self.record_data, self.code, self.calls = record_data, code, []
+
+    def test_dns_answer(self, **kwargs):
+        self.calls.append(kwargs)
+        return {"RecordData": self.record_data, "ResponseCode": self.code}
+
+
+def test_unit_resolve_ip_filters_non_ip_record_data():
+    client = StubRoute53(["d111.cloudfront.net.", "203.0.113.7", "203.0.113.8"])
+    assert hosting.resolve_ip("reports.example.com", "example.com", zone_id="Z1", client=client) == "203.0.113.7"
+    assert client.calls == [{"HostedZoneId": "Z1", "RecordName": "reports.example.com", "RecordType": "A"}]
+
+
+def test_unit_resolve_ip_no_a_answer_raises_clear_error():
+    with pytest.raises(RuntimeError, match=r"reports\.example\.com.*A 응답이 없다.*NXDOMAIN"):
+        hosting.resolve_ip("reports.example.com", "example.com", zone_id="Z1", client=StubRoute53(["alias.cloudfront.net."], "NXDOMAIN"))
+    with pytest.raises(RuntimeError, match="A 응답이 없다"):
+        hosting.resolve_ip("dash.example.com", "example.com", zone_id="Z1", client=StubRoute53([]))
+
+
+def test_unit_resolve_ip_always_queries_route53_even_if_local_dns_resolves(monkeypatch):
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: [("x",)])  # 로컬 DNS가 풀려도 쓰지 않는다
+    client = StubRoute53(["198.51.100.4"])
+    assert hosting.resolve_ip("dash.example.com", "example.com", zone_id="Z1", client=client) == "198.51.100.4"
+    assert len(client.calls) == 1
+
+
+def test_unit_html_without_measurement_is_notice_page():
+    html = hosting.render_html(None, reason="TD_DOMAIN이 설정돼 있지 않다")
+    assert "<title>호스팅 방식 비교</title>" in html and "측정 없음" in html and "TD_DOMAIN" in html
 
 
 # --- S13 상태 규칙 -------------------------------------------------------------------------
@@ -236,7 +282,7 @@ def _run(exec_env, monkeypatch, ok=10):
     run_id, run_dir, env, _ = exec_env
     env = {**env, "TD_DOMAIN": "example.com"}
     s3, cf = FakeS3(), OkCloudFront()
-    monkeypatch.setattr(hosting, "resolve_ip", lambda host, domain, zone_id=None: None)
+    monkeypatch.setattr(hosting, "resolve_ip", lambda host, domain, zone_id=None, client=None: "203.0.113.1")
     result = publish.Publication("sutx", run_id, run_dir, env, s3, cf, hosting_measurer=_fake_measurer(ok)).execute()
     return result, s3, cf, run_id
 
@@ -252,7 +298,10 @@ def test_unit_hosting_phase_publishes_json_html_no_cache_and_invalidates(exec_en
     jsonschema.validate(doc, hosting.load_schema())
     assert doc["hosts"]["dash"]["quantitative"]["ttfb"]["url"] == "https://dash.example.com/_test/u/index.html"
     assert doc["hosts"]["dash"]["quantitative"]["memory"]["afterMb"] == 99999999999  # ssh 스텁이 돌려준 available 값
-    assert any(paths == ["/_test/u/hosting.json", "/_test/u/hosting.html"] for paths in cf.paths)
+    assert any(paths == ["/_test/u/hosting.html", "/_test/u/hosting.json"] for paths in cf.paths)
+    cloudfront = result["hosts"]["cloudfront"]
+    assert cloudfront["invalidationId"] and cloudfront["hostingInvalidationId"] and cloudfront["paths"] > 0, "앞선 무효화 정보를 보존한다"
+    assert all(h["quantitative"]["connection"]["pinned"] for h in doc["hosts"].values())
     assert result["timings"]["rsyncSeconds"] is not None and result["timings"]["uploadSeconds"] >= 0
     assert "호스팅 방식 비교" in s3.objects["_test/u/hosting.html"]["data"].decode()
 
@@ -265,3 +314,28 @@ def test_unit_hosting_phase_null_ttfb_makes_s13_degraded_and_logged(exec_env, mo
     log = json.loads(s3.objects[f"_test/u/suts/sutx/publish-log/{run_id}.json"]["data"])
     assert log["status"] == "degraded" and log["hosts"]["hosting"]["status"] == "failed"
     assert result["hosts"]["s3"]["status"] == "passed"
+
+
+def test_unit_hosting_phase_error_text_in_reason_and_notice_page_kept(exec_env, monkeypatch):
+    run_id, run_dir, env, _ = exec_env
+    env = {**env, "TD_DOMAIN": "example.com"}
+    s3, cf = FakeS3(), OkCloudFront()
+
+    def boom(host, domain, zone_id=None, client=None):
+        raise RuntimeError(f"{host}의 Route53 A 응답이 없다(응답 코드 NXDOMAIN)")
+    monkeypatch.setattr(hosting, "resolve_ip", boom)
+    result = publish.Publication("sutx", run_id, run_dir, env, s3, cf, hosting_measurer=_fake_measurer()).execute()
+    assert result["status"] == "degraded"
+    reason = result["hosts"]["hosting"]["reason"]
+    assert "RuntimeError" in reason and "NXDOMAIN" in reason and "reports" in reason and "dash" in reason
+    doc = json.loads(s3.objects["_test/u/hosting.json"]["data"])
+    assert not doc["hosts"]["dash"]["quantitative"]["connection"]["pinned"]
+
+
+def test_unit_hosting_phase_missing_domain_writes_notice_page(exec_env):
+    run_id, run_dir, env, _ = exec_env  # TD_DOMAIN 없음
+    s3 = FakeS3()
+    result = publish.Publication("sutx", run_id, run_dir, env, s3, OkCloudFront(), hosting_measurer=_fake_measurer()).execute()
+    assert result["status"] == "degraded" and "TD_DOMAIN" in result["hosts"]["hosting"]["reason"]
+    assert "측정 없음" in s3.objects["_test/u/hosting.html"]["data"].decode()
+    assert "_test/u/hosting.json" not in s3.objects

@@ -2,8 +2,9 @@
 
 설계 §13.8. 측정은 게시 직후 로컬에서 하고, 결과는 `<prefix>hosting.json`/`hosting.html`(no-cache)로 게시한다.
 TTFB 정의: 새 연결(TCP+TLS 포함)을 맺고 요청을 보낸 시각부터 응답 상태줄과 헤더를 받은 시각(첫 응답 바이트)까지.
-방금 만든 DNS 이름은 로컬 리졸버가 NXDOMAIN을 캐시할 수 있어, 풀리지 않으면 Route53 권한 응답 IP로 연결을 고정한다
-(TLS 검증과 SNI, Host 헤더는 호스트 이름 기준 그대로).
+방금 만든 DNS 이름은 로컬 리졸버가 NXDOMAIN을 캐시할 수 있고 리졸버마다 응답도 달라, 두 호스트 모두 항상 Route53 권한 응답의
+A 레코드 IP로 연결을 고정해 측정한다(TLS 검증과 SNI, Host 헤더는 호스트 이름 기준 그대로). IP 값은 게시하지 않고
+고정했다는 사실과 출처(`route53-authoritative`)만 hosting.json에 남긴다.
 """
 from __future__ import annotations
 
@@ -81,20 +82,21 @@ def _connection(url: str, timeout: float, connect_ip: str | None):
     return cls(host, connect_ip, port=port, timeout=timeout), path
 
 
-def resolve_ip(host: str, domain: str, zone_id: str | None = None) -> str | None:
-    """로컬 리졸버로 풀리면 None(그대로 연결), 안 풀리면 Route53 권한 응답의 A 레코드 IP."""
-    try:
-        socket.getaddrinfo(host, 443)
-        return None
-    except socket.gaierror:
-        pass
-    import boto3
-    from td import route53
-    zone = zone_id or route53.find_zone_id(domain)
-    answer = boto3.client("route53").test_dns_answer(HostedZoneId=zone, RecordName=host, RecordType="A")
-    ips = [value for value in answer["RecordData"] if value[:1].isdigit()]
+PIN_SOURCE = "route53-authoritative"
+
+
+def resolve_ip(host: str, domain: str, zone_id: str | None = None, client=None) -> str:
+    """Route53 권한 응답(test_dns_answer)의 A 레코드 IP. IP가 아닌 RecordData(CNAME 등)는 거르고, A 응답이 없으면 RuntimeError."""
+    if client is None:
+        import boto3
+        client = boto3.client("route53")
+    if zone_id is None:
+        from td import route53
+        zone_id = route53.find_zone_id(domain, client)
+    answer = client.test_dns_answer(HostedZoneId=zone_id, RecordName=host, RecordType="A")
+    ips = [value for value in answer.get("RecordData", []) if value[:1].isdigit()]
     if not ips:
-        raise RuntimeError(f"{host}의 A 응답이 없다: {answer['ResponseCode']}")
+        raise RuntimeError(f"{host}의 Route53 A 응답이 없다(응답 코드 {answer.get('ResponseCode')})")
     return ips[0]
 
 
@@ -160,6 +162,8 @@ DEPLOY_BASIS = {
     "reports": "S3 업로드 시작부터 인덱스 재생성 업로드까지(조건부 PUT, 검증, _COMPLETE 포함)",
     "dash": "미러에서 Lightsail로 rsync 두 번(새 파일, 인덱스)에 걸린 시간",
 }
+HOME_BASIS = ("홈 HTML을 끝까지 받는 데 걸린 시간의 단일 표본(중앙값이 아님, 새 연결). "
+              "본문 읽기가 중간에 실패하면 실패로 세어 값이 없다.")
 
 
 def build_document(*, sut: str, run_id: str, generated_at: str, measures: dict, timings: dict, qualitative: dict,
@@ -180,7 +184,8 @@ def build_document(*, sut: str, run_id: str, generated_at: str, measures: dict, 
                 "ttfb": {"medianMs": None if ttfb.median_ms is None else round(ttfb.median_ms, 1), "unit": "ms", "samples": n,
                          "ok": ttfb.ok, "failed": ttfb.failed, "timeoutSeconds": timeout, "url": measured["url"], "warm": True},
                 "homeTransfer": {"ms": None if home.ms is None else round(home.ms, 1), "unit": "ms", "bytes": home.bytes,
-                                 "url": measured["url"]},
+                                 "url": measured["url"], "basis": HOME_BASIS},
+                "connection": {"pinned": bool(measured.get("pinned")), "source": PIN_SOURCE if measured.get("pinned") else None},
                 "memory": memory,
             },
             "qualitative": {"cost": info["cost"], "operations": info["operations"], "failureScope": info["failureScope"]},
@@ -198,9 +203,10 @@ def measurement_status(doc: dict) -> tuple[str, str | None]:
     return ("failed", "; ".join(problems)) if problems else ("passed", None)
 
 
-def render_html(doc: dict, css_href: str = "static/site.css") -> str:
+def render_html(doc: dict | None, css_href: str = "static/site.css", reason: str | None = None) -> str:
+    """doc가 None이면 "측정 없음" 안내 페이지(홈의 링크가 항상 열리게 한다)."""
     from td.site import pages
-    return pages.jinja_env().get_template("hosting.html.j2").render(doc=doc, css_href=css_href)
+    return pages.jinja_env().get_template("hosting.html.j2").render(doc=doc, css_href=css_href, reason=reason)
 
 
 def check_document(doc: dict) -> None:

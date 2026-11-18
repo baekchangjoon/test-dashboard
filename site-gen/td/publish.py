@@ -747,43 +747,67 @@ class Publication:
         candidate = Path(self.env.get("TD_ROOT", ".")) / "infra" / "hosting-qualitative.yaml"
         return candidate if candidate.exists() else hosting_default_qualitative()
 
+    def _publish_hosting_files(self, hosting_mod, doc: dict | None, reason: str | None = None) -> None:
+        """hosting.json(문서가 있을 때)과 hosting.html(없으면 "측정 없음" 안내)을 미러에 쓰고 S3에 올린 뒤 명시 무효화한다.
+        hosting 무효화 결과는 cloudfront 항목의 별도 필드(hostingInvalidationId)에 남겨 앞선 invalidationId/paths를 보존한다."""
+        target = self.mirror / self.prefix
+        target.mkdir(parents=True, exist_ok=True)
+        files = [target / "hosting.html"]
+        (target / "hosting.html").write_text(hosting_mod.render_html(doc, reason=reason))
+        if doc is not None:
+            (target / "hosting.json").write_text(json.dumps(doc, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+            files.append(target / "hosting.json")
+        upload_files(self.s3, self.bucket, self.mirror, files)
+        paths = [f"/{self.prefix}{path.name}" for path in files]
+        try:
+            invalidation = invalidate(self.cf, self.distribution_id, paths, self.run_id)
+            self.hosts["cloudfront"] = {**self.hosts["cloudfront"], "hostingInvalidationId": invalidation}
+        except Exception as exc:  # noqa: BLE001
+            problem = f"hosting invalidation: {type(exc).__name__}: {str(exc)[:200]}"
+            previous = self.hosts["cloudfront"].get("reason")
+            self.hosts["cloudfront"] = {**self.hosts["cloudfront"], "status": "failed",
+                                        "reason": f"{previous}; {problem}" if previous else problem}
+
     def hosting_phase(self) -> None:
         """게시 직후 두 호스트의 TTFB·홈 전송을 재고 hosting.json/hosting.html을 접두 루트에 올린다(no-cache, 명시 무효화).
-        Lightsail 쪽은 이어지는 log_phase의 rsync가 함께 싣는다. TTFB 성공 표본 부족이나 측정 오류는 hosts.hosting=failed(degraded)."""
-        from td import hosting
+        Lightsail 쪽은 이어지는 log_phase의 rsync가 함께 싣는다. TTFB 성공 표본 부족이나 측정 오류는 hosts.hosting=failed(degraded)이고
+        사유에 예외 문구를 담는다. 측정이 불가능해도 hosting.html(측정 없음 안내)은 남겨 홈 링크가 끊기지 않게 한다."""
+        from td import hosting as hosting_mod
         if not self.measure_hosting:
             return
+        errors: list[str] = []
         try:
             domain = self.env.get("TD_DOMAIN")
             if not domain:
                 raise PublishError("TD_DOMAIN이 설정돼 있지 않다")
             measures = {}
-            for name in hosting.HOST_NAMES:
+            for name in hosting_mod.HOST_NAMES:
                 host = f"{name}.{domain}"
                 url = f"https://{host}/{self.prefix}index.html"
                 try:
-                    ip = hosting.resolve_ip(host, domain)
+                    ip = hosting_mod.resolve_ip(host, domain)  # 항상 Route53 권한 응답으로 고정(두 호스트 비교 가능성)
                     ttfb, home = (self.hosting_measurer or _measure_both)(url, ip)
-                    measures[name] = {"url": url, "ttfb": ttfb, "home": home}
-                except Exception:  # noqa: BLE001 - 이름이 안 풀리는 등: 이 호스트 표본은 모두 실패로 센다
-                    measures[name] = {"url": url, "ttfb": hosting.Ttfb(None, 0, hosting.SAMPLES), "home": hosting.HomeTransfer(None, None)}
-            doc = hosting.build_document(
+                    measures[name] = {"url": url, "ttfb": ttfb, "home": home, "pinned": True}
+                except Exception as exc:  # noqa: BLE001 - 이 호스트 표본은 모두 실패로 센다
+                    errors.append(f"{name}: {type(exc).__name__}: {str(exc)[:200]}")
+                    measures[name] = {"url": url, "ttfb": hosting_mod.Ttfb(None, 0, hosting_mod.SAMPLES),
+                                      "home": hosting_mod.HomeTransfer(None, None), "pinned": False}
+            doc = hosting_mod.build_document(
                 sut=self.sut, run_id=self.run_id, generated_at=_utc_now(), measures=measures, timings=self.result("", None)["timings"],
-                qualitative=hosting.load_qualitative(self._qualitative_path()))
-            hosting.check_document(doc)
-            target = self.mirror / self.prefix
-            target.mkdir(parents=True, exist_ok=True)
-            (target / "hosting.json").write_text(json.dumps(doc, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
-            (target / "hosting.html").write_text(hosting.render_html(doc))
-            upload_files(self.s3, self.bucket, self.mirror, [target / "hosting.json", target / "hosting.html"])
-            try:
-                invalidate(self.cf, self.distribution_id, [f"/{self.prefix}hosting.json", f"/{self.prefix}hosting.html"], self.run_id)
-            except Exception as exc:  # noqa: BLE001
-                self.hosts["cloudfront"] = {"status": "failed", "reason": f"hosting invalidation: {type(exc).__name__}: {str(exc)[:200]}"}
-            status, reason = hosting.measurement_status(doc)
+                qualitative=hosting_mod.load_qualitative(self._qualitative_path()))
+            hosting_mod.check_document(doc)
+            self._publish_hosting_files(hosting_mod, doc)
+            status, reason = hosting_mod.measurement_status(doc)
+            if errors:
+                status, reason = "failed", "; ".join(x for x in (reason, *errors) if x)
             self.hosts["hosting"] = {"status": status, **({"reason": reason} if reason else {})}
         except Exception as exc:  # noqa: BLE001 - 비교 측정이 게시 자체를 막지 않는다
-            self.hosts["hosting"] = {"status": "failed", "reason": f"hosting 측정/게시 실패: {type(exc).__name__}: {str(exc)[:200]}"}
+            reason = f"hosting 측정/게시 실패: {type(exc).__name__}: {str(exc)[:200]}"
+            self.hosts["hosting"] = {"status": "failed", "reason": reason}
+            try:
+                self._publish_hosting_files(hosting_mod, None, reason)
+            except Exception:  # noqa: BLE001 - 안내 페이지도 최선 노력
+                pass
 
     def log_phase(self) -> dict:
         status, reason = overall_status(self.hosts)
@@ -842,8 +866,8 @@ class Publication:
         release_warning = ""
         try:
             self.hooks.check_allowed(self.env)
-            hosting = load_hosting(self.work_dir, self.env)
-            self.bucket, self.distribution_id = hosting["bucket"], hosting["distribution_id"]
+            infra = load_hosting(self.work_dir, self.env)
+            self.bucket, self.distribution_id = infra["bucket"], infra["distribution_id"]
             if self.s3 is None or self.cf is None:
                 self.s3, self.cf = _make_clients(self.env)
             self.preflight()

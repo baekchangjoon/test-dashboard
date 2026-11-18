@@ -1,27 +1,32 @@
 # 호스팅 방식 비교의 정성값(hosting.json의 hosts.<name>.qualitative로 그대로 들어간다).
-# 숫자 단가는 이 환경에서 가격 페이지를 열어 확인하지 못해 모두 "추정"이다. 게시 전에 출처 페이지로 다시 확인한다.
+# 가격 근거: CloudFront 상시 무료 구간은 AWS 공식 페이지로 확인했고, S3 단가는 서울 요청 단가를 확인하지 못해 "추정"이다(각 priceBasis 참조).
 hosts:
   reports:
     label: "S3 + CloudFront (reports 호스트)"
     cost:
       monthlyUsdIncremental: 0.2
       monthlyUsdStandalone: 0.2
-      priceBasis: "추정 - 가격 페이지 값을 이 환경에서 직접 확인하지 못했다. 단가는 AWS 공개 가격표 기준 대략값이며 게시 전에 출처 페이지로 재확인한다."
+      priceBasis: "일부 확인, 나머지 추정 - CloudFront 상시 무료 구간(월 전송 1TB, 요청 1,000만 건, Function 호출 200만 건)은 AWS 공식 페이지로 확인했다. S3 서울 리전의 저장 단가 0.025 USD/GB-월은 제3자 글(Upstash)에서만 확인했고, 서울 리전 요청 단가는 확인하지 못해 미국 동부(버지니아) 단가를 가정 근거로 썼으므로 S3 항목은 추정이다. 게시 전에 S3 가격 페이지에서 서울 표를 다시 확인한다."
       region: "S3: 서울(ap-northeast-2). CloudFront: 아시아 가격 구간. ACM 인증서는 us-east-1."
       asOf: "2026-11-19"
       source:
-        - name: "Amazon S3 가격(서울 리전 표)"
+        - name: "Amazon S3 가격(서울 리전 표를 확인할 곳)"
           url: "https://aws.amazon.com/s3/pricing/"
-        - name: "Amazon CloudFront 가격(아시아 구간, 상시 무료 구간)"
-          url: "https://aws.amazon.com/cloudfront/pricing/"
+        - name: "Upstash, AWS S3 가격 설명 2026(서울 저장 단가의 제3자 출처)"
+          url: "https://upstash.com/blog/aws-s3-pricing-explained-2026"
+        - name: "Amazon CloudFront 가격(종량제, 상시 무료 구간)"
+          url: "https://aws.amazon.com/cloudfront/pricing/pay-as-you-go"
+        - name: "AWS 가격 인하 공지 2021-11(CloudFront 인터넷 전송 1TB 상시 무료)"
+          url: "https://aws.amazon.com/about-aws/whats-new/2021/11/aws-price-reduction-data-transfers-internet"
       assumptions:
         - "저장량 1GB(run이 누적돼도 run 하나는 200MB 경고선 아래, 몇 개 run을 보존한다고 가정)"
         - "월 게시 100회, 게시 1회당 객체 약 300개를 올린다고 가정(PUT 30,000건)"
         - "월 조회 100,000건(GET), 전송량 5GB"
-        - "S3 저장 단가 0.025 USD/GB-월(추정), GET 0.00035 USD/1,000건(추정), PUT 0.0045 USD/1,000건(추정)"
-        - "CloudFront는 월 전송 1TB와 요청 1,000만 건의 상시 무료 구간 안에 든다고 가정(추정). S3에서 CloudFront로의 전송은 과금 없음으로 가정"
+        - "S3 저장 단가 0.025 USD/GB-월(서울, 제3자 출처, 추정)"
+        - "S3 요청 단가는 미국 동부 단가를 가정 근거로 썼다: PUT 0.005 USD/1,000건, GET 0.0004 USD/1,000건(서울 단가 미확인, 추정)"
+        - "CloudFront는 월 전송 1TB와 요청 1,000만 건의 상시 무료 구간 안에 든다(AWS 공식 페이지로 확인한 사실). S3에서 CloudFront로의 전송은 과금 없음으로 가정"
         - "Route53 호스티드 존은 이미 있어 증분 비용이 없고, alias 레코드 질의 비용은 무시"
-      formula: "월 비용 = 저장 1GB x 0.025 + GET 100 x 0.00035 + PUT 30 x 0.0045 + CloudFront 0 = 0.025 + 0.035 + 0.135 = 약 0.2 USD"
+      formula: "월 비용 = 저장 1GB x 0.025 + GET 100 x 0.0004 + PUT 30 x 0.005 + CloudFront 0 = 0.025 + 0.04 + 0.15 = 약 0.2 USD"
     operations: "서버 관리가 없다. Terraform으로 한 번 만들면 OS 패치, 디스크, 인증서 갱신(ACM 자동)을 AWS가 맡는다. 남는 일은 게시 때마다 무효화 경로를 명시해 요청하는 것과 OAC 버킷 정책을 유지하는 것이다. 캐시 헤더 설계(인덱스 no-cache, run 불변)를 이해하고 있어야 한다."
     failureScope: "관리형 서비스라 단일 서버 고장 지점이 없다. 장애가 나도 reports 사이트에만 영향을 주고 Sonar와 dash 호스트에는 영향이 없다. 게시 중 무효화가 실패하면 인덱스가 잠시 낡아 보일 수 있고(no-cache라 곧 갱신), 글로벌 서비스(CloudFront, us-east-1 ACM) 장애는 이 호스트만 막는다."
   dash:
