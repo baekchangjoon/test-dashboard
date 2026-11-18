@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
+import yaml
 
 from helpers import claude_call_log as _claude_call_log
 from helpers import docker_ids as _docker_ids
@@ -32,6 +33,10 @@ _SESSION_RUN_IDS: list[str] = []  # 이 세션의 fixture가 시작한 실제 ru
 
 # --- baseline 마커 (개정 A) ---------------------------------------------------
 def pytest_configure(config):
+    # 백그라운드 작업(`cmd &`)으로 띄운 pytest는 SIGINT를 SIG_IGN으로 물려받고, 자식 프로세스도 그 설정을 그대로 받는다.
+    # bash는 "시작할 때 무시된 신호"를 trap할 수 없으므로 run-all.sh의 SIGINT trap이 죽고, 정리 테스트가 90초를 기다리게 된다
+    # (test_req010_sigint_cleanup 플레이크의 근본 원인). 핸들러를 명시적으로 설치하면 자식은 exec 때 기본 동작(SIG_DFL)으로 시작한다.
+    signal.signal(signal.SIGINT, signal.default_int_handler)
     config.addinivalue_line(
         "markers",
         "baseline: 기준 run 증거(work/acceptance-session.json)가 필요한 E2E 테스트. 없으면 실패한다.",
@@ -258,8 +263,7 @@ def real_pipeline_run(tmp_path_factory, site_prefix):
         full_env.update(TD_WORK_DIR=str(work), TD_ROOT=str(REPO_ROOT), TD_SITE_PREFIX=site_prefix, **env)
         # 새 세션(프로세스 그룹)으로 띄우고, 시간이 넘으면 그룹에 TERM을 보내 파이프라인 trap이 컨테이너를 정리하게 한다.
         sut_args = ["--sut-file", sut_file] if sut_file else []
-        sut_name = next(line.split(":", 1)[1].strip() for line in Path(sut_file).read_text().splitlines()
-                        if line.startswith("name:")) if sut_file else "petclinic"
+        sut_name = yaml.safe_load(Path(sut_file).read_text())["name"] if sut_file else "petclinic"
         proc = subprocess.Popen(["bash", str(RUN_ALL), sut_name, *sut_args, "--only", only], env=full_env, text=True,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
         try:
@@ -417,7 +421,9 @@ MINI_SUT_WORK = REPO_ROOT / "work" / "fixtures" / "mini-sut"
 
 @pytest.fixture(scope="session")
 def mini_sut_sut_file() -> Path:
-    """mini-sut fixture를 work/fixtures/mini-sut로 복사하고 git 저장소(커밋 2개)로 만든 뒤 repo를 채운 sut.yaml 경로를 돌려준다.
+    """(주의: 이 fixture와 mini_sut_run, injected_petclinic_run은 고정 경로 work/fixtures/mini-sut, work/suts/mini-sut를 쓰는 세션 fixture라
+    pytest-xdist 병렬 실행에서는 안전하지 않다. 이 스위트는 단일 프로세스로 돌린다.)
+    mini-sut fixture를 work/fixtures/mini-sut로 복사하고 git 저장소(커밋 2개)로 만든 뒤 repo를 채운 sut.yaml 경로를 돌려준다.
     설명 파일 디렉터리에는 expected-tests.yaml이 함께 있다. 이전 시도의 clone 캐시(work/suts/mini-sut)는 지운다."""
     shutil.rmtree(MINI_SUT_WORK, ignore_errors=True)
     shutil.rmtree(REPO_ROOT / "work" / "suts" / "mini-sut", ignore_errors=True)

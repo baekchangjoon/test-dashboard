@@ -15,8 +15,8 @@ import static io.restassured.RestAssured.given;
 @ExtendWith(PerTestCoverageExtension.class)
 abstract class ApiBlackBoxTestSupport {
 
-    static final String USERNAME = System.getenv().getOrDefault("TD_SUT_USER", "admin");
-    static final String PASSWORD = System.getenv().getOrDefault("TD_SUT_PASS", "password");
+    static final String USERNAME = System.getenv().getOrDefault("TD_MINISUT_USER", "admin");
+    static final String PASSWORD = System.getenv().getOrDefault("TD_MINISUT_PASS", "password");
 
     private static volatile String cachedToken;
 
