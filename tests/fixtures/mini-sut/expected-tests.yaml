@@ -1,0 +1,8 @@
+# S01 수량 게이트의 기대값: 블랙박스 IT의 @Test 수. 거부 요청도 서블릿 안에서 처리되므로 전부 .exec가 생긴다.
+blackbox:
+  total: 5
+  classes:
+    AuthApiBlackBoxIT: 1
+    ItemApiBlackBoxIT: 3
+    TagApiBlackBoxIT: 1
+expected_exec: 5

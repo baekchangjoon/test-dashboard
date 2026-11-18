@@ -47,6 +47,8 @@ STAGE_DIR="${TD_STAGE_DIR:-$TD_ROOT/pipeline}"
 # --- SUT 커밋 해석(run 디렉터리 예약 전) -------------------------------------------------
 SUT_VARS="$(td_py -m td.sutsrc "$SUT_FILE")" || die "sut 파일을 읽지 못했다: $SUT_FILE"
 eval "$SUT_VARS"
+# 게시 경로와 단계 인자는 인자 $SUT를 쓰므로 설명 파일의 name과 다르면 다른 SUT 이름으로 게시된다. 시작 전에 거부한다.
+[[ "$SUT" == "$SUT_NAME" ]] || die "sut 인자($SUT)가 설명 파일 name($SUT_NAME)과 다르다: $SUT_FILE"
 SRC_DIR="$TD_WORK_DIR/suts/$SUT_NAME/src"
 mkdir -p "$(dirname "$SRC_DIR")"
 if [[ -d "$SRC_DIR/.git" ]]; then

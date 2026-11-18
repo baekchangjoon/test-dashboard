@@ -1,0 +1,27 @@
+# 멀티 SUT 검증용 mini-sut 설명 파일(REQ-050). repo의 __REPO__는 수용 테스트가 work/fixtures/mini-sut/repo 경로로 바꿔 쓴다.
+# 파이프라인 코드는 이 파일의 값만 쓴다. S09(hotspot)·S11(sonar)은 mini-sut로 실행하지 않는다(hotspot.yml.tmpl 없음).
+name: mini-sut
+repo: __REPO__
+ref: main
+java: 17
+build: { system: gradle, cmd: "./gradlew --no-daemon -q bootJar -x test" }
+jar: build/libs/mini-sut-*-SNAPSHOT.jar
+classes: build/classes/java/main
+sources: src/main/java
+packages: td.minisut.*
+runtime: { profile: default, db: none, ddl: src/main/resources/application.properties }
+port: 8080
+health: /actuator/health
+api: { include: "/api/**" }
+# 인터셉터(서블릿 안)가 401로 거부한다. S00이 실측해 이 값과 대조한다.
+auth: { type: bearer, login: "POST /api/auth/login", user_env: TD_SUT_USER, pass_env: TD_SUT_PASS, probe: "GET /api/items", unauthenticated_status: 401 }
+coverage:
+  probes:
+    - { test: "ItemApiBlackBoxIT#listItems", controller: ItemController }
+    - { test: "TagApiBlackBoxIT#listTags", controller: TagController }
+blackbox:
+  cmd: "./gradlew --no-daemon blackboxTest"
+  props: { minisut.base-url: "{baseUrl}", pjacoco.control-url: "{controlUrl}" }
+  junit_xml: build/test-results/blackboxTest
+tia: { range: "HEAD~1..HEAD", first_parent: true }
+sonar: { projectKey: minisut-td-test, cmd_build: "./gradlew --no-daemon build -x test", cmd_scan: "./gradlew --no-daemon sonar" }

@@ -1,0 +1,52 @@
+plugins {
+  id 'java'
+  id 'org.springframework.boot' version '3.5.3'
+  id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'td.minisut'
+version = '0.1.0-SNAPSHOT'
+
+java {
+  sourceCompatibility = JavaVersion.VERSION_17
+  targetCompatibility = JavaVersion.VERSION_17
+}
+
+repositories {
+  mavenCentral()
+}
+
+// 실행 가능한 jar 하나만 만든다(plain jar가 있으면 sut.yaml jar glob이 2개와 맞는다).
+jar {
+  enabled = false
+}
+
+dependencies {
+  implementation 'org.springframework.boot:spring-boot-starter-web'
+  implementation 'org.springframework.boot:spring-boot-starter-actuator'
+  testImplementation 'org.springframework.boot:spring-boot-starter-test'
+  testImplementation 'io.rest-assured:rest-assured:5.5.1'
+  testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+  useJUnitPlatform {
+    excludeTags 'blackbox'
+  }
+}
+
+// 실행 중인 서버에 대한 out-of-process REST Assured 블랙박스 테스트(petclinic의 blackboxTest와 같은 규약).
+tasks.register('blackboxTest', Test) {
+  description = 'Runs out-of-process black-box API tests against a running mini-sut server.'
+  group = 'verification'
+  testClassesDirs = sourceSets.test.output.classesDirs
+  classpath = sourceSets.test.runtimeClasspath
+  useJUnitPlatform {
+    includeTags 'blackbox'
+  }
+  systemProperty 'minisut.base-url', System.getProperty('minisut.base-url', 'http://localhost:8080')
+  if (System.getProperty('pjacoco.control-url') != null) {
+    systemProperty 'pjacoco.control-url', System.getProperty('pjacoco.control-url')
+  }
+  outputs.upToDateWhen { false }
+}

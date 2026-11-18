@@ -250,14 +250,17 @@ def real_pipeline_run(tmp_path_factory, site_prefix):
     def run(only: str, sut_file: str | None = None, **env: str) -> "RunResult":
         counter["n"] += 1
         work = tmp_path_factory.mktemp(f"real-run{counter['n']}")
-        for shared in ("tools", "suts"):
+        # infra(terraform 상태)와 site-mirror(게시 미러)도 공유한다: S13이 둘을 TD_WORK_DIR 아래에서 읽는다.
+        for shared in ("tools", "suts", "infra", "site-mirror"):
             (real_work / shared).mkdir(parents=True, exist_ok=True)
             (work / shared).symlink_to(real_work / shared)
         full_env = {k: v for k, v in os.environ.items() if not k.startswith("TD_")}
         full_env.update(TD_WORK_DIR=str(work), TD_ROOT=str(REPO_ROOT), TD_SITE_PREFIX=site_prefix, **env)
         # 새 세션(프로세스 그룹)으로 띄우고, 시간이 넘으면 그룹에 TERM을 보내 파이프라인 trap이 컨테이너를 정리하게 한다.
         sut_args = ["--sut-file", sut_file] if sut_file else []
-        proc = subprocess.Popen(["bash", str(RUN_ALL), "petclinic", *sut_args, "--only", only], env=full_env, text=True,
+        sut_name = next(line.split(":", 1)[1].strip() for line in Path(sut_file).read_text().splitlines()
+                        if line.startswith("name:")) if sut_file else "petclinic"
+        proc = subprocess.Popen(["bash", str(RUN_ALL), sut_name, *sut_args, "--only", only], env=full_env, text=True,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
         try:
             try:
@@ -403,8 +406,42 @@ def s11_run(real_pipeline_run, local_env):
 
 # --- 이후 Task가 채우는 fixture ----------------------------------------------------------
 @pytest.fixture(scope="session")
-def injected_petclinic_run():
-    pytest.fail("requires Task 15 (run-all.sh --only S00,S01,S08,S13 + TD_SITE_PREFIX)", pytrace=False)
+def injected_petclinic_run(real_pipeline_run):
+    """주입 환경(TD_SITE_PREFIX=_test/<sessionId>/)에서 petclinic을 `--only S00,S01,S08,S13`으로 실제 실행·게시한다(세션당 1회)."""
+    return real_pipeline_run("S00,S01,S08,S13")
+
+
+MINI_SUT_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "mini-sut"
+MINI_SUT_WORK = REPO_ROOT / "work" / "fixtures" / "mini-sut"
+
+
+@pytest.fixture(scope="session")
+def mini_sut_sut_file() -> Path:
+    """mini-sut fixture를 work/fixtures/mini-sut로 복사하고 git 저장소(커밋 2개)로 만든 뒤 repo를 채운 sut.yaml 경로를 돌려준다.
+    설명 파일 디렉터리에는 expected-tests.yaml이 함께 있다. 이전 시도의 clone 캐시(work/suts/mini-sut)는 지운다."""
+    shutil.rmtree(MINI_SUT_WORK, ignore_errors=True)
+    shutil.rmtree(REPO_ROOT / "work" / "suts" / "mini-sut", ignore_errors=True)
+    repo, desc = MINI_SUT_WORK / "repo", MINI_SUT_WORK / "desc"
+    shutil.copytree(MINI_SUT_FIXTURE / "app", repo, ignore=shutil.ignore_patterns("build", ".gradle"))
+    desc.mkdir(parents=True)
+    for name in ("sut.yaml", "expected-tests.yaml"):
+        shutil.copyfile(MINI_SUT_FIXTURE / name, desc / name)
+    sut_yaml = desc / "sut.yaml"
+    sut_yaml.write_text(sut_yaml.read_text().replace("__REPO__", str(repo)))
+    git = lambda *a: subprocess.run(["git", "-c", "core.hooksPath=/dev/null", *GIT_IDENTITY, *a], cwd=repo, check=True, capture_output=True)
+    git("init", "-b", "main")
+    git("add", ".")
+    git("commit", "-m", "mini-sut: initial")
+    (repo / "CHANGELOG.md").write_text("# mini-sut\n\n- tags endpoint\n")  # tia.range(HEAD~1..HEAD)가 유효하도록 두 번째 커밋을 둔다
+    git("add", ".")
+    git("commit", "-m", "mini-sut: changelog")
+    return sut_yaml
+
+
+@pytest.fixture(scope="session")
+def mini_sut_run(real_pipeline_run, injected_petclinic_run, mini_sut_sut_file):
+    """petclinic run이 먼저 게시된 같은 접두에 mini-sut를 `--sut-file`로 `--only S00,S01,S08,S13` 실행·게시한다."""
+    return real_pipeline_run("S00,S01,S08,S13", sut_file=str(mini_sut_sut_file))
 
 
 @pytest.fixture(scope="session")
