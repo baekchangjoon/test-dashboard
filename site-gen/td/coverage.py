@@ -303,10 +303,31 @@ def copy_sources(source_keys, sources_dir, out_dir: Path) -> int:
 RESULT_VALUES = ("passed", "failed", "skipped", "undefined", "uncompilable")
 
 
+def parse_scenario_results(path) -> dict[str, str]:
+    """scenario-results.json은 엄격한 NDJSON이다: 줄마다 {"testId": str, "status": passed|failed|undefined|uncompilable,
+    "requests": int, "exec": str|null}. 다른 모양은 줄 번호를 붙여 CoverageError로 거부한다."""
+    results: dict[str, str] = {}
+    for number, line in enumerate(Path(path).read_text().splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise CoverageError(f"{path}:{number}: NDJSON 줄이 JSON이 아니다: {exc}") from exc
+        if not isinstance(item, dict) or set(item) != {"testId", "status", "requests", "exec"}:
+            raise CoverageError(f"{path}:{number}: 키가 testId,status,requests,exec여야 한다: {line[:120]}")
+        if not isinstance(item["testId"], str) or item["status"] not in ("passed", "failed", "undefined", "uncompilable") \
+                or not isinstance(item["requests"], int) or isinstance(item["requests"], bool) \
+                or not (item["exec"] is None or isinstance(item["exec"], str)):
+            raise CoverageError(f"{path}:{number}: 값 형식이 맞지 않는다: {line[:120]}")
+        results[item["testId"]] = item["status"]
+    return results
+
+
 def load_results(run_dir, suite_name: str, test_sources=None) -> dict[str, str]:
     """스위트의 TC별 결과(testId -> 결과). 스위트 종류별 결과 소스를 여기서 고른다.
     - blackbox: S01 JUnit XML(passed|failed|skipped)
-    - e2e-<genId>: S07/<genId>/scenario-results.json(`{testId: status}` 또는 `[{testId, status}]`, status는 passed|failed|undefined|uncompilable)
+    - e2e-<genId>: S07/<genId>/scenario-results.json(NDJSON: 줄마다 {testId, status, requests, exec}, status는 passed|failed|undefined|uncompilable)
     소스가 없으면 빈 dict(그 TC의 결과는 알 수 없음으로 표시한다)."""
     run_dir = Path(run_dir)
     if suite_name == "blackbox":
@@ -317,12 +338,7 @@ def load_results(run_dir, suite_name: str, test_sources=None) -> dict[str, str]:
         path = run_dir / "S07" / suite_name[len("e2e-"):] / "scenario-results.json"
         if not path.is_file():
             return {}
-        data = json.loads(path.read_text())
-        if isinstance(data, dict) and isinstance(data.get("results"), (dict, list)):
-            data = data["results"]
-        if isinstance(data, list):
-            data = {item["testId"]: item["status"] for item in data}
-        return {str(k): str(v) for k, v in data.items()}
+        return parse_scenario_results(path)
     return {}
 
 

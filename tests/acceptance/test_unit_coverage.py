@@ -83,10 +83,23 @@ def test_discover_suites_by_directory(tmp_path):
     assert sorted(coverage.discover_suites(tmp_path)) == ["blackbox", "e2e-base-1234abcd-r1"]
 
 
-def test_load_results_e2e_scenario_results_plugin(tmp_path):
+def test_load_results_e2e_scenario_results_ndjson(tmp_path):
     import json
     gen = tmp_path / "S07" / "base-1234abcd-r1"
     gen.mkdir(parents=True)
-    (gen / "scenario-results.json").write_text(json.dumps({"E2E_a#L3": "passed", "E2E_a#L9": "undefined"}))
-    assert coverage.load_results(tmp_path, "e2e-base-1234abcd-r1") == {"E2E_a#L3": "passed", "E2E_a#L9": "undefined"}
+    lines = [{"testId": "E2E_a#L3", "status": "passed", "requests": 4, "exec": "E2E_a#L3.exec"},
+             {"testId": "E2E_a#L9", "status": "undefined", "requests": 0, "exec": None},
+             {"testId": "E2E_a#L12", "status": "uncompilable", "requests": 0, "exec": None}]
+    (gen / "scenario-results.json").write_text("\n".join(json.dumps(item) for item in lines) + "\n")
+    assert coverage.load_results(tmp_path, "e2e-base-1234abcd-r1") == {
+        "E2E_a#L3": "passed", "E2E_a#L9": "undefined", "E2E_a#L12": "uncompilable"}
     assert coverage.load_results(tmp_path, "e2e-owl-00000000-r1") == {}
+
+
+@pytest.mark.parametrize("body", ['{"E2E_a#L3": "passed"}', '[{"testId": "x"}]', '{"testId": "x", "status": "weird", "requests": 1, "exec": null}',
+                                  '{"testId": "x", "status": "passed", "requests": 1}', "not json"])
+def test_scenario_results_rejects_other_shapes(tmp_path, body):
+    path = tmp_path / "scenario-results.json"
+    path.write_text(body + "\n")
+    with pytest.raises(coverage.CoverageError, match="scenario-results.json:1"):
+        coverage.parse_scenario_results(path)
