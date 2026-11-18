@@ -1,7 +1,7 @@
 # test-dashboard 실증(PoC) 설계
 
 - 작성일: 2026-11-18 (v2: 3-벤더 리뷰와 빌더 점검 반영)
-- 상태: 초안 (사용자 승인 대기)
+- 상태: 승인됨 (2026-11-18)
 - 저장소: `baekchangjoon/test-dashboard` (공개, 로컬 `/Users/changjoonbaek/test-dashboard`)
 - 첫 대상 SUT: `baekchangjoon/spring-petclinic` (`ref: main`. 각 run이 실제로 쓴 커밋은 `run.json`의 `commit`이 기준이다. 작성 시점 HEAD는 `b6f9393`)
 
@@ -42,7 +42,7 @@ E2E 테스트를 만들고 그 결과와 품질 지표를 한 화면에서 보�
 - A2. 실패하거나 컴파일되지 않는 시나리오를 지우거나 비활성화해 지표를 꾸미는 것. 생성된 모든 시나리오는 결과의 분모에 들어간다.
 - A3. 테스트가 띄운 컨테이너, 네트워크, 볼륨, 프로세스, git worktree가 남는 것.
 - A4. Sonar DB에 임시로 넣은 토큰이 남는 것.
-- A5. 공유 인프라를 망가뜨리는 것. 대상은 Sonar 서버의 기존 컨테이너, 기존 Sonar 프로젝트 `spring-petclinic`의 분석 이력, Route53 기존 레코드다.
+- A5. 공유 인프라를 **되돌릴 수 없게** 망가뜨리는 것. 대상은 Sonar 데이터(DB 볼륨), Route53 기존 레코드다. 짧은 서비스 중단과 기존 CI의 일시적 깨짐은 사용자가 허용했다(2026-11-18).
 
 ## 3. 제약 (실측, 2026-11-18)
 
@@ -272,7 +272,7 @@ sonar: { projectKey: spring-petclinic-td, cmd_build: "./gradlew --no-daemon buil
 - `compare.html`: arm × 지표 표, generation별 점 그래프, 판정 결과와 한계 서술
 
 ### 6.13 S11 SonarQube
-- 기존 CI 프로젝트 `spring-petclinic`을 건드리지 않으려고 **전용 프로젝트 키 `spring-petclinic-td`**를 쓴다(A5). 없으면 API로 만들고, 분석은 그 프로젝트의 main 브랜치에 누적한다.
+- **전용 프로젝트 키 `spring-petclinic-td`**를 쓴다. 없으면 API로 만들고, 분석은 그 프로젝트의 main 브랜치에 누적한다. 사용자는 기존 CI가 일부 깨지는 것을 허용했지만, 전용 키가 비용 없이 이력 혼선을 막으므로 유지한다.
 - 토큰 수명 관리(`pipeline/lib/sonar-token.sh`, 이번 세션 한정 승인):
   1. 사전 확인: DB에서 `user_tokens` 스키마를 조회하고 해시 방식을 확인한다. aws-resource-controller 세션 기록으로는 SHA-384이고, 만든 토큰으로 `api/authentication/validate`를 호출해 실제로 검증한다. 맞지 않으면 S11은 `failed`다.
   2. 사전 청소: `name LIKE 'td-%'`인 잔존 행을 지우고 기록한다.
@@ -310,11 +310,11 @@ sonar: { projectKey: spring-petclinic-td, cmd_build: "./gradlew --no-daemon buil
   ```
 - 크기: run 크기를 KPI로 기록하고, 200MB를 넘으면 경고한다. 보존 정책은 이번에는 전부 보존한다.
 - **정적 호스팅**(`infra/static/`, Terraform): 비공개 S3 버킷(퍼블릭 차단, OAC), CloudFront, ACM(us-east-1) `reports.<domain>`, Route53 alias
-- **Lightsail**(Caddy 무중단):
-  - 별도 compose 프로젝트 `dashboard`로 `dashboard-web`(caddy:2 `file_server`, 메모리 제한 64MB)을 띄운다. `/srv/dashboard`를 읽기 전용으로 마운트하고, 기존 스택 네트워크(외부 네트워크)에 붙인다.
-  - 기존 Caddyfile에 `dash.<domain> { reverse_proxy dashboard-web:80 }` 블록을 추가한다. 파일은 inode를 유지하도록 `cat new > Caddyfile`로 제자리에서 덮어쓴다. `caddy validate` 후 `caddy reload`만 하고, Caddy 컨테이너는 재생성하지 않는다.
-  - 적용 순서: Route53 A 레코드 → `/srv/dashboard` 생성과 소유권(ubuntu) → dashboard-web 기동 → Caddyfile 변경 → validate → reload → `api/system/status` 확인
-  - 롤백: Caddyfile 백업을 복원하고 reload
+- **Lightsail**(짧은 중단 허용, 사용자 승인 2026-11-18):
+  - 기존 compose의 `caddy` 서비스에 `/srv/dashboard:/srv/dashboard:ro` 볼륨을 추가한다. Caddyfile에는 `dash.<domain> { root * /srv/dashboard; encode gzip; file_server }` 블록을 추가한다.
+  - `caddy validate`를 통과하면 `docker compose up -d --no-deps --force-recreate caddy`로 Caddy만 재생성한다. 이때 Sonar 앞단이 몇 초 끊기며, 이는 허용됐다.
+  - 적용 순서: Route53 A 레코드 → `/srv/dashboard` 생성과 소유권(ubuntu) → Caddyfile과 compose 백업 → 변경 → validate → Caddy 재생성 → `api/system/status`와 `dash` 응답 확인
+  - 롤백: 백업을 복원하고 Caddy를 재생성한다. 필요하면 스택 전체를 다시 띄울 수 있다(사용자 승인).
   - 철거 절차를 `infra/lightsail/teardown.sh`로 둔다.
   - 같은 변경을 `~/aws-resource-controller/sonarqube/`에 반영하고 그 레포의 main에 커밋·push한다(사용자 승인).
 - **Route53 안전장치**: 변경 전에 전체 RRSet을 정규화해 스냅샷한다. 변경 후 `reports`, `dash` 외에는 이름·타입·값·TTL이 같은지 비교한다. 대상 이름이 이미 다른 값으로 있으면 중단한다.
@@ -358,7 +358,7 @@ E2E는 `pipeline/run-all.sh petclinic`을 실제로 실행한 뒤 산출물과 �
 | AT-11 | 두 번째 run을 게시해도 첫 run의 객체가 바이트 단위로 그대로이고(S3 ETag 비교), 이력 표에 두 run이 모두 있다. 같은 run을 다시 올리면 거부된다. |
 | AT-12 | 두 번째 최소 SUT fixture(`tests/fixtures/mini-sut`, 작은 Spring Boot 앱)로 S00, S01, S08, S13을 실행하면 `index.html`에 SUT 2개가 나온다. 파이프라인 코드에 `petclinic` 문자열이 없다. |
 | AT-13 | `compare.html`에 세 arm의 §6.12 지표와 판정 결과가 모두 있고, 반복 횟수가 표기된다. |
-| AT-14 | 게시 후에도 Sonar 서버가 정상이고(`api/system/status` UP), 서버 메모리 여유가 300MB 이상이며, Route53의 대상 외 RRSet이 변경 전 스냅샷과 같다. `spring-petclinic` 프로젝트의 마지막 분석 시각이 바뀌지 않았다. |
+| AT-14 | 게시 후에도 Sonar 서버가 정상이고(`api/system/status` UP), 서버 메모리 여유가 300MB 이상이며, Route53의 대상 외 RRSet이 변경 전 스냅샷과 같다.  |
 | AT-15 | S11에 장애를 주입하면(잘못된 Sonar URL) S11은 `failed`가 되지만 나머지는 게시되고, run 페이지에 실패 사유가 보인다. |
 | AT-16 | S01의 TC 수(JUnit XML) = TC별 `.exec` 수(현재 35개)다. |
 
@@ -378,7 +378,7 @@ E2E는 `pipeline/run-all.sh petclinic`을 실제로 실행한 뒤 산출물과 �
 | jQA server 모드 export 실패 | 같은 버전 Neo4j 컨테이너로 대체한다(라벨, 누수 게이트 적용). |
 | LLM 생성물의 비결정성과 step 불일치 | 3회 반복, 스냅샷, 수리 2회 제한(정적 오류만), JUnit 대체 스타일 |
 | 모델의 petclinic 사전 지식 | fork 고유 기능 지표를 따로 집계하고, 한계를 명시한다. |
-| 4GB Sonar 서버 부하 | 정적 파일만 서비스(메모리 제한 64MB 컨테이너)하고 AT-14로 확인한다. |
+| 4GB Sonar 서버 부하 | 기존 Caddy가 정적 파일만 추가로 서비스한다. AT-14로 확인한다. |
 | SSH 22번이 사용자 IP 변경으로 막힘(현재 IAM으로 방화벽 수정 불가) | Lightsail 게시와 S11이 `failed`로 기록되고, 사용자에게 방화벽 갱신을 요청한다. 다음 게시에서 따라잡는다. |
 | DB 토큰 직접 삽입이 Sonar 내부 스키마에 의존 | 사전 스키마·해시 확인, 만료 2시간, 사전 청소, `trap` 삭제, 0행 검사, 이번 세션 한정 |
 | bbtg가 비공개라 재현성이 제한됨 | `tools.lock`에 커밋을 고정하고 README에 한계를 적는다. |
@@ -391,6 +391,7 @@ E2E는 `pipeline/run-all.sh petclinic`을 실제로 실행한 뒤 산출물과 �
 - 기존 블랙박스 IT를 활용한다(S01 실행과 기준선).
 - TIA는 실제 최근 커밋 범위를 쓴다.
 - 호스팅은 정적(S3+CloudFront)과 Lightsail(기존 Sonar 서버)을 모두 만들어 비교한다. 서브도메인은 `reports`와 `dash`다.
+- 짧은 서비스 중단과 기존 CI의 일시적 깨짐은 허용한다. 필요하면 Sonar 스택을 다시 띄워도 된다.
 - Sonar 토큰은 이번 세션에 한해 DB 직접 삽입 방식을 쓴다.
 - aws-resource-controller의 sonarqube 스택 변경은 그 레포 main에 커밋하고 push한다.
 - 실행은 로컬 수동으로 하고 업로드까지 한다. CI 트리거는 자리만 둔다. 결과는 run 단위로 누적한다.
@@ -401,7 +402,6 @@ E2E는 `pipeline/run-all.sh petclinic`을 실제로 실행한 뒤 산출물과 �
 
 - Sonar는 전용 프로젝트 키 `spring-petclinic-td`를 쓴다.
 - 이력 원본은 S3이고 Lightsail은 미러다.
-- Lightsail은 Caddy를 재생성하지 않고 별도 정적 서버 컨테이너와 reverse_proxy를 쓴다.
 - E2E는 순차 실행이고, generation마다 SUT를 새로 띄운다.
 - 생성 가설과 온톨로지 효과의 판정 기준(§6.12의 수치)
 - 인프라 식별자는 gitignore 대상 `infra/local.env`에만 둔다.
