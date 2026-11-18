@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 from td.site import index
+from td.site.index import line_chart
 from helpers import make_site_run
 
 KPIS = {"tests": {"passRate": 0.95}, "blackbox": {"line": 0.5}, "sonar": {"gate": "OK"}}
@@ -47,3 +48,23 @@ def test_test_index_lists_prefixes_with_suts_json(tmp_path):
     html = (tmp_path / "_test/index.html").read_text()
     assert 'href="td-test-a/index.html"' in html and "empty" not in html
     assert (tmp_path / "_test/td-test-a/suts.json").exists()
+
+
+def _runs(*values):
+    return [{"runId": f"2026110{i + 1}-010000Z-aaaaaaa-manual-0000000{i}", "kpis": {"passRate": v}} for i, v in enumerate(values)]
+
+
+def test_line_chart_single_run_draws_a_dot_without_line():
+    svg = line_chart("제목", "설명", _runs(0.5), "passRate")
+    assert svg.count("<circle") == 1 and "<polyline" not in svg and "<title" in svg and "<desc" in svg
+
+
+def test_line_chart_missing_value_breaks_the_line():
+    svg = line_chart("제목", "설명", _runs(0.2, None, 0.4, 0.6), "passRate")
+    assert svg.count("<circle") == 3
+    assert svg.count("<polyline") == 1  # 끊긴 앞쪽은 점 하나라 선이 없고, 뒤쪽 두 점만 선이 된다
+
+
+def test_line_chart_all_missing_has_axes_only():
+    svg = line_chart("제목", "설명", _runs(None, None), "passRate")
+    assert "<circle" not in svg and "<polyline" not in svg and 'class="axis"' in svg

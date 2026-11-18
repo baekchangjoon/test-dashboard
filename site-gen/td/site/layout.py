@@ -6,6 +6,10 @@
 """
 from __future__ import annotations
 
+import json
+from pathlib import Path
+from typing import Callable
+
 SITE_LAYOUT: dict[str, str] = {
     "S08/coverage": "coverage/",
 }
@@ -17,3 +21,15 @@ REPORTS: dict[str, tuple[str, str]] = {
 
 # 게시하지 않는 파일 패턴(.exec는 크고 사이트에서 쓰지 않는다)
 COPY_IGNORE = ("*.exec", "exec", "site.css")
+
+
+# 복사된 리포트를 사이트 공통 CSS로 다시 만드는 훅: 사이트 경로 -> fn(복사된 디렉터리, css_href)
+def _rerender_coverage(target: Path, css_href: str) -> None:
+    if (target / "coverage.json").exists():  # 단독 열람용 사본 site.css는 복사에서 뺐다
+        from td import coverage
+        coverage.render_page(target, json.loads((target / "coverage.json").read_text()), css_href=css_href, copy_css=False)
+
+
+RERENDER: dict[str, Callable[[Path, str], None]] = {
+    "coverage/": _rerender_coverage,
+}

@@ -1,5 +1,5 @@
 {% extends "base.html.j2" %}
-{% block title %}{{ sut }}{% endblock %}
+{% block title %}{{ sut }} 품질 현황{% endblock %}
 {% macro pct(value) %}{% if value is number %}{{ "%.1f"|format(value * 100) }}%{% else %}—{% endif %}{% endmacro %}
 {% block header %}<strong><a href="{{ home_href }}">test-dashboard</a></strong> / {{ sut }}{% endblock %}
 {% block content %}
