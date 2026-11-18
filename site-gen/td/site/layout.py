@@ -13,6 +13,7 @@ from typing import Callable
 SITE_LAYOUT: dict[str, str] = {
     "S08/coverage": "coverage/",
     "S09/hotspot": "hotspot/",
+    "S10/tia": "tia/",
     "S11/sonar": "sonar/",
 }
 
@@ -20,6 +21,7 @@ SITE_LAYOUT: dict[str, str] = {
 REPORTS: dict[str, tuple[str, str]] = {
     "coverage/": ("커버리지", "coverage.html"),
     "hotspot/": ("hotspot", "hotspots.html"),
+    "tia/": ("TIA", "tia.html"),
     "sonar/": ("Sonar 품질 결과", "sonar.html"),
 }
 
