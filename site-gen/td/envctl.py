@@ -6,9 +6,12 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import signal
 import subprocess
 import sys
+import time
 from dataclasses import dataclass, field
 
 PROJECT_LABEL = "com.docker.compose.project"
@@ -140,6 +143,101 @@ def gradle_daemons() -> list[tuple[int, str]]:
     return parse_gradle_daemons(out)
 
 
+# --- 기동 실패 사유 ------------------------------------------------------------------------------------
+def failure_reason(message: str, log_text: str, rel_log: str, budget: int = 1400, max_lines: int = 50) -> str:
+    """사유 = 메시지 + 로그 마지막 `max_lines`줄 + `(full log: <상대 경로>)`. 전체 길이는 `budget`자(문자 기준) 이내.
+
+    예산이 모자라면 로그 꼬리의 앞쪽을 잘라 낸다(마지막 줄이 남는다). 문자 단위(코드 포인트)로 자르므로 한글이 깨지지 않는다.
+    """
+    pointer = f"(full log: {rel_log})"
+    message = message.strip()
+    if len(message) > 300:
+        message = message[:299] + "…"
+    lines = log_text.replace("\r", "").rstrip().splitlines()[-max_lines:]
+    tail = "\n".join(lines)
+    head = f"{message}. 로그 마지막:\n"
+    room = budget - len(head) - len(pointer) - 1
+    if not tail:
+        tail = "(로그 없음)"
+    if len(tail) > room:
+        tail = "…" + tail[len(tail) - max(room - 1, 0):]
+    return f"{head}{tail}\n{pointer}"
+
+
+def cap_chars(text: str, limit: int) -> str:
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+# --- PID reap -----------------------------------------------------------------------------------------
+def _ps(field: str, pid: int) -> str:
+    result = subprocess.run(["ps", "-o", f"{field}=", "-p", str(pid)], capture_output=True, text=True, timeout=10)
+    return result.stdout.strip()
+
+
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return not _ps("stat", pid).startswith("Z")  # 회수 전 좀비는 죽은 것으로 본다
+
+
+def _started_after_registration(pid: int, registered_at: float) -> bool:
+    """PID 재사용 방지: 등록(pid 파일 기록)보다 늦게 시작한 프로세스는 우리가 등록한 것이 아니다."""
+    started = _ps("lstart", pid)
+    try:
+        begun = time.mktime(time.strptime(started, "%a %b %d %H:%M:%S %Y"))
+    except ValueError:
+        return False
+    return begun > registered_at + 2
+
+
+def reap_pids(run_dir, term_wait: float = 10.0) -> list[int]:
+    """`<run_dir>/pids/*.pid`의 살아 있는 프로세스를 TERM → 유예 → KILL로 정리한다. 정리한 PID를 돌려준다.
+
+    pid가 프로세스 그룹 리더면 그룹 전체에, 아니면 그 pid에만 신호를 보낸다(서브셸에서 등록한 PID도 파일로 찾는다).
+    """
+    reaped: list[int] = []
+    pids_dir = os.path.join(str(run_dir), "pids")
+    if not os.path.isdir(pids_dir):
+        return reaped
+    targets = []
+    for name in sorted(os.listdir(pids_dir)):
+        path = os.path.join(pids_dir, name)
+        if not name.endswith(".pid"):
+            continue
+        try:
+            pid = int(open(path).read().split()[0])
+            registered_at = os.path.getmtime(path)
+        except (OSError, ValueError, IndexError):
+            continue
+        if pid <= 1 or not _pid_alive(pid) or _started_after_registration(pid, registered_at):
+            continue
+        try:
+            is_leader = os.getpgid(pid) == pid
+        except ProcessLookupError:
+            continue
+        targets.append((pid, is_leader))
+
+    def send(sig: int) -> None:
+        for pid, is_leader in targets:
+            try:
+                (os.killpg if is_leader else os.kill)(pid, sig)
+            except (ProcessLookupError, PermissionError):
+                pass
+
+    if not targets:
+        return reaped
+    send(signal.SIGTERM)
+    deadline = time.time() + term_wait
+    while time.time() < deadline and any(_pid_alive(pid) for pid, _ in targets):
+        time.sleep(0.2)
+    send(signal.SIGKILL)
+    return [pid for pid, _ in targets]
+
+
 def main(argv: list[str] | None = None) -> int:
     """bash용 CLI.
 
@@ -163,7 +261,21 @@ def main(argv: list[str] | None = None) -> int:
     except (RuntimeError, ValueError, subprocess.TimeoutExpired) as exc:
         print(f"envctl: {exc}", file=sys.stderr)
         return 2
-    print("usage: td.envctl check-labels <labelValue> | leak-gate <runId>", file=sys.stderr)
+    if len(args) in (4, 5) and args[0] == "failure-reason":
+        # failure-reason <message> <logfile> <relLogPath> [budget]
+        try:
+            log_text = open(args[2], encoding="utf-8", errors="replace").read()
+        except OSError:
+            log_text = ""
+        print(failure_reason(args[1], log_text, args[3], int(args[4]) if len(args) == 5 else 1400))
+        return 0
+    if len(args) == 2 and args[0] == "cap":
+        print(cap_chars(sys.stdin.read(), int(args[1])), end="")
+        return 0
+    if len(args) == 2 and args[0] == "reap-pids":
+        reap_pids(args[1])
+        return 0
+    print("usage: td.envctl check-labels <labelValue> | leak-gate <runId> | failure-reason <msg> <log> <rel> | reap-pids <runDir>", file=sys.stderr)
     return 2
 
 

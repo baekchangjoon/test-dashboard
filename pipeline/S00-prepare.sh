@@ -67,7 +67,7 @@ s00_py pin-get tia.commit; TIA_PIN="$S00_OUT"
 s00_py pin-get tia.repo; TIA_REPO="$S00_OUT"
 TIA_SRC="$TOOLS_DIR/tia-src"
 TIA_COMMIT="$(fetch_git_tool "$TIA_SRC" https "$TIA_REPO" "$TIA_PIN")" || s00_fail "TIA 소스 확보 실패($TIA_REPO@$TIA_PIN)"
-[[ "$TIA_COMMIT" == "$TIA_PIN" ]] || s00_fail "TIA 체크아웃 커밋 $TIA_COMMIT이 pin $TIA_PIN과 다르다"
+[[ "$TIA_COMMIT" == "$TIA_PIN" ]] || s00_fail "TIA 체크아웃 커밋 ${TIA_COMMIT}이 pin ${TIA_PIN}과 다르다"
 if [[ "$(cat "$TOOLS_DIR/tia/.commit" 2>/dev/null)" != "$TIA_COMMIT" || ! -x "$TOOLS_DIR/tia/bin/tia" ]]; then
   td_run 1800 -- env JAVA_HOME="$JAVA17" "$TIA_SRC/gradlew" -p "$TIA_SRC" --no-daemon -q ":tia-cli:installDist" >&2 \
     || s00_fail "TIA 빌드 실패(:tia-cli:installDist, JDK 17)"
@@ -83,9 +83,9 @@ s00_py pin-get bbtg.repo; BBTG_REPO="$S00_OUT"
 BBTG_DIR="$TOOLS_DIR/bbtg"
 BBTG_COMMIT="$(fetch_git_tool "$BBTG_DIR" gh "$BBTG_REPO" "$BBTG_PIN")" \
   || s00_fail "bbtg 소스 확보 실패($BBTG_REPO@$BBTG_PIN): 비공개 레포라 gh 인증이 필요하다"
-[[ "$BBTG_COMMIT" == "$BBTG_PIN" ]] || s00_fail "bbtg 체크아웃 커밋 $BBTG_COMMIT이 pin $BBTG_PIN과 다르다"
+[[ "$BBTG_COMMIT" == "$BBTG_PIN" ]] || s00_fail "bbtg 체크아웃 커밋 ${BBTG_COMMIT}이 pin ${BBTG_PIN}과 다르다"
 s00_py pin-get bbtg.python; PY_VERSION="$S00_OUT"
-PYTHON_BIN="$(command -v "python$PY_VERSION")" || s00_fail "python$PY_VERSION이 없다(bbtg 전용 venv에 필요)"
+PYTHON_BIN="$(command -v "python$PY_VERSION")" || s00_fail "python${PY_VERSION}이 없다(bbtg 전용 venv에 필요)"
 REQ_SHA="$(shasum -a 256 "$BBTG_DIR/requirements.txt" | cut -d' ' -f1)"
 VENV_STAMP="$REQ_SHA:$BBTG_COMMIT:$PY_VERSION"
 if [[ "$(cat "$BBTG_DIR/.venv/.td-stamp" 2>/dev/null)" != "$VENV_STAMP" ]]; then
@@ -129,7 +129,7 @@ s00_py claude-result "$SCRATCH/claude-call.json" --model "$MODEL"
 
 # --- 5. SUT 빌드 ------------------------------------------------------------------------------------
 SUT_JAVA="$(sut_get java)"; SUT_JAVA_HOME="$(java_home "$SUT_JAVA")"
-[[ -n "$SUT_JAVA_HOME" ]] || s00_fail "SUT가 요구하는 JDK $SUT_JAVA를 찾지 못했다"
+[[ -n "$SUT_JAVA_HOME" ]] || s00_fail "SUT가 요구하는 JDK ${SUT_JAVA}를 찾지 못했다"
 BUILD_CMD="$(sut_get build.cmd)"
 (cd "$TD_SUT_SRC" && td_run 1800 -- env JAVA_HOME="$SUT_JAVA_HOME" bash -c "$BUILD_CMD") > "$SCRATCH/sut-build.log" 2>&1 \
   || s00_fail "SUT 빌드 실패($BUILD_CMD): $(tail -15 "$SCRATCH/sut-build.log")"

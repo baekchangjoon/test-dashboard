@@ -75,3 +75,36 @@ def test_sut_boot_failure_reports_and_cleans(stub_stages, tmp_path, sut_env):
     assert result2.stage("S01")["status"] == "failed"
     assert "corrupt" in reason.lower() or "invalid" in reason.lower(), reason
     assert envctl.diff(before, envctl.snapshot()).owned == []
+    # 로그 꼬리와 전체 로그 위치 안내(상대 경로)가 사유 끝에 붙는다.
+    rel = "S01/blackbox/sut.log"
+    log_lines = (result2.run_dir / rel).read_text().rstrip().splitlines()
+    assert log_lines, "sut.log가 비었다"
+    assert reason.endswith(f"{log_lines[-1]}\n(full log: {rel})"), reason[-300:]
+    assert len(reason) <= 1500
+
+
+def test_health_timeout_fails_and_cleans(sut_env):
+    """health 경로가 끝내 응답하지 않으면(여기서는 없는 경로) 시간 초과로 failed 사유를 남기고 정리한다."""
+    from td import envctl
+    env = sut_env("healthto")
+    before = envctl.snapshot()
+    result = env.bash('''
+td_sut_up "$TD_RUN_DIR" S01 blackbox; echo "RC=$?"
+echo "REASON_START"; echo "$TD_SUT_FAIL_REASON"; echo "REASON_END"
+''', TD_SUT_HEALTH="/no-such-health", TD_SUT_HEALTH_TIMEOUT="6")
+    assert "RC=1" in result.stdout, result.stdout + result.stderr[-2000:]
+    reason = result.stdout.split("REASON_START\n", 1)[1].split("\nREASON_END", 1)[0]
+    assert "health 6초 초과" in reason and "(full log: S01/blackbox/sut.log)" in reason, reason
+    assert envctl.diff(before, envctl.snapshot()).owned == []
+
+
+def test_sut_up_fails_clearly_when_sut_yaml_unreadable(sut_env, tmp_path):
+    """sut.yaml에서 값을 읽지 못하면 기본값으로 얼버무리지 않고 사유를 남기며 실패한다."""
+    env = sut_env("badyaml")
+    bad = tmp_path / "bad.yaml"
+    bad.write_text("name: x\n")
+    env.env.pop("TD_SUT_PORT")
+    result = env.bash('td_sut_up "$TD_RUN_DIR" S01 blackbox; echo "RC=$?"; echo "REASON=$TD_SUT_FAIL_REASON"',
+                      TD_SUT_FILE=str(bad))
+    assert "RC=1" in result.stdout
+    assert "port" in result.stdout.split("REASON=", 1)[1]

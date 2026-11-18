@@ -96,14 +96,20 @@ state_failed() { # <stage_id> <what> <message>
     || { echo "run-all: run.json을 쓸 수 없어 run을 중단한다 ($msg)" >&2; exit 1; }
 }
 
-# Ctrl-C/TERM: 단계 스크립트(같은 프로세스 그룹)가 컨테이너와 PID를 정리할 때까지 기다린 뒤 종료한다.
+# Ctrl-C/TERM: 바로 종료하지 않고 표시만 한다. 단계 스크립트(같은 프로세스 그룹)가 컨테이너와 PID를 정리하고
+# 돌아오면 그 단계를 failed, 남은 단계를 skipped로 기록하고 run.json을 마감한 뒤 계약 종료 코드(0/1/2)로 끝낸다.
 # (bash는 전경 자식이 끝난 뒤에 trap을 실행하므로 정리 중에 run-all이 먼저 빠져나가지 않는다)
-trap 'echo "run-all: interrupted, 단계 정리 후 종료" >&2; exit 130' INT TERM
+INTERRUPTED=""
+trap 'INTERRUPTED=1; echo "run-all: interrupted, 단계 정리 후 기록하고 종료" >&2' INT TERM
 
 ABORTED=""
 for stage_id in "${ORDER[@]}"; do
   if ! requested "$stage_id"; then
     out="$(td_py -m td.state skip "$RUN_DIR" "$stage_id" "not-requested" 2>&1)" || state_failed "$stage_id" skip "$out"
+    continue
+  fi
+  if [[ -n "$INTERRUPTED" ]]; then
+    out="$(td_py -m td.state skip "$RUN_DIR" "$stage_id" "run interrupted" 2>&1)" || state_failed "$stage_id" skip "$out"
     continue
   fi
   if [[ -n "$ABORTED" ]]; then
@@ -124,6 +130,14 @@ for stage_id in "${ORDER[@]}"; do
   fi
   "${script[0]}" "$SUT" "$RUN_ID"
   script_rc=$?
+  if [[ -n "$INTERRUPTED" ]]; then
+    # 신호로 끊긴 단계: 아직 running이면 failed로 마감한다(이미 끝난 상태는 그대로 둔다). post 훅은 건너뛴다.
+    current="$(td_py -c "import sys;from td.state import stage_status;print(stage_status(sys.argv[1],sys.argv[2]) or '')" "$RUN_DIR" "$stage_id" 2>&1)" || current=""
+    if [[ "$current" == "running" || -z "$current" ]]; then
+      td_py -m td.state end "$RUN_DIR" "$stage_id" failed "interrupted (signal)" || state_failed "$stage_id" interrupt "end failed"
+    fi
+    continue
+  fi
   if [[ $script_rc -ne 0 ]]; then
     current="$(td_py -c "import sys;from td.state import stage_status;print(stage_status(sys.argv[1],sys.argv[2]) or '')" "$RUN_DIR" "$stage_id" 2>&1)" \
       || { state_failed "$stage_id" read "$current"; continue; }
