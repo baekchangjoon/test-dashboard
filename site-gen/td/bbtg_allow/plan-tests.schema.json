@@ -8,8 +8,9 @@
     "results"
   ],
   "x-forbidden-paths": [
-    "artifact_path",
-    "key_params_path"
+    "test_cases[].condition",
+    "test_cases[].expected",
+    "test_cases[].description"
   ],
   "properties": {
     "skill": {
@@ -69,15 +70,6 @@
                     "branch_value": {
                       "type": "string"
                     },
-                    "condition": {
-                      "type": "string"
-                    },
-                    "description": {
-                      "type": "string"
-                    },
-                    "expected": {
-                      "type": "string"
-                    },
                     "id": {
                       "type": "string"
                     },
@@ -89,6 +81,12 @@
                     },
                     "source": {
                       "type": "string"
+                    },
+                    "expected_exception": {
+                      "type": "string"
+                    },
+                    "expected_code": {
+                      "type": "integer"
                     }
                   },
                   "additionalProperties": false

@@ -2,6 +2,7 @@
 REQ-019/020/022는 소유 Task(번들 조립, S06)가 이 파일에 덧붙인다.
 """
 import json
+import re
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
@@ -44,6 +45,17 @@ def _all_strings(node):
         yield node
 
 
+def _keyed_strings(node, key=""):
+    if isinstance(node, dict):
+        for child_key, child in node.items():
+            yield from _keyed_strings(child, child_key)
+    elif isinstance(node, list):
+        for child in node:
+            yield from _keyed_strings(child, key)
+    elif isinstance(node, str):
+        yield key, node
+
+
 def test_req021_bbtg_allow_schema(s02_default):
     run = s02_default
     assert run.stage["status"] == "passed", run.stage
@@ -63,11 +75,14 @@ def test_req021_bbtg_allow_schema(s02_default):
         assert document["skill"] == skill and document["results"], skill
     assert sorted(p.name for p in run.clean_dir.iterdir()) == sorted(f"{skill}.json" for skill in bbtg.SKILLS)
 
-    # 금지 경로: 선언 목록 전체가 strippedFields에 있고 interceptor_sources[].source를 포함한다.
+    # 금지 경로: 값이 있어 실제로 제거한 경로는 strippedFields, 선언만 하고 이번 입력에는 값이 없던 경로는 forbiddenDeclared다.
     sanitize = run.manifest["sanitize"]
-    stripped = sanitize["strippedFields"]
+    stripped, declared_only = sanitize["strippedFields"], sanitize["forbiddenDeclared"]
     assert "inspect-auth:interceptor_sources[].source" in stripped
-    assert set(bbtg.declared_forbidden_paths()) <= set(stripped)
+    assert "plan-tests:test_cases[].condition" in stripped  # 식 텍스트(A1 재정): petclinic raw에 값이 있다
+    assert set(stripped) == set(sanitize["removedCounts"])
+    assert not set(stripped) & set(declared_only)
+    assert set(bbtg.declared_forbidden_paths()) <= set(stripped) | set(declared_only)
     # 원본에 값이 있던 경로마다 removedCount가 기록된다(raw와 대조).
     raw_auth = json.loads((run.out_dir / "raw" / "stdout" / "inspect-auth.json").read_text())
     sources_with_value = [item for item in raw_auth["interceptor_sources"] if item.get("source")]
@@ -75,17 +90,35 @@ def test_req021_bbtg_allow_schema(s02_default):
     assert sanitize["removedCounts"]["inspect-auth:interceptor_sources[].source"] == len(sources_with_value)
     raw_stack = json.loads((run.out_dir / "raw" / "stdout" / "inspect-stack.json").read_text())
     assert sanitize["removedCounts"]["inspect-stack:analysis_meta.timestamp"] == 1 and raw_stack["analysis_meta"]["timestamp"]
+    raw_plans = [json.loads(p.read_text()) for p in sorted((run.out_dir / "raw" / "stdout").glob("plan-tests-*.json"))]
+    raw_conditions = sum(1 for plan in raw_plans for case in plan["test_cases"] if case.get("condition"))
+    assert raw_conditions and sanitize["removedCounts"]["plan-tests:test_cases[].condition"] == raw_conditions
     for path, count in sanitize["removedCounts"].items():
         assert count >= 1 and path in stripped, path
+    assert sanitize["errors"] == []
 
     # 정제 결과에 원문·시각·절대 경로가 없다.
     for skill in bbtg.SKILLS:
         document = json.loads((run.clean_dir / f"{skill}.json").read_text())
         keys = set(_all_keys(document))
-        assert not keys & {"timestamp", "scan_duration_ms", "llm_delegation_guide", "deep_inspection"}, skill
+        assert not keys & {"timestamp", "scan_duration_ms", "llm_delegation_guide", "deep_inspection", "condition", "where_clause",
+                           "sql_delete", "formula", "variable_name", "wiremock_strategy"}, skill
         for text in _all_strings(document):
             assert "package org.springframework" not in text, f"{skill}: 소스 원문 조각"
             assert str(run.sut_src) not in text and not text.startswith("/Users/") and "/private/" not in text, f"{skill}: {text[:80]}"
+    # A1(식·문장 텍스트 금지): 식 문자를 포함한 12자 이상 문자열이 SUT 소스에 그대로 있으면 안 된다(관문과 독립으로 다시 센다).
+    corpus = " ".join(re.sub(r"\s+", " ", p.read_text(errors="replace")) for p in run.sut_src.rglob("*.java") if "src" in p.parts)
+    special = set("(){};=<>!&|+*\"'")
+    for skill in bbtg.SKILLS:
+        for key, text in _keyed_strings(json.loads((run.clean_dir / f"{skill}.json").read_text())):
+            if key == "display_name":  # 사람이 쓴 @DisplayName 메타데이터는 A1 대상이 아니다(보고서에 명시)
+                continue
+            normalized = re.sub(r"\s+", " ", text)
+            if len(text) >= 12 and special & set(text) and not re.fullmatch(r"/[\w\-./{}*?&=%:,]+|[\w.$<>\[\],? ]+", text):
+                assert normalized not in corpus, f"{skill}: 소스 식 텍스트 {text[:60]!r}"
+    # 자격 증명 모양 문자열이 없다
+    for skill in bbtg.SKILLS:
+        assert not bbtg.credential_violations(json.loads((run.clean_dir / f"{skill}.json").read_text())), skill
     clean_auth = json.loads((run.clean_dir / "inspect-auth.json").read_text())["results"][0]["data"]
     assert clean_auth["interceptor_sources"] and all("source" not in item for item in clean_auth["interceptor_sources"])
     # 원문이 raw에는 남아 있다(로컬 전용): 제거는 정제 단계의 일이다.
