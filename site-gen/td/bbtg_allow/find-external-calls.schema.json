@@ -1,0 +1,331 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "bbtg find-external-calls 정제 산출물(허용 목록)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "skill",
+    "results"
+  ],
+  "x-forbidden-paths": [
+    "external_calls[].deep_inspection"
+  ],
+  "properties": {
+    "skill": {
+      "const": "find-external-calls"
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source",
+          "data"
+        ],
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "class": {
+                "type": "string"
+              },
+              "event_listeners": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "type": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "pattern": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "variable_name": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "methods_called": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "location": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "method": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "discovered_in": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "discovered_depth": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        }
+                      }
+                    },
+                    "url_source": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "mockable_with_di": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "wiremock_applicable": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "wiremock_strategy": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "event_channel": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              },
+              "event_publishes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "type": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "pattern": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "variable_name": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "methods_called": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "location": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "method": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "discovered_in": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "discovered_depth": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        }
+                      }
+                    },
+                    "url_source": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "mockable_with_di": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "wiremock_applicable": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "wiremock_strategy": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "event_channel": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              },
+              "external_calls": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "type": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "pattern": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "variable_name": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "methods_called": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "location": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "method": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "discovered_in": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "discovered_depth": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        }
+                      }
+                    },
+                    "url_source": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "mockable_with_di": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "wiremock_applicable": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "wiremock_strategy": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "event_channel": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              },
+              "files_analyzed": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "class": {
+                      "type": "string"
+                    },
+                    "depth": {
+                      "type": "integer"
+                    },
+                    "external_calls_found": {
+                      "type": "integer"
+                    },
+                    "file": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "max_depth_traversed": {
+                "type": "integer"
+              },
+              "package": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    }
+  }
+}

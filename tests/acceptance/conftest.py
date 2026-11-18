@@ -630,3 +630,84 @@ def published_runs(publisher, site_prefix):
     for run_id, run_dir, done in runs:
         assert done.returncode == 0, f"S13 실패: {done.stderr[-1500:]}"
     return {"sut": sut, "runs": runs, "prefix": site_prefix}
+
+
+# --- S02 bbtg 스테이지 하네스(Task 16) --------------------------------------------------------------
+S02_SCRIPT = REPO_ROOT / "pipeline" / "S02-bbtg.sh"
+PETCLINIC_SUT_FILE = REPO_ROOT / "suts" / "petclinic" / "sut.yaml"
+BBTG_TOOLS_DIR = REPO_ROOT / "work" / "tools"
+SUT_COPY_IGNORE = shutil.ignore_patterns("build", ".gradle", ".git", ".bbtg")
+
+
+@dataclass
+class S02Run:
+    returncode: int
+    stdout: str
+    stderr: str
+    run_dir: Path
+    sut_src: Path
+
+    @property
+    def out_dir(self) -> Path:
+        return self.run_dir / "S02" / "bbtg"
+
+    @property
+    def stage(self) -> dict:
+        return json.loads((self.run_dir / "stages" / "S02.json").read_text())
+
+    @property
+    def manifest(self) -> dict:
+        return json.loads((self.out_dir / "manifest.json").read_text())
+
+    @property
+    def clean_dir(self) -> Path:
+        return self.out_dir / "clean"
+
+
+@pytest.fixture(scope="session")
+def petclinic_sut_master(tmp_path_factory) -> Path:
+    """S00이 clone해 둔 petclinic 소스를 build 산출물 없이 한 번 복사해 두는 원본(테스트마다 다시 복사해 쓴다)."""
+    source = REPO_ROOT / "work" / "suts" / "petclinic" / "src"
+    if not (source / "src" / "main" / "java").is_dir() or not (BBTG_TOOLS_DIR / "bbtg" / ".venv" / "bin" / "python").exists():
+        pytest.fail("S00이 준비한 petclinic clone과 bbtg venv가 필요하다(work/suts/petclinic/src, work/tools/bbtg/.venv)", pytrace=False)
+    master = tmp_path_factory.mktemp("petclinic-master") / "src"
+    shutil.copytree(source, master, ignore=SUT_COPY_IGNORE, symlinks=True)
+    return master
+
+
+@pytest.fixture
+def s02_stage(tmp_path, petclinic_sut_master):
+    """s02_stage(checkout=<tmp 하위 경로>, **env) -> S02Run. SUT 복사본에서 pipeline/S02-bbtg.sh를 단독 실행한다.
+    S00 산출물은 실제 도구 경로를 가리키는 S00.json으로 대신한다. 호출마다 run 디렉터리가 새로 생긴다."""
+    counter = {"n": 0}
+
+    def run(checkout: str = "checkout", sut_file: Path = PETCLINIC_SUT_FILE, **env: str) -> S02Run:
+        counter["n"] += 1
+        sut_src = tmp_path / f"s02-{counter['n']}" / checkout
+        sut_src.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(petclinic_sut_master, sut_src, symlinks=True)
+        run_dir = tmp_path / f"s02-run-{counter['n']}" / "runs" / "20990101-000000Z-s02test0-manual-00000000"
+        full_env = {k: v for k, v in os.environ.items() if not k.startswith("TD_")}
+        full_env.update(TD_ROOT=str(REPO_ROOT), TD_WORK_DIR=str(run_dir.parents[1]), TD_RUN_DIR=str(run_dir),
+                        TD_SUT_SRC=str(sut_src), TD_SUT_FILE=str(sut_file), TD_SITE_PREFIX="_test/s02-stage/")
+        full_env.update(env)
+        init = subprocess.run(
+            [sys.executable, "-m", "td.state", "init", str(run_dir), "--run-id", run_dir.name, "--sut", "petclinic",
+             "--commit", "b6f939355e8790202ddfc71e3f3507252745ed37"],
+            capture_output=True, text=True, env={**full_env, "PYTHONPATH": str(REPO_ROOT / "site-gen")})
+        assert init.returncode == 0, init.stderr
+        (run_dir / "stages").mkdir(parents=True, exist_ok=True)
+        (run_dir / "pids").mkdir(exist_ok=True)
+        (run_dir / "stages" / "S00.json").write_text(json.dumps(
+            {"id": "S00", "status": "passed", "reason": None, "outputs": {"toolsDir": str(BBTG_TOOLS_DIR)}}))
+        done = subprocess.run(["bash", str(S02_SCRIPT), "petclinic", run_dir.name], capture_output=True, text=True,
+                              env=full_env, timeout=1500)
+        return S02Run(done.returncode, done.stdout, done.stderr, run_dir, sut_src)
+
+    return run
+
+
+@pytest.fixture
+def s02_default(s02_stage, fake_claude):
+    """가짜 claude를 PATH 앞에 둔 채 S02를 한 번 돌린다(REQ-013이 호출 0회를 검증한다)."""
+    return s02_stage()

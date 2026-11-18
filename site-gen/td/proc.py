@@ -21,12 +21,13 @@ def redacted_command(argv: list[str]) -> str:
 
 
 def run_with_timeout(timeout_sec: float, argv: list[str], kill_grace: float | None = None,
-                     reraise: bool = False) -> int:
+                     reraise: bool = False, *, cwd=None, stdout=None, stderr=None, env=None) -> int:
     """reraise=True이면 대기 중 받은 TERM/INT로 자식 그룹을 정리한 뒤 같은 신호를 자신에게 다시 보내
-    호출자의 핸들러(예: 게시기의 잠금 해제)가 실행되게 한다."""
+    호출자의 핸들러(예: 게시기의 잠금 해제)가 실행되게 한다.
+    cwd/stdout/stderr/env는 파이썬 호출자(예: td.bbtg)가 출력을 파일로 받을 때 쓴다(기본은 상속)."""
     grace = float(os.environ.get("TD_KILL_GRACE", "10")) if kill_grace is None else kill_grace
     try:
-        proc = subprocess.Popen(argv, start_new_session=True)
+        proc = subprocess.Popen(argv, start_new_session=True, cwd=cwd, stdout=stdout, stderr=stderr, env=env)
     except OSError as exc:
         print(f"td_run: 실행 실패 {argv[0]}: {exc}", file=sys.stderr)
         return 127

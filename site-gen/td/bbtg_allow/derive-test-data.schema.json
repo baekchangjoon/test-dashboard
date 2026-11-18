@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "bbtg derive-test-data 정제 산출물(허용 목록)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "skill",
+    "results"
+  ],
+  "x-forbidden-paths": [],
+  "properties": {
+    "skill": {
+      "const": "derive-test-data"
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source",
+          "data"
+        ],
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "class_name": {
+                  "type": "string"
+                },
+                "columns": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "db_column": {
+                        "type": "string"
+                      },
+                      "db_type": {
+                        "type": "string"
+                      },
+                      "enumerated": {
+                        "type": "string"
+                      },
+                      "formula": {
+                        "type": "string"
+                      },
+                      "is_generated": {
+                        "type": "boolean"
+                      },
+                      "is_nullable": {
+                        "type": "boolean"
+                      },
+                      "is_pk": {
+                        "type": "boolean"
+                      },
+                      "is_unique": {
+                        "type": "boolean"
+                      },
+                      "java_field": {
+                        "type": "string"
+                      },
+                      "java_type": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "file_path": {
+                  "type": "string"
+                },
+                "relations": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "cascade": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "join_column": {
+                        "type": "string"
+                      },
+                      "mapped_by": {
+                        "type": "string"
+                      },
+                      "orphan_removal": {
+                        "type": "boolean"
+                      },
+                      "target": {
+                        "type": "string"
+                      },
+                      "type": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "sql_delete": {
+                  "type": "string"
+                },
+                "table_name": {
+                  "type": "string"
+                },
+                "where_clause": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      }
+    }
+  }
+}

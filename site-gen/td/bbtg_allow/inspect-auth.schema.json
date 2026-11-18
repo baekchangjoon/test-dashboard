@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "bbtg inspect-auth 정제 산출물(허용 목록)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "skill",
+    "results"
+  ],
+  "x-forbidden-paths": [
+    "interceptor_sources[].source",
+    "llm_delegation_guide",
+    "throw_branches",
+    "state_value_checks",
+    "state_value_warnings"
+  ],
+  "properties": {
+    "skill": {
+      "const": "inspect-auth"
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source",
+          "data"
+        ],
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "auth_db_dependencies": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "caller_method": {
+                      "type": "string"
+                    },
+                    "columns": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "interceptor_class": {
+                      "type": "string"
+                    },
+                    "resolution": {
+                      "type": "string"
+                    },
+                    "service_method": {
+                      "type": "string"
+                    },
+                    "service_type": {
+                      "type": "string"
+                    },
+                    "tables": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "auth_type": {
+                "type": "string"
+              },
+              "ddl_missing_columns": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "ddl_missing_tables": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "interceptor_sources": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "class_name": {
+                      "type": "string"
+                    },
+                    "file": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "interceptors": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "class_name": {
+                      "type": "string"
+                    },
+                    "class_type": {
+                      "type": "string"
+                    },
+                    "file": {
+                      "type": "string"
+                    },
+                    "headers_extracted": {
+                      "type": "integer"
+                    },
+                    "state_value_checks": {
+                      "type": "integer"
+                    },
+                    "throw_branches": {
+                      "type": "integer"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "llm_analysis_hints": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "llm_analysis_required": {
+                "type": "boolean"
+              },
+              "registrations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "config_file": {
+                      "type": "string"
+                    },
+                    "interceptor_refs": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "url_patterns": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "required_headers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "boolean"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "target_endpoint": {
+                "type": "null"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    }
+  }
+}
