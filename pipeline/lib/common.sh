@@ -28,6 +28,15 @@ td_run() {
   td_py -m td.proc run "$timeout_sec" -- "$@"
 }
 
+# td_java_home <version> — macOS는 /usr/libexec/java_home, 그 밖에는 JAVA_HOME_<version> 환경 변수. 없으면 return 1.
+td_java_home() {
+  local version="${1:?version}" found="" var="JAVA_HOME_${1}"
+  if [[ -x /usr/libexec/java_home ]]; then found="$(/usr/libexec/java_home -v "$version" 2>/dev/null)" || found=""; fi
+  [[ -n "$found" ]] || found="${!var:-}"
+  [[ -n "$found" ]] || return 1
+  printf '%s\n' "$found"
+}
+
 td_log() { printf '[td] %s\n' "$*" >&2; }
 
 # --- 단계 수명주기 ------------------------------------------------------------------
