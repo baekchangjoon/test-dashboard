@@ -10,6 +10,8 @@ S3 클라이언트는 인자로 받아(boto3 호환 객체) 단위 테스트에�
 from __future__ import annotations
 
 import argparse
+import contextlib
+import fcntl
 import hashlib
 import json
 import mimetypes
@@ -372,6 +374,31 @@ def _file_md5(path: Path) -> str:
     return _file_digests(path)[1]
 
 
+def safe_local_path(mirror_dir, key: str) -> Path | None:
+    """원격 키를 미러 안의 로컬 경로로 바꾼다. 절대 경로, 역슬래시, '.'/'..' 구간, 빈 구간, 미러 밖으로 풀리는 키는 None(경로 순회 방어)."""
+    if not key or key.startswith("/") or "\\" in key or "\x00" in key:
+        return None
+    if any(part in ("", ".", "..") for part in key.split("/")):
+        return None
+    mirror = Path(mirror_dir).resolve()
+    target = (mirror / key).resolve()
+    return mirror / key if target.is_relative_to(mirror) and target != mirror else None
+
+
+@contextlib.contextmanager
+def mirror_lock(work_dir):
+    """미러(work/site-mirror)와 Lightsail /srv/dashboard는 접두와 무관하게 하나라서, 미러 동기화부터 rsync까지를
+    로컬 flock 하나로 직렬화한다(접두별 S3 잠금과 별개). 다른 게시가 끝날 때까지 기다린다."""
+    work_dir = Path(work_dir)
+    work_dir.mkdir(parents=True, exist_ok=True)
+    with (work_dir / ".site-mirror.flock").open("w") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
 def sync_mirror(s3, bucket: str, mirror_dir) -> MirrorStats:
     """S3 버킷 전체(운영 + `_test/`, 잠금 제외)를 mirror_dir에 맞춘다(S3가 원본). run 객체는 있으면 건너뛰고,
     그 밖의 파일은 ETag(단일 PUT은 md5)나 크기가 다르면 받는다. S3에 없는 로컬 파일은 지운다(마커가 있는 미러만)."""
@@ -387,7 +414,11 @@ def sync_mirror(s3, bucket: str, mirror_dir) -> MirrorStats:
             key = obj["Key"]
             if key.endswith("/") or _is_lock_key(key):
                 continue
-            target = mirror / key
+            target = safe_local_path(mirror, key)
+            if target is None:
+                print(f"[td] 미러: 안전하지 않은 S3 키를 건너뛴다: {key!r}", file=sys.stderr)
+                stats.skipped += 1
+                continue
             keep.add(target)
             size, etag = int(obj["Size"]), _etag(obj.get("ETag"))
             if target.is_file() and target.stat().st_size == size:
@@ -426,7 +457,7 @@ def upload_files(s3, bucket: str, mirror_dir, paths) -> list[str]:
     return keys
 
 
-def invalidation_paths(mirror_dir, written, prefix: str, sut: str, run_id: str) -> list[str]:
+def invalidation_paths(mirror_dir, written, prefix: str, sut: str, run_id: str, include_log: bool = True) -> list[str]:
     """무효화 경로: 재생성한 인덱스 파일(디렉터리형 `/dir/`도), hosting.json/html(있으면), publish-log. 중간 와일드카드는 쓰지 않는다."""
     mirror = Path(mirror_dir)
     paths: list[str] = []
@@ -438,7 +469,8 @@ def invalidation_paths(mirror_dir, written, prefix: str, sut: str, run_id: str) 
     for name in ("hosting.json", "hosting.html"):
         if (mirror / prefix / name).exists():
             paths.append(f"/{prefix}{name}")
-    paths.append(f"/{prefix}suts/{sut}/publish-log/{run_id}.json")
+    if include_log:
+        paths.append(f"/{prefix}suts/{sut}/publish-log/{run_id}.json")
     return list(dict.fromkeys(paths))
 
 
@@ -672,7 +704,7 @@ class Publication:
 
     def cloudfront_phase(self, written: list[Path]) -> None:
         try:
-            paths = invalidation_paths(self.mirror, written, self.prefix, self.sut, self.run_id)
+            paths = invalidation_paths(self.mirror, written, self.prefix, self.sut, self.run_id, include_log=False)
             invalidation = invalidate(self.cf, self.distribution_id, paths, self.run_id)
             self.hosts["cloudfront"] = {"status": "passed", "invalidationId": invalidation, "paths": len(paths)}
         except Exception as exc:  # noqa: BLE001 - 무효화 실패는 degraded(인덱스는 no-cache라 곧 갱신된다)
@@ -702,7 +734,20 @@ class Publication:
                 self.hosts["lightsail"] = {"status": "failed", "reason": f"publish-log 동기화: {exc}"[:300]}
                 status, reason = overall_status(self.hosts)
                 write_log(self.s3, self.bucket, self.mirror, self.prefix, self.sut, self.run_id, self.result(status, reason))
+        self.invalidate_log()
+        status, reason = overall_status(self.hosts)
         return self.result(status, reason)
+
+    def invalidate_log(self) -> None:
+        """publish-log는 인덱스 뒤에 쓰이므로 쓴 다음에 그 경로만 무효화한다. 실패하면 CloudFront를 failed로 고쳐 로그를 다시 쓴다."""
+        path = f"/{log_key(self.prefix, self.sut, self.run_id)}"
+        try:
+            invalidate(self.cf, self.distribution_id, [path], self.run_id)
+            return
+        except Exception as exc:  # noqa: BLE001
+            self.hosts["cloudfront"] = {"status": "failed", "reason": f"publish-log invalidation: {type(exc).__name__}: {str(exc)[:200]}"}
+        status, reason = overall_status(self.hosts)
+        write_log(self.s3, self.bucket, self.mirror, self.prefix, self.sut, self.run_id, self.result(status, reason))
 
     def write_failure_log(self) -> None:
         """실패 사유를 S3 publish-log에 남긴다(잠금을 잡았고, 이미 봉인된 run이 아닐 때만 — 성공 기록을 덮어쓰지 않는다)."""
@@ -718,6 +763,7 @@ class Publication:
     def execute(self) -> dict:
         global _TIMINGS
         _TIMINGS = {"uploadSeconds": None, "memBeforeMb": None, "memAfterMb": None}
+        release_warning = ""
         try:
             self.hooks.check_allowed(self.env)
             hosting = load_hosting(self.work_dir, self.env)
@@ -728,10 +774,11 @@ class Publication:
             manifest = self.render()
             self.lock = acquire_lock(self.s3, self.bucket, self.prefix, self.attempt_id)
             self.s3_phase(manifest)
-            written = self.index_phase()
-            self.cloudfront_phase(written)
-            self.lightsail_phase()
-            result = self.log_phase()
+            with mirror_lock(self.work_dir):
+                written = self.index_phase()
+                self.cloudfront_phase(written)
+                self.lightsail_phase()
+                result = self.log_phase()
         except LockHeld as exc:
             self.hosts["s3"] = {"status": "failed", "reason": str(exc)}
             result = self.result("failed", str(exc))
@@ -753,9 +800,20 @@ class Publication:
             signal.signal(signal.SIGTERM, signal.SIG_IGN)
             if self.lock is not None:
                 try:
-                    release(self.s3, self.lock)
+                    if not release(self.s3, self.lock):
+                        release_warning = "잠금이 이미 다른 소유자로 바뀌었거나 없어 해제하지 않았다"
                 except Exception as exc:  # noqa: BLE001
-                    print(f"[td] 잠금 해제 실패(수동 --force-unlock {self.lock.attempt_id} 필요): {exc}", file=sys.stderr)
+                    release_warning = f"잠금 해제 실패(수동 --force-unlock {self.lock.attempt_id} 필요): {type(exc).__name__}"
+        if release_warning:
+            print(f"[td] {release_warning}", file=sys.stderr)
+            if result["status"] != "failed":
+                self.hosts["s3"]["warning"] = release_warning
+                reason = "; ".join(x for x in (result["reason"], release_warning) if x)
+                result = self.result(result["status"], reason)
+                try:
+                    write_log(self.s3, self.bucket, self.mirror, self.prefix, self.sut, self.run_id, result)
+                except Exception:  # noqa: BLE001
+                    pass
         _TIMINGS = dict(result["timings"])
         return result
 

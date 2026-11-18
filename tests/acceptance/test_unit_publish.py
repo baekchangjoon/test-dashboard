@@ -322,3 +322,124 @@ def test_log_payload_has_shared_fields():
     result = publish.build_result("failed", "x", {"s3": host("failed", "x")}, {"uploadSeconds": 1.5, "memBeforeMb": None, "memAfterMb": None}, 123)
     assert result == {"status": "failed", "reason": "x", "hosts": {"s3": {"status": "failed", "reason": "x"}},
                       "timings": {"uploadSeconds": 1.5, "memBeforeMb": None, "memAfterMb": None}, "sizeBytes": 123}
+
+
+# --- 경로 순회 방어(보안 리뷰) ------------------------------------------------------------------
+@pytest.mark.parametrize("key", ["../evil", "a/../../evil", "/abs", "a\\b", "a//b", "./x", "a/./b", "..", ""])
+def test_safe_local_path_rejects_malicious_keys(tmp_path, key):
+    assert publish.safe_local_path(tmp_path / "m", key) is None
+
+
+def test_safe_local_path_rejects_symlink_escape(tmp_path):
+    mirror = tmp_path / "m"
+    mirror.mkdir()
+    (mirror / "link").symlink_to(tmp_path)
+    assert publish.safe_local_path(mirror, "link/x") is None
+    assert publish.safe_local_path(mirror, "ok/x.json") == mirror / "ok/x.json"
+
+
+def test_sync_mirror_skips_malicious_keys_and_logs(tmp_path, capsys):
+    s3 = FakeS3()
+    for key in ("../escape.txt", "/abs.txt", "a/../../escape2.txt", "good.json"):
+        s3.put_object(Bucket=BUCKET, Key=key, Body=b"x")
+    mirror = tmp_path / "mirror"
+    publish.sync_mirror(s3, BUCKET, mirror)
+    assert (mirror / "good.json").exists()
+    assert not (tmp_path / "escape.txt").exists() and not (tmp_path / "escape2.txt").exists()
+    err = capsys.readouterr().err
+    assert "../escape.txt" in err and "/abs.txt" in err
+
+
+# --- Publication.execute 상태(CloudFront 실패, Lightsail 사전 점검 실패, 잠금 해제 실패) ---------------------
+import signal as _signal
+
+from helpers import make_local_run
+from td import state
+
+
+class FailingCloudFront:
+    def create_invalidation(self, **kwargs):
+        raise RuntimeError("cloudfront down")
+
+
+class OkCloudFront:
+    def __init__(self):
+        self.paths = []
+
+    def create_invalidation(self, DistributionId, InvalidationBatch):
+        self.paths.append(InvalidationBatch["Paths"]["Items"])
+        return {"Invalidation": {"Id": f"I{len(self.paths)}"}}
+
+
+@pytest.fixture
+def exec_env(tmp_path, monkeypatch):
+    saved = {sig: _signal.getsignal(sig) for sig in (_signal.SIGINT, _signal.SIGTERM)}
+    work = tmp_path / "work"
+    (work / "infra").mkdir(parents=True)
+    (work / "infra" / "terraform.tfstate").write_text(json.dumps(
+        {"outputs": {"bucket": {"value": BUCKET}, "distribution_id": {"value": "DIST"}}}))
+    run_id = "20261119-000001Z-b6f9393-manual-0000000a"
+    run_dir = make_local_run(tmp_path / "runs", "sutx", run_id)
+    state.begin(run_dir, "S13")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for name, body in (("ssh", "echo 99999999999"), ("rsync", "exit 0")):
+        (bin_dir / name).write_text(f"#!/usr/bin/env bash\n{body}\n")
+        (bin_dir / name).chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
+    env = {"TD_WORK_DIR": str(work), "TD_ROOT": str(tmp_path), "TD_SITE_PREFIX": "_test/u/",
+           "TD_LIGHTSAIL_IP": "203.0.113.9", "TD_SSH_KEY_PATH": "/key", "PATH": os.environ["PATH"]}
+    yield run_id, run_dir, env, tmp_path
+    for sig, handler in saved.items():
+        _signal.signal(sig, handler)
+
+
+def execute(run_id, run_dir, env, s3, cf):
+    return publish.Publication("sutx", run_id, run_dir, env, s3, cf).execute()
+
+
+def test_execute_all_ok_invalidates_log_after_it_is_written(exec_env):
+    run_id, run_dir, env, _ = exec_env
+    s3, cf = FakeS3(), OkCloudFront()
+    result = execute(run_id, run_dir, env, s3, cf)
+    assert result["status"] == "passed", result
+    assert len(cf.paths) == 2
+    assert not any("publish-log" in p for p in cf.paths[0]), "첫 무효화에는 아직 없는 publish-log가 없어야 한다"
+    assert cf.paths[1] == [f"/_test/u/suts/sutx/publish-log/{run_id}.json"]
+    assert "_test/u/locks/publish" not in s3.objects
+
+
+def test_execute_cloudfront_failure_is_degraded(exec_env):
+    run_id, run_dir, env, _ = exec_env
+    s3 = FakeS3()
+    result = execute(run_id, run_dir, env, s3, FailingCloudFront())
+    assert result["status"] == "degraded" and "cloudfront" in result["reason"]
+    assert result["hosts"]["s3"]["status"] == "passed" and result["hosts"]["cloudfront"]["status"] == "failed"
+    log = json.loads(s3.objects[f"_test/u/suts/sutx/publish-log/{run_id}.json"]["data"])
+    assert log["status"] == "degraded" and log["hosts"]["cloudfront"]["status"] == "failed"
+
+
+def test_execute_lightsail_unreachable_preflight_is_degraded(exec_env):
+    run_id, run_dir, env, tmp_path = exec_env
+    (tmp_path / "bin" / "ssh").write_text("#!/usr/bin/env bash\necho 'no route' >&2\nexit 255\n")
+    result = execute(run_id, run_dir, env, FakeS3(), OkCloudFront())
+    assert result["status"] == "degraded", result
+    assert result["hosts"]["lightsail"]["status"] == "failed" and "사전 점검" in result["hosts"]["lightsail"]["reason"]
+    assert result["hosts"]["s3"]["status"] == "passed"
+
+
+def test_execute_lock_release_failure_is_recorded_in_log(exec_env):
+    run_id, run_dir, env, _ = exec_env
+
+    class ReleaseFails(FakeS3):
+        def delete_object(self, Bucket, Key, IfMatch=None):
+            if Key.endswith("locks/publish"):
+                raise RuntimeError("boom")
+            return super().delete_object(Bucket, Key, IfMatch)
+
+    s3 = ReleaseFails()
+    result = execute(run_id, run_dir, env, s3, OkCloudFront())
+    assert result["status"] == "passed" and "잠금 해제 실패" in result["reason"]
+    assert "--force-unlock" in result["hosts"]["s3"]["warning"]
+    log = json.loads(s3.objects[f"_test/u/suts/sutx/publish-log/{run_id}.json"]["data"])
+    assert log["reason"] == result["reason"] and "warning" in log["hosts"]["s3"]

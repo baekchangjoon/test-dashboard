@@ -20,7 +20,8 @@
 <thead><tr><th>단계</th><th>상태</th><th>사유</th></tr></thead>
 <tbody>
 {% for stage_id, stage in stages.items() %}
-  <tr><td>{{ stage_id }}</td><td class="st-{{ stage.status }}">{{ stage.status }}</td><td style="white-space: normal">{{ stage.reason or "" }}</td></tr>
+  {% set shown = "publishing" if stage_id == "S13" else stage.status %}
+  <tr data-stage="{{ stage_id }}"><td>{{ stage_id }}</td><td class="st-{{ shown }}">{{ shown }}</td><td style="white-space: normal">{{ "" if stage_id == "S13" else (stage.reason or "") }}</td></tr>
 {% endfor %}
 </tbody></table></div>
 
