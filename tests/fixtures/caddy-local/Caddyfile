@@ -1,0 +1,11 @@
+{
+	auto_https off
+}
+
+http://sonar.fixture.test:18080 {
+	handle /api/system/status {
+		header Content-Type application/json
+		respond `{"status":"UP"}` 200
+	}
+	respond 404
+}

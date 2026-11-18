@@ -1,0 +1,8 @@
+# dash 사이트: 대시보드 정적 파일(/srv/dashboard, 컨테이너에는 읽기 전용 마운트)을 서빙한다.
+__DASH_ADDR__ {
+	root * /srv/dashboard
+	encode gzip
+	file_server {
+		hide .* *.env *.bak
+	}
+}
