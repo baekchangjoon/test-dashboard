@@ -315,13 +315,13 @@ def test_overall_status_rules(s3, cf, ls, expected):
 
 
 def test_timings_default_shape():
-    assert set(publish.timings()) == {"uploadSeconds", "memBeforeMb", "memAfterMb"}
+    assert set(publish.timings()) == {"uploadSeconds", "rsyncSeconds", "memBeforeMb", "memAfterMb"}
 
 
 def test_log_payload_has_shared_fields():
-    result = publish.build_result("failed", "x", {"s3": host("failed", "x")}, {"uploadSeconds": 1.5, "memBeforeMb": None, "memAfterMb": None}, 123)
+    result = publish.build_result("failed", "x", {"s3": host("failed", "x")}, {"uploadSeconds": 1.5, "rsyncSeconds": None, "memBeforeMb": None, "memAfterMb": None}, 123)
     assert result == {"status": "failed", "reason": "x", "hosts": {"s3": {"status": "failed", "reason": "x"}},
-                      "timings": {"uploadSeconds": 1.5, "memBeforeMb": None, "memAfterMb": None}, "sizeBytes": 123}
+                      "timings": {"uploadSeconds": 1.5, "rsyncSeconds": None, "memBeforeMb": None, "memAfterMb": None}, "sizeBytes": 123}
 
 
 # --- 경로 순회 방어(보안 리뷰) ------------------------------------------------------------------
@@ -395,7 +395,7 @@ def exec_env(tmp_path, monkeypatch):
 
 
 def execute(run_id, run_dir, env, s3, cf):
-    return publish.Publication("sutx", run_id, run_dir, env, s3, cf).execute()
+    return publish.Publication("sutx", run_id, run_dir, env, s3, cf, measure_hosting=False).execute()
 
 
 def test_execute_all_ok_invalidates_log_after_it_is_written(exec_env):

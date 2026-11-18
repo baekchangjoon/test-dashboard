@@ -506,8 +506,9 @@ def server_free_bytes(target: str, key_path: str) -> int:
     return int(ssh_output(target, key_path, f"df -Pk {DASH_DIR} | awk 'NR==2{{print $4}}'").strip()) * 1024
 
 
-def server_mem_used_mb(target: str, key_path: str) -> int:
-    return int(ssh_output(target, key_path, "free -m | awk '/^Mem:/{print $3}'").strip())
+def server_mem_available_mb(target: str, key_path: str) -> int:
+    """`free -m`의 available(MB). 호스팅 비교와 REQ-052가 보는 값이다."""
+    return int(ssh_output(target, key_path, "free -m | awk '/^Mem:/{print $7}'").strip())
 
 
 def rsync_lightsail(mirror_dir, target: str, key_path: str, timeout: float = RSYNC_TIMEOUT, runs: bool = True) -> None:
@@ -528,11 +529,11 @@ def rsync_lightsail(mirror_dir, target: str, key_path: str, timeout: float = RSY
 
 
 # --- 상태 규칙과 publish-log -----------------------------------------------------------------
-_TIMINGS: dict = {"uploadSeconds": None, "memBeforeMb": None, "memAfterMb": None}
+_TIMINGS: dict = {"uploadSeconds": None, "rsyncSeconds": None, "memBeforeMb": None, "memAfterMb": None}
 
 
 def timings() -> dict:
-    """가장 최근 게시의 `{uploadSeconds, memBeforeMb(게시 전 서버 사용 MB), memAfterMb}`."""
+    """가장 최근 게시의 `{uploadSeconds(S3), rsyncSeconds(Lightsail), memBeforeMb(게시 전 서버 available MB), memAfterMb}`."""
     return dict(_TIMINGS)
 
 
@@ -540,8 +541,8 @@ def overall_status(hosts: dict) -> tuple[str, str | None]:
     """설계 §13.9: S3(인덱스 포함)가 실패하면 failed, S3는 성공이고 CloudFront나 Lightsail이 실패하면 degraded."""
     if hosts["s3"]["status"] != "passed":
         return "failed", f"s3: {hosts['s3'].get('reason') or hosts['s3']['status']}"
-    problems = [f"{name}: {hosts[name].get('reason') or 'failed'}" for name in ("cloudfront", "lightsail")
-                if hosts[name]["status"] == "failed"]
+    problems = [f"{name}: {hosts[name].get('reason') or 'failed'}" for name in ("cloudfront", "lightsail", "hosting")
+                if hosts.get(name, {}).get("status") == "failed"]  # hosting: TTFB 성공 표본 부족 등 비교 측정 실패
     return ("degraded", "; ".join(problems)) if problems else ("passed", None)
 
 
@@ -606,9 +607,22 @@ def _raise_interrupted(signum, _frame):
     raise PublishInterrupted(signal.Signals(signum).name)
 
 
+def hosting_default_qualitative() -> Path:
+    from td import hosting
+    return hosting.QUALITATIVE_PATH
+
+
+def _measure_both(url: str, connect_ip: str | None) -> tuple:
+    from td import hosting
+    return hosting.measure(url, connect_ip=connect_ip), hosting.measure_home(url, connect_ip=connect_ip)
+
+
 # --- 오케스트레이션 -----------------------------------------------------------------------------
 class Publication:
-    def __init__(self, sut: str, run_id: str, run_dir, env: dict, s3=None, cf=None):
+    def __init__(self, sut: str, run_id: str, run_dir, env: dict, s3=None, cf=None, measure_hosting: bool = True,
+                 hosting_measurer: Callable[[str, str | None], tuple] | None = None):
+        # measure_hosting=False는 단위 테스트가 네트워크 측정을 끄는 용도, hosting_measurer(url, connect_ip)->(Ttfb, HomeTransfer)는 측정 대체용.
+        self.measure_hosting, self.hosting_measurer = measure_hosting, hosting_measurer
         from td import hooks
         self.hooks = hooks
         self.sut, self.run_id, self.run_dir, self.env = sut, run_id, Path(run_dir), env
@@ -625,6 +639,7 @@ class Publication:
                             "lightsail": {"status": "skipped", "reason": "not reached"}}
         self.size_bytes = 0
         self.upload_seconds = 0.0
+        self.rsync_seconds: float | None = None
         self.mem_before: int | None = None
         self.mem_after: int | None = None
         self.sealed_before = False  # 이번 시도 전에 이미 _COMPLETE가 있었다
@@ -641,7 +656,9 @@ class Publication:
             raise InjectedFailure(f"injected failure (TD_FAIL_STAGE=S13:{point})")
 
     def result(self, status: str, reason: str | None) -> dict:
-        timing = {"uploadSeconds": round(self.upload_seconds, 2), "memBeforeMb": self.mem_before, "memAfterMb": self.mem_after}
+        timing = {"uploadSeconds": round(self.upload_seconds, 2),
+                  "rsyncSeconds": None if self.rsync_seconds is None else round(self.rsync_seconds, 2),
+                  "memBeforeMb": self.mem_before, "memAfterMb": self.mem_after}
         return build_result(status, reason, self.hosts, timing, self.size_bytes)
 
     # -- 단계 ----------------------------------------------------------------------------------
@@ -652,7 +669,7 @@ class Publication:
             self.lightsail_preflight_error = "TD_LIGHTSAIL_IP/TD_SSH_KEY_PATH가 설정돼 있지 않다"
             return
         try:
-            self.mem_before = server_mem_used_mb(self.ssh_target, self.ssh_key)
+            self.mem_before = server_mem_available_mb(self.ssh_target, self.ssh_key)
             free = server_free_bytes(self.ssh_target, self.ssh_key)
         except (PublishError, ValueError) as exc:
             self.lightsail_preflight_error = f"서버 사전 점검 실패: {exc}"  # 서버에 닿지 않는 것은 Lightsail만의 실패(degraded)
@@ -715,14 +732,58 @@ class Publication:
             self.inject("lightsail")
             if self.lightsail_preflight_error:
                 raise PublishError(self.lightsail_preflight_error)
+            rsync_started = time.monotonic()
             rsync_lightsail(self.mirror, self.ssh_target, self.ssh_key, RSYNC_TIMEOUT)
+            self.rsync_seconds = time.monotonic() - rsync_started
             try:
-                self.mem_after = server_mem_used_mb(self.ssh_target, self.ssh_key)
+                self.mem_after = server_mem_available_mb(self.ssh_target, self.ssh_key)
             except (PublishError, ValueError):
                 self.mem_after = None  # 메모리 측정 실패는 게시 실패가 아니다
             self.hosts["lightsail"] = {"status": "passed"}
         except (PublishError, OSError) as exc:
             self.hosts["lightsail"] = {"status": "failed", "reason": str(exc)[:300]}
+
+    def _qualitative_path(self) -> Path:
+        candidate = Path(self.env.get("TD_ROOT", ".")) / "infra" / "hosting-qualitative.yaml"
+        return candidate if candidate.exists() else hosting_default_qualitative()
+
+    def hosting_phase(self) -> None:
+        """게시 직후 두 호스트의 TTFB·홈 전송을 재고 hosting.json/hosting.html을 접두 루트에 올린다(no-cache, 명시 무효화).
+        Lightsail 쪽은 이어지는 log_phase의 rsync가 함께 싣는다. TTFB 성공 표본 부족이나 측정 오류는 hosts.hosting=failed(degraded)."""
+        from td import hosting
+        if not self.measure_hosting:
+            return
+        try:
+            domain = self.env.get("TD_DOMAIN")
+            if not domain:
+                raise PublishError("TD_DOMAIN이 설정돼 있지 않다")
+            measures = {}
+            for name in hosting.HOST_NAMES:
+                host = f"{name}.{domain}"
+                url = f"https://{host}/{self.prefix}index.html"
+                try:
+                    ip = hosting.resolve_ip(host, domain)
+                    ttfb, home = (self.hosting_measurer or _measure_both)(url, ip)
+                    measures[name] = {"url": url, "ttfb": ttfb, "home": home}
+                except Exception:  # noqa: BLE001 - 이름이 안 풀리는 등: 이 호스트 표본은 모두 실패로 센다
+                    measures[name] = {"url": url, "ttfb": hosting.Ttfb(None, 0, hosting.SAMPLES), "home": hosting.HomeTransfer(None, None)}
+            doc = hosting.build_document(
+                sut=self.sut, run_id=self.run_id, generated_at=_utc_now(), measures=measures, timings=self.result("", None)["timings"],
+                qualitative=hosting.load_qualitative(self._qualitative_path()))
+            hosting.check_document(doc)
+            target = self.mirror / self.prefix
+            target.mkdir(parents=True, exist_ok=True)
+            (target / "hosting.json").write_text(json.dumps(doc, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+            (target / "hosting.html").write_text(hosting.render_html(doc))
+            upload_files(self.s3, self.bucket, self.mirror, [target / "hosting.json", target / "hosting.html"])
+            try:
+                invalidate(self.cf, self.distribution_id, [f"/{self.prefix}hosting.json", f"/{self.prefix}hosting.html"], self.run_id)
+            except Exception as exc:  # noqa: BLE001
+                self.hosts["cloudfront"] = {"status": "failed", "reason": f"hosting invalidation: {type(exc).__name__}: {str(exc)[:200]}"}
+            status, reason = hosting.measurement_status(doc)
+            self.hosts["hosting"] = {"status": status, **({"reason": reason} if reason else {})}
+        except Exception as exc:  # noqa: BLE001 - 비교 측정이 게시 자체를 막지 않는다
+            self.hosts["hosting"] = {"status": "failed", "reason": f"hosting 측정/게시 실패: {type(exc).__name__}: {str(exc)[:200]}"}
 
     def log_phase(self) -> dict:
         status, reason = overall_status(self.hosts)
@@ -777,7 +838,7 @@ class Publication:
     # -- 실행 ----------------------------------------------------------------------------------
     def execute(self) -> dict:
         global _TIMINGS
-        _TIMINGS = {"uploadSeconds": None, "memBeforeMb": None, "memAfterMb": None}
+        _TIMINGS = {"uploadSeconds": None, "rsyncSeconds": None, "memBeforeMb": None, "memAfterMb": None}
         release_warning = ""
         try:
             self.hooks.check_allowed(self.env)
@@ -793,6 +854,7 @@ class Publication:
                 written = self.index_phase()
                 self.cloudfront_phase(written)
                 self.lightsail_phase()
+                self.hosting_phase()
                 result = self.log_phase()
         except LockHeld as exc:
             self.hosts["s3"] = {"status": "failed", "reason": str(exc)}

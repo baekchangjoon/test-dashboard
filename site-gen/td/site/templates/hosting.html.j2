@@ -1,0 +1,37 @@
+{% extends "base.html.j2" %}
+{% block title %}호스팅 방식 비교{% endblock %}
+{% block header %}<a href="index.html"><strong>test-dashboard</strong></a>{% endblock %}
+{% macro num(value, digits) %}{% if value is none %}측정 실패{% else %}{{ ("%." ~ digits ~ "f")|format(value) }}{% endif %}{% endmacro %}
+{% block content %}
+<h1>호스팅 방식 비교</h1>
+<p class="muted">run {{ doc.runId }} ({{ doc.sut }}) 게시 직후 {{ doc.generatedAt }}에 측정했다. 정량값은 이 게시의 측정이고, 정성값은 <code>infra/hosting-qualitative.yaml</code>에서 온다.</p>
+<h2>정량 비교</h2>
+<div class="scroll"><table>
+  <thead><tr><th>항목</th>{% for name, host in doc.hosts.items() %}<th>{{ host.label }}</th>{% endfor %}</tr></thead>
+  <tbody>
+    <tr><th>배포 소요 시간(초)</th>{% for name, host in doc.hosts.items() %}<td class="num" data-host="{{ name }}" data-field="deploy">{{ num(host.quantitative.deploy.seconds, 2) }} s</td>{% endfor %}</tr>
+    <tr><th>배포 시간 기준</th>{% for name, host in doc.hosts.items() %}<td class="muted">{{ host.quantitative.deploy.basis }}</td>{% endfor %}</tr>
+    <tr><th>TTFB 중앙값(ms)</th>{% for name, host in doc.hosts.items() %}<td class="num" data-host="{{ name }}" data-field="ttfb">{{ num(host.quantitative.ttfb.medianMs, 1) }} ms</td>{% endfor %}</tr>
+    <tr><th>TTFB 표본</th>{% for name, host in doc.hosts.items() %}{% set t = host.quantitative.ttfb %}<td class="muted">성공 {{ t.ok }} / 실패 {{ t.failed }} (표본 {{ t.samples }}, timeout {{ t.timeoutSeconds }}초, warm 사전 요청 1회 뒤){% if t.medianMs is none %} - 성공 7개 미만이라 값 없음{% endif %}<br>{{ t.url }}</td>{% endfor %}</tr>
+    <tr><th>홈 HTML 전송(ms)</th>{% for name, host in doc.hosts.items() %}{% set h = host.quantitative.homeTransfer %}<td class="num" data-host="{{ name }}" data-field="home">{{ num(h.ms, 1) }} ms{% if h.bytes is not none %} ({{ h.bytes }} B){% endif %}</td>{% endfor %}</tr>
+    <tr><th>서버 available 메모리(MB), 게시 전 / 후</th>{% for name, host in doc.hosts.items() %}{% set m = host.quantitative.memory %}<td class="num" data-host="{{ name }}" data-field="memory">{% if m is none %}해당 없음(서버 없음){% else %}{{ m.beforeMb if m.beforeMb is not none else "—" }} MB / {{ m.afterMb if m.afterMb is not none else "—" }} MB{% endif %}</td>{% endfor %}</tr>
+  </tbody>
+</table></div>
+<h2>정성 비교</h2>
+<div class="cards">
+{% for name, host in doc.hosts.items() %}{% set q = host.qualitative %}
+  <div class="card" data-host="{{ name }}">
+    <h3>{{ host.label }}</h3>
+    <p><b>월 비용 추정</b>: 증분 {{ q.cost.monthlyUsdIncremental }} USD, 단독 구축 시 {{ q.cost.monthlyUsdStandalone }} USD</p>
+    <p class="note">{{ q.cost.priceBasis }}</p>
+    <p class="muted">리전: {{ q.cost.region }}<br>기준일: {{ q.cost.asOf }}</p>
+    <p class="muted">출처: {% for s in q.cost.source %}<a href="{{ s.url }}">{{ s.name }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</p>
+    <p><b>사용량 가정</b></p>
+    <ul>{% for a in q.cost.assumptions %}<li>{{ a }}</li>{% endfor %}</ul>
+    <p><b>계산식</b>: {{ q.cost.formula }}</p>
+    <p><b>운영 부담</b>: {{ q.operations }}</p>
+    <p><b>장애 영향 범위</b>: {{ q.failureScope }}</p>
+  </div>
+{% endfor %}
+</div>
+{% endblock %}
