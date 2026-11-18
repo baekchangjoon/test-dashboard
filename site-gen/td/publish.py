@@ -13,12 +13,13 @@ import hashlib
 import json
 import mimetypes
 import os
+import socket
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, ParamValidationError
 
 CACHE_IMMUTABLE = "max-age=31536000, immutable"
 CACHE_NO_CACHE = "no-cache"
@@ -219,3 +220,116 @@ def complete(s3, bucket: str, manifest: Manifest) -> None:
         existing = read_complete(s3, bucket, manifest.key_prefix) or {}
         if existing.get("manifestSha256") != manifest.digest():
             raise ContentConflict("_COMPLETE가 이미 있고 내용(manifest)이 다르다") from exc
+
+
+# --- 10b: 잠금 -----------------------------------------------------------------------------
+class LockHeld(PublishError):
+    """다른 게시가 잠금을 잡고 있다(메시지에 잠금 정보와 --force-unlock 안내)."""
+
+    def __init__(self, info: dict, prefix: str):
+        self.info = info
+        super().__init__(format_lock_hint(info, prefix))
+
+
+class LockMismatch(PublishError):
+    """--force-unlock의 attemptId가 잠금의 attemptId와 다르다."""
+
+
+@dataclass
+class Lock:
+    bucket: str
+    key: str
+    etag: str
+    attempt_id: str
+
+
+def lock_key(prefix: str) -> str:
+    return f"{prefix}locks/publish"
+
+
+def format_lock_hint(info: dict, prefix: str = "") -> str:
+    owner = info.get("owner") or {}
+    attempt = info.get("attemptId", "?")
+    return (f"다른 게시가 잠금을 잡고 있다: attemptId={attempt} 소유자={owner.get('host', '?')}:{owner.get('pid', '?')} "
+            f"획득={info.get('acquiredAt', '?')} (접두 '{prefix}'). 그 게시가 비정상 종료됐다면 확인 뒤 "
+            f"`S13-publish.sh <sut> <runId> --force-unlock {attempt}`로 푼다(자동 만료는 없다).")
+
+
+def _utc_now() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def read_lock(s3, bucket: str, prefix: str) -> tuple[dict, str] | None:
+    """(잠금 정보, ETag). 없으면 None."""
+    try:
+        response = s3.get_object(Bucket=bucket, Key=lock_key(prefix))
+    except ClientError as exc:
+        if _error_code(exc) in ("NoSuchKey", "404"):
+            return None
+        raise
+    try:
+        info = json.loads(response["Body"].read())
+    except ValueError:
+        info = {"attemptId": "?", "note": "잠금 내용을 읽지 못했다"}
+    return info, _etag(response.get("ETag"))
+
+
+def acquire_lock(s3, bucket: str, prefix: str, attempt_id: str) -> Lock:
+    """`<prefix>locks/publish`를 조건부 PUT(`If-None-Match: *`)으로 만든다. 이미 있으면 LockHeld."""
+    info = {"attemptId": attempt_id, "owner": {"host": socket.gethostname(), "pid": os.getpid()}, "acquiredAt": _utc_now()}
+    body = (json.dumps(info, sort_keys=True) + "\n").encode()
+    for _ in range(2):  # 확인하는 사이 풀린 잠금이면 한 번 더 시도한다
+        try:
+            response = s3.put_object(Bucket=bucket, Key=lock_key(prefix), Body=body, IfNoneMatch="*",
+                                     ContentType="application/json", CacheControl=CACHE_NO_CACHE)
+            return Lock(bucket, lock_key(prefix), _etag(response.get("ETag")), attempt_id)
+        except ClientError as exc:
+            if _error_code(exc) not in EXISTS_CODES:
+                raise
+        held = read_lock(s3, bucket, prefix)
+        if held is not None:
+            raise LockHeld(held[0], prefix)
+    raise PublishError("잠금을 잡지 못했다(동시 갱신 충돌)")
+
+
+def _conditional_delete(s3, bucket: str, key: str, etag: str) -> bool:
+    """조회한 ETag와 같을 때만 지운다. 지웠으면 True, 이미 바뀌었거나 없으면 False.
+    S3가 조건부 삭제를 지원하지 않으면(오류) 재조회 후 ETag가 같을 때만 삭제한다(경합은 수동 실행이라 수용, 설계 §13.9)."""
+    try:
+        s3.delete_object(Bucket=bucket, Key=key, IfMatch=f'"{etag}"')
+        return True
+    except ClientError as exc:
+        code = _error_code(exc)
+        if code in ("PreconditionFailed", "NoSuchKey", "404"):
+            return False
+        if code not in ("NotImplemented", "InvalidArgument", "MethodNotAllowed", "UnsupportedOperation", "XNotImplemented"):
+            raise
+    except ParamValidationError:
+        pass  # 이 botocore가 IfMatch를 모른다
+    try:
+        head = s3.head_object(Bucket=bucket, Key=key)
+    except ClientError as exc:
+        if _error_code(exc) in ("NoSuchKey", "404"):
+            return False
+        raise
+    if _etag(head.get("ETag")) != etag:
+        return False
+    s3.delete_object(Bucket=bucket, Key=key)
+    return True
+
+
+def release(s3, lock: Lock) -> bool:
+    """내가 잡은 잠금(획득 시 ETag)만 지운다. 남이 교체했거나 이미 없으면 건드리지 않고 False."""
+    return _conditional_delete(s3, lock.bucket, lock.key, lock.etag)
+
+
+def force_unlock(s3, bucket: str, prefix: str, attempt_id: str) -> str:
+    """잠금의 attemptId가 인자와 같을 때만 지운다(조회한 ETag로 조건부 삭제). 'released' 또는 'absent', 다르면 LockMismatch."""
+    held = read_lock(s3, bucket, prefix)
+    if held is None:
+        return "absent"
+    info, etag = held
+    if info.get("attemptId") != attempt_id:
+        raise LockMismatch(f"잠금의 attemptId({info.get('attemptId')})가 인자({attempt_id})와 달라 지우지 않는다. "
+                           + format_lock_hint(info, prefix))
+    return "released" if _conditional_delete(s3, bucket, lock_key(prefix), etag) else "absent"
