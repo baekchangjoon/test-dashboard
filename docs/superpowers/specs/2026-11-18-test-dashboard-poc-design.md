@@ -486,3 +486,9 @@ E2E는 `pipeline/run-all.sh petclinic`을 실제로 실행한 뒤 산출물과 �
 | `S13:lightsail` | Lightsail rsync를 실패시킨다. |
 | 설정 주입(훅 아님) | 제어 URL 오류는 `TD_CONTROL_URL_OVERRIDE`, Sonar URL 오류는 `TD_SONAR_URL_OVERRIDE`, 번들 오염은 `TD_BUNDLE_EXTRA=<파일>`, 단계 중단은 테스트가 SIGINT를 보내 재현한다. |
 | `TD_SONAR_TOKEN_OBSERVE=<파일>` | 주입 실행에서만 동작한다. 토큰을 0600 파일에 1회 쓴다. |
+| `TD_STAGE_DIR=<dir>` | 단계 스크립트 디렉터리를 바꾼다(스텁 단계 테스트용). |
+| `TD_SSH_PORT_OVERRIDE=<port>` | SSH 접속 실패를 재현한다. |
+| `TD_NOW=<ISO>` | 오케스트레이터 시각을 고정한다(시간 경계 테스트). |
+| `TD_LIGHTSAIL_FAIL_AFTER=recreate\|health` | 로컬 Caddy fixture에서 적용 실패를 재현한다. |
+
+경로 규약: run 산출물은 `work/runs/<runId>/<StageID>/…`이다. 모듈 배치는 구현 계획 "개정 사항 v2 A"를 따른다(앞 절의 `pipeline/lib/bbtg_driver.py`, `ontology/owl/build.py`, `measure-hosting.sh` 표기는 `td.*` 모듈로 대체).

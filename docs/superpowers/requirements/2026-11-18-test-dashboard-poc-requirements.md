@@ -124,7 +124,7 @@
 
 #### REQ-013 — bbtg 7개 스킬 CLI 실행
 - 유형: Functional / 우선순위: Must
-- 수용기준: Given 기준 run의 `bbtg/manifest.json`, Then 다음이 모두 있다.
+- 수용기준: Given 기준 run의 `S02/bbtg/manifest.json`, Then 다음이 모두 있다.
   - inspect-stack, scan-test-assets, inspect-auth 각 1회
   - dependency-map과 find-external-calls는 `@RestController` 수(기대 목록 기준)만큼
   - plan-tests는 1회 이상
@@ -145,7 +145,7 @@
 
 #### REQ-015 — 온톨로지 스키마
 - 유형: Functional / 우선순위: Must
-- 수용기준: Given `ontology-jqa.json`과 `ontology-owl.json`, Then `site-gen/schemas/ontology.schema.json` 검증을 통과하고 `meta.commit` = `run.json.commit`이다. jQA 산출물에는 Endpoint 외에도 `Service`, `Repository`, `Entity`, `Exception` kind 노드가 각각 1개 이상 있다.
+- 수용기준: Given `ontology-jqa.json`과 `ontology-owl.json`, Then `site-gen/td/schemas/ontology.schema.json` 검증을 통과하고 `meta.commit` = `run.json.commit`이다. jQA 산출물에는 Endpoint 외에도 `Service`, `Repository`, `Entity`, `Exception` kind 노드가 각각 1개 이상 있다.
 - 검증 레벨: E2E
 
 #### REQ-016 — 온톨로지 HTML 오프라인 동작
@@ -184,7 +184,7 @@
 
 #### REQ-021 — bbtg 산출물 허용 스키마
 - 유형: Functional / 우선순위: Must
-- 수용기준: Given 정제된 bbtg 산출물, Then 스킬별 허용 JSON Schema(`pipeline/lib/bbtg-allow/*.schema.json`, `additionalProperties: false`)를 통과한다. `bdd-gen.json.strippedFields`는 스키마가 금지하는 경로 목록 전체이고 `interceptor_sources[].source`를 포함한다. 원본에 값이 있던 경로마다 `removedCount`가 기록된다.
+- 수용기준: Given 정제된 bbtg 산출물, Then 스킬별 허용 JSON Schema(`site-gen/td/bbtg_allow/*.schema.json`, `additionalProperties: false`)를 통과한다. `bdd-gen.json.strippedFields`는 스키마가 금지하는 경로 목록 전체이고 `interceptor_sources[].source`를 포함한다. 원본에 값이 있던 경로마다 `removedCount`가 기록된다.
 - 검증 레벨: E2E
 
 #### REQ-022 — LLM 호출 격리 (외부 캡처)
@@ -299,7 +299,7 @@
 
 #### REQ-036 — TIA 리포트와 base 일치
 - 유형: Functional / 우선순위: Must
-- 수용기준: Given S10 passed, Then `tia.html`(TIA 도구 산출물)과 `scenarios.json`이 있다. 리포트에 내장된 커밋 값이 `stages/S10.json.base`(first-parent `HEAD~10`의 전체 sha)의 prefix다. TIA DB가 `work/runs/<runId>/tia/tia.db`에 있다. run 페이지에서 링크된다. (참고: base의 블랙박스 TC 수는 HEAD와 다를 수 있고, c37b2e4 기준 29개다.)
+- 수용기준: Given S10 passed, Then `tia.html`(TIA 도구 산출물)과 `scenarios.json`이 있다. 리포트에 내장된 커밋 값이 `stages/S10.json.base`(first-parent `HEAD~10`의 전체 sha)의 prefix다. TIA DB가 `work/runs/<runId>/S10/tia.db`에 있다. run 페이지에서 링크된다. (참고: base의 블랙박스 TC 수는 HEAD와 다를 수 있고, c37b2e4 기준 29개다.)
 - 검증 레벨: E2E
 
 #### REQ-037 — Sonar 전용 프로젝트 분석과 export
