@@ -1,0 +1,64 @@
+/* 사이트 공통 스타일. 색은 모두 변수이고, 어두운 모드는 OS 설정을 따르되 data-theme으로 고정할 수 있다. */
+:root {
+  --bg: #ffffff; --fg: #1f2328; --muted: #59636e; --border: #d1d9e0; --card: #f6f8fa;
+  --accent: #0969da; --hit: #d1f0d8; --hit-fg: #12361c; --warn: #fff8c5; --warn-border: #d4a72c;
+  --bad: #cf222e; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --border: #3d444d; --card: #151b23;
+    --accent: #4493f8; --hit: #14391f; --hit-fg: #c8f2d2; --warn: #3a2f06; --warn-border: #9e6a03; --bad: #ff7b72;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --border: #3d444d; --card: #151b23;
+  --accent: #4493f8; --hit: #14391f; --hit-fg: #c8f2d2; --warn: #3a2f06; --warn-border: #9e6a03; --bad: #ff7b72;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.wrap { max-width: 1200px; margin: 0 auto; padding: 0 16px; }
+.site-header { border-bottom: 1px solid var(--border); padding: 12px 0; }
+main { padding-top: 16px; padding-bottom: 48px; min-width: 0; }
+h1 { font-size: 1.5rem; margin: 8px 0 12px; }
+h2 { font-size: 1.2rem; margin: 28px 0 10px; }
+a { color: var(--accent); }
+.muted { color: var(--muted); }
+.note { background: var(--warn); border: 1px solid var(--warn-border); border-radius: 6px; padding: 8px 12px; margin: 8px 0; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; min-width: 0; }
+.card h3 { margin: 0 0 6px; font-size: 1rem; overflow-wrap: anywhere; }
+.kpi { display: flex; gap: 16px; flex-wrap: wrap; }
+.kpi div { min-width: 0; }
+.kpi b { font-size: 1.3rem; display: block; }
+.scroll { overflow-x: auto; max-width: 100%; border: 1px solid var(--border); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; }
+th, td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+th { background: var(--card); position: sticky; top: 0; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+button.sort { all: unset; cursor: pointer; font-weight: 600; }
+button.sort:focus-visible { outline: 2px solid var(--accent); }
+tr.tc-row { cursor: pointer; }
+tr.tc-row:hover, tr.tc-row.selected { background: var(--card); }
+tr.tc-row.unattributed { color: var(--muted); }
+input[type="search"], select { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; max-width: 100%; }
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.toolbar input[type="search"] { flex: 1 1 200px; min-width: 0; }
+/* 히트맵 */
+#heatmap table { width: auto; }
+#heatmap th.col { writing-mode: vertical-rl; transform: rotate(180deg); height: 130px; padding: 6px 2px; font-weight: 500; position: static; }
+#heatmap td.hm-cell { width: 22px; min-width: 22px; padding: 0; height: 20px; border: 1px solid var(--bg);
+  background: color-mix(in srgb, var(--accent) calc(var(--v, 0) * 100%), transparent); }
+#heatmap td.hm-cell.zero { background: transparent; }
+#heatmap th.row { font-weight: 500; font-family: var(--mono); font-size: 12px; }
+/* 소스 뷰어 */
+#detail { min-width: 0; }
+.src-file { border: 1px solid var(--border); border-radius: 6px; margin: 8px 0; min-width: 0; }
+.src-file > summary { padding: 6px 10px; cursor: pointer; background: var(--card); overflow-wrap: anywhere; }
+.src-body { overflow-x: auto; font: 12px/1.45 var(--mono); }
+.src-line { display: grid; grid-template-columns: 4ch 1fr; gap: 8px; padding: 0 8px; width: max-content; min-width: 100%; }
+.src-line .ln { color: var(--muted); text-align: right; user-select: none; }
+.src-line .code { white-space: pre; }
+.src-line.hit { background: var(--hit); color: var(--hit-fg); }
+#detail h3, #detail p { overflow-wrap: anywhere; }
+.src-file { overflow: hidden; max-width: 100%; }

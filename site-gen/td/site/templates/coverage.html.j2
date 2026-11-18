@@ -1,0 +1,189 @@
+{% extends "base.html.j2" %}
+{% block title %}커버리지{% endblock %}
+{% macro pct(value) %}{{ "%.1f"|format(value * 100) }}%{% endmacro %}
+{% block content %}
+<h1>커버리지</h1>
+<p class="muted">귀속(attributed)은 TC별 .exec의 합집합이고, 집계(aggregate)는 기동 시 실행된 코드를 포함한 aggregate.exec다.</p>
+
+<section id="suites" class="cards">
+{% for name, suite in coverage.suites.items() %}
+  <div class="card" data-suite="{{ name }}">
+    <h3>{{ name }}</h3>
+    <div class="kpi">
+      <div><span class="muted">귀속 라인</span><b>{{ pct(suite.kpis.line) }}</b></div>
+      <div><span class="muted">귀속 브랜치</span><b>{{ pct(suite.kpis.branch) }}</b></div>
+    </div>
+    <div class="kpi">
+      <div><span class="muted">집계 라인</span><b>{{ pct(suite.kpis.aggregate.line) }}</b></div>
+      <div><span class="muted">집계 브랜치</span><b>{{ pct(suite.kpis.aggregate.branch) }}</b></div>
+    </div>
+    <p class="muted">TC {{ suite.tcCount }}개 중 {{ suite.attributedCount }}개 귀속</p>
+    <p>
+    {% for kind, paths in suite.paths.items() %}
+      {{ kind }}: <a href="{{ paths.html }}">HTML</a> · <a href="{{ paths.xml }}">XML</a> · <a href="{{ paths.csv }}">CSV</a><br>
+    {% endfor %}
+    </p>
+  </div>
+{% endfor %}
+</section>
+<p id="filter-chain-note" class="note">알려진 한계: 서블릿 필터 체인(예: 보안 필터)에서 실행되는 코드의 커버리지는 TC에 귀속되지 않는다.
+pjacoco는 HttpServlet#service부터 귀속을 시작하므로, 그 코드는 집계 커버리지에만 나타난다.</p>
+{% if coverage.integrity.violations %}
+<div class="note" id="integrity-violations"><strong>무결성 위반 {{ coverage.integrity.violations|length }}건</strong>
+<ul>{% for v in coverage.integrity.violations %}<li>{{ v.kind }}: {{ v.detail }}</li>{% endfor %}</ul></div>
+{% endif %}
+
+<h2>TC × 클래스 히트맵</h2>
+<p class="muted">셀 색의 진하기는 그 TC가 그 클래스에서 커버한 라인 수에 비례한다.</p>
+<div class="scroll" id="heatmap">
+<table>
+  <thead><tr><th>TC</th>{% for src in coverage.classes %}<th class="col" title="{{ src }}">{{ short(src) }}</th>{% endfor %}</tr></thead>
+  <tbody>
+  {% for name, suite in coverage.suites.items() %}{% for tc in suite.tcs if tc.attributed %}
+    <tr><th class="row" scope="row">{{ tc.testId }}</th>
+    {% for src in coverage.classes %}{% set n = tc.classCounts.get(src, 0) %}
+      <td class="hm-cell{{ ' zero' if n == 0 }}" style="--v: {{ '%.2f'|format(0.15 + 0.85 * n / heat_max) if n else 0 }}" title="{{ tc.testId }} · {{ src }}: {{ n }}줄"></td>
+    {% endfor %}</tr>
+  {% endfor %}{% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h2>TC</h2>
+<div class="toolbar">
+  <input type="search" id="tc-filter" placeholder="TC 이름 필터" aria-label="TC 이름 필터">
+  <select id="suite-filter" aria-label="스위트 필터"><option value="">모든 스위트</option>
+  {% for name in coverage.suites %}<option value="{{ name }}">{{ name }}</option>{% endfor %}</select>
+</div>
+<div class="scroll">
+<table id="tc-table">
+  <thead><tr>
+    <th><button class="sort" data-key="name">TC</button></th>
+    <th class="num"><button class="sort" data-key="line">라인</button></th>
+    <th class="num"><button class="sort" data-key="branch">브랜치</button></th>
+    <th class="num"><button class="sort" data-key="method">메서드</button></th>
+    <th class="num"><button class="sort" data-key="lines">커버 라인</button></th>
+    <th class="num"><button class="sort" data-key="unique">고유 라인</button></th>
+    <th class="num"><button class="sort" data-key="classes">클래스</button></th>
+  </tr></thead>
+  <tbody>
+  {% for name, suite in coverage.suites.items() %}{% for tc in suite.tcs %}
+    <tr class="tc-row{{ ' unattributed' if not tc.attributed }}" tabindex="0" data-testid="{{ tc.testId }}" data-slug="{{ tc.slug }}" data-suite="{{ name }}" data-attributed="{{ 1 if tc.attributed else 0 }}">
+      <td data-key="name" data-value="{{ tc.testId }}">{{ tc.testId }}{% if not tc.attributed %} <span class="muted">(귀속 없음)</span>{% endif %}</td>
+      <td class="num" data-key="line" data-value="{{ tc.line }}">{{ pct(tc.line) }}</td>
+      <td class="num" data-key="branch" data-value="{{ tc.branch }}">{{ pct(tc.branch) }}</td>
+      <td class="num" data-key="method" data-value="{{ tc.method }}">{{ pct(tc.method) }}</td>
+      <td class="num" data-key="lines" data-value="{{ tc.lineCount }}">{{ tc.lineCount }}</td>
+      <td class="num" data-key="unique" data-value="{{ tc.uniqueLines }}">{{ tc.uniqueLines }}</td>
+      <td class="num" data-key="classes" data-value="{{ tc.classes|length }}">{{ tc.classes|length }}</td>
+    </tr>
+  {% endfor %}{% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h2>TC 상세</h2>
+<div id="detail"><p class="muted">TC 행을 클릭하면 그 TC가 커버한 라인이 소스에 하이라이트된다.</p></div>
+<script type="application/json" id="cov-data">{{ data_json | safe }}</script>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  const table = document.getElementById('tc-table');
+  const body = table.tBodies[0];
+  let sortKey = null, sortDir = 1;
+  function value(row, key) {
+    const cell = row.querySelector('td[data-key="' + key + '"]');
+    return key === 'name' ? cell.dataset.value : Number(cell.dataset.value);
+  }
+  table.querySelectorAll('button.sort').forEach(function (button) {
+    button.addEventListener('click', function () {
+      const key = button.dataset.key;
+      sortDir = (sortKey === key) ? -sortDir : 1;
+      sortKey = key;
+      const rows = Array.from(body.rows).sort(function (a, b) {
+        const x = value(a, key), y = value(b, key);
+        return (x < y ? -1 : x > y ? 1 : 0) * sortDir;
+      });
+      rows.forEach(function (row) { body.appendChild(row); });
+    });
+  });
+  const filterInput = document.getElementById('tc-filter');
+  const suiteSelect = document.getElementById('suite-filter');
+  function applyFilter() {
+    const text = filterInput.value.trim().toLowerCase(), suite = suiteSelect.value;
+    Array.from(body.rows).forEach(function (row) {
+      row.hidden = !(row.dataset.testid.toLowerCase().includes(text) && (!suite || row.dataset.suite === suite));
+    });
+  }
+  filterInput.addEventListener('input', applyFilter);
+  suiteSelect.addEventListener('change', applyFilter);
+
+  const detail = document.getElementById('detail');
+  const sourceCache = {};
+  function fetchSource(path) {
+    if (!sourceCache[path]) {
+      sourceCache[path] = fetch('src/' + path).then(function (r) { return r.ok ? r.text() : '(소스를 불러오지 못했다: ' + path + ')'; });
+    }
+    return sourceCache[path];
+  }
+  let selection = 0;
+  async function showTc(row) {
+    const mine = ++selection;
+    body.querySelectorAll('tr.selected').forEach(function (r) { r.classList.remove('selected'); });
+    row.classList.add('selected');
+    detail.replaceChildren();
+    const title = document.createElement('h3');
+    title.textContent = row.dataset.testid;
+    detail.appendChild(title);
+    if (row.dataset.attributed !== '1') {
+      const p = document.createElement('p');
+      p.className = 'muted';
+      p.textContent = '이 TC는 귀속된 커버리지가 없다(.exec 없음). 집계 커버리지에는 반영되어 있을 수 있다.';
+      detail.appendChild(p);
+      return;
+    }
+    const tc = await (await fetch('tc/' + row.dataset.slug + '.json')).json();
+    if (mine !== selection) return;
+    const summary = document.createElement('p');
+    summary.id = 'hl-summary';
+    summary.className = 'muted';
+    summary.textContent = '하이라이트 ' + tc.lineCount + '줄 · 고유 ' + tc.uniqueLineCount + '줄';
+    detail.appendChild(summary);
+    const files = Object.keys(tc.lines).sort();
+    for (const path of files) {
+      const text = await fetchSource(path);
+      if (mine !== selection) return;
+      const hits = new Set(tc.lines[path]);
+      const unique = new Set(tc.uniqueLines[path] || []);
+      const box = document.createElement('details');
+      box.className = 'src-file';
+      box.open = true;
+      const head = document.createElement('summary');
+      head.textContent = path + ' (' + hits.size + '줄)';
+      box.appendChild(head);
+      const code = document.createElement('div');
+      code.className = 'src-body';
+      text.split('\n').forEach(function (content, index) {
+        const line = document.createElement('div');
+        line.className = 'src-line' + (hits.has(index + 1) ? ' hit' : '') + (unique.has(index + 1) ? ' unique' : '');
+        const num = document.createElement('span'); num.className = 'ln'; num.textContent = String(index + 1);
+        const src = document.createElement('span'); src.className = 'code'; src.textContent = content;
+        line.append(num, src);
+        code.appendChild(line);
+      });
+      box.appendChild(code);
+      detail.appendChild(box);
+    }
+  }
+  body.addEventListener('click', function (event) {
+    const row = event.target.closest('tr.tc-row');
+    if (row) showTc(row);
+  });
+  body.addEventListener('keydown', function (event) {
+    const row = event.target.closest('tr.tc-row');
+    if (row && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); showTc(row); }
+  });
+})();
+</script>
+{% endblock %}
