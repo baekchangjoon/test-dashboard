@@ -1,0 +1,16 @@
+# REQ-074 로컬 fixture: 서버 스택의 caddy 서비스만 흉내 낸다(sonar는 정적 응답으로 대체).
+services:
+  caddy:
+    image: caddy:2
+    labels:
+      test-run: ${TD_TEST_LABEL:?}
+    ports:
+      - "127.0.0.1:${TD_CADDY_PORT:?}:18080"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+
+volumes:
+  caddy_data:
+    labels:
+      test-run: ${TD_TEST_LABEL:?}

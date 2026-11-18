@@ -29,6 +29,11 @@ td_log "before 스냅샷: $BEFORE"
 EXPECTED=()
 if [[ -s "$STATE" ]]; then
   CURRENT_DOMAIN="$("$TF" -chdir="$STATIC_DIR" output -state="$STATE" -raw distribution_domain 2>/dev/null || true)"
+  # outputs가 비어 있는 상태 파일(부분 적용·중단 후)이면 리소스 속성에서 직접 읽는다.
+  if [[ -z "$CURRENT_DOMAIN" ]]; then
+    CURRENT_DOMAIN="$("$TF" -chdir="$STATIC_DIR" state show -no-color -state="$STATE" aws_cloudfront_distribution.reports 2>/dev/null \
+      | sed -n 's/^ *domain_name *= *"\(.*\)"$/\1/p' | head -1 || true)"
+  fi
   [[ -z "$CURRENT_DOMAIN" ]] || EXPECTED=(--expected-target "$CURRENT_DOMAIN")
 fi
 td_py -m td.route53 check "$ZONE_ID" reports ${EXPECTED[@]+"${EXPECTED[@]}"} \
@@ -43,6 +48,7 @@ AFTER="$INFRA_WORK/route53-after.json"
 td_py -m td.route53 snapshot "$ZONE_ID" "$AFTER"
 # 비교 기준은 최초 before다(재실행 시에도 처음 상태 대비 허용 밖 변경이 없어야 한다).
 td_py -m td.route53 compare "$INFRA_WORK/route53-before.json" "$AFTER" \
-  --allow "reports.$TD_DOMAIN." --allow "_*.reports.$TD_DOMAIN." \
+  --allow "reports.$TD_DOMAIN.,A" --allow "reports.$TD_DOMAIN.,AAAA" --allow "_*.reports.$TD_DOMAIN.,CNAME" \
+  --allow "dash.$TD_DOMAIN.,A" \
   || { td_log "허용 밖 Route53 변경 발견"; exit 5; }
-td_log "완료: bucket=$BUCKET (Route53은 reports와 ACM 검증 CNAME만 변경됨)"
+td_log "완료: bucket=$BUCKET (Route53은 reports A/AAAA, ACM 검증 CNAME, dash A만 허용)"

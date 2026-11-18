@@ -1,7 +1,8 @@
 """Route53 안전장치: 적용 전후 RRSet 스냅샷, 이름 충돌 검사, 허용 목록 밖 변경 탐지.
 
-이 모듈은 읽기 전용이다(Route53 변경은 Terraform만 한다).
-CLI: python -m td.route53 {snapshot|check|compare} ...
+reports·ACM 검증 레코드는 Terraform만 바꾼다. 이 모듈이 직접 바꾸는 것은 Lightsail용 `dash` A 레코드
+(create_a_record/delete_a_record)뿐이며, CREATE/DELETE만 쓰고 UPSERT는 쓰지 않는다.
+CLI: python -m td.route53 {zone-id|snapshot|check|compare|state|create-a|delete-a} ...
 """
 from __future__ import annotations
 
@@ -87,16 +88,37 @@ def check_conflict(zone_id: str, names: list[str], client=None, expected_target:
         raise Route53Conflict(f"{_norm_name(rrset['Name'])} ({rrset['Type']})가 이미 다른 대상으로 있다")
 
 
-def compare(before: list[RRSet], after: list[RRSet], allow: list[str]) -> list[Diff]:
-    """allow(fnmatch 패턴, 전체 이름) 밖의 추가·삭제·변경만 돌려준다."""
-    patterns = [_norm_name(p) for p in allow]
-    allowed = lambda name: any(fnmatch.fnmatchcase(name, pattern) for pattern in patterns)
+def record_state(zone_id: str, name: str, ip: str, client=None) -> str:
+    """name의 기존 레코드 상태: absent(없음) | same(A가 ip 하나) | different(그 밖의 모든 경우)."""
+    wanted = _norm_name(name)
+    existing = [r for r in snapshot(zone_id, client) if _norm_name(r["Name"]) == wanted]
+    if not existing:
+        return "absent"
+    return "same" if len(existing) == 1 and existing[0]["Type"] == "A" and _target(existing[0]) == ip else "different"
+
+
+def parse_allow(values: list[str]) -> list[tuple[str, str]]:
+    """CLI 값 `이름패턴,타입`을 (이름패턴, 타입) 쌍으로 바꾼다."""
+    pairs = []
+    for value in values:
+        name, sep, rtype = value.rpartition(",")
+        if not sep or not name or not rtype:
+            raise ValueError(f"--allow는 '이름,타입' 형식이어야 한다: {value!r}")
+        pairs.append((name, rtype))
+    return pairs
+
+
+def compare(before: list[RRSet], after: list[RRSet], allow: list[tuple[str, str]]) -> list[Diff]:
+    """allow((이름 fnmatch 패턴, 레코드 타입) 쌍) 밖의 추가·삭제·변경만 돌려준다."""
+    patterns = [(_norm_name(name), rtype.upper()) for name, rtype in allow]
+    allowed = lambda name, rtype: any(
+        fnmatch.fnmatchcase(name, pattern) and rtype.upper() == allowed_type for pattern, allowed_type in patterns)
     before_map = {_key(r): r for r in before}
     after_map = {_key(r): r for r in after}
     diffs: list[Diff] = []
     for key in sorted(before_map.keys() | after_map.keys()):
         name, rtype, _ = key
-        if allowed(name):
+        if allowed(name, rtype):
             continue
         old, new = before_map.get(key), after_map.get(key)
         if old is None:
@@ -116,6 +138,24 @@ def _normalize(rrset: RRSet) -> dict:
     return out
 
 
+def _change_a_record(action: str, comment: str, zone_id: str, name: str, ip: str, client) -> None:
+    client = _client(client)
+    client.change_resource_record_sets(HostedZoneId=_bare_id(zone_id), ChangeBatch={
+        "Comment": comment,
+        "Changes": [{"Action": action, "ResourceRecordSet": {
+            "Name": name, "Type": "A", "TTL": 300, "ResourceRecords": [{"Value": ip}]}}]})
+
+
+def create_a_record(zone_id: str, name: str, ip: str, client=None) -> None:
+    """A 레코드를 CREATE한다(이미 있으면 Route53이 거부하므로 덮어쓰지 않는다)."""
+    _change_a_record("CREATE", "td dash", zone_id, name, ip, client)
+
+
+def delete_a_record(zone_id: str, name: str, ip: str, client=None) -> None:
+    """우리가 만든 A 레코드를 정확한 값으로 DELETE한다(롤백용)."""
+    _change_a_record("DELETE", "td dash rollback", zone_id, name, ip, client)
+
+
 def _main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="td.route53")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -125,6 +165,9 @@ def _main(argv: list[str]) -> int:
     p_chk.add_argument("--expected-target")
     p_cmp = sub.add_parser("compare"); p_cmp.add_argument("before"); p_cmp.add_argument("after")
     p_cmp.add_argument("--allow", action="append", default=[])
+    p_state = sub.add_parser("state"); p_state.add_argument("zone_id"); p_state.add_argument("name"); p_state.add_argument("ip")
+    for cmd in ("create-a", "delete-a"):
+        p_rec = sub.add_parser(cmd); p_rec.add_argument("zone_id"); p_rec.add_argument("name"); p_rec.add_argument("ip")
     args = parser.parse_args(argv)
     if args.cmd == "zone-id":
         print(find_zone_id(args.domain))
@@ -136,8 +179,13 @@ def _main(argv: list[str]) -> int:
         except Route53Conflict as error:
             print(f"충돌: {error}", file=sys.stderr)
             return 4
+    elif args.cmd == "state":
+        print(record_state(args.zone_id, args.name, args.ip))
+    elif args.cmd in ("create-a", "delete-a"):
+        (create_a_record if args.cmd == "create-a" else delete_a_record)(args.zone_id, args.name, args.ip)
     else:
-        diffs = compare(json.loads(Path(args.before).read_text()), json.loads(Path(args.after).read_text()), args.allow)
+        diffs = compare(json.loads(Path(args.before).read_text()), json.loads(Path(args.after).read_text()),
+                        parse_allow(args.allow))
         for diff in diffs:
             print(f"허용 밖 변경: {diff.kind} {diff.name} {diff.type}", file=sys.stderr)
         return 5 if diffs else 0
