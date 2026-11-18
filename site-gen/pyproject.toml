@@ -12,6 +12,7 @@ dependencies = [
   "pyshacl",
   "pytest",
   "playwright",
+  "neo4j>=6.4.1",
 ]
 
 [build-system]
