@@ -47,3 +47,23 @@ def test_parse_gradle_daemons_uses_pid_and_start_time():
     ps = ("  101 Thu Nov 19 10:00:00 2026 /jdk/bin/java -Xmx1g org.gradle.launcher.daemon.bootstrap.GradleDaemon 8.14\n"
           "  102 Thu Nov 19 10:00:01 2026 /usr/bin/vim notes.txt\n")
     assert envctl.parse_gradle_daemons(ps) == [(101, "Thu Nov 19 10:00:00 2026")]
+
+
+def test_failure_reason_keeps_tail_pointer_and_budget():
+    log = "\n".join(f"line {n} " + "가" * 40 for n in range(200))
+    reason = envctl.failure_reason("SUT 컨테이너가 종료됐다", log, "S01/blackbox/sut.log")
+    assert len(reason) <= 1400
+    assert reason.endswith("(full log: S01/blackbox/sut.log)")
+    assert reason.splitlines()[-2] == "line 199 " + "가" * 40  # 마지막 로그 줄이 포인터 바로 앞에 온다
+    assert "line 0 " not in reason  # 최근 50줄만
+
+
+def test_failure_reason_short_log_is_whole_and_empty_log_is_marked():
+    reason = envctl.failure_reason("실패", "a\nb\n", "x/sut.log")
+    assert reason == "실패. 로그 마지막:\na\nb\n(full log: x/sut.log)"
+    assert "(로그 없음)" in envctl.failure_reason("실패", "", "x/sut.log")
+
+
+def test_cap_chars_is_character_safe():
+    assert envctl.cap_chars("한" * 10, 4) == "한한한…"
+    assert envctl.cap_chars("abc", 4) == "abc"

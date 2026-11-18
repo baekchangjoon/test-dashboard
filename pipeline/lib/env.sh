@@ -22,6 +22,7 @@ _TD_CLEANING=""
 _td_run_exit_cmds() {
   [[ -z "$_TD_CLEANING" ]] || return 0
   _TD_CLEANING=1
+  trap '' INT TERM   # 정리 도중의 중복 Ctrl-C로 정리가 반쯤 끊기지 않게 한다
   local index
   for ((index = ${#TD_EXIT_CMDS[@]} - 1; index >= 0; index--)); do
     eval "${TD_EXIT_CMDS[$index]}" || true
@@ -37,41 +38,55 @@ _td_compose() {
   td_run "${TD_COMPOSE_TIMEOUT:-300}" -- docker compose -f "$TD_COMPOSE_FILE" -p "$TD_COMPOSE_PROJECT" "$@"
 }
 
-_td_sut_resolve() { # <run_dir>  — 입력 변수를 env 우선, 없으면 sut.yaml/S00 출력에서 채운다
-  local run_dir="$1"
+# 입력 변수를 env 우선, 없으면 sut.yaml/S00 출력에서 채운다. 알 수 없으면 기본값으로 얼버무리지 않고 실패한다.
+# 실패하면 TD_SUT_FAIL_REASON에 사유를 두고 return 1.
+_td_sut_resolve() { # <run_dir>
+  local run_dir="$1" pair var key value err
   if [[ -z "${TD_SUT_JAR:-}" && -f "$run_dir/stages/S00.json" ]]; then
     TD_SUT_JAR="$(jq -r '.outputs.jar // empty' "$run_dir/stages/S00.json")"
   fi
   : "${TD_AGENT_JAR:=$TD_WORK_DIR/tools/pjacoco-agent.jar}"
-  if [[ -n "${TD_SUT_FILE:-}" && -f "${TD_SUT_FILE:-}" ]]; then
-    [[ -n "${TD_SUT_PORT:-}" ]] || TD_SUT_PORT="$(td_py -m td.sut_config get "$TD_SUT_FILE" port 2>/dev/null)"
-    [[ -n "${TD_SUT_HEALTH:-}" ]] || TD_SUT_HEALTH="$(td_py -m td.sut_config get "$TD_SUT_FILE" health 2>/dev/null)"
-    [[ -n "${TD_SUT_PACKAGES:-}" ]] || TD_SUT_PACKAGES="$(td_py -m td.sut_config get "$TD_SUT_FILE" packages 2>/dev/null)"
-  fi
-  : "${TD_SUT_PORT:=8080}" "${TD_SUT_HEALTH:=/}"
+  for pair in TD_SUT_PORT:port TD_SUT_HEALTH:health TD_SUT_PACKAGES:packages; do
+    var="${pair%%:*}"; key="${pair#*:}"
+    [[ -z "${!var:-}" ]] || continue
+    if [[ -z "${TD_SUT_FILE:-}" || ! -f "${TD_SUT_FILE:-}" ]]; then
+      TD_SUT_FAIL_REASON="${var}가 없고 sut.yaml(TD_SUT_FILE)도 없어 $key 값을 알 수 없다"; return 1
+    fi
+    if ! value="$(td_py -m td.sut_config get "$TD_SUT_FILE" "$key" 2>&1)"; then
+      TD_SUT_FAIL_REASON="sut.yaml에서 ${key}를 읽지 못했다: $value"; return 1
+    fi
+    printf -v "$var" '%s' "$value"
+  done
+  return 0
 }
 
-_td_log_tail() { # <file> [bytes]
-  [[ -s "$1" ]] && tail -n 50 "$1" | tail -c "${2:-1000}"
+_td_log_tail() { # <file> [bytes]  (compose-config 오류처럼 짧은 사유용)
+  [[ -s "$1" ]] && tail -n 20 "$1" | tail -c "${2:-600}"
+}
+
+# 사유 = 메시지 + 로그 마지막 50줄(1400자 예산, 파이썬에서 문자 단위로 자름) + "(full log: <run_dir 기준 상대 경로>)"
+_td_reason_with_log() { # <메시지> <로그 파일> <run_dir>
+  local rel="${2#"$3"/}"
+  td_py -m td.envctl failure-reason "$1" "$2" "$rel"
 }
 
 _td_sut_fail() { # <사유>  — 사유를 남기고 정리한 뒤 return 1
-  TD_SUT_FAIL_REASON="${*:0:1400}"
+  TD_SUT_FAIL_REASON="$(printf '%s' "$*" | td_py -m td.envctl cap 1400)"
   td_log "SUT 기동 실패: $TD_SUT_FAIL_REASON"
   td_sut_down
   return 1
 }
 
-_td_sut_fail_with_logs() { # <사유> <out_dir>  — 컨테이너 로그 마지막 50줄을 사유에 붙인다
+_td_sut_fail_with_logs() { # <사유> <out_dir> <run_dir>  — 컨테이너 로그를 sut.log로 저장하고 사유에 꼬리를 붙인다
   _td_compose logs --no-color --no-log-prefix --tail 50 sut >"$2/sut.log" 2>&1
-  _td_sut_fail "$1. 로그 마지막: $(_td_log_tail "$2/sut.log")"
+  _td_sut_fail "$(_td_reason_with_log "$1" "$2/sut.log" "$3")"
 }
 
 # --- td_sut_up ----------------------------------------------------------------------------------
 td_sut_up() { # <run_dir> <stage> <suite>
   local run_dir="${1:?run_dir}" stage="${2:?stage}" suite="${3:?suite}"
   TD_SUT_FAIL_REASON=""
-  _td_sut_resolve "$run_dir"
+  _td_sut_resolve "$run_dir" || { _td_sut_fail "$TD_SUT_FAIL_REASON"; return 1; }
   local run_id label out_dir
   run_id="$(basename "$run_dir")"
   label="${TD_RUN_LABEL:-td-$run_id}"
@@ -97,14 +112,14 @@ td_sut_up() { # <run_dir> <stage> <suite>
 
   # td_sut_down은 source 시점에 종료 정리로 등록돼 있다(기동 도중 중단돼도 같은 프로젝트를 내린다).
   if ! _td_compose up -d >"$out_dir/compose-up.log" 2>&1; then
-    _td_sut_fail "compose up 실패: $(_td_log_tail "$out_dir/compose-up.log" 800)"; return 1
+    _td_sut_fail "$(_td_reason_with_log "compose up 실패" "$out_dir/compose-up.log" "$run_dir")"; return 1
   fi
 
   local sut_addr control_addr
   sut_addr="$(_td_compose port sut "$TD_SUT_PORT" 2>/dev/null)"
   control_addr="$(_td_compose port sut 6310 2>/dev/null)"
   if [[ ! "$sut_addr" =~ ^127\.0\.0\.1:[0-9]+$ || ! "$control_addr" =~ ^127\.0\.0\.1:[0-9]+$ ]]; then
-    _td_sut_fail_with_logs "게시 포트가 루프백이 아니다(컨테이너가 일찍 종료했을 수 있다): sut='$sut_addr' control='$control_addr'" "$out_dir"; return 1
+    _td_sut_fail_with_logs "게시 포트가 루프백이 아니다(컨테이너가 일찍 종료했을 수 있다): sut='$sut_addr' control='$control_addr'" "$out_dir" "$run_dir"; return 1
   fi
   export TD_BASE_URL="http://$sut_addr" TD_CONTROL_URL="http://$control_addr"
 
@@ -118,10 +133,10 @@ td_sut_up() { # <run_dir> <stage> <suite>
     fi
     running="$(td_run 30 -- docker inspect -f '{{.State.Running}}' "$container_id" 2>/dev/null)"
     if [[ "$running" != "true" ]]; then
-      _td_sut_fail_with_logs "SUT 컨테이너가 종료됐다" "$out_dir"; return 1
+      _td_sut_fail_with_logs "SUT 컨테이너가 종료됐다" "$out_dir" "$run_dir"; return 1
     fi
     if ((SECONDS >= deadline)); then
-      _td_sut_fail_with_logs "health ${TD_SUT_HEALTH_TIMEOUT:-120}초 초과($TD_SUT_HEALTH)" "$out_dir"; return 1
+      _td_sut_fail_with_logs "health ${TD_SUT_HEALTH_TIMEOUT:-120}초 초과($TD_SUT_HEALTH)" "$out_dir" "$run_dir"; return 1
     fi
     sleep 2
   done
@@ -137,27 +152,17 @@ td_sut_down() {
 }
 
 # --- PID 관리 ----------------------------------------------------------------------------------------
-TD_OWN_PIDS=()
+# 등록은 pid 파일로만 한다(서브셸에서 등록해도 보인다). 정리는 파일을 읽어 td.envctl이 한다.
 td_pid_register() { # <name> <pid>
   local name="${1:?name}" pid="${2:?pid}" run_dir="${TD_RUN_DIR:?TD_RUN_DIR가 필요하다}"
   mkdir -p "$run_dir/pids"
   echo "$pid" > "$run_dir/pids/$name.pid"
-  TD_OWN_PIDS+=("$pid")
 }
 
-# 이 셸이 등록한 PID만 정리한다(TERM → 10초 → KILL). 이미 없는 PID는 무시한다.
+# pids/*.pid의 살아 있는 프로세스를 TERM → 10초 → KILL. 그룹 리더면 그룹 전체에, 아니면 그 pid에만 보낸다.
 td_pids_reap() {
-  local pid tries
-  for pid in ${TD_OWN_PIDS[@]+"${TD_OWN_PIDS[@]}"}; do
-    kill -0 "$pid" 2>/dev/null || continue
-    kill -TERM "$pid" 2>/dev/null || true
-    for tries in $(seq 1 50); do
-      kill -0 "$pid" 2>/dev/null || break
-      sleep 0.2
-    done
-    kill -0 "$pid" 2>/dev/null && kill -KILL "$pid" 2>/dev/null
-  done
-  TD_OWN_PIDS=()
+  [[ -n "${TD_RUN_DIR:-}" && -d "$TD_RUN_DIR/pids" ]] || return 0
+  td_py -m td.envctl reap-pids "$TD_RUN_DIR" || td_log "경고: PID 정리 실패"
   return 0
 }
 

@@ -114,7 +114,7 @@ sleep 600
                    TD_SUT_JAR=env.env["TD_SUT_JAR"], TD_AGENT_JAR=env.env["TD_AGENT_JAR"],
                    TD_SUT_PACKAGES=env.env["TD_SUT_PACKAGES"], TD_SUT_PORT="8080", TD_SUT_HEALTH="/actuator/health")
     proc = subprocess.Popen(["bash", str(REPO_ROOT / "pipeline" / "run-all.sh"), "stub",
-                             "--sut-file", str(stub_stages.sut_file), "--only", "S00,S01"],
+                             "--sut-file", str(stub_stages.sut_file)],
                             env=run_env, start_new_session=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     pgid = proc.pid
     try:
@@ -131,11 +131,42 @@ sleep 600
         proc.wait(timeout=30)
     runs = [p for p in (work / "runs").glob("*") if p.is_dir()]
     assert len(runs) == 1
+    # 중단된 run도 계약대로 마감된다: S01 failed(신호), 이후 단계 skipped, 종료 코드는 계약(0/1/2) 값.
+    assert proc.returncode == 2, (proc.returncode, proc.stderr.read()[-1500:])
+    stages = {p.stem: json.loads(p.read_text()) for p in (runs[0] / "stages").glob("S*.json")}
+    assert len(stages) == 14
+    assert stages["S00"]["status"] == "passed"
+    assert stages["S01"]["status"] == "failed" and stages["S01"]["reason"] == "interrupted (signal)"
+    for stage_id, data in stages.items():
+        if stage_id not in ("S00", "S01"):
+            assert data["status"] == "skipped" and data["reason"] == "run interrupted", (stage_id, data)
+    run_json = json.loads((runs[0] / "run.json").read_text())
+    assert run_json.get("finishedAt") and run_json["stages"]["S01"] == "failed"
     leak = envctl.diff(before, envctl.snapshot())
     assert leak.owned == [], leak
     pids = run_pids(runs[0])
     assert "bgsleep" in pids, pids
     assert not any(pid_alive(pid) for pid in pids.values()), pids
+
+
+def test_pid_reap_reads_files_and_signals_group(tmp_path):
+    """서브셸에서 등록한 PID도 파일로 찾고, 그룹 리더면 그룹 전체(자손 포함)를 정리한다."""
+    run_dir = tmp_path / "run"
+    (run_dir / "pids").mkdir(parents=True)
+    group = subprocess.Popen(["bash", "-c", "sleep 600 & sleep 600"], start_new_session=True)
+    single = subprocess.Popen(["sleep", "600"])
+    time.sleep(0.5)
+    (run_dir / "pids" / "group.pid").write_text(f"{group.pid}\n")
+    (run_dir / "pids" / "single.pid").write_text(f"{single.pid}\n")
+    (run_dir / "pids" / "dead.pid").write_text("999999\n")
+    child = subprocess.run(["pgrep", "-g", str(group.pid)], capture_output=True, text=True).stdout.split()
+    assert len(child) >= 2, child
+    envctl.reap_pids(run_dir, term_wait=5)
+    group.wait(timeout=10)
+    single.wait(timeout=10)
+    time.sleep(0.5)
+    still = subprocess.run(["pgrep", "-g", str(group.pid)], capture_output=True, text=True).stdout.split()
+    assert still == [], still
 
 
 def _gradle_daemon_ids() -> set[tuple[int, str]]:
