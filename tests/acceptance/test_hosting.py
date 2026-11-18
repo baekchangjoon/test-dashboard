@@ -142,3 +142,65 @@ def test_req048_lightsail_crawl(published_runs, local_env, site_prefix, s3_clien
     static = helpers.https_fetch(f"reports.{domain}", domain, runs_path)
     assert dash[0] == static[0] == 200 and dash[2] == static[2], "runs.json은 두 호스트에서 바이트 단위로 같아야 한다"
     assert dash[2] == s3_client.get_object(Bucket=bucket, Key=runs_path.lstrip("/"))["Body"].read()
+
+
+# --- 호스팅 비교(Task 11): 게시된 hosting.json/hosting.html을 두 호스트에서 읽어 검사한다(E2E) ---
+def _hosting_doc(local_env, site_prefix, host_name: str) -> dict:
+    domain = local_env["TD_DOMAIN"]
+    status, headers, body = helpers.https_fetch(f"{host_name}.{domain}", domain, f"/{site_prefix}hosting.json")
+    assert status == 200, f"{host_name} hosting.json {status}"
+    if host_name == "reports":  # Lightsail Caddy는 캐시 헤더를 달지 않는다(REQ-068도 reports만 검사)
+        assert headers.get("cache-control") == "no-cache", headers.get("cache-control")
+    return json.loads(body)
+
+
+def _hosting_html(local_env, site_prefix, host_name: str) -> str:
+    domain = local_env["TD_DOMAIN"]
+    status, headers, body = helpers.https_fetch(f"{host_name}.{domain}", domain, f"/{site_prefix}hosting.html")
+    assert status == 200, status
+    if host_name == "reports":
+        assert headers.get("cache-control") == "no-cache", headers.get("cache-control")
+    return body.decode()
+
+
+def test_req051_quantitative(published_runs, local_env, site_prefix):
+    import jsonschema
+    from td import hosting
+    last_log = json.loads((published_runs["runs"][-1][1] / "stages" / "S13.json").read_text())
+    doc = _hosting_doc(local_env, site_prefix, "reports")
+    assert doc == _hosting_doc(local_env, site_prefix, "dash"), "두 호스트의 hosting.json은 같아야 한다"
+    jsonschema.validate(doc, hosting.load_schema())
+    html = _hosting_html(local_env, site_prefix, "reports")
+    assert "호스팅 방식 비교" in html
+    for name in ("reports", "dash"):
+        quant = doc["hosts"][name]["quantitative"]
+        assert quant["deploy"]["unit"] == "s" and quant["deploy"]["seconds"] is not None and quant["deploy"]["seconds"] >= 0
+        ttfb = quant["ttfb"]
+        assert ttfb["unit"] == "ms" and ttfb["samples"] == 10 and ttfb["timeoutSeconds"] == 10 and ttfb["warm"] is True
+        assert ttfb["ok"] + ttfb["failed"] == 10 and ttfb["url"].startswith(f"https://{name}.{local_env['TD_DOMAIN']}/")
+        assert quant["homeTransfer"]["unit"] == "ms" and quant["homeTransfer"]["ms"] > 0
+        assert str(quant["deploy"]["seconds"]) in html
+        if ttfb["ok"] >= 7:
+            assert ttfb["medianMs"] > 0 and f"{ttfb['medianMs']:.1f}" in html
+        else:
+            assert ttfb["medianMs"] is None and last_log["status"] == "degraded"
+    memory = doc["hosts"]["dash"]["quantitative"]["memory"]
+    assert memory["unit"] == "MB" and memory["metric"] == "available" and memory["beforeMb"] > 0 and memory["afterMb"] > 0
+    assert doc["hosts"]["reports"]["quantitative"]["memory"] is None
+    assert str(memory["afterMb"]) in html
+
+
+def test_req073_qualitative(published_runs, local_env, site_prefix):
+    doc = _hosting_doc(local_env, site_prefix, "dash")
+    html = _hosting_html(local_env, site_prefix, "dash")
+    for name in ("reports", "dash"):
+        qual = doc["hosts"][name]["qualitative"]
+        cost = qual["cost"]
+        assert cost["source"] and all(item["url"].startswith("https://") for item in cost["source"])
+        for field in ("region", "asOf", "formula", "priceBasis"):
+            assert str(cost[field]).strip(), (name, field)
+        assert cost["assumptions"] and all(str(a).strip() for a in cost["assumptions"])
+        assert qual["operations"].strip() and qual["failureScope"].strip()
+        for text in (cost["formula"], qual["operations"], qual["failureScope"], cost["region"], cost["asOf"]):
+            assert text.split("\n")[0].strip()[:20] in html or text.strip()[:20] in html, text[:30]
+    assert "Sonar" in doc["hosts"]["dash"]["qualitative"]["failureScope"]

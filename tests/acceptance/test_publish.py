@@ -206,8 +206,8 @@ def test_req071_publish_status_files(published_runs, s3_client, bucket, site_pre
         for field in ("status", "reason", "hosts", "timings", "sizeBytes"):
             assert log[field] == stage[field], field
         assert log["status"] in ("passed", "degraded") and log["sizeBytes"] > 0
-        assert set(log["hosts"]) == {"s3", "cloudfront", "lightsail"}
-        assert set(log["timings"]) == {"uploadSeconds", "memBeforeMb", "memAfterMb"}
+        assert set(log["hosts"]) == {"s3", "cloudfront", "lightsail", "hosting"}
+        assert set(log["timings"]) == {"uploadSeconds", "rsyncSeconds", "memBeforeMb", "memAfterMb"}
         page = get_bytes(s3_client, bucket, key_prefix + "index.html").decode()
         assert f'data-url="../../publish-log/{run_id}.json"' in page
         # CloudFront로도 같은 publish-log가 나온다(run 페이지가 fetch하는 경로).
