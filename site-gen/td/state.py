@@ -166,7 +166,9 @@ def begin(run_dir, stage_id: str) -> None:
     _check_stage(stage_id)
     if stage_id == PUBLISH_STAGE:
         # S13 수명주기: 시작 직전 finishedAt을 쓰고 run.json을 'publishing'으로 동결한다.
-        write_run_meta(run_dir, finishedAt=fmt_utc(now(finished=True)))
+        # 같은 run의 S13 재시도에서는 처음 동결한 값을 유지한다(게시된 run.json과 바이트 단위로 같아야 한다).
+        if not read_run(run_dir).get("finishedAt"):
+            write_run_meta(run_dir, finishedAt=fmt_utc(now(finished=True)))
         _set_run_stage(run_dir, PUBLISH_STAGE, "publishing")
     _write_json(stage_path(run_dir, stage_id), {
         "id": stage_id, "status": "running", "reason": None,

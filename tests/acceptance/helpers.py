@@ -175,3 +175,94 @@ def https_get(host: str, domain: str, path: str = "/", timeout: int = 30) -> tup
     connection.request("GET", path)
     response = connection.getresponse()
     return response.status, response.read()
+
+
+# --- S13 게시 테스트 보조(Task 10) ---------------------------------------------------------
+import hashlib
+import io
+
+from botocore.exceptions import ClientError
+
+
+def _client_error(code: str, status: int, op: str) -> ClientError:
+    return ClientError({"Error": {"Code": code, "Message": code}, "ResponseMetadata": {"HTTPStatusCode": status}}, op)
+
+
+class FakeS3:
+    """boto3 S3 클라이언트의 게시기 사용 부분만 흉내 내는 메모리 구현(조건부 쓰기·삭제 포함)."""
+
+    def __init__(self, supports_conditional_delete: bool = True):
+        self.objects: dict[str, dict] = {}
+        self.supports_conditional_delete = supports_conditional_delete
+        self.calls: list[tuple[str, str, dict]] = []
+
+    @staticmethod
+    def _body(body) -> bytes:
+        if hasattr(body, "read"):
+            return body.read()
+        return body if isinstance(body, bytes) else str(body).encode()
+
+    def put_object(self, Bucket, Key, Body=b"", IfNoneMatch=None, **kwargs):
+        self.calls.append(("put", Key, {"IfNoneMatch": IfNoneMatch, **kwargs}))
+        if IfNoneMatch == "*" and Key in self.objects:
+            raise _client_error("PreconditionFailed", 412, "PutObject")
+        data = self._body(Body)
+        self.objects[Key] = {"data": data, "etag": hashlib.md5(data).hexdigest(), **kwargs}
+        return {"ETag": f'"{self.objects[Key]["etag"]}"'}
+
+    def head_object(self, Bucket, Key):
+        if Key not in self.objects:
+            raise _client_error("404", 404, "HeadObject")
+        obj = self.objects[Key]
+        return {"ETag": f'"{obj["etag"]}"', "ContentLength": len(obj["data"])}
+
+    def get_object(self, Bucket, Key):
+        if Key not in self.objects:
+            raise _client_error("NoSuchKey", 404, "GetObject")
+        obj = self.objects[Key]
+        return {"ETag": f'"{obj["etag"]}"', "Body": io.BytesIO(obj["data"]), "ContentLength": len(obj["data"])}
+
+    def delete_object(self, Bucket, Key, IfMatch=None):
+        self.calls.append(("delete", Key, {"IfMatch": IfMatch}))
+        if IfMatch is not None:
+            if not self.supports_conditional_delete:
+                raise _client_error("NotImplemented", 501, "DeleteObject")
+            if Key in self.objects and self.objects[Key]["etag"] != IfMatch.strip('"'):
+                raise _client_error("PreconditionFailed", 412, "DeleteObject")
+        self.objects.pop(Key, None)
+        return {}
+
+    def get_paginator(self, name):
+        assert name == "list_objects_v2"
+        fake = self
+
+        class Paginator:
+            def paginate(self, Bucket, Prefix=""):
+                keys = sorted(k for k in fake.objects if k.startswith(Prefix))
+                yield {"Contents": [{"Key": k, "Size": len(fake.objects[k]["data"]),
+                                     "ETag": f'"{fake.objects[k]["etag"]}"'} for k in keys]}
+        return Paginator()
+
+
+def make_local_run(base: Path, sut: str, run_id: str, *, with_coverage: bool = True, passed: float = 0.9) -> Path:
+    """게시 전 로컬 run 디렉터리(`<base>/<runId>`): run.json, stages/S00,S01,S08 JSON, S08 산출물."""
+    from td import state
+    run_dir = Path(base) / run_id
+    run_dir.mkdir(parents=True)
+    started = f"{run_id[:4]}-{run_id[4:6]}-{run_id[6:8]}T{run_id[9:11]}:{run_id[11:13]}:{run_id[13:15]}Z"
+    state.write_run_meta(run_dir, runId=run_id, sut=sut, commit="b6f939355e8790202ddfc71e3f3507252745ed37",
+                         trigger="manual", startedAt=started)
+    state.set_run_field(run_dir, "kpis", {"tests": {"passRate": passed}, "blackbox": {"line": 0.5}})
+    state.end(run_dir, "S00", "passed")
+    state.end(run_dir, "S01", "passed")
+    outputs = None
+    if with_coverage:
+        cov = run_dir / "S08"
+        (cov / "blackbox" / "attributed" / "exec").mkdir(parents=True)
+        (cov / "blackbox" / "attributed" / "exec" / "a.exec").write_bytes(b"\x00" * 64)
+        (cov / "coverage.html").write_text("<html>stale</html>")
+        (cov / "coverage.json").write_text(json.dumps(
+            {"suites": {}, "classes": [], "integrity": {"violations": [], "classIdWarnings": 0, "probes": []}, "merged": {}}))
+        outputs = {"coverage": str(cov)}
+    state.end(run_dir, "S08", "passed", outputs=outputs)
+    return run_dir

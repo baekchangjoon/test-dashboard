@@ -113,3 +113,12 @@ def test_stub_generation_ids_only_in_stub_mode(tmp_path, monkeypatch):
     monkeypatch.setenv("TD_STAGE_DIR", "/stub")
     state.post(tmp_path, "S06")
     assert list(state.read_stage(tmp_path, "S06")["generations"]) == ["base-00000000-r1"]
+
+
+def test_s13_rebegin_keeps_frozen_finished_at(run_dir):
+    """같은 run의 S13 재시도에서 run.json(finishedAt 포함)이 바뀌면 게시본과 어긋나므로 처음 값을 유지한다."""
+    state.begin(run_dir, "S13")
+    frozen = (run_dir / "run.json").read_bytes()
+    state.end(run_dir, "S13", "failed", "x")
+    state.begin(run_dir, "S13")
+    assert (run_dir / "run.json").read_bytes() == frozen

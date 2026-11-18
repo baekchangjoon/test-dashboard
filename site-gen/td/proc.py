@@ -7,7 +7,6 @@ macOS에는 setsid 명령이 없고 bash job control은 비대화형에서 믿�
 from __future__ import annotations
 
 import os
-import shlex
 import signal
 import subprocess
 import sys
@@ -15,7 +14,16 @@ import sys
 TIMEOUT_EXIT = 124
 
 
-def run_with_timeout(timeout_sec: float, argv: list[str], kill_grace: float | None = None) -> int:
+def redacted_command(argv: list[str]) -> str:
+    """사유 문구용 명령 표기: 프로그램 이름만 남기고 인자(토큰·URL 등 비밀값이 섞일 수 있다)는 가린다."""
+    program = os.path.basename(argv[0]) if argv else "?"
+    return program if len(argv) < 2 else f"{program} [args redacted]"
+
+
+def run_with_timeout(timeout_sec: float, argv: list[str], kill_grace: float | None = None,
+                     reraise: bool = False) -> int:
+    """reraise=True이면 대기 중 받은 TERM/INT로 자식 그룹을 정리한 뒤 같은 신호를 자신에게 다시 보내
+    호출자의 핸들러(예: 게시기의 잠금 해제)가 실행되게 한다."""
     grace = float(os.environ.get("TD_KILL_GRACE", "10")) if kill_grace is None else kill_grace
     try:
         proc = subprocess.Popen(argv, start_new_session=True)
@@ -23,8 +31,11 @@ def run_with_timeout(timeout_sec: float, argv: list[str], kill_grace: float | No
         print(f"td_run: 실행 실패 {argv[0]}: {exc}", file=sys.stderr)
         return 127
 
+    received: list[int] = []
+
     def forward(signum, _frame):
         # 호출자가 TERM/INT를 받으면 자식 그룹도 정리한다.
+        received.append(signum)
         _kill_group(proc, signal.SIGTERM)
 
     old_term = signal.signal(signal.SIGTERM, forward)
@@ -33,7 +44,7 @@ def run_with_timeout(timeout_sec: float, argv: list[str], kill_grace: float | No
         try:
             return proc.wait(timeout=timeout_sec)
         except subprocess.TimeoutExpired:
-            print(f"timeout:{shlex.join(argv)} (>{timeout_sec:g}s)", file=sys.stderr)
+            print(f"timeout:{redacted_command(argv)} (>{timeout_sec:g}s)", file=sys.stderr)
             _kill_group(proc, signal.SIGTERM)
             try:
                 proc.wait(timeout=grace)
@@ -46,6 +57,8 @@ def run_with_timeout(timeout_sec: float, argv: list[str], kill_grace: float | No
     finally:
         signal.signal(signal.SIGTERM, old_term)
         signal.signal(signal.SIGINT, old_int)
+        if reraise and received:
+            os.kill(os.getpid(), received[0])
 
 
 def _kill_group(proc: subprocess.Popen, sig: int) -> None:
