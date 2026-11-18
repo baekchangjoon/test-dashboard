@@ -14,7 +14,7 @@ port: 8080
 health: /actuator/health
 api: { include: "/api/**" }
 # 인터셉터(서블릿 안)가 401로 거부한다. S00이 실측해 이 값과 대조한다.
-auth: { type: bearer, login: "POST /api/auth/login", user_env: TD_SUT_USER, pass_env: TD_SUT_PASS, probe: "GET /api/items", unauthenticated_status: 401 }
+auth: { type: bearer, login: "POST /api/auth/login", user_env: TD_MINISUT_USER, pass_env: TD_MINISUT_PASS, probe: "GET /api/items", unauthenticated_status: 401 }
 coverage:
   probes:
     - { test: "ItemApiBlackBoxIT#listItems", controller: ItemController }

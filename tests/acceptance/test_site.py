@@ -3,7 +3,9 @@ import functools
 import http.server
 import json
 import re
+import subprocess
 import threading
+from pathlib import Path
 
 import pytest
 
@@ -178,9 +180,6 @@ def test_render_run_ignores_outputs_of_failed_stage(tmp_path):
 
 
 # --- REQ-050 멀티 SUT(E2E-inj) ---------------------------------------------------------------------
-import subprocess
-from pathlib import Path
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SUT_NEUTRAL_DIRS = ("pipeline", "site-gen", "e2e/harness", "e2e/runner", "ontology", "prompts", "env")
 
@@ -206,7 +205,7 @@ def test_req050_multi_sut(injected_petclinic_run, mini_sut_run, s3_client, bucke
         assert _s3_bytes(s3_client, bucket, f"{site_prefix}suts/{sut}/runs/{result.run_id}/_COMPLETE")
     home = _s3_bytes(s3_client, bucket, f"{site_prefix}index.html").decode()
     assert 'href="suts/petclinic/index.html"' in home and 'href="suts/mini-sut/index.html"' in home
-    assert home.count('class="kpi-item"') == 2 * 4 or home.count('class="kpi-item"') >= 8, "SUT마다 KPI 4칸"
+    assert home.count('class="kpi-item"') == 2 * 4, "SUT 2개 x KPI 4칸"
     mini_page = _s3_bytes(s3_client, bucket, f"{site_prefix}suts/mini-sut/index.html").decode()
     assert mini.run_id in mini_page and pet.run_id not in mini_page
 
