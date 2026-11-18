@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SUT 설명 파일(suts/<name>/sut.yaml)",
+  "type": "object",
+  "required": ["name", "repo", "ref", "java", "build", "jar", "classes", "sources", "packages", "runtime",
+               "port", "health", "api", "auth", "coverage", "blackbox", "tia", "sonar"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
+    "repo": {"type": "string", "minLength": 1},
+    "ref": {"type": "string", "minLength": 1},
+    "expected_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "java": {"type": "integer", "minimum": 8},
+    "build": {
+      "type": "object", "required": ["system", "cmd"], "additionalProperties": false,
+      "properties": {"system": {"enum": ["gradle", "maven"]}, "cmd": {"type": "string", "minLength": 1}}
+    },
+    "jar": {"type": "string", "minLength": 1},
+    "classes": {"type": "string", "minLength": 1},
+    "sources": {"type": "string", "minLength": 1},
+    "packages": {"type": "string", "minLength": 1},
+    "runtime": {
+      "type": "object", "required": ["profile", "db", "ddl"], "additionalProperties": false,
+      "properties": {"profile": {"type": "string"}, "db": {"type": "string"}, "ddl": {"type": "string", "minLength": 1}}
+    },
+    "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+    "health": {"type": "string", "pattern": "^/"},
+    "api": {
+      "type": "object", "required": ["include"], "additionalProperties": false,
+      "properties": {"include": {"type": "string", "minLength": 1}}
+    },
+    "auth": {
+      "type": "object",
+      "required": ["type", "login", "user_env", "pass_env", "probe", "unauthenticated_status"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {"enum": ["bearer"]},
+        "login": {"type": "string", "pattern": "^[A-Z]+ /"},
+        "user_env": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+        "pass_env": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+        "probe": {"type": "string", "pattern": "^[A-Z]+ /"},
+        "unauthenticated_status": {"enum": [401, 403]}
+      }
+    },
+    "coverage": {
+      "type": "object", "required": ["probes"], "additionalProperties": false,
+      "properties": {
+        "probes": {
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object", "required": ["test", "controller"], "additionalProperties": false,
+            "properties": {"test": {"type": "string", "pattern": "^[A-Za-z0-9_$.]+#[A-Za-z0-9_<>$]+$"},
+                           "controller": {"type": "string", "minLength": 1}}
+          }
+        }
+      }
+    },
+    "blackbox": {
+      "type": "object", "required": ["cmd", "props", "junit_xml"], "additionalProperties": false,
+      "properties": {
+        "cmd": {"type": "string", "minLength": 1},
+        "props": {"type": "object", "additionalProperties": {"type": "string"}},
+        "junit_xml": {"type": "string", "minLength": 1}
+      }
+    },
+    "tia": {
+      "type": "object", "required": ["range"], "additionalProperties": false,
+      "properties": {"range": {"type": "string", "pattern": "^\\S+\\.\\.\\S+$"}, "first_parent": {"type": "boolean"}}
+    },
+    "sonar": {
+      "type": "object", "required": ["projectKey", "cmd_build", "cmd_scan"], "additionalProperties": false,
+      "properties": {
+        "projectKey": {"type": "string", "minLength": 1},
+        "cmd_build": {"type": "string", "minLength": 1},
+        "cmd_scan": {"type": "string", "minLength": 1}
+      }
+    },
+    "compare": {
+      "type": "object", "additionalProperties": false,
+      "properties": {"focus": {"type": "string", "minLength": 1}}
+    }
+  }
+}

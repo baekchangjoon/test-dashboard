@@ -1,0 +1,11 @@
+# S01 수량 게이트의 기대값: 블랙박스 IT의 @Test 수(기준 커밋 b6f9393). JUnit XML 총 TC 수와 .exec 수가 이 값과 같아야 한다.
+blackbox:
+  total: 35
+  classes:
+    AuthApiBlackBoxIT: 4
+    ConcurrencyBlackBoxIT: 2
+    OwnerApiBlackBoxIT: 8
+    PetApiBlackBoxIT: 5
+    ReservationApiBlackBoxIT: 6
+    TokenRejectionBlackBoxIT: 5
+    VetApiBlackBoxIT: 5
