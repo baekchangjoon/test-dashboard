@@ -138,9 +138,33 @@ def evaluate(junit_dir, exec_dir, sources_dir=None, expected_file=None) -> dict:
     return result
 
 
+def summarize(junit_dir, exec_dir, sources_dir=None) -> dict:
+    """과거 커밋(S10 base)용 관대한 판정: expected-tests와 대조하지 않고 수량은 기록만 한다.
+    실행된 TC가 없거나, .exec가 하나도 없거나, aggregate.exec가 없을 때만 failed다."""
+    test_ids = junit_test_ids(junit_dir, sources_dir)
+    names = exec_names(exec_dir)
+    aggregate = any(Path(exec_dir).glob(f"{AGGREGATE_PREFIX}*.exec"))
+    missing = sorted({t for t in test_ids if exec_file_key(t) not in names})
+    result = {"tcCount": len(test_ids), "execCount": len(names), "missingExec": missing,
+              "noAttribution": [], "aggregateExec": aggregate, "status": "passed"}
+    problems = []
+    if not test_ids:
+        problems.append("JUnit XML에 실행된 TC가 없다")
+    if not names:
+        problems.append(".exec가 하나도 없다")
+    if not aggregate:
+        problems.append("aggregate.exec가 없다")
+    if problems:
+        result["status"], result["reason"] = "failed", "; ".join(problems)
+    return result
+
+
 def main(argv: list[str] | None = None) -> int:
     """`python -m td.blackbox evaluate <junit_dir> <exec_dir> [<test_sources_dir> [<expected_tests.yaml>]]`: 판정 JSON을 stdout에 낸다."""
     args = sys.argv[1:] if argv is None else argv
+    if len(args) in (3, 4) and args[0] == "summarize":
+        print(json.dumps(summarize(args[1], args[2], args[3] if len(args) > 3 else None), ensure_ascii=False))
+        return 0
     if len(args) not in (3, 4, 5) or args[0] != "evaluate":
         print("usage: td.blackbox evaluate <junit_dir> <exec_dir> [<test_sources_dir> [<expected_tests.yaml>]]", file=sys.stderr)
         return 2

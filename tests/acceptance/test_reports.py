@@ -100,3 +100,88 @@ def test_req037_sonar_export(s11_run):
     for path in site_dir.rglob("*"):
         if path.is_file() and path.suffix in {".html", ".json"}:
             assert home not in path.read_text(), path
+
+
+# --- S10 TIA(REQ-036, REQ-011) ---------------------------------------------------------------------
+import re
+import signal
+import subprocess
+import time
+
+from helpers import PETCLINIC_SRC, pid_alive, run_pids
+from td import envctl
+
+
+def _worktrees() -> str:
+    return subprocess.run(["git", "-C", str(PETCLINIC_SRC), "worktree", "list", "--porcelain"],
+                          capture_output=True, text=True).stdout
+
+
+@pytest.fixture(scope="session")
+def s10_run(real_pipeline_run):
+    """`--only S00,S10` 실제 run 1회. 실행 전후의 worktree 목록과 라벨 자원을 함께 기록한다."""
+    before_worktrees = _worktrees()
+    before = envctl.snapshot()
+    result = real_pipeline_run("S00,S10")
+    return {"result": result, "before_worktrees": before_worktrees, "leak": envctl.diff(before, envctl.snapshot())}
+
+
+def test_req036_tia_base(s10_run):
+    run = s10_run["result"]
+    assert run.returncode == 0, run.stderr[-3000:]
+    stage = run.stage("S10")
+    # M1에는 e2e 스위트가 없으므로 블랙박스만으로 끝나는 S10은 degraded다(Task 22 이후 passed).
+    assert stage["status"] == "degraded" and stage["reason"] == "e2e suites not attached", stage
+    base = stage["base"]
+    assert re.fullmatch(r"[0-9a-f]{40}", base)
+    head = run.stage("S00")["outputs"]["commit"]
+    expected = subprocess.run(["git", "-C", str(PETCLINIC_SRC), "rev-list", "--first-parent", "-n", "1", "--skip=10", head],
+                              capture_output=True, text=True, check=True).stdout.strip()
+    assert base == expected and base.startswith("c37b2e4")
+    root = run.run_dir / "S10"
+    assert (root / "tia.db").is_file() and (root / "tia.db").stat().st_size > 0
+    testwise = json.loads((root / "testwise.json").read_text())
+    assert testwise, "testwise.json이 비었다"
+    assert (root / "base-head.diff").stat().st_size > 0
+    scenarios = json.loads((root / "scenarios.json").read_text())
+    assert scenarios is not None
+    html = (root / "tia" / "tia.html").read_text()
+    assert base in html or base[:7] in html, "TIA 리포트의 commit이 base와 다르다"
+    assert stage["tcCount"] >= 1 and stage["execCount"] >= 1
+    # run 페이지가 TIA 리포트에 링크하고 게시 사본에 들어간다
+    site_dir = pages.render_run(run.run_dir, run.run_dir).parent
+    assert 'href="tia/tia.html"' in (site_dir / "index.html").read_text()
+    assert (site_dir / "tia" / "tia.html").is_file()
+    assert not (site_dir / "tia" / "base").exists() and not list(site_dir.rglob("tia.db"))
+    # 정리: worktree와 라벨 자원이 남지 않는다
+    assert not (root / "base").exists()
+    assert _worktrees() == s10_run["before_worktrees"]
+    assert s10_run["leak"].owned == [], s10_run["leak"]
+
+
+def test_req011_s10_interrupt_removes_worktree(real_pipeline_run_async):
+    """S10 base 빌드 중 SIGINT: worktree 등록과 디렉터리가 남지 않고 라벨 자원도 0이다."""
+    before_worktrees = _worktrees()
+    before = envctl.snapshot()
+    handle = real_pipeline_run_async("S00,S10")
+    try:
+        base_dir = None
+        deadline = time.time() + 900
+        while time.time() < deadline and handle.proc.poll() is None:
+            found = list(handle.work.glob("runs/*/S10/base/.git"))
+            if found:
+                base_dir = found[0].parent
+                break
+            time.sleep(1)
+        assert base_dir is not None, "S10 base worktree가 만들어지지 않았다"
+        assert str(base_dir) in _worktrees()
+        time.sleep(3)
+        handle.interrupt()
+        assert handle.wait(120), "SIGINT 후 프로세스 그룹이 남았다"
+    finally:
+        handle.kill_if_alive()
+    assert not base_dir.exists()
+    assert _worktrees() == before_worktrees
+    assert envctl.diff(before, envctl.snapshot()).owned == []
+    pids = run_pids(handle.work / "runs" / base_dir.parents[1].name)
+    assert not any(pid_alive(pid) for pid in pids.values()), pids

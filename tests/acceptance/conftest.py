@@ -279,6 +279,62 @@ def real_pipeline_run(tmp_path_factory, site_prefix):
     return run
 
 
+class AsyncRun:
+    """비동기로 띄운 실제 파이프라인 run(중단 테스트용). 새 세션이므로 프로세스 그룹에 시그널을 보낼 수 있다."""
+
+    def __init__(self, proc: subprocess.Popen, work: Path):
+        self.proc, self.work = proc, work
+
+    def interrupt(self) -> None:
+        os.killpg(self.proc.pid, signal.SIGINT)
+
+    def _group_alive(self) -> bool:
+        try:
+            os.killpg(self.proc.pid, 0)
+        except ProcessLookupError:
+            return False
+        return True
+
+    def wait(self, timeout: float) -> bool:
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if self.proc.poll() is not None and not self._group_alive():
+                return True
+            time.sleep(0.5)
+        return False
+
+    def kill_if_alive(self) -> None:
+        if self._group_alive():
+            os.killpg(self.proc.pid, signal.SIGKILL)
+        self.proc.wait(timeout=30)
+
+
+@pytest.fixture(scope="session")
+def real_pipeline_run_async(tmp_path_factory, site_prefix):
+    """real_pipeline_run의 비동기판: run을 띄우고 AsyncRun을 돌려준다(호출자가 종료까지 책임진다)."""
+    real_work = REPO_ROOT / "work"
+
+    def start(only: str, **env: str) -> AsyncRun:
+        work = tmp_path_factory.mktemp("real-run-async")
+        for shared in ("tools", "suts"):
+            (work / shared).symlink_to(real_work / shared)
+        full_env = {k: v for k, v in os.environ.items() if not k.startswith("TD_")}
+        full_env.update(TD_WORK_DIR=str(work), TD_ROOT=str(REPO_ROOT), TD_SITE_PREFIX=site_prefix, **env)
+        proc = subprocess.Popen(["bash", str(RUN_ALL), "petclinic", "--only", only], env=full_env, text=True,
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        _ASYNC_WORKS.append(work)
+        return AsyncRun(proc, work)
+
+    yield start
+    for work in _ASYNC_WORKS:
+        runs_dir = work / "runs"
+        if runs_dir.exists():
+            _SESSION_RUN_IDS.extend(p.name for p in runs_dir.iterdir() if p.is_dir())
+
+
+_ASYNC_WORKS: list[Path] = []
+
+
 @pytest.fixture(scope="session")
 def m1_run(real_pipeline_run):
     """`run-all.sh petclinic --only S00,S01`의 결과(세션 내 1회 실행해 재사용). S13을 돌리지 않으므로 게시는 없다."""
