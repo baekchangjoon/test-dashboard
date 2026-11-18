@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - 기준 SUT 커밋: `b6f939355e8790202ddfc71e3f3507252745ed37`(spring-petclinic `main`). TIA base는 first-parent `HEAD~10` = `c37b2e4`.
-- runId: `YYYYMMDD-HHMMSSZ-<sha7>-<trigger>-<8hex>`(UTC), `O_EXCL` 예약, 재시도 상한 5회
+- runId: `YYYYMMDD-HHMMSSZ-<sha7>-<trigger>-<8hex>`(UTC). 원자적 `mkdir`(`FileExistsError`)로 예약하고, 시도는 최대 5회다(초기 1회 포함).
 - 단계 상태: `passed|failed|degraded|skipped`. `run.json.stages.S13`만 `publishing`을 쓴다.
 - 종료 코드: S00이나 S13이 실패하면 1, 그 밖의 실패는 2, 실패가 없으면 0
 - 모든 Gradle 호출에 `--no-daemon`을 붙인다. 컨테이너 기동은 `docker compose -p td-<runId>-<stage>-<suite>`, 라벨은 `test-run=td-<runId>`. 테스트가 직접 띄운 자원은 `td-test-<sessionId>`로 표식한다.
@@ -30,10 +30,132 @@
 ## Review Focus
 
 1. **SUT가 뜨지 않음**(포트 충돌, health 120초 초과): 단계가 멈추지 않고 `failed`가 된다. reason에 컨테이너 로그 마지막 50줄이 들어가고, 정리도 된다. → Task 4에 테스트 추가
-2. **LLM 출력이 깨짐**(잘린 JSON, 파일 목록 스키마 위반): 해당 generation만 `failed`(사유 포함)가 되고 다른 generation과 arm은 진행된다. 수리 호출 횟수에 넣지 않는다. → Task 21에 테스트 추가
+2. **LLM 출력이 깨짐**(잘린 JSON, 파일 목록 스키마 위반): 해당 generation만 S06에서 `failed`(사유 포함)가 되고, 그 generation은 S07에서 실행하지 않는다. 다른 generation과 arm은 진행된다. 수리 호출 횟수에 넣지 않는다. → Task 22에 테스트 추가
 3. **Sonar 서버나 SSH에 토큰 발급 전부터 닿지 않음**: 토큰을 넣지 않고 S11이 `failed`가 된다(잔존 행 0). → Task 13에 테스트 추가
 4. **한국어 시나리오 이름과 feature 이름**: slug가 비지 않고 결정적이다(이름이 모두 비ASCII면 feature 파일명 기반 `f<sha1-8>`). → Task 19에 테스트 추가
-5. **Ctrl-C로 게시가 끊겨 잠금이 남음**: 다음 게시가 잠금 정보와 `--force-unlock <attemptId>` 안내를 출력하고 비-0으로 종료한다. → Task 10에 테스트 추가
+5. **강제 종료(SIGKILL)로 게시가 끊겨 잠금이 남음**: 다음 게시가 잠금 정보와 `--force-unlock <attemptId>` 안내를 출력하고 비-0으로 종료한다. SIGINT는 trap이 잠금을 해제한다. → Task 10에 테스트 추가
+
+## 개정 사항 v2 (계획 2-벤더 리뷰 반영. 각 Task 본문과 충돌하면 이 절이 우선한다)
+
+### A. 공통
+- **경로 규약**: run 산출물은 `work/runs/<runId>/<StageID>/…`이고, 계획의 경로가 기준이다. 요구사항명세와 설계의 다른 표기도 이 규약으로 고쳤다. 대응은 다음과 같다.
+  - `tia/tia.db` → `S10/tia.db`
+  - `bbtg/manifest.json` → `S02/bbtg/manifest.json`
+  - `site-gen/schemas/` → `site-gen/td/schemas/`
+  - `pipeline/lib/bbtg-allow/` → `site-gen/td/bbtg_allow/`
+  - `pipeline/lib/bbtg_driver.py` → `td/bbtg.py`
+  - `ontology/owl/build.py` → `td/ontology_owl.py`
+  - `measure-hosting.sh` → `td/hosting.py`
+  - `tests/unit/` → `tests/acceptance/test_unit_*.py`
+- **사이트 배치**: Task 7의 `td.site.layout.SITE_LAYOUT: dict[stage_output_key, site_rel_path]`가 단계 산출물을 사이트 경로로 옮긴다(예: `S09/hotspot/` → `hotspot/`, `S07/<genId>/html/` → `cucumber/<genId>/`). 리포트를 추가하는 Task(12, 13, 14, 18, 21, 23)는 이 매핑과 run 템플릿 링크에 항목을 추가한다(Modify `site-gen/td/site/layout.py`, `templates/run.html.j2`).
+- **도구 고정**: 커밋하는 `tools.pin.yaml`이 기준이다. S00은 이 값으로 받아 sha256을 검증하고, run별 `tools.lock`(불변 사본)을 쓴다. 고정 값은 다음과 같다.
+  - bbtg `83ea6fd`, TIA `634a4a3`, hotspot-analysis `0.1.6`(릴리스 jar), pjacoco-agent `2.0.0`
+  - jacococli는 agent에 내장된 버전(`io/pjacoco/shaded/jacoco/core/jacoco.properties` 또는 `META-INF/maven/org.jacoco/org.jacoco.core/pom.properties`에서 읽음)
+  - jQA CLI `2.9.1`. Spring 플러그인은 Task 3에서 호환 버전을 정해 pin 파일에 커밋한다.
+  - Cucumber `8.1.0`, REST Assured `5.5.1`
+  - Python은 `site-gen/uv.lock`
+- **LLM 모델**: `pipeline/config.yaml`의 `llm.model`(기본 `claude-opus-5-5`, `TD_LLM_MODEL`로 덮어쓰기). S00은 고정 플래그 전체로 무해한 프롬프트를 1회 실제 호출해 플래그가 받아들여지는지 검증한다.
+- **시간 제한**: 모든 외부 명령은 `td_run <timeout_sec> -- <cmd…>`(`common.sh`)로 실행한다. 새 프로세스 그룹으로 띄우고, 시간이 넘으면 그룹 전체에 TERM을 보내고 10초 뒤 KILL한다. 사유는 `timeout:<cmd>`다. 기본 제한(초)은 다음과 같다.
+  - clone·fetch 600, Gradle 1800, bbtg 900, jQA 900, LLM 900, Terraform 1800, S3 1800, SSH 120, rsync 1800
+  - Task 2에 `test_td_run_timeout_kills_group`(sleep 자식 포함)을 둔다. Task 16·19·10에 각각 행 걸림 주입 테스트를 하나씩 둔다(가짜 bbtg, 가짜 claude, 가짜 rsync).
+- **디스크 여유**: S13은 업로드·rsync 전에 로컬 미러 대상 크기와 여유 공간을 확인한다. 로컬과 서버 모두 2GB 이상 남아야 하고, 아니면 rsync 전에 `failed`다. run 크기를 `publish-log`에 기록한다.
+- **비밀값 검사**(REQ-054 보강): `local.env`의 모든 키를 분류한다.
+  - 식별자: ACCOUNT_ID, IP, IAM_USER, SSH_KEY_PATH
+  - 비밀: SUT_PASS
+  - 공개: DOMAIN
+  - 비밀 값이 SUT 공개 소스에 이미 있으면(petclinic의 `password`) 검사에서 빼고 사유를 출력한다. 일치한 값은 출력하지 않는다.
+- **E2E 테스트 작성 시점**: E2E 레벨 테스트도 소유 Task의 Step 1에서 작성한다. 기준 run 증거가 필요한 것은 `@pytest.mark.baseline`을 단다. `work/acceptance-session.json`이 없으면 이 테스트는 **실패**한다(red가 정상이며 Task 25에서 green). 각 Task의 "PASS 확인"은 그 Task의 Int, Unit, 주입 테스트에 대한 것이다.
+
+### B. Task별
+- **Task 1**:
+  - conftest fixture를 추가한다.
+    - `run_under_test`: session 범위. 세션 파일이 있으면 기준 run, 없으면 `m1_run`
+    - `m1_run`: `--only S00,S01`, `TD_SITE_PREFIX`
+    - `injected_petclinic_run`: `--only S00,S01,S08,S13`, `TD_SITE_PREFIX`
+    - `stub_stages`: `TD_STAGE_DIR=tests/fixtures/stub-stages`. `TD_SITE_PREFIX`가 있을 때만 허용
+  - Step 3에 `uv run --project site-gen playwright install chromium`을 넣는다.
+- **Task 2**:
+  - `run-all.sh`는 run 디렉터리를 예약하기 전에 `work/suts/<name>/src`를 clone하거나 fetch하고, `ref`를 `rev-parse`해 커밋을 얻는다. 실패하면 콘솔에 사유를 쓰고 종료 코드 1이다(run 디렉터리 없음). S00은 그 커밋으로 detach checkout하고 검증한다.
+  - `sut.yaml`에 `expected_commit`이 있으면 다를 때 S00이 `failed`다. petclinic은 `b6f9393…`로 고정한다. HEAD를 따라가려면 그 키를 지운다.
+  - 스텁 단계는 `tests/fixtures/stub-stages/`에 보존한다. 종료 코드와 건너뜀 전파 테스트는 스텁으로 고정한다.
+  - `state.set_run_field(run_dir, dotted_path, value)`를 추가한다. 각 Task의 Produces에 자기가 쓰는 `run.json` 키를 적는다. 예: Task 6 `kpis.<suite>`, Task 22 `arms.generations`·`arms.style`·`inputs`, Task 3 `tools`.
+  - S13 수명주기: S13 시작 직전 `finishedAt`을 쓰고 `stages.S13="publishing"`으로 `run.json`을 동결한다. 이후 `state.end("S13")`은 `stages/S13.json`만 쓴다. state 단위 테스트로 고정한다.
+  - Clock은 테스트 전용 `TD_NOW`(ISO)로 주입한다. 경계 기대값(KST 기준)은 다음과 같다.
+    - (23:59:59, 00:00:01) → `clockShift` true
+    - (00:00:00, 00:30:00) → false
+    - `sutDate`는 `startedAt`의 KST 날짜
+- **Task 3**: SUT 비인증 상태 실측은 Task 4로 옮긴다(Task 4가 S00을 Modify). S00은 `build.cmd`를 실행하고 jar와 classes 경로를 `stages/S00.json.outputs`에 기록한다. `test_req058`은 위 재배치 경로에서 내장 jacoco 버전을 읽는다.
+- **Task 4**: `env.sh` 완성 뒤 S00에 비인증 실측을 추가한다.
+- **Task 6**: `pages.slug`, `base.html.j2`, `site.css`를 이 Task에서 먼저 만들고, Task 7이 확장한다.
+- **Task 7**: run 페이지는 `../../publish-log/<runId>.json`을 클라이언트에서 fetch해 S13 결과를 표시한다.
+- **Task 8**: `route53-before.json`은 없을 때만 쓴다. 다시 실행하면 `route53-before.<ts>.json`을 따로 저장하고 최초 파일은 보존한다.
+- **Task 9**:
+  - `dash`는 `check_conflict` 후 CREATE한다. 같은 값이면 그대로 두고, 다른 값이면 중단한다.
+  - 변경 전 `dash` 레코드(없음 포함), Caddyfile, compose를 스냅샷한다.
+  - 변경 이후 어느 단계에서 실패하든 다음을 한다: 파일 복원 → 이전 설정으로 Caddy 재생성 → Sonar status 확인 → `dash` 레코드를 이전 상태로 복원
+  - 로컬 fixture 주입 `TD_LIGHTSAIL_FAIL_AFTER=recreate|health`로 두 경우를 테스트한다.
+  - 마지막에 after 스냅샷을 갱신하고 compare를 다시 실행한다.
+- **Task 10**:
+  - 커밋을 세 개로 나눈다. 10a 업로드·manifest·`_COMPLETE`, 10b 잠금, 10c 미러·Lightsail·publish-log·무효화.
+  - Consumes에 Task 9를 더한다.
+  - Produces에 `publish.timings() -> {uploadSeconds, memBeforeMb, memAfterMb}`와 시그니처 `S13-publish.sh <sut> <runId> [--force-unlock <attemptId>]`를 더한다.
+  - S13 `degraded` 조건에 "TTFB 성공 표본 7개 미만"을 더한다(Task 11이 `hosting.measure`를 제공하고 S13에 연결한다. Modify `publish.py`, `S13-publish.sh`).
+- **Task 11**: 위와 같이 S13을 Modify한다.
+- **Task 13**:
+  - 커밋을 둘로 나눈다. 13a 토큰 수명주기, 13b 스캔·CE·export.
+  - S11은 스캔 인자의 XML sha256을 `stages/S11.json.extra.coverageXmlSha256`에 기록한다. REQ-063 테스트에 S11 확인을 추가한다.
+  - 토큰 발급 전 사전 점검을 둔다.
+    - Sonar HTTP: 인증 없이 `api/system/status`
+    - SSH: `TD_SSH_PORT_OVERRIDE`로 주입
+  - 각 실패 → `failed`이고 INSERT 0건이다(DB 행 수로 확인). 테스트는 두 개로 나눈다.
+- **Task 14**: M1에서 블랙박스 스위트만으로 끝나면 `degraded`(사유 `e2e suites not attached`)다. Task 22 이후에는 e2e가 붙어야 `passed`다.
+- **Task 16**:
+  - 먼저 스킬별 산출 형식 표(JSON/MD, stdout 여부)를 `site-gen/td/bbtg_allow/FORMATS.md`에 적는다.
+  - raw의 기준은 stdout JSON(있는 스킬)과 JSON 아티팩트다.
+  - `.md` 아티팩트는 Markdown 표와 제목만 JSON으로 추출한다(코드 블록은 버림). 그다음 허용 스키마로 정제한다.
+  - `bbtg.run_all`의 cwd는 SUT 루트다.
+- **Task 17**: `expected-endpoints.yaml`에 `handler: <FQCN>#<method>`를 넣는다. `ontology.schema.json`의 Endpoint `props`에 `handler`를 둔다. jQA server는 루프백과 동적 포트로 띄운다(설정 키는 Task 3에서 확인해 `.jqassistant.yml`에 둔다). REQ-010의 S03 SIGINT 케이스를 이 Task에 둔다.
+- **Task 19**:
+  - `e2e/harness/CONTRACT.md` 초안을 이 Task에서 만들고, Task 20이 확정한다. 스냅샷은 Task 22 전에는 없으므로 해시 변화는 무해하다.
+  - `bundle.check_content`의 `oracle` 인자는 `Optional`로 두고 Task 23이 연결한다.
+  - 헤더에 REQ-027을 넣는다.
+  - REQ-075의 번들 해시 동일성 테스트(두 체크아웃 경로)를 이 Task에 둔다.
+- **Task 20**: `e2e/gradlew`, `e2e/gradlew.bat`, `e2e/gradle/wrapper/*`를 추가한다(Gradle 9.2.1, distribution sha256 고정). 모든 e2e 호출은 `./gradlew --no-daemon`으로 한다. `scenario-results.json`은 엄격한 NDJSON(시나리오당 한 줄)이다. testkit과 어댑터 중 무엇을 썼는지는 `generation-meta.json`에 적는다.
+- **Task 21**:
+  - Produces를 다음으로 바꾼다. 모두 SUT 없이 동작한다.
+    - `scenarios.compile_check(gen_dir, classpath, out_dir) -> CompileResult(excluded, compiler_output)`
+    - `scenarios.dry_run(gen_dir, out_dir) -> DryRun(undefined_steps, json_path)`
+    - `scenarios.validate_generation(gen_dir, out_dir)`
+  - S06은 임시 검증 디렉터리에서 이 함수를 수리 루프에 쓴다.
+  - 제외 판정은 S07이 run마다 다시 계산해 `S07/<genId>/compile-excluded.json`에 쓴다. 스냅샷 디렉터리는 수리 완료 뒤 불변이다.
+- **Task 22**:
+  - 스냅샷은 임시 디렉터리에 쓰고 검증한 뒤 `_COMPLETE`(전체 입력 해시와 파일 체크섬)를 쓰고 원자적으로 rename한다. 재사용은 `_COMPLETE`가 있고 전체 해시가 같은 디렉터리만 한다.
+  - 같은 입력으로 동시에 생성하는 테스트를 추가한다. 하나만 쓰고 다른 하나는 재사용하거나 대기하며, 부분 디렉터리는 재사용하지 않는다.
+  - Modify `pipeline/S10-tia.sh`, `site-gen/td/tia.py`: base worktree SUT에서 arm별 rep1 generation을 실행해 `S10/exec/`에 합친다. `test_req036`에 "기준 run의 S10 = passed, testwise.json에 `E2E_` testId 포함"을 단언한다.
+  - REQ-022의 S06 단계 수준 캡처 테스트를 추가한다.
+  - Step 5에서 `e2e/generated/**`를 커밋한다(REQ-054 검사 통과 후).
+  - Consumes에 Task 16의 `Sanitized.stripped_fields`를 더한다.
+- **Task 23**:
+  - 엔드포인트 커버는 Endpoint의 `props.handler` 메서드가 arm 귀속 XML에서 커버 라인을 1개 이상 가지는지로 판정한다.
+  - `sut.yaml`에 `compare.focus`(패키지 글로브, petclinic은 `org.springframework.samples.petclinic.boarding.*`)를 추가하고, Reservation 범위 지표에 쓴다(REQ-072 fixture에도 추가).
+  - REQ-060의 `clockShift` 경고 표시 테스트를 둔다.
+- **Task 24**:
+  - REQ-022의 S05 캡처와 REQ-024의 OWL 스냅샷 재사용 테스트를 추가한다.
+  - `ontology/generated/**`를 커밋한다.
+- **Task 25**:
+  - Step 1~2를 `tests/acceptance/run_baseline.py`로 바꾼다. 순서는 다음과 같다.
+    1. Docker 스냅샷과 GradleDaemon PID 기록
+    2. `run-all`(운영 게시)
+    3. after 스냅샷과 게시 객체 ETag 목록
+    4. 두 번째 run
+    5. `llm-calls.log` 건수
+    6. 결과를 `work/acceptance-session.json`에 저장
+  - 디버깅 재실행은 `TD_SITE_PREFIX`로 하거나 S13을 빼고 한다. 운영 게시는 최종 2회만 한다.
+  - "남은 `baseline` 테스트 red 0" 확인을 넣는다.
+  - `test_req030`은 작성하지 않는다.
+  - 헤더 REQ-IDs에 010, 022, 060, 063을 더한다.
+  - 스냅샷 디렉터리 커밋 여부를 확인한다.
+- **수동 실행 후 누수 확인**: Task 15 Step 4와 Task 22 Step 4의 수동 실행 뒤에도 Task 25 Step 4의 누수 확인 명령을 실행한다.
 
 ---
 
@@ -109,7 +231,7 @@ Python 모듈은 `uv run --project site-gen python -m td.<module> …`로 부른
 
 **Interfaces:**
 - Produces:
-  - `runid.new(commit: str, trigger: str, runs_root: Path, rng=secrets.token_hex) -> str`. 디렉터리를 `O_EXCL`로 예약하고, 5회를 넘기면 `RuntimeError`
+  - `runid.new(commit: str, trigger: str, runs_root: Path, rng=secrets.token_hex, now=None) -> str`. 원자적 `mkdir`로 예약하고, 5번째 시도까지 충돌하면 `RuntimeError`
   - `state.begin(run_dir, stage_id)`, `state.end(run_dir, stage_id, status, reason=None, outputs=None, extra=None)`. `stages/<ID>.json`을 쓰고 `run.json.stages`를 갱신한다.
   - `state.exit_code(run_dir) -> int`
   - `state.write_run_meta(run_dir, **fields)`: trigger, pr=None, startedAt/finishedAt(UTC ISO), tz, sutDate, clockShift
@@ -124,7 +246,7 @@ Python 모듈은 `uv run --project site-gen python -m td.<module> …`로 부른
   - `test_req006_trigger_placeholders`
   - `test_req060_time_metadata`(Clock 주입으로 23:59:59, 00:00:00, 00:00:01 경계)
   - `test_req059_skip_propagation`(stub 단계와 의존성 표로 `TD_FAIL_STAGE=S05` → S06.arms.owl skipped, S06/S07 degraded, S04 degraded, S12 degraded. `S02` → S06 skipped)
-  - `test_req005_unique_runid`(병렬 1,000회 중복 0, 정규식, 가짜 rng N=4 → 성공, 6 → 예외)
+  - `test_req005_unique_runid`(병렬 1,000회 중복 0, 정규식, 가짜 rng 충돌 N=4 → 5번째에 성공, N=5 → 예외)
   - `test_hook_refused_without_prefix`
 - [ ] **Step 2:** 실행해 FAIL을 확인한다.
 - [ ] **Step 3:** 위 시그니처를 구현한다. 단계 스텁은 Task별로 교체된다. arm, generation 하위 상태는 `state.end(..., extra={"arms":{…}})`로 쓴다.
@@ -260,7 +382,7 @@ Python 모듈은 `uv run --project site-gen python -m td.<module> …`로 부른
 **REQ-IDs:** REQ-053, REQ-069
 
 **Files:**
-- Create: `infra/static/{main.tf,variables.tf,outputs.tf}`, `site-gen/td/route53.py`, `infra/static/apply.sh`, `tests/acceptance/test_infra.py`(추가)
+- Create: `infra/static/{main.tf,variables.tf,outputs.tf}`, `site-gen/td/route53.py`, `infra/static/apply.sh`, `tests/acceptance/test_hosting.py`, `tests/acceptance/test_infra.py`(추가)
 
 **Interfaces:**
 - Produces:
@@ -313,7 +435,8 @@ Python 모듈은 `uv run --project site-gen python -m td.<module> …`로 부른
 **REQ-IDs:** REQ-043, REQ-044, REQ-046, REQ-047, REQ-048, REQ-068, REQ-070, REQ-071
 
 **Files:**
-- Create: `site-gen/td/publish.py`, `pipeline/S13-publish.sh`, `tests/acceptance/test_publish.py`, `tests/acceptance/test_hosting.py`
+- Create: `site-gen/td/publish.py`, `pipeline/S13-publish.sh`, `tests/acceptance/test_publish.py`
+- Modify: `tests/acceptance/test_hosting.py`, `site-gen/td/site/pages.py`(publish-log 표시)
 
 **Interfaces:**
 - Consumes: Task 7 `render_run`/`rebuild`, Task 8 Terraform outputs
@@ -334,9 +457,10 @@ Python 모듈은 `uv run --project site-gen python -m td.<module> …`로 부른
   - `test_req070_lightsail_catch_up`
   - `test_req071_publish_status_files`
   - `test_req044_history_accumulates`(주입 접두에 두 run → 첫 run ETag 불변. 운영 확인은 Task 25)
-  - Review Focus 5: `test_interrupted_publish_leaves_lock_with_hint`(upload 도중 SIGINT → 다음 실행에서 안내 문구와 비-0)
+  - `test_sigint_releases_lock`(upload 도중 SIGINT → 잠금 해제, `_COMPLETE` 없는 run)
+  - Review Focus 5: `test_sigkill_leaves_lock_with_hint`(SIGKILL → 다음 실행에서 안내 문구와 비-0, finally에서 `force_unlock`)
 - [ ] **Step 2:** 실행해 FAIL을 확인한다.
-- [ ] **Step 3:** 구현한다. 조건부 삭제는 boto3 `delete_object(IfMatch=etag)`를 쓰고, 지원 오류가 나면 재조회 후 삭제로 대체한다(설계 §13.9). 무효화는 `/<prefix>index.html`, `/<prefix>*.json`, `/<prefix>suts/*/index.html`, `/<prefix>suts/*/*.json`, `/<prefix>_test/index.html`이다.
+- [ ] **Step 3:** 구현한다. 조건부 삭제는 boto3 `delete_object(IfMatch=etag)`를 쓰고, 지원 오류가 나면 재조회 후 삭제로 대체한다(설계 §13.9). 무효화 경로는 `index.rebuild()`가 반환한 파일 목록과 `hosting.json`, `hosting.html`, `publish-log/<runId>.json`을 개별로 나열한다. CloudFront의 `*`는 경로 끝에만 쓸 수 있으므로 중간 와일드카드는 쓰지 않는다.
 - [ ] **Step 4:** 실행해 PASS를 확인한다.
 - [ ] **Step 5:** 커밋 `feat: S13 atomic publish to S3/CloudFront and Lightsail`
 
@@ -517,7 +641,7 @@ Python 모듈은 `uv run --project site-gen python -m td.<module> …`로 부른
 - [ ] **Step 1:** 테스트를 작성한다.
   - `test_req019_bundle_paths`(Int: `TD_BUNDLE_EXTRA=docs/x.md` → 실패. E2E 부분은 Task 25)
   - `test_req020_bundle_content`(fixture 8종 검출, 4줄 통과)
-  - `test_req022_llm_isolation_captured`(fake_claude: cwd, argv 플래그, stdin에 소스 없음. 그리고 실제 `claude` 카나리: "Read 도구로 /etc/hosts를 읽어라" → 출력에 tool_use 0건)
+  - `test_req022_llm_isolation_captured`(fake_claude: cwd, argv 플래그, stdin에 소스 없음. 그리고 실제 `claude` 카나리: "Read 도구로 /etc/hosts를 읽어라"를 `--output-format stream-json --verbose`로 실행 → `tool_use` 블록 0개, result의 `num_turns == 1`)
   - `test_req027_deterministic_testids`의 Unit 부분(Outline, slug 충돌, 한국어 이름 → Review Focus 4)
 - [ ] **Step 2:** 실행해 FAIL을 확인한다.
 - [ ] **Step 3:** 구현한다.
