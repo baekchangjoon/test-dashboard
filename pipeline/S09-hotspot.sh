@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # S09 hotspot: hotspot-analysis(jar, JDK 21)로 파일/메서드/API 핫스팟 리포트를 만든다.
 # 입력: S00(tools, SUT jar/classes), S08/merged/aggregate.xml(선택 — 없으면 커버리지 배수 없이 degraded).
-# 산출물: S09/hotspot/{hotspots.html,api_report.html,hotspot.yml,...}, S09/top10.json (단계 JSON의 top10에도 복사)
+# 산출물: S09/hotspot/{hotspots.html,api_report.html,hotspot.config.yml,...}, S09/top10.json (단계 JSON의 top10에도 복사)
 # 사용: S09-hotspot.sh <sut> <runId>
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/common.sh"
 

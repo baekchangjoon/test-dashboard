@@ -59,3 +59,18 @@ def test_top10_falls_back_to_files_and_caps_ten(tmp_path):
 def test_top10_empty_is_empty_list(tmp_path):
     (tmp_path / "hotspots.yml").write_text(yaml.safe_dump({"fileHotspots": [], "methodHotspots": []}))
     assert hotspot.top10(tmp_path / "hotspots.yml") == []
+
+
+def test_render_is_valid_yaml_for_awkward_paths(tmp_path):
+    config = _render(tmp_path, target=tmp_path / "a: b #c" / "src")
+    assert config["analysis"]["target"]["path"] == str(tmp_path / "a: b #c" / "src")
+
+
+def test_xml_problem_cases(tmp_path):
+    assert hotspot.xml_problem(None) and hotspot.xml_problem(tmp_path / "none.xml")
+    (tmp_path / "bad.xml").write_text("<report")
+    assert "파싱" in hotspot.xml_problem(tmp_path / "bad.xml")
+    (tmp_path / "empty.xml").write_text('<report name="x"></report>')
+    assert "비어" in hotspot.xml_problem(tmp_path / "empty.xml")
+    (tmp_path / "ok.xml").write_text('<report name="x"><package name="p"/></report>')
+    assert hotspot.xml_problem(tmp_path / "ok.xml") is None

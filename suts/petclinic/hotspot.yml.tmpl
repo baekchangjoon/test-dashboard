@@ -1,10 +1,10 @@
-# hotspot-analysis 설정 템플릿. td.hotspot.render_config가 ${...}를 채운다.
-# 상대 경로는 실행 디렉터리(cwd) 기준으로 해석되므로 모든 경로를 절대 경로로 채운다.
-# JACOCO_LINE 자리: S08 병합 XML이 있으면 jacocoReportPath 줄이 들어가고, 없으면 줄 전체가 빠진다.
+# hotspot-analysis 설정 템플릿(유효한 YAML). td.hotspot.render_config가 "${NAME}" 값을 채우고 yaml.safe_dump로 쓴다.
+# 상대 경로는 실행 디렉터리(cwd) 기준으로 해석되므로 경로 값은 모두 절대 경로로 채운다.
+# "${CLASSPATH_DIRS}" 항목은 디렉터리 목록으로 펼쳐지고, "${JACOCO_XML}" 값은 S08 병합 XML이 없으면 키째 빠진다.
 analysis:
   target:
     type: local-git
-    path: ${TARGET_PATH}
+    path: "${TARGET_PATH}"
   window:
     since: "${SINCE}"
     until: "${UNTIL}"
@@ -22,10 +22,10 @@ analysis:
     enabled: true
     sharedComponentMode: BOTH
     classpathDirectories:
-${CLASSPATH_LINES}
-${JACOCO_LINE}
+      - "${CLASSPATH_DIRS}"
+  jacocoReportPath: "${JACOCO_XML}"
 output:
   formats: [csv, yaml, md, html]
   apiLayout: BOTH
-  path: ${OUTPUT_PATH}
+  path: "${OUTPUT_PATH}"
   topN: 50

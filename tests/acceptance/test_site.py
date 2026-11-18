@@ -137,3 +137,41 @@ def test_run_page_renders_s13_row_as_publishing_before_fetch(tmp_path):
     html = (run_dir / "site/index.html").read_text()
     row = [line for line in html.splitlines() if 'data-stage="S13"' in line][0]
     assert "publishing" in row
+
+
+def test_sanitize_replaces_run_repo_and_home_paths(tmp_path, monkeypatch):
+    home = tmp_path / "home" / "me"
+    repo = home / "repo"
+    run_dir = repo / "work" / "runs" / "r1"
+    out = tmp_path / "out"
+    out.mkdir()
+    (home).mkdir(parents=True)
+    monkeypatch.setattr(pages.Path, "home", classmethod(lambda cls: home))
+    (out / "a.html").write_text(f"<p>{run_dir}/S09 {repo}/suts {home}/.cache</p>")
+    (out / "b.yml").write_text(f"path: {run_dir}\n")
+    (out / "c.bin").write_bytes(f"{home}".encode())
+    changed = pages.sanitize_site(out, run_dir, repo_root=repo)
+    assert (out / "a.html").read_text() == "<p><run>/S09 <repo>/suts ~/.cache</p>"
+    assert (out / "b.yml").read_text() == "path: <run>\n"
+    assert (out / "c.bin").read_bytes() == str(home).encode()  # 바이너리는 그대로
+    assert {p.name for p in changed} == {"a.html", "b.yml"}
+
+
+def test_sanitize_gate_raises_on_residual_home_path(tmp_path, monkeypatch):
+    home = tmp_path / "home" / "me"
+    out = tmp_path / "out"
+    out.mkdir()
+    home.mkdir(parents=True)
+    monkeypatch.setattr(pages.Path, "home", classmethod(lambda cls: home))
+    (out / "ok.txt").write_text("clean")
+    pages.check_no_home(out)
+    (out / "y.txt").write_text(f"see {home}")
+    with pytest.raises(pages.SanitizeError):
+        pages.check_no_home(out)
+
+
+def test_render_run_ignores_outputs_of_failed_stage(tmp_path):
+    run_dir = make_site_run(tmp_path, "petclinic", R2, coverage_dir=True, stages={"S00": "passed", "S08": "failed"})
+    out = pages.render_run(run_dir, run_dir).parent
+    assert not (out / "coverage").exists()
+    assert "coverage/coverage.html" not in (out / "index.html").read_text()
