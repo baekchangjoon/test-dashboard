@@ -233,9 +233,33 @@ def sut_env(tmp_path, session_id, request):
 
 
 # --- 이후 Task가 채우는 fixture ----------------------------------------------------------
+# --- 실제 파이프라인 run(Task 5) ---------------------------------------------------------------
 @pytest.fixture(scope="session")
-def m1_run():
-    pytest.fail("requires Task 5 (run-all.sh --only S00,S01 실행 helper)", pytrace=False)
+def real_pipeline_run(tmp_path_factory, site_prefix):
+    """real_pipeline_run("S00,S01", **env) -> RunResult. 호출마다 run 디렉터리용 work를 새로 만들고
+    tools·suts는 실제 work 캐시를 공유한다. TD_SITE_PREFIX를 항상 주므로 S13이 없어도 게시는 일어나지 않는다."""
+    real_work = REPO_ROOT / "work"
+    counter = {"n": 0}
+
+    def run(only: str, **env: str) -> "RunResult":
+        counter["n"] += 1
+        work = tmp_path_factory.mktemp(f"real-run{counter['n']}")
+        for shared in ("tools", "suts"):
+            (real_work / shared).mkdir(parents=True, exist_ok=True)
+            (work / shared).symlink_to(real_work / shared)
+        full_env = {k: v for k, v in os.environ.items() if not k.startswith("TD_")}
+        full_env.update(TD_WORK_DIR=str(work), TD_ROOT=str(REPO_ROOT), TD_SITE_PREFIX=site_prefix, **env)
+        done = subprocess.run(["bash", str(RUN_ALL), "petclinic", "--only", only],
+                              capture_output=True, text=True, env=full_env, timeout=3300)
+        return RunResult(done.returncode, done.stdout, done.stderr, work)
+
+    return run
+
+
+@pytest.fixture(scope="session")
+def m1_run(real_pipeline_run):
+    """`run-all.sh petclinic --only S00,S01`의 결과(세션 내 1회 실행해 재사용). S13을 돌리지 않으므로 게시는 없다."""
+    return real_pipeline_run("S00,S01")
 
 
 @pytest.fixture(scope="session")
