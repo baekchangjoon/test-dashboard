@@ -33,7 +33,8 @@ if [[ -n "$LOCAL_DIR" ]]; then
   cp "$STACK_DIR/docker-compose.yml" "$SCRATCH/docker-compose.yml.cur"
   SERVER_ENV=(STACK_DIR="$STACK_DIR" DASH_DIR="$DASH_DIR" SONAR_URL="$SONAR_URL" SONAR_HOST="$SONAR_HOST"
               DASH_URL="$DASH_URL" DASH_HOST="$DASH_HOST" COMPOSE_PROJECT="$COMPOSE_PROJECT"
-              TEST_LABEL="$TD_TEST_LABEL" FAIL_AFTER="${TD_LIGHTSAIL_FAIL_AFTER:-}")
+              TEST_LABEL="$TD_TEST_LABEL" FAIL_AFTER="${TD_LIGHTSAIL_FAIL_AFTER:-}"
+              WAIT_SECONDS="${TD_LIGHTSAIL_WAIT_SECONDS:-120}")
   remote_stage() { td_run 600 -- env "${SERVER_ENV[@]}" bash "$HERE/server-apply.sh"; }
   put_files() { cp "$SCRATCH/Caddyfile.new" "$STACK_DIR/Caddyfile.td-new"; cp "$SCRATCH/docker-compose.yml.new" "$STACK_DIR/docker-compose.yml.td-new"; }
 else
@@ -77,16 +78,25 @@ if [[ -z "$LOCAL_DIR" ]]; then
   fi
 fi
 
-rollback_dns() {
+rollback_dns() {  # 우리가 만든 레코드만 지운다(이미 있던 같은 값 레코드는 건드리지 않는다)
   if [[ "$DNS_CREATED" == 1 ]]; then
     td_log "dash 레코드를 이전 상태(없음)로 복원"
     td_py -m td.route53 delete-a "$ZONE_ID" "dash.$TD_DOMAIN." "$TD_LIGHTSAIL_IP" || td_log "경고: dash 레코드 삭제 실패(수동 확인 필요)"
   fi
 }
 
-# 3. 서버 단계(변경 이후 실패 복원은 server-apply.sh가 담당, DNS 복원은 여기서)
+# 3. 서버 단계(변경 이후 실패·시그널 복원은 server-apply.sh의 trap이 담당, DNS 복원은 여기서)
+# 서버 단계는 백그라운드로 돌리고 HUP/INT/TERM을 그쪽으로 넘겨, 중단돼도 서버 쪽 trap이 복원하게 한다.
 rc=0
-{ put_files && remote_stage; } || rc=$?
+put_files || rc=$?
+if (( rc == 0 )); then
+  remote_stage &
+  STAGE_PID=$!
+  trap 'kill -TERM "$STAGE_PID" 2>/dev/null' HUP INT TERM
+  wait "$STAGE_PID" || rc=$?
+  if (( rc > 128 )); then rc=0; wait "$STAGE_PID" || rc=$?; fi  # 시그널로 깨어났으면 실제 종료까지 기다린다
+  trap - HUP INT TERM
+fi
 if (( rc != 0 )); then
   td_log "서버 단계 실패(rc=$rc)"
   rollback_dns

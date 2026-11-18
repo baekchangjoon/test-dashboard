@@ -126,3 +126,52 @@ def make_site_run(site_base: Path, sut: str, run_id: str, *, complete: bool = Tr
     if complete:
         (run_dir / "_COMPLETE").write_text("")
     return run_dir
+
+
+# --- 방금 만든 DNS 이름 접근(로컬 리졸버의 NXDOMAIN 음성 캐시 우회) -------------------------
+import http.client
+import socket
+import ssl
+
+
+def resolve_authoritative(host: str, zone_id: str) -> str:
+    """Route53 권한 응답에서 A 레코드를 얻는다."""
+    import boto3
+    answer = boto3.client("route53").test_dns_answer(HostedZoneId=zone_id, RecordName=host, RecordType="A")
+    ips = [value for value in answer["RecordData"] if value[:1].isdigit()]
+    assert ips, f"{host}의 A 응답이 없다: {answer['ResponseCode']}"
+    return ips[0]
+
+
+class PinnedHTTPSConnection(http.client.HTTPSConnection):
+    """TLS 검증과 SNI는 호스트 이름으로 하되 연결은 지정한 IP로 한다."""
+
+    def __init__(self, host, ip, **kwargs):
+        super().__init__(host, **kwargs)
+        self._ip = ip
+
+    def connect(self):
+        sock = socket.create_connection((self._ip, self.port), self.timeout)
+        self.sock = ssl.create_default_context().wrap_socket(sock, server_hostname=self.host)
+
+
+def https_get(host: str, domain: str, path: str = "/", timeout: int = 30) -> tuple[int, bytes]:
+    """getaddrinfo가 되면 그대로, gaierror면 Route53 권한 응답 IP로 고정해 GET한다(TLS 검증은 호스트 이름 기준)."""
+    from td import route53
+    try:
+        socket.getaddrinfo(host, 443)
+        ip = None
+    except socket.gaierror:
+        ip = resolve_authoritative(host, route53.find_zone_id(domain))
+    if ip is None:
+        import urllib.error
+        import urllib.request
+        try:
+            with urllib.request.urlopen(f"https://{host}{path}", timeout=timeout) as response:
+                return response.status, response.read()
+        except urllib.error.HTTPError as error:
+            return error.code, b""
+    connection = PinnedHTTPSConnection(host, ip, timeout=timeout)
+    connection.request("GET", path)
+    response = connection.getresponse()
+    return response.status, response.read()

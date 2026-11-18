@@ -2,10 +2,7 @@
 
 Task 10이 게시 후 검사(REQ 추가)를 이 파일에 덧붙인다.
 """
-import http.client
 import json
-import socket
-import ssl
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -16,12 +13,15 @@ from botocore.stub import Stubber
 
 from td import route53
 
+import helpers
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 INFRA_WORK = REPO_ROOT / "work" / "infra"
 
 
-def _allow(domain: str) -> list[str]:
-    return [f"reports.{domain}.", f"_*.reports.{domain}."]
+def _allow(domain: str) -> list[tuple[str, str]]:
+    return [(f"reports.{domain}.", "A"), (f"reports.{domain}.", "AAAA"),
+            (f"_*.reports.{domain}.", "CNAME"), (f"dash.{domain}.", "A")]
 
 
 def _zone_id(local_env) -> str:
@@ -92,36 +92,6 @@ def test_req069_s3_direct_forbidden(local_env):
     assert status == 403
 
 
-def _resolve_authoritative(host: str, zone_id: str) -> str:
-    """Route53 권한 응답에서 A 레코드를 얻는다(로컬 리졸버의 NXDOMAIN 음성 캐시를 우회)."""
-    answer = boto3.client("route53").test_dns_answer(HostedZoneId=zone_id, RecordName=host, RecordType="A")
-    ips = [value for value in answer["RecordData"] if value[:1].isdigit()]
-    assert ips, f"{host}의 A 응답이 없다: {answer['ResponseCode']}"
-    return ips[0]
-
-
-class _PinnedHTTPSConnection(http.client.HTTPSConnection):
-    """TLS 검증과 SNI는 호스트 이름으로 하되 연결은 지정한 IP로 한다."""
-
-    def __init__(self, host, ip, **kwargs):
-        super().__init__(host, **kwargs)
-        self._ip = ip
-
-    def connect(self):
-        sock = socket.create_connection((self._ip, self.port), self.timeout)
-        self.sock = ssl.create_default_context().wrap_socket(sock, server_hostname=self.host)
-
-
 def test_hosting_reports_domain_serves_https(local_env):
-    host = f"reports.{local_env['TD_DOMAIN']}"
-    try:
-        socket.getaddrinfo(host, 443)
-        ip = None
-    except socket.gaierror:  # 방금 만든 이름이면 로컬 리졸버가 NXDOMAIN을 캐시했을 수 있다
-        ip = _resolve_authoritative(host, _zone_id(local_env))
-    if ip is None:
-        assert _get_status(f"https://{host}/") == 200
-        return
-    connection = _PinnedHTTPSConnection(host, ip, timeout=30)
-    connection.request("GET", "/")
-    assert connection.getresponse().status == 200
+    status, _ = helpers.https_get(f"reports.{local_env['TD_DOMAIN']}", local_env["TD_DOMAIN"])
+    assert status == 200
