@@ -11,7 +11,8 @@
     "analysis_meta.timestamp",
     "analysis_meta.scan_duration_ms",
     "test_env.database.username",
-    "test_env.database.password"
+    "test_env.database.password",
+    "test_env.database.url"
   ],
   "properties": {
     "skill": {
@@ -239,9 +240,6 @@
                     "properties": {
                       "driver_class_name": {
                         "type": "null"
-                      },
-                      "url": {
-                        "type": "string"
                       }
                     },
                     "additionalProperties": false

@@ -68,6 +68,7 @@ class BbtgConfig:
 class Sanitized:
     stripped_fields: list[str] = field(default_factory=list)
     removed_counts: dict[str, int] = field(default_factory=dict)
+    forbidden_declared: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     written: list[str] = field(default_factory=list)
 
@@ -146,7 +147,9 @@ def run_all(src, out_dir, cfg: BbtgConfig) -> Manifest:
     shutil.rmtree(src / BBTG_DIRNAME, ignore_errors=True)  # 이전 실행의 잔재가 산출물에 섞이지 않게 한다
     calls: list[dict] = []
     skipped: list[dict] = []
-    env = {**os.environ, "PYTHONHASHSEED": "0", "PYTHONDONTWRITEBYTECODE": "1"}
+    # 자식(bbtg)에는 필요한 최소 환경만 준다(TD_*, 토큰, 자격 증명 변수를 넘기지 않는다).
+    env = {key: os.environ[key] for key in ("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR") if key in os.environ}
+    env.update(PYTHONHASHSEED="0", PYTHONDONTWRITEBYTECODE="1")
     python_bin = str(Path(cfg.python_bin).absolute())  # resolve()는 venv 심볼릭 링크를 풀어 venv를 잃는다
 
     def call(skill: str, call_id: str, key: str, args: list[str]) -> dict:
@@ -163,7 +166,7 @@ def run_all(src, out_dir, cfg: BbtgConfig) -> Manifest:
         if rc == proc.TIMEOUT_EXIT:
             record["reason"] = f"timeout:{skill} (>{cfg.timeout:g}s)"
         elif rc != 0:
-            record["reason"] = f"exit {rc}: " + _tail(stderr_path)
+            record["reason"] = f"exit {rc}: see raw/logs/{call_id}.stderr.txt"  # stderr 본문은 절대 경로·비밀이 섞일 수 있어 옮기지 않는다
         parsed = _parse_first_json(stdout_path.read_text(encoding="utf-8", errors="replace"))
         if parsed is not None:
             json_path = raw_dir / "stdout" / f"{call_id}.json"
@@ -220,17 +223,12 @@ def run_all(src, out_dir, cfg: BbtgConfig) -> Manifest:
         "status": status, "reason": reason, "calls": calls, "skipped": skipped,
         "controllers": controllers,
         "summary": {"total": len(calls), "failed": len(failed), "bySkill": dict(Counter(c["skill"] for c in calls))},
-        "sanitize": {"strippedFields": sanitized.stripped_fields, "removedCounts": sanitized.removed_counts,
+        "sanitize": {"strippedFields": sanitized.stripped_fields, "forbiddenDeclared": sanitized.forbidden_declared, "removedCounts": sanitized.removed_counts,
                      "errors": sanitized.errors, "written": sanitized.written},
     }
     (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
                                            encoding="utf-8")
     return Manifest(manifest)
-
-
-def _tail(path: Path, limit: int = 300) -> str:
-    text = path.read_text(encoding="utf-8", errors="replace").strip()
-    return re.sub(r"\s+", " ", text[-limit:])
 
 
 # --- Markdown -> JSON ---------------------------------------------------------------------------
@@ -333,16 +331,15 @@ def _load_raw(raw_dir: Path, record: dict, kind: str):
 
 
 def _relativize(value, roots: list[str]):
+    """SUT 루트(경로 경계에서만)를 걷어낸다: `<root>/x` -> `x`, `<root>` -> `.`. `<root>foo` 같은 접두 일치는 건드리지 않는다."""
     if isinstance(value, dict):
         return {key: _relativize(child, roots) for key, child in value.items()}
     if isinstance(value, list):
         return [_relativize(child, roots) for child in value]
     if isinstance(value, str):
         for root in roots:
-            if value == root:
-                return "."
-            value = value.replace(root + "/", "")
-            value = value.replace(root, ".")
+            pattern = re.compile(r"(?<![\w.\-/])" + re.escape(root) + r"(/|(?![\w.\-]))")
+            value = pattern.sub(lambda m: "" if m.group(1) == "/" else ".", value)
         return value
     return value
 
@@ -368,12 +365,103 @@ def _roots(sut_root: Path) -> list[str]:
     return sorted(candidates, key=len, reverse=True)
 
 
+# --- 정제 관문(fail closed) ---------------------------------------------------------------------
+EXPRESSION_CHARS = set("(){};=<>!&|+*\"'")
+A1_MIN_LENGTH = 12
+PATH_SHAPE_RE = re.compile(r"^/[\w\-./{}*?&=%:,]+$")  # HTTP 경로(질의 문자열 포함)는 식별자다
+TYPE_SHAPE_RE = re.compile(r"^[\w.$<>\[\],? ]+$")
+# user=/username=은 URL·JDBC 질의 문맥(`?`, `&`, `;` 뒤)에서만 본다: bbtg가 만드는 "username=admin 경로" 같은 분기 설명은 자격 증명이 아니다.
+CREDENTIAL_RE = re.compile(r"(?i)(?:password|passwd|pwd|secret|token|api[_-]?key)\s*=|[?&;]\s*(?:user(?:name)?|uid)\s*=|://[^/\s:@]+:[^/\s@]*@")
+# 사람이 쓴 테스트 표시 이름(@DisplayName 문장)은 메타데이터라서 A1 관문에서 뺀다(설계 6.6: scan-test-assets 메타데이터는 포함).
+A1_EXEMPT_SUFFIXES = (".display_name",)
+
+
+def _normalize_ws(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def source_corpus(sut_root: Path) -> str:
+    """SUT의 src/** 아래 .java 전부를 공백 정규화해 이어 붙인다(A1 관문용). 루트가 없으면 빈 문자열이다."""
+    sut_root = Path(sut_root)
+    if not sut_root.is_dir():
+        return ""
+    parts = []
+    for path in sorted(sut_root.rglob("*.java")):
+        rel = path.relative_to(sut_root).parts
+        if "src" in rel and not {"build", ".gradle", BBTG_DIRNAME} & set(rel):
+            parts.append(_normalize_ws(path.read_text(encoding="utf-8", errors="replace")))
+    return "\n".join(parts)
+
+
+def _string_leaves(node, path: str = ""):
+    if isinstance(node, dict):
+        for key, child in node.items():
+            yield from _string_leaves(child, f"{path}.{key}")
+    elif isinstance(node, list):
+        for index, child in enumerate(node):
+            yield from _string_leaves(child, f"{path}[{index}]")
+    elif isinstance(node, str):
+        yield path, node
+
+
+def a1_violations(document, corpus: str) -> list[str]:
+    """식 문자(`(){};=<>!&|+*"'`)를 포함하는 12자 이상 문자열이 SUT 소스에 그대로(공백 정규화) 있으면 그 JSON 경로를 돌려준다.
+    식별자(HTTP 경로, 제네릭 타입 표기)는 허용한다."""
+    if not corpus:
+        return []
+    found = []
+    for path, text in _string_leaves(document):
+        if len(text) < A1_MIN_LENGTH or not EXPRESSION_CHARS & set(text) or path.endswith(A1_EXEMPT_SUFFIXES):
+            continue
+        if PATH_SHAPE_RE.match(text) or (EXPRESSION_CHARS & set(text) <= {"<", ">"} and TYPE_SHAPE_RE.match(text)):
+            continue
+        if _normalize_ws(text) in corpus:
+            found.append(path)
+    return found
+
+
+def credential_violations(document) -> list[str]:
+    return [path for path, text in _string_leaves(document) if CREDENTIAL_RE.search(text)]
+
+
+def _derive_flags(data):
+    """derive-test-data: 어노테이션 식 문자열(where/delete SQL, formula)은 지우고 존재 여부만 불리언으로 남긴다."""
+    if not isinstance(data, list):
+        return data
+    for entity in data:
+        if isinstance(entity, dict):
+            entity["has_where_clause"] = bool(entity.get("where_clause"))
+            entity["has_sql_delete"] = bool(entity.get("sql_delete"))
+            for column in entity.get("columns") or []:
+                if isinstance(column, dict):
+                    column["has_formula"] = bool(column.get("formula"))
+    return data
+
+
+EXCEPTION_EXPECTED_RE = re.compile(r"^([A-Za-z_]\w*Exception) code=(\d+)$")
+
+
+def _plan_flags(data):
+    """plan-tests: `expected`(분기 설명문에 조건식 조각이 섞인다)와 `description`은 버리고, 예외 이름과 코드만 구조화해 남긴다."""
+    if isinstance(data, dict):
+        for case in data.get("test_cases") or []:
+            if isinstance(case, dict):
+                match = EXCEPTION_EXPECTED_RE.match(str(case.get("expected", "")))
+                if match:
+                    case["expected_exception"], case["expected_code"] = match.group(1), int(match.group(2))
+    return data
+
+
+TRANSFORMS = {"derive-test-data": _derive_flags, "plan-tests": _plan_flags}
+
+
 def sanitize(raw_dir, out_dir, sut_root=None) -> Sanitized:
     """raw를 허용 스키마로 정제해 `out_dir/<skill>.json`을 쓴다. 호출이 실패했거나 정제 오류가 나면 그 스킬 파일은 쓰지 않는다."""
     raw_dir, out_dir = Path(raw_dir), Path(out_dir)
     if sut_root is None:
         sut_root = Path(json.loads((raw_dir / "meta.json").read_text())["sutRoot"])
     roots = _roots(Path(sut_root))
+    corpus = source_corpus(Path(sut_root))
     calls = json.loads((raw_dir / "calls.json").read_text())["calls"]
     shutil.rmtree(out_dir, ignore_errors=True)
     out_dir.mkdir(parents=True)
@@ -387,9 +475,10 @@ def sanitize(raw_dir, out_dir, sut_root=None) -> Sanitized:
             try:
                 data = _load_raw(raw_dir, record, CLEAN_SOURCE[skill])
             except (OSError, ValueError) as exc:
-                result.errors.append(f"{record['id']}: raw를 읽지 못했다({type(exc).__name__})")
+                result.errors.append(f"{record['id']}: raw unreadable ({type(exc).__name__})")
                 continue
-            results.append({"source": record["key"], "data": _relativize(data, roots)})
+            data = TRANSFORMS.get(skill, lambda value: value)(_relativize(data, roots))
+            results.append({"source": record["key"], "data": data})
         if not results:
             continue  # 성공한 호출이 없으면 파일을 쓰지 않는다(호출 실패는 manifest.calls에 이미 있다)
         document = {"skill": skill, "results": results}
@@ -398,10 +487,14 @@ def sanitize(raw_dir, out_dir, sut_root=None) -> Sanitized:
         problems = sorted(Draft202012Validator(schema).iter_errors(document), key=lambda e: list(e.absolute_path))
         if problems:
             where = "/".join(str(p) for p in problems[0].absolute_path)
-            result.errors.append(f"{skill}: 스키마 검증 실패 {where}: {problems[0].message[:120]}")
+            result.errors.append(f"{skill}: schema validation failed at {where or '<root>'}")  # 검증기 메시지는 값 조각을 담을 수 있어 옮기지 않는다
         leak = _find_absolute(document)
         if leak:
-            result.errors.append(f"{skill}: 절대 경로가 남았다 {leak}")
+            result.errors.append(f"{skill}: absolute path remained at {leak}")
+        for path in a1_violations(document, corpus)[:3]:
+            result.errors.append(f"{skill}: A1 gate (source text) at {path}")
+        for path in credential_violations(document)[:3]:
+            result.errors.append(f"{skill}: credential gate at {path}")
         if len(result.errors) > errors_before:
             continue
         for path, count in local_removed.items():
@@ -410,7 +503,8 @@ def sanitize(raw_dir, out_dir, sut_root=None) -> Sanitized:
             json.dumps(document, indent=2, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8")
         result.written.append(f"{skill}.json")
     result.removed_counts = dict(sorted(removed.items()))
-    result.stripped_fields = sorted(set(declared_forbidden_paths()) | set(removed))
+    result.stripped_fields = sorted(removed)  # 실제로 값이 있어 제거한 경로만
+    result.forbidden_declared = sorted(set(declared_forbidden_paths()) - set(removed))  # 선언했지만 이번 입력에는 값이 없던 경로
     return result
 
 

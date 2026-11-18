@@ -31,3 +31,18 @@ bbtg 고정 커밋(`tools.pin.yaml`)의 7개 스킬 `cli.py --help`와 `SKILL.md
   엄밀히는 소스 일부다. 길이를 제한하지 않고 형식만 문자열로 제한한다(검토 대상으로 보고서에 적는다).
 - `dependency-map`의 의존성 트리는 코드 블록이라 clean에 남지 않는다. 엔드포인트 표와 핸들러 제목만 남는다.
 - `--include-di-analysis`는 stdout에 JSON 두 덩어리를 구분선으로 이어 붙이므로 쓰지 않는다.
+
+## 수정 1차(A1 재정) 반영
+
+통제자 판정: 식별자(클래스·메서드·필드·파라미터 이름, 타입, HTTP 경로, enum 값, 불리언, 숫자)는 허용하고, SUT 소스의 식·문장 텍스트(조건식,
+어노테이션 식 문자열, SQL 조각, 호출 패턴, formula)는 금지한다.
+
+- plan-tests: `condition`, `expected`(분기 설명문에 조건식이 섞인다), `description`은 금지. `expected`가 `<X>Exception code=<N>`이면
+  `expected_exception`/`expected_code`로 구조화해 남긴다.
+- derive-test-data: `where_clause`, `sql_delete`, `formula`는 금지하고 `has_where_clause`, `has_sql_delete`, `has_formula` 불리언으로 대체. `enumerated`는 enum.
+- find-external-calls: `pattern`, `url_source`는 enum 값만 허용, `variable_name`, `wiremock_strategy`, `deep_inspection`은 금지.
+- inspect-stack: `test_env.database.url`(자격 증명이 섞일 수 있다), `username`, `password`는 금지.
+- 정제 관문(fail closed, 해당 스킬 clean 미작성, 오류 문구는 JSON 경로만): (1) 식 문자 `(){};=<>!&|+*"'`를 포함한 12자 이상 문자열이 SUT `src/**/*.java`에
+  공백 정규화 후 그대로 있으면 위반(HTTP 경로, 제네릭 타입 표기, 사람이 쓴 `display_name`은 예외), (2) `password=`/`token=` 등과 URL·JDBC 질의의 `user=`,
+  `://user:pass@` 모양이 있으면 위반.
+- 이 관문은 "소스에 그대로 있는 식"만 잡는다. bbtg가 만든 가공 문장은 못 잡으므로 위 스키마 금지가 1차 방어선이다.

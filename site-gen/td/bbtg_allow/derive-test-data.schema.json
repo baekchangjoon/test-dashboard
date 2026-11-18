@@ -7,7 +7,11 @@
     "skill",
     "results"
   ],
-  "x-forbidden-paths": [],
+  "x-forbidden-paths": [
+    "[].where_clause",
+    "[].sql_delete",
+    "[].columns[].formula"
+  ],
   "properties": {
     "skill": {
       "const": "derive-test-data"
@@ -45,10 +49,12 @@
                         "type": "string"
                       },
                       "enumerated": {
-                        "type": "string"
-                      },
-                      "formula": {
-                        "type": "string"
+                        "type": "string",
+                        "enum": [
+                          "",
+                          "STRING",
+                          "ORDINAL"
+                        ]
                       },
                       "is_generated": {
                         "type": "boolean"
@@ -67,6 +73,9 @@
                       },
                       "java_type": {
                         "type": "string"
+                      },
+                      "has_formula": {
+                        "type": "boolean"
                       }
                     },
                     "additionalProperties": false
@@ -105,14 +114,14 @@
                     "additionalProperties": false
                   }
                 },
-                "sql_delete": {
-                  "type": "string"
-                },
                 "table_name": {
                   "type": "string"
                 },
-                "where_clause": {
-                  "type": "string"
+                "has_where_clause": {
+                  "type": "boolean"
+                },
+                "has_sql_delete": {
+                  "type": "boolean"
                 }
               },
               "additionalProperties": false

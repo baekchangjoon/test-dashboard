@@ -27,10 +27,10 @@ fi
 
 OUT_DIR="$TD_RUN_DIR/S02/bbtg"
 mkdir -p "$TD_RUN_DIR/S02"
-RESULT="$(td_py -m td.bbtg run "$OUT_DIR" --src "$TD_SUT_SRC" --sut-file "$TD_SUT_FILE" --bbtg-dir "$BBTG_DIR" "${EXTRA_ARGS[@]}" \
-  2>"$TD_RUN_DIR/S02/bbtg.log")" || s02_fail "td.bbtg 실행 실패: $(tail -c 600 "$TD_RUN_DIR/S02/bbtg.log")"
+RESULT="$(td_py -m td.bbtg run "$OUT_DIR" --src "$TD_SUT_SRC" --sut-file "$TD_SUT_FILE" --bbtg-dir "$BBTG_DIR" ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"} \
+  2>"$TD_RUN_DIR/S02/bbtg.log")" || s02_fail "td.bbtg 실행 실패(로그: S02/bbtg.log)"
 rm -rf "$TD_SUT_SRC/.bbtg"  # run_all이 지웠지만, 중간에 죽은 경우에도 clone을 깨끗이 둔다
-jq -e . >/dev/null 2>&1 <<< "$RESULT" || s02_fail "td.bbtg 출력이 JSON이 아니다: $(head -c 300 <<< "$RESULT")"
+jq -e . >/dev/null 2>&1 <<< "$RESULT" || s02_fail "td.bbtg 출력이 JSON이 아니다(로그: S02/bbtg.log)"
 STATUS="$(jq -r '.status' <<< "$RESULT")"
 REASON="$(jq -r '.reason // empty' <<< "$RESULT")"
 EXTRA="$(jq -c '.extra // {}' <<< "$RESULT")"

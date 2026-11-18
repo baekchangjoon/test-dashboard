@@ -205,9 +205,20 @@ def test_req050_multi_sut(injected_petclinic_run, mini_sut_run, s3_client, bucke
         assert _s3_bytes(s3_client, bucket, f"{site_prefix}suts/{sut}/runs/{result.run_id}/_COMPLETE")
     home = _s3_bytes(s3_client, bucket, f"{site_prefix}index.html").decode()
     assert 'href="suts/petclinic/index.html"' in home and 'href="suts/mini-sut/index.html"' in home
-    assert home.count('class="kpi-item"') == 2 * 4, "SUT 2개 x KPI 4칸"
+    # 같은 세션 접두에 다른 테스트가 다른 SUT 이름으로도 게시하므로, 두 SUT 카드만 잘라 KPI를 센다(카드당 4칸).
+    for sut in ("petclinic", "mini-sut"):
+        card = _sut_card(home, sut)
+        assert card.count('class="kpi-item"') == 4, f"{sut} 카드 KPI 4칸"
     mini_page = _s3_bytes(s3_client, bucket, f"{site_prefix}suts/mini-sut/index.html").decode()
     assert mini.run_id in mini_page and pet.run_id not in mini_page
+
+
+def _sut_card(home: str, sut: str) -> str:
+    """홈 HTML에서 `href="suts/<sut>/index.html"` 제목이 속한 카드(다음 카드 시작 전까지)를 잘라낸다."""
+    start = home.index(f'<h3><a href="suts/{sut}/index.html">')
+    card_start = home.rfind("<div", 0, start)
+    next_card = home.find('<h3><a href="suts/', start + 1)
+    return home[card_start:next_card if next_card != -1 else len(home)]
 
 
 def test_req050_no_sut_hardcode_in_pipeline_code():

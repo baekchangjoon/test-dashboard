@@ -101,6 +101,27 @@ def test_req013_hung_skill_times_out_and_is_killed(s02_stage, tmp_path):
         os.kill(child_pid, 0)
 
 
+def test_req013_failure_reasons_do_not_carry_stderr(s02_stage, tmp_path):
+    """스킬이 stderr에 절대 경로·비밀처럼 보이는 문자열을 써도 manifest와 단계 사유에는 고정 문구만 남는다."""
+    noisy = "sys.stderr.write('/Users/someone/private/app.properties password=hunter2 token=squ_abc\\n'); sys.exit(3)"
+    fake = _fake_bbtg(tmp_path, {"inspect-auth": noisy})
+    run = s02_stage(TD_BBTG_FAKE_DIR=str(fake))
+    failed = [c for c in run.manifest["calls"] if c["rc"] != 0][0]
+    assert failed["reason"] == "exit 3: see raw/logs/inspect-auth.stderr.txt"
+    blob = json.dumps(run.manifest) + json.dumps(run.stage) + run.stderr
+    assert "hunter2" not in blob and "squ_abc" not in blob and "/Users/someone" not in blob
+    assert "hunter2" in (run.out_dir / "raw" / "logs" / "inspect-auth.stderr.txt").read_text()  # 원본은 raw 로그에만 있다
+
+
+def test_req013_children_get_minimal_environment(s02_stage, tmp_path):
+    """bbtg 자식 프로세스는 TD_*와 비밀 환경 변수를 받지 않는다."""
+    dump = "import os,json; print(json.dumps({'env': sorted(os.environ)}))"
+    fake = _fake_bbtg(tmp_path, {"inspect-stack": dump})
+    run = s02_stage(TD_BBTG_FAKE_DIR=str(fake), AWS_SECRET_ACCESS_KEY="sekret", TD_SONAR_TOKEN="squ_x")
+    env_names = json.loads((run.out_dir / "raw" / "stdout" / "inspect-stack.json").read_text())["env"]
+    assert not [n for n in env_names if n.startswith("TD_") or n.startswith("AWS_") or "TOKEN" in n]
+
+
 def test_req013_injected_failure_hook(s02_stage):
     run = s02_stage(TD_FAIL_STAGE="S02")
     assert run.stage["status"] == "failed" and "injected failure" in run.stage["reason"]

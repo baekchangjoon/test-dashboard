@@ -88,8 +88,10 @@ def test_prune_removes_unlisted_keys_and_counts_only_valued_paths():
 
 def test_relativize_handles_resolved_variants_and_exact_root():
     roots = ["/private/tmp/x/src", "/tmp/x/src"]
-    data = {"p": "/private/tmp/x/src/a/B.java", "q": "/tmp/x/src", "r": "see /tmp/x/src/c", "n": 3}
-    assert bbtg._relativize(data, roots) == {"p": "a/B.java", "q": ".", "r": "see c", "n": 3}
+    data = {"p": "/private/tmp/x/src/a/B.java", "q": "/tmp/x/src", "r": "see /tmp/x/src/c", "n": 3,
+            "boundary": "/tmp/x/srcfoo/a and /opt/tmp/x/src/a"}
+    assert bbtg._relativize(data, roots) == {"p": "a/B.java", "q": ".", "r": "see c", "n": 3,
+                                             "boundary": "/tmp/x/srcfoo/a and /opt/tmp/x/src/a"}  # 경로 경계가 아니면 그대로
 
 
 def test_absolute_path_guard():
@@ -114,7 +116,7 @@ def test_sanitize_skips_failed_calls_and_reports_leaks(tmp_path):
         {"id": "plan-tests-A.b", "skill": "plan-tests", "key": "A.b", "rc": 0, "stdout": "stdout/plan.json", "artifacts": []},
     ]
     stack = {"project_info": {"name": "n"}, "analysis_meta": {"timestamp": "2026-01-01T00:00:00Z", "scan_duration_ms": 5, "scanned_files": 4}}
-    plan = {"class": "A", "method": "b", "test_cases": [{"id": "x", "condition": f"{sut_root}/leak"}], "artifact_path": ".bbtg/x.md"}
+    plan = {"class": "A", "method": "b", "test_cases": [{"id": "x", "param": f"{sut_root}/leak"}], "artifact_path": ".bbtg/x.md"}
     _write_raw(raw, calls, {"inspect-stack": stack, "plan": plan}, sut_root)
     result = bbtg.sanitize(raw, tmp_path / "clean")
     assert result.written == ["inspect-stack.json", "plan-tests.json"]  # 실패한 inspect-auth는 파일이 없다
@@ -124,7 +126,7 @@ def test_sanitize_skips_failed_calls_and_reports_leaks(tmp_path):
     assert result.removed_counts["plan-tests:artifact_path"] == 1
     # SUT 루트 아래 절대 경로는 상대화된다(누수가 아니다)
     plan_clean = json.loads((tmp_path / "clean" / "plan-tests.json").read_text())
-    assert plan_clean["results"][0]["data"]["test_cases"][0]["condition"] == "leak"
+    assert plan_clean["results"][0]["data"]["test_cases"][0]["param"] == "leak"
     assert not (tmp_path / "clean" / "inspect-auth.json").exists()
 
 
@@ -132,8 +134,138 @@ def test_sanitize_rejects_foreign_absolute_path(tmp_path):
     sut_root = tmp_path / "checkout"
     raw = tmp_path / "raw"
     calls = [{"id": "plan-tests-A.b", "skill": "plan-tests", "key": "A.b", "rc": 0, "stdout": "stdout/plan.json", "artifacts": []}]
-    plan = {"class": "A", "method": "b", "test_cases": [{"id": "x", "condition": "/Users/someone/else/Foo.java"}]}
+    plan = {"class": "A", "method": "b", "test_cases": [{"id": "x", "param": "/Users/someone/else/Foo.java"}]}
     _write_raw(raw, calls, {"plan": plan}, sut_root)
     result = bbtg.sanitize(raw, tmp_path / "clean")
-    assert "plan-tests.json" not in result.written and any("절대 경로" in e for e in result.errors)
+    assert "plan-tests.json" not in result.written and any("absolute path remained" in e for e in result.errors)
     assert not (tmp_path / "clean" / "plan-tests.json").exists()
+
+
+# --- A1 관문, 자격 증명 관문, 불리언 변환, 고정 문구 ----------------------------------------------------
+PLANTED = "req.nights() < 1 || req.nights() > 30"
+
+
+def _sut_with_source(tmp_path: Path, text: str) -> Path:
+    root = tmp_path / "checkout"
+    java = root / "src" / "main" / "java" / "p"
+    java.mkdir(parents=True)
+    (java / "ReservationService.java").write_text(text)
+    return root
+
+
+def _plan_raw(tmp_path: Path, sut_root: Path, case: dict, skill="plan-tests") -> Path:
+    raw = tmp_path / "raw"
+    calls = [{"id": "plan-tests-A.b", "skill": skill, "key": "A.b", "rc": 0, "stdout": "stdout/plan.json", "artifacts": []}]
+    _write_raw(raw, calls, {"plan": {"class": "A", "method": "b", "test_cases": [case]}}, sut_root)
+    return raw
+
+
+def test_a1_gate_blocks_expression_text_found_in_source(tmp_path):
+    root = _sut_with_source(tmp_path, f"class S {{\n  void f() {{\n    if ({PLANTED}) {{ throw new X(); }}\n  }}\n}}\n")
+    # `param`은 허용 필드지만 값이 소스 식과 같으면(공백 차이 무시) 그 스킬은 fail closed다.
+    case = {"id": "x", "param": "req.nights()  <  1 ||\n req.nights() > 30"}
+    result = bbtg.sanitize(_plan_raw(tmp_path, root, case), tmp_path / "clean")
+    assert "plan-tests.json" not in result.written
+    assert result.errors == ["plan-tests: A1 gate (source text) at .results[0].data.test_cases[0].param"]
+    assert not (tmp_path / "clean" / "plan-tests.json").exists()
+
+
+def test_a1_gate_allows_identifiers_paths_types_and_unrelated_text(tmp_path):
+    root = _sut_with_source(tmp_path, 'class S { Map<String, Object> m; @GetMapping("/api/owners/{ownerId}") void f() {} }\n')
+    for text in ("Map<String, Object>", "/api/owners/{ownerId}", "ReservationValidationException code=400",
+                 "분기 진입: Happy Path (POST - 상태코드 실측 필요)"):
+        raw = tmp_path / f"raw-{abs(hash(text))}"
+        calls = [{"id": "plan-tests-A.b", "skill": "plan-tests", "key": "A.b", "rc": 0, "stdout": "stdout/plan.json", "artifacts": []}]
+        _write_raw(raw, calls, {"plan": {"class": "A", "method": "b", "test_cases": [{"id": "x", "param": text}]}}, root)
+        result = bbtg.sanitize(raw, tmp_path / f"clean-{abs(hash(text))}")
+        assert result.errors == [] and result.written == ["plan-tests.json"], text
+
+
+def test_condition_field_is_stripped_and_counted(tmp_path):
+    root = _sut_with_source(tmp_path, "class S {}\n")
+    result = bbtg.sanitize(_plan_raw(tmp_path, root, {"id": "x", "condition": PLANTED, "param": "req"}), tmp_path / "clean")
+    clean = json.loads((tmp_path / "clean" / "plan-tests.json").read_text())
+    assert clean["results"][0]["data"]["test_cases"] == [{"id": "x", "param": "req"}]
+    assert result.removed_counts["plan-tests:test_cases[].condition"] == 1
+    assert "plan-tests:test_cases[].condition" in result.stripped_fields
+
+
+def test_plan_expected_becomes_exception_fields(tmp_path):
+    root = _sut_with_source(tmp_path, "class S {}\n")
+    raw = tmp_path / "raw"
+    calls = [{"id": "plan-tests-A.b", "skill": "plan-tests", "key": "A.b", "rc": 0, "stdout": "stdout/plan.json", "artifacts": []}]
+    cases = [{"id": "a", "expected": "ReservationValidationException code=400", "description": "X (code=unknown)"},
+             {"id": "b", "expected": '분기 진입: 조기 return 분기: username == "admin"'}]
+    _write_raw(raw, calls, {"plan": {"class": "A", "method": "b", "test_cases": cases}}, root)
+    result = bbtg.sanitize(raw, tmp_path / "clean")
+    out = json.loads((tmp_path / "clean" / "plan-tests.json").read_text())["results"][0]["data"]["test_cases"]
+    assert out == [{"id": "a", "expected_exception": "ReservationValidationException", "expected_code": 400}, {"id": "b"}]
+    assert result.removed_counts["plan-tests:test_cases[].expected"] == 2
+
+
+def test_derive_flags_replace_expression_strings(tmp_path):
+    root = _sut_with_source(tmp_path, "class S {}\n")
+    raw = tmp_path / "raw"
+    calls = [{"id": "derive-test-data", "skill": "derive-test-data", "key": ".", "rc": 0, "stdout": "stdout/d.json", "artifacts": []}]
+    entity = {"class_name": "Owner", "table_name": "owners", "file_path": f"{root}/src/main/java/p/Owner.java",
+              "where_clause": "deleted = false", "sql_delete": "update owners set deleted = true", "relations": [],
+              "columns": [{"java_field": "a", "db_column": "a", "formula": "(select 1 from dual)", "enumerated": "STRING"},
+                          {"java_field": "b", "db_column": "b", "formula": "", "enumerated": ""}]}
+    _write_raw(raw, calls, {"d": [entity]}, root)
+    result = bbtg.sanitize(raw, tmp_path / "clean")
+    assert result.errors == [], result.errors
+    data = json.loads((tmp_path / "clean" / "derive-test-data.json").read_text())["results"][0]["data"][0]
+    assert data["has_where_clause"] is True and data["has_sql_delete"] is True and data["file_path"] == "src/main/java/p/Owner.java"
+    assert [c["has_formula"] for c in data["columns"]] == [True, False]
+    assert not {"where_clause", "sql_delete"} & set(data) and all("formula" not in c for c in data["columns"])
+    assert result.removed_counts["derive-test-data:[].where_clause"] == 1
+
+
+def test_credentialed_jdbc_url_is_dropped_and_credential_leaf_blocks(tmp_path):
+    root = _sut_with_source(tmp_path, "class S {}\n")
+    raw = tmp_path / "raw"
+    calls = [{"id": "inspect-stack", "skill": "inspect-stack", "key": ".", "rc": 0, "stdout": "stdout/s.json", "artifacts": []}]
+    stack = {"project_info": {"name": "n"},
+             "test_env": {"database": {"url": "jdbc:mysql://db/app?user=root&password=hunter2"}, "server": {"url": "http://localhost:8080"}}}
+    _write_raw(raw, calls, {"s": stack}, root)
+    result = bbtg.sanitize(raw, tmp_path / "clean")
+    text = (tmp_path / "clean" / "inspect-stack.json").read_text()
+    assert "hunter2" not in text and "jdbc" not in text
+    assert result.removed_counts["inspect-stack:test_env.database.url"] == 1
+    # 허용 필드에 자격 증명 모양이 들어오면 그 스킬은 fail closed다(값은 오류 문구에도 없다).
+    for secret in ("http://admin:hunter2@host/x", "http://h/?password=hunter2", "http://h/?user=root"):
+        stack["test_env"]["server"]["url"] = secret
+        raw2 = tmp_path / f"raw-{abs(hash(secret))}"
+        _write_raw(raw2, calls, {"s": stack}, root)
+        blocked = bbtg.sanitize(raw2, tmp_path / f"clean-{abs(hash(secret))}")
+        assert blocked.written == [] and blocked.errors == ["inspect-stack: credential gate at .results[0].data.test_env.server.url"]
+        assert "hunter2" not in " ".join(blocked.errors)
+
+
+def test_schema_error_reason_is_fixed_text_without_values(tmp_path):
+    root = _sut_with_source(tmp_path, "class S {}\n")
+    raw = tmp_path / "raw"
+    calls = [{"id": "inspect-stack", "skill": "inspect-stack", "key": ".", "rc": 0, "stdout": "stdout/s.json", "artifacts": []}]
+    _write_raw(raw, calls, {"s": {"project_info": {"name": 12345678}}}, root)
+    result = bbtg.sanitize(raw, tmp_path / "clean")
+    assert result.errors == ["inspect-stack: schema validation failed at results/0/data/project_info/name"]
+
+
+def test_sanitize_markdown_artifact_path(tmp_path):
+    """dependency-map은 stdout이 JSON이 아니라 Markdown 아티팩트에서 정제한다(_load_raw의 md 경로)."""
+    root = _sut_with_source(tmp_path, "class S {}\n")
+    raw = tmp_path / "raw"
+    (raw / "artifacts" / "dependency-map").mkdir(parents=True)
+    (raw / "artifacts" / "dependency-map" / "C.md").write_text(MD)
+    calls = [{"id": "dependency-map-C", "skill": "dependency-map", "key": "src/main/java/C.java", "rc": 0, "stdout": None,
+              "artifacts": ["artifacts/dependency-map/C.md"]}]
+    _write_raw(raw, calls, {}, root)
+    result = bbtg.sanitize(raw, tmp_path / "clean")
+    assert result.errors == [] and result.written == ["dependency-map.json"]
+    clean = json.loads((tmp_path / "clean" / "dependency-map.json").read_text())
+    assert clean["results"][0]["data"]["sections"][1]["tables"][0]["rows"][0] == ["GET", "/api/owners", "getAllOwners"]
+    # 아티팩트가 없으면 오류로 기록되고 파일은 없다
+    calls[0]["artifacts"] = []
+    (raw / "calls.json").write_text(json.dumps({"calls": calls}))
+    missing = bbtg.sanitize(raw, tmp_path / "clean2")
+    assert missing.errors == ["dependency-map-C: raw unreadable (ValueError)"] and missing.written == []
