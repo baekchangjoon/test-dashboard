@@ -8,7 +8,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/pipeline/lib/common.
 set -a; source "$TD_ROOT/infra/local.env"; set +a
 export AWS_REGION="${AWS_REGION:-ap-northeast-2}"
 
-SSH_OPTS=(-i "$TD_SSH_KEY_PATH" -o BatchMode=yes -o ConnectTimeout=20)
+SSH_OPTS=(-i "$TD_SSH_KEY_PATH" -o BatchMode=yes -o ConnectTimeout=20 -o LogLevel=ERROR)
 td_run 300 -- ssh "${SSH_OPTS[@]}" "ubuntu@$TD_LIGHTSAIL_IP" 'set -e
   cd ~/sonarqube
   original=".td-backup/original-pre-dashboard"

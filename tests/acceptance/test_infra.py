@@ -165,9 +165,12 @@ def test_req074_caddy_backups_pruned_to_five(caddy_fixture):
     # 설정을 바꿔야 백업 경로를 탄다: 블록을 gzip 없는 변형으로 교체.
     variant = fixture.dir / "variant.block"
     variant.write_text("__DASH_ADDR__ {\n\troot * /srv/dashboard\n\tfile_server {\n\t\thide .* *.env *.bak\n\t}\n}\n")
+    shutil.rmtree(root / "original-pre-dashboard")  # 없으면 가장 오래된 유효 백업에서 정리 전에 다시 만든다
     assert fixture.apply(TD_LIGHTSAIL_BLOCK_FILE=str(variant)).returncode == 0
     assert len(fixture.backups()) == 5
-    assert (root / "original-pre-dashboard").is_dir()
+    original = root / "original-pre-dashboard"
+    assert b"/srv/dashboard" not in (original / "docker-compose.yml").read_bytes()
+    assert (original / "Caddyfile").read_bytes() == (CADDY_FIXTURE / "Caddyfile").read_bytes()
 
 
 def test_req074_caddy_apply_invalid_block_restores_bytes(caddy_fixture, tmp_path):
@@ -199,28 +202,34 @@ def test_req074_caddy_apply_failure_after_mutation_rolls_back(caddy_fixture, fai
 
 
 def test_req074_caddy_apply_sigterm_after_mutation_restores(caddy_fixture):
-    """REQ-074: 변경 후 확인 대기 중 TERM을 받아도 서버 쪽 trap이 바이트 그대로 복원한다."""
+    """REQ-074: 변경 후 확인 대기(최대 300초) 중 TERM을 받으면 30초 안에 끝나고 파일이 바이트 그대로 복원된다.
+
+    신호가 서버 단계에 전달되지 않으면(고아 프로세스) 300초 대기가 끝날 때까지 apply.sh가 안 끝나므로 실패한다."""
     import signal
     fixture = caddy_fixture("sigterm")
     before = {name: fixture.read(name) for name in ("Caddyfile", "docker-compose.yml")}
     proc = subprocess.Popen(["bash", str(APPLY_SH), "--local", str(fixture.dir)], cwd=REPO_ROOT, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, text=True,
-                            env={**fixture.env, "TD_LIGHTSAIL_FAIL_AFTER": "health", "TD_LIGHTSAIL_WAIT_SECONDS": "90"})
+                            env={**fixture.env, "TD_LIGHTSAIL_FAIL_AFTER": "health", "TD_LIGHTSAIL_WAIT_SECONDS": "300"})
     deadline = time.monotonic() + 120
     while fixture.read("Caddyfile") == before["Caddyfile"]:  # 교체가 일어난 뒤(= health 대기 구간)에 신호를 보낸다
         assert proc.poll() is None and time.monotonic() < deadline, "교체 전에 끝났다"
         time.sleep(0.2)
     time.sleep(8)  # recreate와 sonar 확인을 지나 dash 대기에 들어가도록
+    sent = time.monotonic()
     proc.send_signal(signal.SIGTERM)
-    proc.communicate(timeout=120)
+    _, stderr = proc.communicate(timeout=60)
+    assert time.monotonic() - sent < 30, "TERM 후 30초 안에 끝나지 않았다"
     assert proc.returncode != 0
+    assert "restore" in stderr.lower() or "복원" in stderr
     assert {name: fixture.read(name) for name in before} == before
     assert b'"status":"UP"' in fixture.http("sonar.fixture.test:18080", "/api/system/status")[1]
+    assert "준비 중".encode() not in fixture.http("dash.fixture.test:18080")[1]  # 이전 설정으로 재생성됨
 
 
-def test_req074_apply_rolls_back_created_dns_record(tmp_path):
-    """REQ-074: 원격 모드에서 서버 단계가 실패하면 우리가 만든 dash A 레코드를 DELETE한다(스텁 ssh/boto3)."""
-    stub_bin, stub_py, calls = tmp_path / "bin", tmp_path / "py", tmp_path / "route53-calls.jsonl"
+def _remote_stub_env(tmp_path: Path, stage_script: str):
+    """원격 모드 apply.sh용 스텁(ssh/scp/boto3). 사건 순서는 tmp_path/events.log에 기록된다."""
+    stub_bin, stub_py, events = tmp_path / "bin", tmp_path / "py", tmp_path / "events.log"
     stub_bin.mkdir(); stub_py.mkdir()
     (tmp_path / "Caddyfile").write_text("sonar.example.test {\n\treverse_proxy sonarqube:9000\n}\n")
     (tmp_path / "docker-compose.yml").write_text(
@@ -229,11 +238,11 @@ def test_req074_apply_rolls_back_created_dns_record(tmp_path):
     ssh.write_text(f"""#!/usr/bin/env bash
 last="${{@: -1}}"
 case "$last" in
+  "env "*) {stage_script} ;;
   *Caddyfile*) cat "{tmp_path}/Caddyfile" ;;
   *docker-compose.yml*) cat "{tmp_path}/docker-compose.yml" ;;
-  *) cat >/dev/null; exit 30 ;;   # 서버 단계(bash -s) 실패
 esac
-""")
+""".replace("EVENTS", str(events)))
     scp = stub_bin / "scp"
     scp.write_text("#!/usr/bin/env bash\nexit 0\n")
     for script in (ssh, scp):
@@ -251,23 +260,47 @@ class _Client:
     def get_paginator(self, op): return _Pager(op)
     def get_hosted_zone(self, Id): return {{"HostedZone": {{"Name": "example.test."}}}}
     def change_resource_record_sets(self, HostedZoneId, ChangeBatch):
-        with open({str(calls)!r}, "a") as fh:
-            fh.write(json.dumps([c["Action"] for c in ChangeBatch["Changes"]]) + "\\n")
+        with open({str(events)!r}, "a") as fh:
+            fh.write(ChangeBatch["Changes"][0]["Action"] + "\\n")
 boto3.client = lambda *a, **k: _Client()
 """)
-    env_file = tmp_path / "local.env"
-    env_file.write_text("TD_DOMAIN=example.test\nTD_LIGHTSAIL_IP=192.0.2.7\nTD_SSH_KEY_PATH=/nonexistent\n")
     apply_copy = tmp_path / "repo"
     shutil.copytree(REPO_ROOT / "infra" / "lightsail", apply_copy / "infra" / "lightsail")
-    (apply_copy / "infra" / "local.env").write_text(env_file.read_text())
+    (apply_copy / "infra" / "local.env").write_text(
+        "TD_DOMAIN=example.test\nTD_LIGHTSAIL_IP=192.0.2.7\nTD_SSH_KEY_PATH=/nonexistent\n")
     (apply_copy / "pipeline").symlink_to(REPO_ROOT / "pipeline")
     (apply_copy / "site-gen").symlink_to(REPO_ROOT / "site-gen")
-    result = subprocess.run(["bash", str(apply_copy / "infra" / "lightsail" / "apply.sh")], cwd=tmp_path, capture_output=True,
-                            text=True, timeout=120, env={**os.environ, "PATH": f"{stub_bin}:{os.environ['PATH']}",
-                                                         "PYTHONPATH": str(stub_py), "TD_WORK_DIR": str(tmp_path / "work")})
+    env = {**os.environ, "PATH": f"{stub_bin}:{os.environ['PATH']}", "PYTHONPATH": str(stub_py),
+           "TD_WORK_DIR": str(tmp_path / "work")}
+    return apply_copy / "infra" / "lightsail" / "apply.sh", env, events
+
+
+def test_req074_apply_rolls_back_created_dns_record(tmp_path):
+    """REQ-074: 원격 모드에서 서버 단계가 실패하면 우리가 만든 dash A 레코드를 DELETE한다(스텁 ssh/boto3)."""
+    apply_sh, env, events = _remote_stub_env(tmp_path, "cat >/dev/null; exit 30")
+    result = subprocess.run(["bash", str(apply_sh)], cwd=tmp_path, capture_output=True, text=True, timeout=120, env=env)
     assert result.returncode == 30, result.stderr[-1500:]
-    recorded = [json.loads(line) for line in calls.read_text().splitlines()]
-    assert recorded == [["CREATE"], ["DELETE"]]
+    assert events.read_text().split() == ["CREATE", "DELETE"]
+
+
+def test_req074_apply_sigterm_dns_rollback_only_after_server_restore(tmp_path):
+    """REQ-074: TERM을 받으면 서버 단계가 복원을 끝낸 뒤에야 DNS를 되돌린다(고아 프로세스·조기 삭제 금지)."""
+    import signal
+    stage = (f"trap 'echo restore-start >> EVENTS; sleep 3; echo restore-done >> EVENTS; exit 30' TERM; "
+             f"echo stage-start >> EVENTS; while :; do sleep 1; done")
+    apply_sh, env, events = _remote_stub_env(tmp_path, stage)
+    proc = subprocess.Popen(["bash", str(apply_sh)], cwd=tmp_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            text=True, env=env)
+    deadline = time.monotonic() + 60
+    while not (events.exists() and "stage-start" in events.read_text()):
+        assert proc.poll() is None and time.monotonic() < deadline, "서버 단계가 시작되지 않았다"
+        time.sleep(0.2)
+    sent = time.monotonic()
+    proc.send_signal(signal.SIGTERM)
+    proc.communicate(timeout=30)
+    assert time.monotonic() - sent < 30
+    assert proc.returncode != 0
+    assert events.read_text().split() == ["CREATE", "stage-start", "restore-start", "restore-done", "DELETE"]
 
 
 # --- 실제 서버 (REQ-055, REQ-052, REQ-074 live) --------------------------------------------
