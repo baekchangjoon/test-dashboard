@@ -179,6 +179,7 @@ def test_req051_quantitative(published_runs, local_env, site_prefix):
         assert ttfb["unit"] == "ms" and ttfb["samples"] == 10 and ttfb["timeoutSeconds"] == 10 and ttfb["warm"] is True
         assert ttfb["ok"] + ttfb["failed"] == 10 and ttfb["url"].startswith(f"https://{name}.{local_env['TD_DOMAIN']}/")
         assert quant["homeTransfer"]["unit"] == "ms" and quant["homeTransfer"]["ms"] > 0
+        assert quant["connection"] == {"pinned": True, "source": "route53-authoritative"}
         assert str(quant["deploy"]["seconds"]) in html
         if ttfb["ok"] >= 7:
             assert ttfb["medianMs"] > 0 and f"{ttfb['medianMs']:.1f}" in html
@@ -190,17 +191,58 @@ def test_req051_quantitative(published_runs, local_env, site_prefix):
     assert str(memory["afterMb"]) in html
 
 
+def _cards(html: str) -> dict[str, str]:
+    """`div.card[data-host]`별 화면 텍스트(공백 정리, href 값 포함)."""
+    from html.parser import HTMLParser
+
+    class Cards(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.depth, self.current, self.cards = 0, None, {}
+
+        def handle_starttag(self, tag, attrs):
+            attributes = dict(attrs)
+            if tag == "div" and self.current is None and "card" in (attributes.get("class") or "").split() and attributes.get("data-host"):
+                self.current, self.depth = attributes["data-host"], 1
+                self.cards[self.current] = []
+                return
+            if self.current is not None:
+                if tag == "div":
+                    self.depth += 1
+                if tag == "a" and attributes.get("href"):
+                    self.cards[self.current].append(attributes["href"])
+
+        def handle_endtag(self, tag):
+            if self.current is not None and tag == "div":
+                self.depth -= 1
+                if self.depth == 0:
+                    self.current = None
+
+        def handle_data(self, data):
+            if self.current is not None:
+                self.cards[self.current].append(data)
+
+    parser = Cards()
+    parser.feed(html)
+    return {name: " ".join(" ".join(parts).split()) for name, parts in parser.cards.items()}
+
+
 def test_req073_qualitative(published_runs, local_env, site_prefix):
     doc = _hosting_doc(local_env, site_prefix, "dash")
-    html = _hosting_html(local_env, site_prefix, "dash")
+    cards = _cards(_hosting_html(local_env, site_prefix, "dash"))
+    assert set(cards) == {"reports", "dash"}
     for name in ("reports", "dash"):
         qual = doc["hosts"][name]["qualitative"]
         cost = qual["cost"]
         assert cost["source"] and all(item["url"].startswith("https://") for item in cost["source"])
         for field in ("region", "asOf", "formula", "priceBasis"):
             assert str(cost[field]).strip(), (name, field)
+        import datetime, re
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", cost["asOf"]) and datetime.date.fromisoformat(cost["asOf"])
         assert cost["assumptions"] and all(str(a).strip() for a in cost["assumptions"])
         assert qual["operations"].strip() and qual["failureScope"].strip()
-        for text in (cost["formula"], qual["operations"], qual["failureScope"], cost["region"], cost["asOf"]):
-            assert text.split("\n")[0].strip()[:20] in html or text.strip()[:20] in html, text[:30]
+        card = cards[name]
+        for text in (cost["formula"], qual["operations"], qual["failureScope"], cost["region"], cost["asOf"], cost["priceBasis"],
+                     *cost["assumptions"], *(item["url"] for item in cost["source"])):
+            assert " ".join(text.split()) in card, (name, text[:40])
     assert "Sonar" in doc["hosts"]["dash"]["qualitative"]["failureScope"]
