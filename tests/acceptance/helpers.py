@@ -280,7 +280,9 @@ class FakeS3:
         if IfMatch is not None:
             if not self.supports_conditional_delete:
                 raise _client_error("NotImplemented", 501, "DeleteObject")
-            if Key in self.objects and self.objects[Key]["etag"] != IfMatch.strip('"'):
+            if Key not in self.objects:
+                raise _client_error("NoSuchKey", 404, "DeleteObject")
+            if self.objects[Key]["etag"] != IfMatch.strip('"'):
                 raise _client_error("PreconditionFailed", 412, "DeleteObject")
         self.objects.pop(Key, None)
         return {}

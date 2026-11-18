@@ -402,7 +402,7 @@ def mirror_lock(work_dir):
 def sync_mirror(s3, bucket: str, mirror_dir) -> MirrorStats:
     """S3 버킷 전체(운영 + `_test/`, 잠금 제외)를 mirror_dir에 맞춘다(S3가 원본). run 객체는 있으면 건너뛰고,
     그 밖의 파일은 ETag(단일 PUT은 md5)나 크기가 다르면 받는다. S3에 없는 로컬 파일은 지운다(마커가 있는 미러만)."""
-    mirror = Path(mirror_dir)
+    mirror = Path(mirror_dir).resolve()  # 한 번만 resolve해 다운로드 대상과 prune 순회가 같은 경로 표기를 쓴다
     fresh = not mirror.exists() or not any(mirror.iterdir())
     mirror.mkdir(parents=True, exist_ok=True)
     if fresh:
@@ -747,7 +747,22 @@ class Publication:
         except Exception as exc:  # noqa: BLE001
             self.hosts["cloudfront"] = {"status": "failed", "reason": f"publish-log invalidation: {type(exc).__name__}: {str(exc)[:200]}"}
         status, reason = overall_status(self.hosts)
-        write_log(self.s3, self.bucket, self.mirror, self.prefix, self.sut, self.run_id, self.result(status, reason))
+        self.rewrite_log(self.result(status, reason), reinvalidate=False, locked=True)
+
+    def rewrite_log(self, result: dict, reinvalidate: bool = True, locked: bool = False) -> None:
+        """이미 게시한 publish-log를 고쳐 쓴 뒤 Lightsail에도 다시 싣고, 그 경로 하나를 다시 무효화한다(각 단계 최선 노력)."""
+        write_log(self.s3, self.bucket, self.mirror, self.prefix, self.sut, self.run_id, result)
+        if self.hosts["lightsail"]["status"] == "passed" and self.ssh_target and self.ssh_key:
+            try:
+                with contextlib.nullcontext() if locked else mirror_lock(self.work_dir):  # flock은 재진입 불가
+                    rsync_lightsail(self.mirror, self.ssh_target, self.ssh_key, RSYNC_TIMEOUT, runs=False)
+            except PublishError as exc:
+                print(f"[td] publish-log 재동기화(Lightsail) 실패: {exc}", file=sys.stderr)
+        if reinvalidate:
+            try:
+                invalidate(self.cf, self.distribution_id, [f"/{log_key(self.prefix, self.sut, self.run_id)}"], self.run_id)
+            except Exception as exc:  # noqa: BLE001
+                print(f"[td] publish-log 재무효화 실패: {type(exc).__name__}", file=sys.stderr)
 
     def write_failure_log(self) -> None:
         """실패 사유를 S3 publish-log에 남긴다(잠금을 잡았고, 이미 봉인된 run이 아닐 때만 — 성공 기록을 덮어쓰지 않는다)."""
@@ -811,7 +826,7 @@ class Publication:
                 reason = "; ".join(x for x in (result["reason"], release_warning) if x)
                 result = self.result(result["status"], reason)
                 try:
-                    write_log(self.s3, self.bucket, self.mirror, self.prefix, self.sut, self.run_id, result)
+                    self.rewrite_log(result)
                 except Exception:  # noqa: BLE001
                     pass
         _TIMINGS = dict(result["timings"])
