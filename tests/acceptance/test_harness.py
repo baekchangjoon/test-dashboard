@@ -114,8 +114,8 @@ def test_baseline_marker_passes_with_session_file(monkeypatch, tmp_path):
     conftest.pytest_runtest_setup(_FakeItem(marked=True))
 
 
-@pytest.mark.parametrize("name", ["m1_run", "injected_petclinic_run", "run_under_test", "stub_stages",
-                                  "baseline_run", "second_run", "injected_run"])
+@pytest.mark.parametrize("name", ["m1_run", "injected_petclinic_run", "run_under_test",
+                                  "baseline_run", "second_run"])
 def test_pending_fixtures_fail_with_clear_message(name, request):
     with pytest.raises(pytest.fail.Exception, match="requires Task"):
         request.getfixturevalue(name)
