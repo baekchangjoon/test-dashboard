@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import signal
 import stat
 import subprocess
@@ -281,6 +282,66 @@ def real_pipeline_run(tmp_path_factory, site_prefix):
 def m1_run(real_pipeline_run):
     """`run-all.sh petclinic --only S00,S01`의 결과(세션 내 1회 실행해 재사용). S13을 돌리지 않으므로 게시는 없다."""
     return real_pipeline_run("S00,S01")
+
+
+# --- S11 Sonar 수용 하네스(Task 13) ------------------------------------------------------------
+import tempfile
+import threading
+import time
+
+
+def sonar_ssh(local_env: dict, sql: str, *, port: str | None = None, timeout: int = 60) -> subprocess.CompletedProcess:
+    """Sonar Postgres에 SQL 하나를 실행한다(허가된 user_tokens 점검·fixture 용도만). 결과는 -tA 형식."""
+    ssh = ["ssh", "-i", local_env["TD_SSH_KEY_PATH"], "-o", "BatchMode=yes", "-o", "ConnectTimeout=20", "-o", "LogLevel=ERROR"]
+    if port:
+        ssh += ["-p", port]
+    remote = f'docker exec sonarqube-db-1 psql -U sonar -d sonar -v ON_ERROR_STOP=1 -tAc "{sql}"'
+    return subprocess.run([*ssh, f"ubuntu@{local_env['TD_LIGHTSAIL_IP']}", remote], capture_output=True, text=True, timeout=timeout)
+
+
+def token_rows(local_env: dict, name_like: str) -> list[str]:
+    done = sonar_ssh(local_env, f"select name||'|'||created_at||'|'||expiration_date from user_tokens where name like '{name_like}' order by name")
+    assert done.returncode == 0, done.stderr[-300:]
+    return [line for line in done.stdout.splitlines() if line]
+
+
+def token_count(local_env: dict) -> int:
+    done = sonar_ssh(local_env, "select count(*) from user_tokens")
+    assert done.returncode == 0, done.stderr[-300:]
+    return int(done.stdout.strip())
+
+
+@dataclass
+class ObservedRun:
+    result: "RunResult"
+    token: str
+    ps_lines: set
+
+
+@pytest.fixture(scope="session")
+def s11_run(real_pipeline_run, local_env):
+    """`--only S00,S01,S08,S11` 실제 run 1회(REQ-037/038/066/063 공유). 토큰 관측 훅 파일을 읽고, 실행 중 프로세스 argv를 폴링한다."""
+    observe_dir = Path(tempfile.mkdtemp(prefix="td-observe-"))
+    observe = observe_dir / "token"
+    lines: set = set()
+    stop = threading.Event()
+
+    def poll():
+        while not stop.is_set():
+            out = subprocess.run(["ps", "-axo", "args"], capture_output=True, text=True).stdout
+            lines.update(out.splitlines())
+            time.sleep(0.3)
+
+    poller = threading.Thread(target=poll, daemon=True)
+    poller.start()
+    try:
+        result = real_pipeline_run("S00,S01,S08,S11", TD_SONAR_TOKEN_OBSERVE=str(observe))
+        token = observe.read_text() if observe.exists() else ""
+    finally:
+        stop.set()
+        poller.join(timeout=5)
+        shutil.rmtree(observe_dir, ignore_errors=True)
+    return ObservedRun(result, token, lines)
 
 
 # --- 이후 Task가 채우는 fixture ----------------------------------------------------------
