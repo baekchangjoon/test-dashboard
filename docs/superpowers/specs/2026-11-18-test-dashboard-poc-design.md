@@ -94,7 +94,7 @@ E2E 테스트를 만들고 그 결과와 품질 지표를 한 화면에서 보�
 | S10 | tia | S00 | S07 | 블랙박스 스위트만으로 축소 실행 |
 | S11 | sonar | S00 | S08 XML | 서버나 토큰 실패 시 실패(사유 기록) |
 | S12 | compare | S07, S08 | – | 건너뜀 |
-| S13 | publish | run.json | 모든 리포트 | 항상 실행 |
+| S13 | publish | run.json | 모든 리포트 | `--only`에 없으면 실행 안 함(§13.1) |
 
 - 상태값은 `passed | failed | degraded | skipped`이고, 모두 `reason`과 산출물 경로를 함께 기록한다. 기록 위치는 `work/runs/<runId>/stages/<ID>.json`이다.
 - `run-all.sh`의 종료 코드는 S00이나 S13이 실패하면 1(우선), 그 밖의 단계가 실패하면 2(게시는 됨), 실패가 없으면 0이다(passed, degraded, skipped 허용).
@@ -276,12 +276,12 @@ sonar: { projectKey: spring-petclinic-td, cmd_build: "./gradlew --no-daemon buil
 - **전용 프로젝트 키 `spring-petclinic-td`**를 쓴다. 없으면 API로 만들고, 분석은 그 프로젝트의 main 브랜치에 누적한다. 사용자는 기존 CI가 일부 깨지는 것을 허용했지만, 전용 키가 비용 없이 이력 혼선을 막으므로 유지한다.
 - 토큰 수명 관리(`pipeline/lib/sonar-token.sh`, 이번 세션 한정 승인):
   1. 사전 확인: DB에서 `user_tokens` 스키마를 조회하고 해시 방식을 확인한다. aws-resource-controller 세션 기록으로는 SHA-384이고, 만든 토큰으로 `api/authentication/validate`를 호출해 실제로 검증한다. 맞지 않으면 S11은 `failed`다.
-  2. 사전 청소: `name LIKE 'td-%'`인 잔존 행을 지우고 기록한다.
+  2. 사전 청소: §13.3으로 대체(만료된 `td-%` 행만).
   3. 발급: 무작위 토큰의 해시를 `admin` 사용자로 INSERT한다. 이름은 `td-<runId>`, `expiration_date`는 지금부터 2시간 뒤로 한다(2차 방어선).
   4. 정리: `trap`으로 DELETE한 뒤 0행인지 확인한다. 정리용 SSH가 실패하면 run을 `failed`로 하고, 콘솔에 "토큰 잔존 가능, 2시간 후 만료"를 크게 출력한다.
   5. 토큰 값은 로그와 산출물에 남기지 않는다(환경 변수로만 전달).
 - 스캔: `cmd_build`와 `cmd_scan`을 따로 호출한다(Gradle 9 implicit-dependency 문제 회피). 인자는 다음과 같다.
-  - `-Dsonar.host.url`, `-Dsonar.token`(환경 변수 `SONAR_TOKEN`), `-Dsonar.projectKey=spring-petclinic-td`
+  - `-Dsonar.host.url`, `-Dsonar.projectKey=<sut.yaml.sonar.projectKey>`. 토큰은 환경 변수 `SONAR_TOKEN`으로만 넘기고 명령줄에 쓰지 않는다.
   - `-Dsonar.coverage.jacoco.xmlReportPaths=<S08 aggregate 병합 XML>`
   - 품질 게이트는 기다리지 않는다(`qualitygate.wait` 미사용). `report-task.txt`의 ceTaskId로 `api/ce/task`를 폴링해 SUCCESS 후 export한다. 품질 게이트 ERROR는 단계 실패가 아니다.
 - export: CE 태스크가 끝난 뒤 실행한다.
@@ -295,7 +295,7 @@ sonar: { projectKey: spring-petclinic-td, cmd_build: "./gradlew --no-daemon buil
   - `run.json` 필드: `{runId, sut, commit, branch, trigger, pr, startedAt, finishedAt, tz, stages, kpis:{<suite>:{…}}, arms, tools, inputs}`
 - **원본은 S3**다. Lightsail은 미러다.
 - 게시 절차(`pipeline/S13-publish.sh`):
-  1. 잠금: S3 `locks/publish`에 조건부 PUT(`If-None-Match: *`, 30분 TTL 메타데이터)을 한다. 실패하면 중단한다.
+  1. 잠금: §13.1로 대체(자동 만료 없음).
   2. 새 run 디렉터리를 S3에 업로드한다. 객체마다 `If-None-Match: *`로 올린다. 이미 있으면 실패다.
   3. 인덱스 재생성: S3의 `suts/*/runs/*/run.json` 목록에서 `runs.json`, `suts.json`, 각 index HTML을 다시 만든다(덧붙이기가 아니라 재생성이므로 멱등).
   4. 인덱스를 업로드한다. `Cache-Control`은 인덱스와 JSON이 `no-cache`, run 디렉터리가 `max-age=31536000, immutable`이다. CloudFront는 인덱스 경로만 무효화한다.
@@ -353,7 +353,7 @@ E2E는 `pipeline/run-all.sh petclinic`을 실제로 실행한 뒤 산출물과 �
 | AT-05 | generation마다 생성된 시나리오 수 = 결과의 시나리오 수 = `coverage.html`의 TC 행 수다. 실행된 시나리오 수 = `.exec` 수다. `@ignore`나 `@Disabled`는 0개다. |
 | AT-06 | §6.9의 무결성 검사 세 가지(포함 관계, classId 경고 0, 교차 오염 탐침)가 통과한다. |
 | AT-07 | 성공한 단계의 리포트(hotspot, tia, sonar, compare)가 run 디렉터리에 있고 run 페이지에서 링크된다. TIA 리포트의 base 커밋이 사전 검사에서 해석한 base와 같다. |
-| AT-08 | S11이 끝나면 `user_tokens`의 `td-%` 행이 0개다. 이전 run이 남긴 행이 있으면 사전 청소가 지운다. |
+| AT-08 | S11이 끝나면 자기 토큰 `td-<runId>` 행이 0개다. 만료된 `td-%` 행은 사전 청소가 지운다(§13.3). |
 | AT-09 | run이 끝나면 라벨이 붙은 컨테이너, 네트워크, 볼륨이 0개다. 기록한 PID(jQA server 등)가 모두 종료됐다. TIA worktree도 남아 있지 않다. 중간 단계에 SIGINT를 보내도 같다. |
 | AT-10 | `https://reports.<domain>/`과 `https://dash.<domain>/`이 200을 반환하고, 새 run 페이지와 그 안의 모든 내부 링크가 깨지지 않는다. CloudFront를 거쳐서도 최신 run이 보인다. |
 | AT-11 | 두 번째 run을 게시해도 첫 run의 객체가 바이트 단위로 그대로이고(S3 ETag 비교), 이력 표에 두 run이 모두 있다. 같은 run을 다시 올리면 거부된다. |
@@ -380,7 +380,7 @@ E2E는 `pipeline/run-all.sh petclinic`을 실제로 실행한 뒤 산출물과 �
 | LLM 생성물의 비결정성과 step 불일치 | 3회 반복, 스냅샷, 수리 2회 제한(정적 오류만), JUnit 대체 스타일 |
 | 모델의 petclinic 사전 지식 | fork 고유 기능 지표를 따로 집계하고, 한계를 명시한다. |
 | 4GB Sonar 서버 부하 | 기존 Caddy가 정적 파일만 추가로 서비스한다. AT-14로 확인한다. |
-| SSH 22번이 사용자 IP 변경으로 막힘(현재 IAM으로 방화벽 수정 불가) | Lightsail 게시와 S11이 `failed`로 기록되고, 사용자에게 방화벽 갱신을 요청한다. 다음 게시에서 따라잡는다. |
+| SSH 22번이 사용자 IP 변경으로 막힘(현재 IAM으로 방화벽 수정 불가) | Lightsail 게시만 실패하면 S13은 `degraded`(§13.1), S11은 `failed`로 기록되고, 사용자에게 방화벽 갱신을 요청한다. 다음 게시에서 따라잡는다. |
 | DB 토큰 직접 삽입이 Sonar 내부 스키마에 의존 | 사전 스키마·해시 확인, 만료 2시간, 사전 청소, `trap` 삭제, 0행 검사, 이번 세션 한정 |
 | bbtg가 비공개라 재현성이 제한됨 | `tools.lock`에 커밋을 고정하고 README에 한계를 적는다. |
 
@@ -425,7 +425,7 @@ E2E는 `pipeline/run-all.sh petclinic`을 실제로 실행한 뒤 산출물과 �
 - 게시된 `run.json`의 S13 상태는 `publishing`이다. 최종 S13 결과는 로컬 `stages/S13.json`과 `publish-log.json`이 기준이다. S13은 `--only`에 없으면 실행하지 않는다.
 
 ### 13.2 수용 테스트 격리
-- `TD_SITE_PREFIX`가 있으면 S3 `<prefix>`와 Lightsail `/srv/dashboard/<prefix>` 아래에만 게시한다. 운영 인덱스는 `_test/`를 무시한다. 주입 실행과 mini-sut은 `_test/<sessionId>/`에만 게시하고, 테스트가 끝나면 지운다.
+- `TD_SITE_PREFIX`가 있으면 S3 `<prefix>`와 Lightsail `/srv/dashboard/<prefix>` 아래에만 게시한다. 운영 인덱스의 SUT 목록과 KPI는 `_test/`를 집계하지 않는다. 주입 실행과 mini-sut은 `_test/<sessionId>/`에 게시하고 **지우지 않는다**(과정 확인용 보존, 사용자 결정). 홈 하단에 `_test/index.html`(세션 목록) 링크를 둔다.
 - 장애 주입 훅: `TD_FAIL_STAGE=<ID>[:<point>]`(예: `S11:scan`, `S13:upload-mid`, `S13:lightsail`). 운영 경로에서는 쓰지 않는다.
 - mini-sut: `tests/fixtures/mini-sut`. 테스트 시점에 `work/fixtures/`로 복사해 `git init` 후 `--sut-file`로 지정한다.
 
@@ -463,3 +463,26 @@ E2E는 `pipeline/run-all.sh petclinic`을 실제로 실행한 뒤 산출물과 �
 - `hosting.json`(스키마 고정)에 정량값과 정성값을 나눠 담는다.
   - 정량: 배포 초, TTFB 중앙값 ms(표본 10, 실패 수, URL, warm), 홈 전송 ms, 메모리 MB
   - 정성: 비용 추정 근거(가격표 출처, 리전, 기준일, 가정, 식), 운영 부담, 장애 영향 범위
+
+### 13.9 v3.1 보정 (요구사항 재리뷰 역전파)
+- **빈 스토어**: pjacoco는 커버 클래스 0개인 TC의 `.exec`를 쓰지 않는다. 수량 게이트는 "하네스가 센 SUT 요청이 1회 이상인 TC 수 = `.exec` 수"다. 하네스는 testId별 요청 수를 `scenario-results.json`에 기록한다. S01은 기존 확장이 요청 수를 세지 않으므로, JUnit TC 수와 비교하되 `.exec`가 없는 TC를 사유와 함께 보고한다.
+- **시나리오 단위**: pickle(Scenario Outline은 Examples 행 단위). testId의 `L<line>`은 pickle 위치다. featureSlug가 겹치면 상대 경로 순서로 `_2`, `_3`을 붙인다. 결과 기준 파일은 generation별 `scenario-results.json`이다.
+- **재게시**: `_COMPLETE`가 있고 manifest 체크섬이 모두 같으면 업로드를 건너뛰고 인덱스만 재생성한다. 하나라도 다르면 실패한다.
+- **게시 결과**: Lightsail만 실패하면 S13은 `degraded`, S3나 인덱스가 실패하면 `failed`다. 최종 결과는 `suts/<sut>/publish-log/<runId>.json`(run별, 갱신 가능)에 둔다. 게시된 `run.json`은 로컬과 바이트 단위로 같고 S13은 `publishing`이다.
+- **잠금 위치**: `<prefix>locks/publish`. 해제는 조회한 ETag로 조건부 삭제한다. S3가 조건부 삭제를 지원하지 않는 버킷이면 재조회 후 삭제하고, 수동 실행이라 남는 경합은 수용한다.
+- **접두와 미러**: 로컬 미러 `work/site-mirror/`는 버킷 전체(`_test/` 포함)를 미러링하고 Lightsail로 그대로 동기화한다(과정 보존). CloudFront 무효화는 게시한 접두의 인덱스 경로만 한다.
+- **arm 상태**: `stages/S06.json.arms.<arm>`, `stages/S07.json.generations.<genId>`에 `status`와 `reason`을 둔다. 일부만 skip되면 단계는 `degraded`다.
+- **입력 해시 안정성**: bbtg 정제에서 타임스탬프, 소요 시간, 절대 경로를 제거하거나 상대화한다. S05 LLM 산출물도 입력 해시 키로 스냅샷해 재사용한다. 번들은 `S05/bundle/`, `S06/bundles/<arm>/`에 항상 조립해 보존한다.
+- **`claude` 호출 기록**: `llm.sh`는 PATH의 shim을 거쳐 실제 CLI를 부르고, shim이 호출 기록을 `work/runs/<runId>/llm-calls.log`에 남긴다(토큰 수 등 메타만 기록, 프롬프트 원문은 번들에 이미 있음).
+- **Sonar CE 폴링**: 상한 10분. FAILED, CANCELED, 시간 초과, `report-task.txt` 없음은 S11 `failed`(사유에 ceTaskId와 상태)다.
+- **주입 훅 식별자**(`TD_FAIL_STAGE`, 쉼표로 복수 지정, `TD_SITE_PREFIX`가 없으면 거부):
+
+| 식별자 | 효과 |
+|---|---|
+| `S01`~`S13` | 해당 단계를 시작 직후 실패시킨다. |
+| `S11:scan` | 토큰 발급 후 스캔 단계를 실패시킨다. |
+| `S11:cleanup-ssh` | 정리용 SSH 호출을 실패시킨다(토큰은 만료로 정리). |
+| `S13:upload-first`, `S13:upload-mid`, `S13:complete`, `S13:index` | 게시의 각 지점에서 실패시킨다. |
+| `S13:lightsail` | Lightsail rsync를 실패시킨다. |
+| 설정 주입(훅 아님) | 제어 URL 오류는 `TD_CONTROL_URL_OVERRIDE`, Sonar URL 오류는 `TD_SONAR_URL_OVERRIDE`, 번들 오염은 `TD_BUNDLE_EXTRA=<파일>`, 단계 중단은 테스트가 SIGINT를 보내 재현한다. |
+| `TD_SONAR_TOKEN_OBSERVE=<파일>` | 주입 실행에서만 동작한다. 토큰을 0600 파일에 1회 쓴다. |

@@ -2,7 +2,8 @@
 
 > 출처(design spec): docs/superpowers/specs/2026-11-18-test-dashboard-poc-design.md (v3)
 > 완료 정의(DoD): 커버리지 대상 요구사항마다 매트릭스에 지정된 검증 테스트가 하나 이상 있고, 그 테스트가 모두 통과한다(대상 매트릭스 전부 green).
-> 버전: v2 (2-벤더 리뷰 반영: Claude Fable, GPT 5.6 Sol. Gemini는 사용자 결정으로 이번 세션에서 제외)
+> 버전: v2.1 (2-벤더 리뷰와 재리뷰 반영: Claude Fable, GPT 5.6 Sol. Gemini는 사용자 결정으로 이번 세션에서 제외)
+> 기준 SUT 커밋: `baekchangjoon/spring-petclinic` `b6f939355e8790202ddfc71e3f3507252745ed37`. 기대 목록(`suts/petclinic/expected-*.yaml`)은 이 커밋에서 추출하고 사람이 검토해 커밋한다. SUT HEAD가 바뀌면 기대 목록 갱신 전까지 해당 테스트는 실패한다.
 
 ## 0. 검증 테스트 규약
 
@@ -19,12 +20,16 @@
 | 구분 | 내용 |
 |---|---|
 | 기준 run (fixture `baseline_run`, session scope) | `run-all.sh petclinic` 1회. 운영 사이트(`TD_SITE_PREFIX=""`)에 게시한다. E2E 레벨 테스트가 공유한다. |
-| 두 번째 run (fixture `second_run`) | 기존 generation 스냅샷을 재사용해 LLM 호출 없이 `run-all.sh petclinic`을 1회 실행한다. 운영 사이트에 게시한다. |
-| 주입 실행 | `TD_SITE_PREFIX=_test/<sessionId>/`(S3)와 `/srv/dashboard/_test/<sessionId>/`(Lightsail)에만 게시한다. 테스트 종료 시 두 경로를 지우고 0건인지 확인한다. 운영 인덱스는 `_test/`를 읽지 않는다. |
-| mini-sut | `tests/fixtures/mini-sut`(작은 Spring Boot 앱)를 테스트 시점에 `work/fixtures/mini-sut`로 `git init`해 `file://` URL로 쓴다. 게시는 주입 실행 환경에만 한다. |
+| 두 번째 run (fixture `second_run`) | S05와 S06 스냅샷을 재사용해 `run-all.sh petclinic`을 1회 실행한다. 실제 `claude` 앞에 둔 호출 기록 shim의 호출 수가 0이어야 한다(REQ-075). 운영 사이트에 게시한다. |
+| 주입 실행 | `TD_SITE_PREFIX=_test/<sessionId>/`(S3)와 `/srv/dashboard/_test/<sessionId>/`(Lightsail)에 게시하고 **지우지 않는다**(나중에 과정을 확인하기 위한 보존, 사용자 결정 2026-11-18). 운영 인덱스의 SUT 목록과 KPI는 `_test/`를 집계하지 않고, 홈 하단의 "테스트 실행 기록" 링크로 `_test/index.html`(세션 목록)에 들어갈 수 있다. |
+| mini-sut | `tests/fixtures/mini-sut`(작은 Spring Boot 앱)를 테스트 시점에 `work/fixtures/mini-sut`로 `git init`해 `file://` URL로 쓴다. 게시는 주입 실행 환경에만 하고 보존한다. |
 | 테스트가 만든 잠금·토큰 | try/finally로 제거하고 잔존 0을 검증한다. |
 | 전제 미충족 | AWS 자격, SSH, Docker, `claude` CLI가 없으면 해당 테스트는 **실패**로 처리한다. skip으로 green을 주장하지 않는다. |
-| 운영 사이트에 남는 것 | 기준 run과 두 번째 run, 이 둘뿐이다. |
+| Sonar 격리 | 주입 실행은 `sonar.projectKey`를 `<key>-test-<sessionId>`로 바꾼다(프로젝트는 보존). 테스트가 DB에 직접 넣는 fixture 행(REQ-065)은 평문을 아무도 모르는 무작위 해시이고, 만료가 삽입 후 10분 이내이며, finally에서 지우고 0행을 검증한다. |
+| 테스트가 띄운 자원 | 테스트가 직접 띄운 컨테이너·프로세스(REQ-007, 010, 074 등)는 `-p td-test-<sessionId>-<name>`과 `test-run=td-test-<sessionId>` 라벨로 표식한다. fixture teardown에서 `down -v --remove-orphans`를 실행하고, 세션 종료 훅에서 해당 라벨 자원과 PID가 0인지 확인한다. 남으면 세션 실패다. |
+| Docker 호스트 전제 | 수용 세션 동안 이 맥에서 다른 Docker 작업을 하지 않는다. 전후 차이 중 `td-`/`td-test-` 계열 compose project에 속하지 않는 것은 경고로 분리해 보고한다. |
+| 주입 훅 | 설계 §13.9의 `TD_FAIL_STAGE` 식별자 표를 따른다. `TD_SITE_PREFIX`가 없으면 훅은 거부된다. |
+| 운영 사이트 집계 대상 | 이번 수용 세션이 운영 경로에 만든 run은 정확히 2개(기준, 두 번째)다. 이전 세션의 운영 run은 보존된다. 주입 실행과 mini-sut 기록은 `_test/` 아래에 보존되며 집계에서 빠진다. |
 
 ## 요구사항 목록
 
@@ -42,16 +47,16 @@
 
 #### REQ-002 — 단계 상태 기록
 - 유형: Functional / 우선순위: Must
-- 수용기준: Given 기준 run, When 로컬 `work/runs/<runId>/run.json`과 `stages/*.json`을 읽으면, Then S00~S13 14개가 모두 있고, 상태는 `passed|failed|degraded|skipped` 중 하나이며, `passed`가 아닌 상태에는 비어 있지 않은 `reason`이 있다.
+- 수용기준: Given 기준 run, When 로컬 `work/runs/<runId>/run.json`과 `stages/*.json`을 읽으면, Then S00~S13 14개가 모두 있다. `stages/*.json`의 상태는 `passed|failed|degraded|skipped` 중 하나다. `run.json.stages.S13`만 `publishing`을 허용한다. `passed`가 아닌 상태에는 비어 있지 않은 `reason`이 있다.
 - 검증 레벨: E2E
 
 #### REQ-003 — run-all 종료 코드 규칙
 - 유형: Functional / 우선순위: Must
 - 수용기준(`TD_FAIL_STAGE=<ID>` 테스트 훅으로 주입):
-  - Given S09만 실패, Then 종료 코드는 2다.
+  - Given S01~S12 중 한 단계만 실패(단계별 parameterized), Then 종료 코드는 2다.
   - Given S13 실패, Then 1이다.
   - Given S00 실패, Then 1이다.
-  - Given S09와 S13이 함께 실패, Then 1이다(S00·S13 실패가 우선).
+  - Given `TD_FAIL_STAGE=S09,S13`, Then 1이다(S00·S13 실패가 우선).
   - Given 실패 없이 passed, degraded, skipped만 있으면, Then 0이다.
 - 검증 레벨: E2E-inj
 
@@ -62,12 +67,12 @@
 
 #### REQ-059 — 의존 단계 건너뜀 전파
 - 유형: Functional / 우선순위: Must
-- 수용기준: Given `TD_FAIL_STAGE=S05`, Then S06과 S07의 `owl` arm generation은 `skipped`(reason에 `S05` 포함)이고, `base`와 `jqa` arm은 실행된다. Given `TD_FAIL_STAGE=S02`, Then S06의 모든 arm이 `skipped`다.
+- 수용기준: Given `TD_FAIL_STAGE=S05`, Then `stages/S06.json.arms.owl.status`와 `stages/S07.json.generations.<owl genId>.status`가 `skipped`(reason에 `S05` 포함)이고, `base`와 `jqa`는 실행된다. S06과 S07의 단계 상태는 `degraded`, S04는 jQA만 시각화해 `degraded`, S12는 '판정 불가(arm 부족)'를 표시하고 `degraded`다. Given `TD_FAIL_STAGE=S02`, Then S06의 모든 arm이 `skipped`이고 S06은 `skipped`다.
 - 검증 레벨: E2E-inj
 
 #### REQ-005 — 고유 runId
 - 유형: Functional / 우선순위: Must
-- 수용기준: Given 같은 커밋에서 같은 초에 runId 생성을 1,000회 병렬로 하면, Then 중복이 0이다. 형식은 `^\d{8}-\d{6}Z-[0-9a-f]{7}-(manual|pr|merge)-[0-9a-f]{8}$`이고 시각은 UTC다. Given 난수 생성기를 같은 값으로 고정하면, Then 로컬 예약(`O_EXCL` 디렉터리 생성) 충돌로 재생성된다.
+- 수용기준: Given 같은 커밋에서 같은 초에 runId 생성을 1,000회 병렬로 하면, Then 중복이 0이다. 형식은 `^\d{8}-\d{6}Z-[0-9a-f]{7}-(manual|pr|merge)-[0-9a-f]{8}$`이고 시각은 UTC다. Given 처음 N회(N≤4)는 같은 값을 내는 가짜 난수, Then 로컬 예약(`O_EXCL` 디렉터리 생성) 충돌로 N회 재생성한 뒤 성공한다. 5회를 넘기면 비-0으로 종료한다.
 - 검증 레벨: Unit
 
 #### REQ-006 — 트리거 자리 마련
@@ -77,19 +82,19 @@
 
 #### REQ-060 — 실행 시간 메타데이터
 - 유형: Functional / 우선순위: Must
-- 수용기준: Given 기준 run, Then `startedAt`과 `finishedAt`은 ISO-8601 UTC이고 `startedAt < finishedAt`이며, `tz="Asia/Seoul"`이고 `sutDate`(SUT 기준 날짜)가 있다. run 도중 SUT 날짜가 바뀌면 `clockShift=true`가 기록되고 `compare.html`에 경고가 표시된다(가짜 시각 주입).
+- 수용기준: Given 기준 run, Then `startedAt`과 `finishedAt`은 ISO-8601 UTC이고 `startedAt < finishedAt`이며, `tz="Asia/Seoul"`이고 `sutDate`(SUT 기준 날짜)가 있다. `clockShift = date(startedAt, tz) != date(finishedAt, tz)`가 기록되고, true면 `compare.html`에 경고가 표시된다. 오케스트레이터 Clock 주입으로 자정 직전, 정확히 자정, 직후 경계를 Unit으로 검증한다.
 - 검증 레벨: E2E, Unit
 
 ### B. SUT 실행 환경과 자원 정리
 
 #### REQ-007 — 컨테이너 SUT에서 per-test 수집 가능
 - 유형: Functional / 우선순위: Must
-- 수용기준: Given SUT 컨테이너 기동, Then `docker compose port`의 결과가 SUT 포트와 제어 포트 모두 `127.0.0.1:<port>`다. When `POST /__coverage__/test/start?testId=T1`과 `POST /__coverage__/test/stop?testId=T1&result=passed`를 호출하면, Then 둘 다 2xx이고 `T1.exec`가 호스트의 마운트 경로에 생긴다.
+- 수용기준: Given SUT 컨테이너 기동, Then `docker compose port`의 결과가 SUT 포트와 제어 포트 모두 `127.0.0.1:<port>`다. When `POST /__coverage__/test/start?testId=T1`, `baggage: test.id=T1`을 붙인 `auth.probe` 요청 1회, `POST /__coverage__/test/stop?testId=T1&result=passed`를 차례로 호출하면, Then 제어 호출이 모두 2xx이고 `T1.exec`가 호스트의 마운트 경로에 생긴다. (pjacoco는 커버 클래스가 0개인 스토어는 쓰지 않는다.)
 - 검증 레벨: Int
 
 #### REQ-008 — TC 수와 .exec 수 일치 게이트
 - 유형: Functional / 우선순위: Must
-- 수용기준: Given S01 완료, Then JUnit XML에서 skipped를 뺀 TC 수가 `aggregate*.exec`를 뺀 `.exec` 수와 같다(b6f9393 기준 참고값 35). Given 제어 URL을 잘못 주는 주입, Then S01은 `failed`다.
+- 수용기준: Given S01 완료, Then JUnit XML에서 skipped를 뺀 TC 수가 `aggregate*.exec`를 뺀 `.exec` 수와 같다(기준 커밋 참고값 35, `suts/petclinic/expected-tests.yaml`). Given 제어 URL을 잘못 주는 주입, Then S01은 `failed`다.
 - 검증 레벨: E2E, E2E-inj
 
 #### REQ-009 — Docker 자원 누수 0 (외부 관측)
@@ -107,7 +112,7 @@
 
 #### REQ-011 — 백그라운드 프로세스와 worktree 정리
 - 유형: Non-functional / 우선순위: Must
-- 수용기준: Given 기준 run, Then `pids/`의 PID가 모두 종료됐고, `git worktree list`에 TIA base worktree가 없으며, run 전후 `GradleDaemon` 프로세스 수가 같다. Given S10 중단 주입, Then worktree가 남지 않는다.
+- 수용기준: Given 기준 run, Then `pids/`의 PID가 모두 종료됐고, `git worktree list`에 TIA base worktree가 없으며, run 시작 뒤 생성된 `GradleDaemon` PID(시작 시각으로 식별) 중 살아 있는 것이 0개다. Given S10 중단 주입, Then worktree가 남지 않는다.
 - 검증 레벨: E2E, E2E-inj
 
 ### C. 기존 블랙박스 IT와 bbtg
@@ -133,7 +138,7 @@
 
 #### REQ-014 — jQA 엔드포인트 완전성 (독립 기대 목록)
 - 유형: Functional / 우선순위: Must
-- 수용기준: Given 사람이 검토한 `suts/petclinic/expected-endpoints.yaml`(b6f9393 기준 `/api/**` 핸들러 17개, 메서드+정규화 경로), When `ontology-jqa.json`의 `kind=Endpoint`, `props.view=false` 집합과 비교하면, Then 같다.
+- 수용기준: Given 사람이 검토한 `suts/petclinic/expected-endpoints.yaml`(기준 커밋의 `/api/**` 핸들러 17개, 메서드+정규화 경로. 생산 코드와 독립적으로 작성), When `ontology-jqa.json`의 `kind=Endpoint`, `props.view=false` 집합과 비교하면, Then 같다.
   - 정규화 규칙: 클래스와 메서드 경로 결합, 배열 값 전개, trailing slash 제거, path variable은 `{name}`
   - 기대 목록과 커밋이 다르면 테스트가 실패하고 기대 목록 갱신을 요구한다.
 - 검증 레벨: E2E
@@ -167,19 +172,19 @@
 
 #### REQ-019 — 입력 번들 경로 검사
 - 유형: Functional / 우선순위: Must
-- 수용기준: Given S05와 S06의 모든 번들, Then 모든 파일이 허용 목록 안에 있다. Given SUT `docs/` 파일을 번들에 넣는 주입, Then LLM 호출 전에 단계가 실패한다.
+- 수용기준: Given 보존된 번들(`S05/bundle/`, `S06/bundles/<arm>/`. 스냅샷 재사용 여부와 무관하게 항상 조립·검사·보존), Then 모든 파일이 허용 목록 안에 있다. Given SUT `docs/` 파일을 번들에 넣는 주입, Then LLM 호출 전에 단계가 실패한다.
 - 검증 레벨: E2E, Int
 
 #### REQ-020 — 입력 번들 내용 검사
 - 유형: Functional / 우선순위: Must
-- 수용기준: 정규화 절차는 다음과 같다. 각 번들 파일을 형식별로 파싱해 문자열 leaf를 추출하고, escape를 해제한다. CRLF를 LF로, 탭을 공백으로 바꾸고, 줄마다 앞뒤 공백을 지운 뒤 빈 줄을 버린다. 그 결과를 SUT `src/**`와 같은 방식으로 정규화한 줄 시퀀스와 비교한다.
+- 수용기준: 정규화 절차는 다음과 같다. 각 번들 파일을 형식별로 파싱해 문자열 leaf를 추출하고, escape를 해제한다. CRLF를 LF로, 탭을 공백으로 바꾸고, 줄마다 앞뒤 공백을 지운 뒤 빈 줄을 버린다. 파일 단위로 leaf를 문서 순서대로 이어 붙여 한 시퀀스로 보고, 3자 이하 줄은 일치 계산에서 뺀다. 형식별 파서는 JSON, YAML, Turtle(literal), Markdown(코드 블록과 본문 줄), 그 밖은 텍스트 줄이다. 그 결과를 SUT `src/**`를 같은 방식으로 정규화한 줄 시퀀스와 비교한다.
   - Given 이 정규화, Then 연속 5줄이 일치하는 블록이 0개다.
-  - Given escaped newline, CRLF, 탭, 빈 줄, 중첩 배열, 이름이 다른 필드에 SUT 소스 6줄을 숨긴 fixture 각각, Then 검사기가 모두 검출한다.
+  - Given escaped newline, CRLF, 탭, 빈 줄, 중첩 배열, 이름이 다른 필드, Unicode escape, 이중 escape에 SUT 소스 5줄을 숨긴 fixture 각각, Then 검사기가 모두 검출한다. 4줄만 숨긴 fixture는 통과한다(경계).
 - 검증 레벨: E2E, Unit
 
 #### REQ-021 — bbtg 산출물 허용 스키마
 - 유형: Functional / 우선순위: Must
-- 수용기준: Given 정제된 bbtg 산출물, Then 스킬별 허용 JSON Schema(`pipeline/lib/bbtg-allow/*.schema.json`, `additionalProperties: false`)를 통과한다. 제거된 필드 경로 목록이 `bdd-gen.json.strippedFields`에 있고, `interceptor_sources[].source`가 그 목록에 들어 있다.
+- 수용기준: Given 정제된 bbtg 산출물, Then 스킬별 허용 JSON Schema(`pipeline/lib/bbtg-allow/*.schema.json`, `additionalProperties: false`)를 통과한다. `bdd-gen.json.strippedFields`는 스키마가 금지하는 경로 목록 전체이고 `interceptor_sources[].source`를 포함한다. 원본에 값이 있던 경로마다 `removedCount`가 기록된다.
 - 검증 레벨: E2E
 
 #### REQ-022 — LLM 호출 격리 (외부 캡처)
@@ -193,14 +198,15 @@
 
 #### REQ-023 — 세 arm과 반복 generation
 - 유형: Functional / 우선순위: Must
-- 수용기준: Given 기준 run, Then `run.json.arms.generations`에 `base`, `jqa`, `owl` 각각 `reps`(기본 3)개의 genId가 있고, 각 디렉터리 `e2e/generated/petclinic/<arm>/<genId>/`가 있다. genId 형식은 `^(base|jqa|owl)-[0-9a-f]{8}-r[1-9](-g[0-9]+)?$`다. `reps`가 3보다 작으면 `compare.html`에 실제 횟수가 보인다.
+- 수용기준: Given 기준 run, Then `run.json.arms.generations`에 `base`, `jqa`, `owl` 각각 `reps`(기본 3)개의 genId가 있고, 각 디렉터리 `e2e/generated/petclinic/<arm>/<genId>/`가 있다. genId 형식은 `^(base|jqa|owl)-[0-9a-f]{8}-r[1-9](-g[0-9]+)?$`다(`reps`는 1~9, 범위 밖이면 S00에서 오류). `reps`가 3보다 작으면 `compare.html`에 실제 횟수가 보인다.
 - 검증 레벨: E2E
 
 #### REQ-024 — 스냅샷 재사용과 보존
 - 유형: Functional / 우선순위: Must
 - 수용기준:
   - Given 같은 입력 해시의 스냅샷, When 기본 옵션으로 다시 실행하면, Then 가짜 `claude`가 호출되지 않고 같은 genId를 재사용한다.
-  - When `--regenerate`로 실행하면, Then 기존 디렉터리의 파일 해시가 그대로이고 `-g<n>` 접미사의 새 genId가 추가된다.
+  - When `--regenerate`로 실행하면, Then 기존 디렉터리의 파일 해시가 그대로이고 `-g<n>` 접미사의 새 genId가 추가된다. 두 `--regenerate`를 병렬로 실행하면 원자적 `mkdir` 예약으로 서로 다른 genId가 생긴다.
+  - S05 OWL 산출물도 입력 해시(jQA JSON + 정제 bbtg + 프롬프트) 키로 스냅샷해 같은 규칙으로 재사용한다.
 - 검증 레벨: Int
 
 #### REQ-025 — 수리 루프 제한 (외부 캡처)
@@ -213,6 +219,11 @@
 - 수용기준: Given 기준 run의 `bdd-gen.json`과 `owl-gen.json`, Then `bdd-gen.schema.json` 검증을 통과한다. 필드는 입력 해시, 프롬프트 해시, 모델 id, CLI 버전, 플래그, 수리 횟수, 입력·출력 토큰, 소요 시간, strippedFields다.
 - 검증 레벨: E2E
 
+#### REQ-075 — 생성 입력 해시 안정성
+- 유형: Functional / 우선순위: Must
+- 수용기준: Given 같은 SUT 커밋과 같은 `tools.lock`, When 서로 다른 체크아웃 경로에서 S02, S03, 번들 조립을 두 번 실행하면, Then arm별 입력 해시가 같다. 정제 단계에서 bbtg의 `timestamp`, `scan_duration_ms`, 생성 시각, 절대 경로를 제거하거나 상대화한다. Given 두 번째 run, Then 호출 기록 shim의 `claude` 호출 수가 0이다.
+- 검증 레벨: Int, E2E
+
 ### F. E2E 하네스와 실행
 
 #### REQ-026 — 인증 하네스
@@ -222,20 +233,21 @@
 
 #### REQ-027 — 결정적 testId
 - 유형: Functional / 우선순위: Must
-- 수용기준: Given 같은 feature 파일, When testId 함수를 두 번 적용하고 dry-run을 두 번 실행하면, Then testId 집합이 같다. 모든 testId가 `^E2E_(base|jqa|owl)_[0-9a-f]{8}r[1-9](g[0-9]+)?_[A-Za-z0-9_]+#L\d+$`에 맞는다.
+- 수용기준: Given 같은 feature 파일, When testId 함수를 두 번 적용하고 dry-run을 두 번 실행하면, Then testId 집합이 같다. 모든 testId가 `^E2E_(base|jqa|owl)_[0-9a-f]{8}r[1-9](g[0-9]+)?_[A-Za-z0-9_]+#L\d+$`에 맞고, generation 안에서 중복이 0이다. 시나리오 단위는 pickle이다(Scenario Outline은 Examples 행마다 하나, `L<line>`은 pickle 위치). Outline fixture와, slug가 같은 feature 두 개 fixture(결정적 접미사 `_2`)에서도 중복이 0이다.
 - 검증 레벨: Unit, Int
 
 #### REQ-028 — 시나리오 수 보존
 - 유형: Functional / 우선순위: Must
 - 수용기준: Given generation별 결과, Then 다음이 성립한다.
   - `.feature`의 시나리오 수 = 결과 시나리오 수(`uncompilable` 포함) = `coverage.html` TC 행 수
-  - 결과가 `uncompilable`이 아닌 시나리오 수 = `.exec` 수
+  - 기준 파일은 generation별 `scenario-results.json`(testId마다 한 줄, `status`, `requests`, `exec` 경로)이다.
+  - 하네스가 센 SUT 요청이 1회 이상인 시나리오 수 = `.exec` 수. 요청이 0회인 시나리오는 커버 0라인 TC로 분모에 남는다.
   - feature와 glue에서 `@ignore`, `@Disabled`, `@wip`가 0건
 - 검증 레벨: E2E
 
 #### REQ-029 — dry-run undefined 비율 기록
 - 유형: Functional / 우선순위: Must
-- 수용기준: Given generation별 결과, Then `undefinedRatio` = dry-run의 undefined 시나리오 수 / 전체 시나리오 수가 기록되고, 그 값을 Cucumber dry-run JSON에서 테스트가 다시 계산한 값과 같다.
+- 수용기준: Given generation별 결과, Then `undefinedRatio` = (step이 하나 이상 undefined이고 `uncompilable`이 아닌 pickle 수) / (uncompilable을 포함한 전체 pickle 수)가 기록되고, 그 값을 Cucumber dry-run JSON에서 테스트가 다시 계산한 값과 같다.
 - 검증 레벨: E2E
 
 #### REQ-030 — JUnit 대체 스타일
@@ -299,6 +311,7 @@
   - 각 item에 key와 Sonar 링크가 있다.
   - `sonar.html`이 렌더링되고 run 페이지에서 링크된다.
   - 다중 페이지 fixture(가짜 API)에서도 같은 불변식이 성립한다(Unit).
+  - CE 태스크가 FAILED, CANCELED이거나 10분 폴링 상한을 넘기면, 또는 `report-task.txt`가 없으면 S11은 `failed`이고 사유에 ceTaskId와 상태가 있다(가짜 API, Unit).
 - 검증 레벨: E2E, Unit
 
 #### REQ-038 — Sonar 자기 토큰 정리 (성공 경로)
@@ -313,12 +326,14 @@
 
 #### REQ-065 — Sonar 토큰 사전 청소 범위
 - 유형: Non-functional / 우선순위: Must
-- 수용기준: Given 만료된 `td-old`와 만료되지 않은 `td-live` 행을 테스트가 넣어 둔 상태, When S11을 실행하면, Then `td-old`만 지워지고 `td-live`는 남는다(테스트 finally에서 지움).
+- 수용기준: Given 만료된 `td-old`와 만료되지 않은 `td-live` 행을 테스트가 넣어 둔 상태(둘 다 §0.1의 무작위 해시 규칙), When S11을 실행하면, Then `td-old`만 지워지고 `td-live`는 남는다(테스트 finally에서 지움).
 - 검증 레벨: E2E-inj
 
 #### REQ-066 — Sonar 토큰 비노출
 - 유형: Non-functional / 우선순위: Must
-- 수용기준: Given S11 실행(가짜 `claude`처럼 `TD_SONAR_TOKEN_OBSERVE` 훅으로 테스트가 토큰 값을 따로 받음), Then `work/runs/<runId>/**`, 단계 로그, 게시 미러 `work/site-mirror/**`에서 그 토큰 문자열이 0건이다.
+- 수용기준: Given 주입 실행의 S11(`TD_SONAR_TOKEN_OBSERVE=<0600 파일 경로>` 훅이 토큰을 그 파일에 1회 쓰고, 테스트가 읽은 뒤 finally에서 지움), Then 다음이 성립한다.
+  - 훅 파일을 뺀 `work/**` 전체와 단계 로그에서 토큰 문자열이 0건이다.
+  - 스캐너 자식 프로세스의 argv에 토큰이 없다(환경 변수로만 전달).
 - 검증 레벨: E2E-inj
 
 #### REQ-039 — Sonar 장애 시 축소 게시
@@ -346,8 +361,8 @@
 - 수용기준: Given `suts/petclinic/oracle.yaml`, Then 다음이 성립한다.
   - 규칙 수가 7개 이상이고 설계 §6.12의 최소 규칙을 포함한다.
   - 각 규칙의 (class, line)이 고정 커밋에서 분기 probe가 있는 라인이다(jacoco XML로 확인).
-  - 정규화한 각 규칙 `description`이 어떤 번들과 가짜 `claude` stdin에도 부분 문자열로 없다.
-- 검증 레벨: E2E
+  - 정규화한 각 규칙 `description`이 보존된 번들(E2E)과 가짜 `claude` stdin(Int)에 부분 문자열로 없다.
+- 검증 레벨: E2E, Int
 
 #### REQ-042 — 판정 규칙 계산
 - 유형: Functional / 우선순위: Must
@@ -359,8 +374,9 @@
 #### REQ-043 — run 게시 원자성
 - 유형: Functional / 우선순위: Must
 - 수용기준:
-  - Given 업로드 단계(첫 객체, 중간 객체, `_COMPLETE` 표식, 인덱스)마다 장애를 주입한 뒤 재시도하면, Then 최종적으로 run 하나만 노출되고, `_COMPLETE`가 없는 run은 인덱스에 나오지 않는다.
-  - Given `_COMPLETE`가 있는 run을 같은 runId로 다시 게시하면, Then S13이 실패하고 기존 객체 ETag가 그대로다.
+  - Given `S13:upload-first`, `S13:upload-mid`, `S13:complete`, `S13:index` 지점마다 장애를 주입한 뒤 같은 runId로 재시도하면, Then 최종적으로 run 하나만 노출된다. `_COMPLETE`가 없는 run은 인덱스에 나오지 않는다.
+  - Given `_COMPLETE`가 있고 로컬 manifest 체크섬이 원격과 모두 같은 run을 재게시하면, Then 업로드를 건너뛰고 인덱스 재생성만 해서 성공한다.
+  - Given `_COMPLETE`가 있고 내용이 하나라도 다른 run을 같은 runId로 재게시하면, Then S13이 실패하고 기존 객체 ETag가 그대로다.
 - 검증 레벨: E2E-inj
 
 #### REQ-044 — 이력 누적
@@ -375,7 +391,7 @@
 
 #### REQ-046 — 게시 잠금
 - 유형: Functional / 우선순위: Should
-- 수용기준: Given 다른 attemptId의 잠금 객체, When S13을 실행하면, Then 업로드 없이 실패하고 잠금 정보(소유자, 획득 시각)를 출력한다. `--force-unlock <attemptId>`를 주면 소유자가 같을 때만 지운다. 정상 종료 후에는 잠금 객체가 없다.
+- 수용기준: Given 다른 attemptId의 잠금 객체(`<prefix>locks/publish`), When S13을 실행하면, Then 업로드 없이 실패하고 잠금 정보(attemptId, 소유자, 획득 시각)를 출력한다. `--force-unlock <attemptId>`는 잠금의 attemptId가 인자와 같을 때만 지우고(조회한 ETag로 조건부 삭제), 다르면 지우지 않고 비-0으로 종료한다. 정상 종료 후에는 잠금 객체가 없다.
 - 검증 레벨: E2E-inj
 
 #### REQ-068 — 캐시 헤더
@@ -400,12 +416,15 @@
 
 #### REQ-070 — Lightsail 따라잡기
 - 유형: Functional / 우선순위: Must
-- 수용기준: Given 주입 실행에서 Lightsail rsync를 실패시킨 게시(S13은 `degraded`, `publish-log.json`에 Lightsail 실패 기록), When 다음 게시를 실행하면, Then Lightsail `_test` 경로의 `runs.json`이 S3와 같아진다.
+- 수용기준: Given `S13:lightsail` 주입 게시(S3와 인덱스는 성공했으므로 S13은 `degraded`, 그 run의 publish-log에 Lightsail 실패 기록), When 다음 게시를 실행하면, Then Lightsail `_test` 경로의 `runs.json`이 S3와 같아진다.
 - 검증 레벨: E2E-inj
 
 #### REQ-071 — 게시 상태의 기준 파일
 - 유형: Functional / 우선순위: Must
-- 수용기준: Given 기준 run, Then 게시된 `run.json`의 S13 상태는 `publishing`이고, 최종 S13 결과는 로컬 `stages/S13.json`과 게시된 `publish-log.json`에 있으며 서로 같다.
+- 수용기준: Given 기준 run과 두 번째 run, Then 각 run에 대해 다음이 성립한다.
+  - 게시된 `run.json`은 로컬 `run.json`과 바이트 단위로 같고, S13 상태는 `publishing`이다.
+  - 최종 S13 결과는 로컬 `stages/S13.json`과 게시된 `suts/<sut>/publish-log/<runId>.json`에 있으며 서로 같다.
+  - run 페이지는 S13 결과를 publish-log에서 읽어 표시한다.
 - 검증 레벨: E2E
 
 #### REQ-049 — 대시보드 홈과 SUT 페이지
@@ -416,7 +435,7 @@
 #### REQ-050 — 멀티 SUT
 - 유형: Functional / 우선순위: Must
 - 수용기준:
-  - Given mini-sut 설명 파일(`--sut-file tests/fixtures/mini-sut/sut.yaml`, 엔드포인트 2개 이상, per-test 확장이 달린 블랙박스 IT 2개 이상, `coverage.probes`, 자체 `auth`), When 주입 실행 환경에서 S00, S01, S08, S13을 실행하면, Then 그 환경의 홈에 SUT 2개가 나온다.
+  - Given mini-sut 설명 파일(`--sut-file tests/fixtures/mini-sut/sut.yaml`, 엔드포인트 2개 이상, per-test 확장이 달린 블랙박스 IT 2개 이상, `coverage.probes`, 자체 `auth`), Given 같은 접두에 petclinic의 `_COMPLETE` run이 있는 상태(fixture `injected_petclinic_run`: `--only S00,S01,S08,S13`), When 주입 실행 환경에서 mini-sut의 S00, S01, S08, S13을 실행하면, Then 그 환경의 홈에 SUT 2개가 나온다.
   - `pipeline/`, `site-gen/`, `e2e/harness/`, `e2e/runner/`, `ontology/`, `prompts/`, `env/` 코드에 `petclinic` 문자열과 `org.springframework.samples` 패키지 문자열이 0건이다.
 - 검증 레벨: E2E-inj
 
@@ -429,7 +448,7 @@
 - 유형: Functional / 우선순위: Must
 - 수용기준: Given 게시 후, Then `hosting.json`이 스키마를 통과하고, 호스트마다 다음 숫자 값이 단위와 함께 있다.
   - 배포 소요 시간(초, 업로드 시작~완료)
-  - TTFB 중앙값(ms, 표본 10, 실패 표본 수, 대상 URL, warm 상태 명시)
+  - TTFB 중앙값(ms, 표본 10, timeout 10초, 성공 표본만 사용, 짝수면 가운데 두 값의 평균, 실패 표본 수, 대상 URL, warm 상태 명시). 성공 표본이 7개 미만이면 값은 null이고 S13은 `degraded`다.
   - 홈 HTML 전송 시간(ms)
   - 게시 전후 서버 available 메모리(MB, Lightsail만)
   - `hosting.html`에 이 값이 표시된다.
@@ -454,13 +473,13 @@
 #### REQ-053 — Route53 기존 레코드 보존
 - 유형: Non-functional / 우선순위: Must
 - 수용기준:
-  - Given 인프라 적용 직전 스냅샷(`work/infra/route53-before.json`), When 적용 직후 비교하면, Then 스냅샷의 RRSet은 전부 그대로다. 새로 생긴 RRSet은 허용 목록(`reports`, `dash`, ACM 검증용 `_*.reports.<domain>` CNAME)뿐이다.
+  - Given 적용 스크립트가 저장한 `work/infra/route53-before.json`과 `route53-after.json`, When 두 파일을 비교하면, Then before의 RRSet은 after에 전부 그대로 있고, 새 RRSet은 허용 목록(`reports`, `dash`, ACM 검증용 `_*.reports.<domain>` CNAME)뿐이다. 현재 zone에는 before의 RRSet이 지금도 있는지만 확인한다.
   - Given 대상 이름이 다른 값으로 이미 있는 상태(boto3 stub), Then 적용이 중단된다.
 - 검증 레벨: E2E, Unit
 
 #### REQ-054 — 인프라 식별자 비공개
 - 유형: Non-functional / 우선순위: Must
-- 수용기준: Given `infra/local.env`(없으면 테스트 실패), Then `git check-ignore -q --no-index infra/local.env`가 성공한다. 그 파일의 값(계정 ID, 서버 IP, IAM 사용자명)이 `git ls-files`의 내용, `git log -p` 전체, `work/site-mirror/**`에서 0건이다.
+- 수용기준: Given `infra/local.env`(없으면 테스트 실패), Then `git check-ignore -q --no-index infra/local.env`가 성공한다. 그 파일의 `TD_AWS_ACCOUNT_ID`, `TD_LIGHTSAIL_IP`, `TD_IAM_USER`, `TD_SSH_KEY_PATH` 값(SUT 자격 증명은 제외)이 `git ls-files`의 내용, `git log -p` 전체, `work/site-mirror/**`에서 0건이다.
 - 검증 레벨: Int
 
 #### REQ-055 — aws-resource-controller 동기화
@@ -516,6 +535,7 @@
 | REQ-024 | 스냅샷 재사용·보존 | test_bdd_gen.py::test_req024_snapshot_reuse_preserve | Int | 🔴 planned |
 | REQ-025 | 수리 루프 제한 | test_bdd_gen.py::test_req025_repair_bounded_captured | Int | 🔴 planned |
 | REQ-061 | 생성 메타데이터 | test_bdd_gen.py::test_req061_gen_metadata_schema | E2E | 🔴 planned |
+| REQ-075 | 입력 해시 안정성 | test_bdd_gen.py::test_req075_input_hash_stable | Int/E2E | 🔴 planned |
 | REQ-026 | 인증 하네스 | test_harness.py::test_req026_auth_harness (→ HarnessAuthIT) | Int | 🔴 planned |
 | REQ-027 | 결정적 testId | test_e2e.py::test_req027_deterministic_testids | Unit/Int | 🔴 planned |
 | REQ-028 | 시나리오 수 보존 | test_e2e.py::test_req028_scenario_conservation | E2E | 🔴 planned |
@@ -562,7 +582,7 @@
 | REQ-056 | CI 자동 실행 | – | – | 🔵 out-of-scope (Won't) |
 | REQ-057 | 접근 제어 | – | – | 🔵 out-of-scope (Won't) |
 
-Coverage: 0/71 green (0%) — target 100% (대상: Must 64 + Should 7). 제외: Could 1 deferred(🔵 REQ-030), Won't 2(🔵 REQ-056, REQ-057).
+Coverage: 0/72 green (0%) — target 100% (대상: Must 65 + Should 7). 제외: Could 1 deferred(🔵 REQ-030), Won't 2(🔵 REQ-056, REQ-057).
 
 ## 자기검토 결과
 
@@ -592,4 +612,5 @@ Coverage: 0/71 green (0%) — target 100% (대상: Must 64 + Should 7). 제외: 
   - `teardown.sh`: 수동 철거 절차라서 자동 테스트하지 않음
   - testkit과 어댑터 중 어느 쪽을 썼는지의 기록: REQ-061 메타에 포함
 - 각 REQ는 하나의 행위이고, 측정 가능한 Given-When-Then이 있으며, 판정 근거가 구현의 자기 보고에만 기대지 않는다(§0 원칙).
-- Must 64, Should 7(REQ-004, 017, 034, 046, 055, 072, 074), Could 1, Won't 2. 총 74개.
+- Must 65, Should 7(REQ-004, 017, 034, 046, 055, 072, 074), Could 1, Won't 2. 총 75개.
+- v2.1: 재리뷰 반영으로 REQ-075를 추가하고 REQ-002, 003, 005, 007, 008, 011, 014, 019~021, 023, 024, 027~029, 037, 041, 043, 046, 050, 051, 053, 054, 059, 060, 065, 066, 070, 071을 보정했다.
