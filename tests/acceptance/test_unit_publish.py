@@ -128,3 +128,71 @@ def test_complete_is_conditional_and_idempotent(site, run_json):
         publish.complete(s3, BUCKET, publish.build_manifest(site, KEY_PREFIX, run_json))
 
 
+# --- 잠금 --------------------------------------------------------------------------------
+def test_lock_acquire_conflict_release():
+    s3 = FakeS3()
+    lock = publish.acquire_lock(s3, BUCKET, "_test/x/", "att-1")
+    assert "_test/x/locks/publish" in s3.objects
+    info = json.loads(s3.objects["_test/x/locks/publish"]["data"])
+    assert info["attemptId"] == "att-1" and info["owner"]["pid"] == os.getpid() and info["acquiredAt"]
+    with pytest.raises(publish.LockHeld) as held:
+        publish.acquire_lock(s3, BUCKET, "_test/x/", "att-2")
+    message = str(held.value)
+    assert "att-1" in message and "--force-unlock att-1" in message and info["owner"]["host"] in message
+    assert publish.release(s3, lock) is True
+    assert "_test/x/locks/publish" not in s3.objects
+    publish.acquire_lock(s3, BUCKET, "_test/x/", "att-3")  # 해제 뒤에는 다시 잡을 수 있다
+
+
+def test_lock_is_scoped_by_prefix():
+    s3 = FakeS3()
+    publish.acquire_lock(s3, BUCKET, "", "prod")
+    publish.acquire_lock(s3, BUCKET, "_test/x/", "test")
+    assert {"locks/publish", "_test/x/locks/publish"} <= set(s3.objects)
+
+
+def test_release_does_not_delete_someone_elses_lock():
+    s3 = FakeS3()
+    lock = publish.acquire_lock(s3, BUCKET, "", "att-1")
+    publish.force_unlock(s3, BUCKET, "", "att-1")
+    other = publish.acquire_lock(s3, BUCKET, "", "att-2")
+    assert publish.release(s3, lock) is False
+    assert "locks/publish" in s3.objects and other.etag == s3.objects["locks/publish"]["etag"]
+
+
+def test_release_falls_back_when_conditional_delete_unsupported():
+    s3 = FakeS3(supports_conditional_delete=False)
+    lock = publish.acquire_lock(s3, BUCKET, "", "att-1")
+    assert publish.release(s3, lock) is True
+    assert "locks/publish" not in s3.objects
+    assert any(call[0] == "delete" and call[2]["IfMatch"] for call in s3.calls)  # 먼저 조건부를 시도했다
+
+
+def test_fallback_delete_refuses_when_lock_changed():
+    s3 = FakeS3(supports_conditional_delete=False)
+    lock = publish.acquire_lock(s3, BUCKET, "", "att-1")
+    s3.objects["locks/publish"]["etag"] = "f" * 32  # 다른 소유자가 교체
+    assert publish.release(s3, lock) is False and "locks/publish" in s3.objects
+
+
+def test_force_unlock_matches_attempt_id_only():
+    s3 = FakeS3()
+    publish.acquire_lock(s3, BUCKET, "", "att-1")
+    with pytest.raises(publish.LockMismatch, match="att-1"):
+        publish.force_unlock(s3, BUCKET, "", "att-other")
+    assert "locks/publish" in s3.objects
+    assert publish.force_unlock(s3, BUCKET, "", "att-1") == "released"
+    assert publish.force_unlock(s3, BUCKET, "", "att-1") == "absent"
+
+
+# --- 접두 정규화 ---------------------------------------------------------------------------
+@pytest.mark.parametrize("raw,expected", [("", ""), ("/", ""), ("_test/x", "_test/x/"), ("/_test/x/", "_test/x/")])
+def test_normalize_prefix(raw, expected):
+    assert publish.normalize_prefix(raw) == expected
+
+
+def test_normalize_prefix_rejects_parent_segments():
+    with pytest.raises(ValueError):
+        publish.normalize_prefix("_test/../x")
+
+
