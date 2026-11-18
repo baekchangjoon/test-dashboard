@@ -9,12 +9,18 @@ S3 클라이언트는 인자로 받아(boto3 호환 객체) 단위 테스트에�
 """
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import mimetypes
 import os
+import shutil
+import signal
 import socket
+import subprocess
+import sys
 import time
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -333,3 +339,476 @@ def force_unlock(s3, bucket: str, prefix: str, attempt_id: str) -> str:
         raise LockMismatch(f"잠금의 attemptId({info.get('attemptId')})가 인자({attempt_id})와 달라 지우지 않는다. "
                            + format_lock_hint(info, prefix))
     return "released" if _conditional_delete(s3, bucket, lock_key(prefix), etag) else "absent"
+
+
+# =====================================================================================
+# 10c: 미러 동기화, 무효화, Lightsail, 상태 규칙, publish-log, 오케스트레이션
+# =====================================================================================
+GIB = 1024 ** 3
+MIRROR_MARKER = ".td-site-mirror"
+DASH_DIR = "/srv/dashboard/"
+RSYNC_TIMEOUT = 1800
+S3_TIMEOUT = 1800
+SSH_TIMEOUT = 120
+
+
+@dataclass
+class MirrorStats:
+    downloaded: int = 0
+    skipped: int = 0
+    pruned: int = 0
+
+
+def _is_run_key(key: str) -> bool:
+    """`.../runs/<runId>/...` 아래 객체는 불변이라 있으면 다시 받지 않는다."""
+    return "runs" in key.split("/")[:-1]
+
+
+def _is_lock_key(key: str) -> bool:
+    return "locks" in key.split("/")[:-1]
+
+
+def _file_md5(path: Path) -> str:
+    return _file_digests(path)[1]
+
+
+def sync_mirror(s3, bucket: str, mirror_dir) -> MirrorStats:
+    """S3 버킷 전체(운영 + `_test/`, 잠금 제외)를 mirror_dir에 맞춘다(S3가 원본). run 객체는 있으면 건너뛰고,
+    그 밖의 파일은 ETag(단일 PUT은 md5)나 크기가 다르면 받는다. S3에 없는 로컬 파일은 지운다(마커가 있는 미러만)."""
+    mirror = Path(mirror_dir)
+    fresh = not mirror.exists() or not any(mirror.iterdir())
+    mirror.mkdir(parents=True, exist_ok=True)
+    if fresh:
+        (mirror / MIRROR_MARKER).write_text("test-dashboard site mirror: S3 bucket mirror, files not in S3 are pruned\n")
+    stats = MirrorStats()
+    keep: set[Path] = set()
+    for page in s3.get_paginator("list_objects_v2").paginate(Bucket=bucket):
+        for obj in page.get("Contents", []):
+            key = obj["Key"]
+            if key.endswith("/") or _is_lock_key(key):
+                continue
+            target = mirror / key
+            keep.add(target)
+            size, etag = int(obj["Size"]), _etag(obj.get("ETag"))
+            if target.is_file() and target.stat().st_size == size:
+                if _is_run_key(key) or "-" in etag or _file_md5(target) == etag:
+                    stats.skipped += 1
+                    continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            partial = target.with_name(target.name + ".part")
+            with partial.open("wb") as handle:
+                shutil.copyfileobj(s3.get_object(Bucket=bucket, Key=key)["Body"], handle)
+            os.replace(partial, target)
+            stats.downloaded += 1
+    if (mirror / MIRROR_MARKER).exists():
+        for path in sorted((p for p in mirror.rglob("*") if p.is_file()), reverse=True):
+            if path not in keep and path.name != MIRROR_MARKER:
+                path.unlink()
+                stats.pruned += 1
+        for directory in sorted((p for p in mirror.rglob("*") if p.is_dir()), reverse=True):
+            if not any(directory.iterdir()):
+                directory.rmdir()
+    return stats
+
+
+def upload_files(s3, bucket: str, mirror_dir, paths) -> list[str]:
+    """인덱스 파일(재생성되는 파일)을 덮어쓴다. `Cache-Control: no-cache`. 올린 키 목록을 돌려준다."""
+    mirror = Path(mirror_dir)
+    keys = []
+    for path in paths:
+        path = Path(path)
+        if not path.is_file():
+            continue
+        key = path.relative_to(mirror).as_posix()
+        with path.open("rb") as handle:
+            s3.put_object(Bucket=bucket, Key=key, Body=handle, CacheControl=CACHE_NO_CACHE, ContentType=content_type(path))
+        keys.append(key)
+    return keys
+
+
+def invalidation_paths(mirror_dir, written, prefix: str, sut: str, run_id: str) -> list[str]:
+    """무효화 경로: 재생성한 인덱스 파일(디렉터리형 `/dir/`도), hosting.json/html(있으면), publish-log. 중간 와일드카드는 쓰지 않는다."""
+    mirror = Path(mirror_dir)
+    paths: list[str] = []
+    for path in written:
+        key = Path(path).relative_to(mirror).as_posix()
+        paths.append("/" + key)
+        if key.endswith("index.html"):
+            paths.append("/" + key[: -len("index.html")])
+    for name in ("hosting.json", "hosting.html"):
+        if (mirror / prefix / name).exists():
+            paths.append(f"/{prefix}{name}")
+    paths.append(f"/{prefix}suts/{sut}/publish-log/{run_id}.json")
+    return list(dict.fromkeys(paths))
+
+
+def invalidate(cf, distribution_id: str, paths: list[str], run_id: str) -> str:
+    response = cf.create_invalidation(DistributionId=distribution_id, InvalidationBatch={
+        "Paths": {"Quantity": len(paths), "Items": paths}, "CallerReference": f"{run_id}-{uuid.uuid4().hex[:8]}"})
+    return response["Invalidation"]["Id"]
+
+
+def check_free_space(label: str, free_bytes: int, minimum_bytes: int) -> None:
+    if free_bytes < minimum_bytes:
+        raise PublishError(f"{label} 디스크 여유가 부족하다: {free_bytes / GIB:.1f}GB 남음 < 최소 {minimum_bytes / GIB:.1f}GB")
+
+
+# --- Lightsail -------------------------------------------------------------------------------
+def _ssh_opts(key_path: str) -> list[str]:
+    return ["-i", key_path, "-o", "BatchMode=yes", "-o", "ConnectTimeout=20", "-o", "LogLevel=ERROR"]
+
+
+def ssh_output(target: str, key_path: str, remote_cmd: str, timeout: float = SSH_TIMEOUT) -> str:
+    try:
+        done = subprocess.run(["ssh", *_ssh_opts(key_path), target, remote_cmd], capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        raise PublishError("timeout:ssh") from exc
+    except OSError as exc:
+        raise PublishError(f"ssh 실행 실패: {exc}") from exc
+    if done.returncode != 0:
+        raise PublishError(f"ssh 종료 코드 {done.returncode}: {done.stderr.strip()[-200:]}")
+    return done.stdout
+
+
+def server_free_bytes(target: str, key_path: str) -> int:
+    return int(ssh_output(target, key_path, f"df -Pk {DASH_DIR} | awk 'NR==2{{print $4}}'").strip()) * 1024
+
+
+def server_mem_used_mb(target: str, key_path: str) -> int:
+    return int(ssh_output(target, key_path, "free -m | awk '/^Mem:/{print $3}'").strip())
+
+
+def rsync_lightsail(mirror_dir, target: str, key_path: str, timeout: float = RSYNC_TIMEOUT, runs: bool = True) -> None:
+    """로컬 미러를 Lightsail `/srv/dashboard/`로 올린다(`--delete` 없음).
+    1) run 디렉터리 등 새 파일: `--ignore-existing`(불변 run은 덮어쓰지 않는다)  2) 인덱스 파일: `runs/`를 빼고 덮어쓴다.
+    인덱스를 마지막에 올려 인덱스가 아직 없는 run을 가리키지 않게 한다. runs=False면 2)만 한다."""
+    from td.proc import TIMEOUT_EXIT, run_with_timeout
+    base = ["rsync", "-rltz", "--exclude=.*", "--exclude=locks/", "-e", "ssh " + " ".join(_ssh_opts(key_path))]
+    destination = f"{target}:{DASH_DIR}"
+    source = f"{Path(mirror_dir)}/"
+    passes = ([["--ignore-existing"]] if runs else []) + [["--exclude=runs/"]]
+    for extra in passes:
+        code = run_with_timeout(timeout, [*base, *extra, source, destination], reraise=True)
+        if code == TIMEOUT_EXIT:
+            raise PublishError(f"timeout:rsync (>{timeout:g}s)")
+        if code != 0:
+            raise PublishError(f"rsync 종료 코드 {code}")
+
+
+# --- 상태 규칙과 publish-log -----------------------------------------------------------------
+_TIMINGS: dict = {"uploadSeconds": None, "memBeforeMb": None, "memAfterMb": None}
+
+
+def timings() -> dict:
+    """가장 최근 게시의 `{uploadSeconds, memBeforeMb(게시 전 서버 사용 MB), memAfterMb}`."""
+    return dict(_TIMINGS)
+
+
+def overall_status(hosts: dict) -> tuple[str, str | None]:
+    """설계 §13.9: S3(인덱스 포함)가 실패하면 failed, S3는 성공이고 CloudFront나 Lightsail이 실패하면 degraded."""
+    if hosts["s3"]["status"] != "passed":
+        return "failed", f"s3: {hosts['s3'].get('reason') or hosts['s3']['status']}"
+    problems = [f"{name}: {hosts[name].get('reason') or 'failed'}" for name in ("cloudfront", "lightsail")
+                if hosts[name]["status"] == "failed"]
+    return ("degraded", "; ".join(problems)) if problems else ("passed", None)
+
+
+def build_result(status: str, reason: str | None, hosts: dict, timing: dict, size_bytes: int) -> dict:
+    """stages/S13.json과 publish-log가 공유하는 필드."""
+    return {"status": status, "reason": reason, "hosts": hosts, "timings": timing, "sizeBytes": size_bytes}
+
+
+def log_key(prefix: str, sut: str, run_id: str) -> str:
+    return f"{prefix}suts/{sut}/publish-log/{run_id}.json"
+
+
+def write_log(s3, bucket: str, mirror_dir, prefix: str, sut: str, run_id: str, result: dict, to_mirror: bool = True) -> str:
+    """`suts/<sut>/publish-log/<runId>.json`(갱신 가능한 인덱스 파일)을 S3에, 그리고 미러에 쓴다."""
+    key = log_key(prefix, sut, run_id)
+    text = json.dumps({"runId": run_id, "sut": sut, **result}, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    if to_mirror:
+        path = Path(mirror_dir) / key
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    s3.put_object(Bucket=bucket, Key=key, Body=text.encode(), CacheControl=CACHE_NO_CACHE, ContentType="application/json")
+    return key
+
+
+# --- 설정 읽기 ---------------------------------------------------------------------------------
+def load_local_env(path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    path = Path(path)
+    if path.exists():
+        for raw in path.read_text().splitlines():
+            line = raw.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, _, value = line.partition("=")
+                values[key.strip()] = value.strip().strip('"').strip("'")
+    return values
+
+
+def load_hosting(work_dir, env) -> dict:
+    state_file = Path(env.get("TD_INFRA_STATE") or Path(work_dir) / "infra" / "terraform.tfstate")
+    if not state_file.exists():
+        raise PublishError(f"정적 호스팅 인프라 상태가 없다({state_file.name}): infra/static/apply.sh를 먼저 실행한다")
+    outputs = json.loads(state_file.read_text()).get("outputs", {})
+    try:
+        return {"bucket": outputs["bucket"]["value"], "distribution_id": outputs["distribution_id"]["value"]}
+    except KeyError as exc:
+        raise PublishError(f"인프라 출력에 {exc}가 없다") from exc
+
+
+def _make_clients(env):
+    import boto3
+    from botocore.config import Config
+    config = Config(retries={"max_attempts": 5, "mode": "standard"}, connect_timeout=10, read_timeout=60)
+    region = env.get("AWS_REGION", "ap-northeast-2")
+    return boto3.client("s3", region_name=region, config=config), boto3.client("cloudfront", config=config)
+
+
+class PublishInterrupted(KeyboardInterrupt):
+    """SIGINT/SIGTERM을 받아 정리 경로(잠금 해제)로 들어가기 위한 예외."""
+
+
+def _raise_interrupted(signum, _frame):
+    raise PublishInterrupted(signal.Signals(signum).name)
+
+
+# --- 오케스트레이션 -----------------------------------------------------------------------------
+class Publication:
+    def __init__(self, sut: str, run_id: str, run_dir, env: dict, s3=None, cf=None):
+        from td import hooks
+        self.hooks = hooks
+        self.sut, self.run_id, self.run_dir, self.env = sut, run_id, Path(run_dir), env
+        self.work_dir = Path(env.get("TD_WORK_DIR") or Path(env.get("TD_ROOT", ".")) / "work")
+        self.mirror = self.work_dir / "site-mirror"
+        self.prefix = normalize_prefix(env.get("TD_SITE_PREFIX", ""))
+        self.key_prefix = f"{self.prefix}suts/{sut}/runs/{run_id}/"
+        self.s3, self.cf = s3, cf
+        self.bucket = self.distribution_id = ""
+        self.lock: Lock | None = None
+        self.attempt_id = uuid.uuid4().hex[:12]
+        self.hosts: dict = {"s3": {"status": "failed", "reason": "not reached"},
+                            "cloudfront": {"status": "skipped", "reason": "not reached"},
+                            "lightsail": {"status": "skipped", "reason": "not reached"}}
+        self.size_bytes = 0
+        self.upload_seconds = 0.0
+        self.mem_before: int | None = None
+        self.mem_after: int | None = None
+        self.sealed_before = False  # 이번 시도 전에 이미 _COMPLETE가 있었다
+        key, ip = env.get("TD_SSH_KEY_PATH"), env.get("TD_LIGHTSAIL_IP")
+        self.ssh_target = f"ubuntu@{ip}" if ip else None
+        self.ssh_key = key
+        self.min_free = int(float(env.get("TD_MIN_FREE_GB", "2")) * GIB)
+        self.lightsail_preflight_error: str | None = None
+        # 테스트 전용: 객체마다 잠깐 멈춰 SIGINT/SIGKILL을 끼워 넣는다(운영 실행은 TD_SITE_PREFIX가 없어 무시된다).
+        self.pause = float(env.get("TD_PUBLISH_PAUSE_SEC", "0") or 0) if env.get("TD_SITE_PREFIX") else 0.0
+
+    def inject(self, point: str) -> None:
+        if self.hooks.should_fail("S13", point, self.env):
+            raise InjectedFailure(f"injected failure (TD_FAIL_STAGE=S13:{point})")
+
+    def result(self, status: str, reason: str | None) -> dict:
+        timing = {"uploadSeconds": round(self.upload_seconds, 2), "memBeforeMb": self.mem_before, "memAfterMb": self.mem_after}
+        return build_result(status, reason, self.hosts, timing, self.size_bytes)
+
+    # -- 단계 ----------------------------------------------------------------------------------
+    def preflight(self) -> None:
+        self.mirror.parent.mkdir(parents=True, exist_ok=True)
+        check_free_space("로컬", shutil.disk_usage(self.mirror.parent).free, self.min_free)
+        if not (self.ssh_target and self.ssh_key):
+            self.lightsail_preflight_error = "TD_LIGHTSAIL_IP/TD_SSH_KEY_PATH가 설정돼 있지 않다"
+            return
+        try:
+            self.mem_before = server_mem_used_mb(self.ssh_target, self.ssh_key)
+            free = server_free_bytes(self.ssh_target, self.ssh_key)
+        except (PublishError, ValueError) as exc:
+            self.lightsail_preflight_error = f"서버 사전 점검 실패: {exc}"  # 서버에 닿지 않는 것은 Lightsail만의 실패(degraded)
+            return
+        check_free_space("Lightsail 서버", free, self.min_free)  # 닿는데 모자라면 rsync 전에 S13 failed
+
+    def render(self) -> Manifest:
+        from td.site import pages
+        site_dir = self.run_dir / pages.PUBLISH_SUBDIR
+        shutil.rmtree(site_dir, ignore_errors=True)  # 이전 시도의 낡은 파일이 manifest에 섞이지 않게
+        pages.render_run(self.run_dir, self.run_dir)
+        manifest = build_manifest(site_dir, self.key_prefix, self.run_dir / "run.json")
+        self.size_bytes = manifest.total_bytes
+        return manifest
+
+    def s3_phase(self, manifest: Manifest) -> None:
+        marker = read_complete(self.s3, self.bucket, self.key_prefix)
+        if marker is not None:
+            self.sealed_before = True
+            problems = verify_remote(self.s3, self.bucket, manifest)
+            if marker.get("manifestSha256") != manifest.digest():
+                problems.append("_COMPLETE의 manifest 체크섬이 다르다")
+            if problems:
+                raise ContentConflict("이미 게시된 run과 내용이 다르다(업로드하지 않음): " + "; ".join(problems[:5]))
+            stats = UploadStats(0, len(manifest.entries), 0.0)
+        else:
+            stats = upload_run(self.s3, self.bucket, manifest, inject=self.inject, pause=self.pause,
+                               deadline=time.monotonic() + S3_TIMEOUT)
+            problems = verify_remote(self.s3, self.bucket, manifest)
+            if problems:
+                raise PublishError("업로드 검증 실패: " + "; ".join(problems[:5]))
+            self.inject("complete")
+            complete(self.s3, self.bucket, manifest)
+        self.upload_seconds += stats.seconds
+        self.hosts["s3"] = {"status": "failed", "reason": "index not published", "uploaded": stats.uploaded,
+                            "skipped": stats.skipped, "objects": len(manifest.entries)}
+
+    def index_phase(self) -> list[Path]:
+        from td.site import index
+        self.inject("index")
+        started = time.monotonic()
+        sync_mirror(self.s3, self.bucket, self.mirror)
+        written = index.rebuild(self.mirror, self.prefix)
+        upload_files(self.s3, self.bucket, self.mirror, written)
+        self.upload_seconds += time.monotonic() - started
+        self.hosts["s3"] = {**self.hosts["s3"], "status": "passed"}
+        self.hosts["s3"].pop("reason", None)
+        return written
+
+    def cloudfront_phase(self, written: list[Path]) -> None:
+        try:
+            paths = invalidation_paths(self.mirror, written, self.prefix, self.sut, self.run_id)
+            invalidation = invalidate(self.cf, self.distribution_id, paths, self.run_id)
+            self.hosts["cloudfront"] = {"status": "passed", "invalidationId": invalidation, "paths": len(paths)}
+        except Exception as exc:  # noqa: BLE001 - 무효화 실패는 degraded(인덱스는 no-cache라 곧 갱신된다)
+            self.hosts["cloudfront"] = {"status": "failed", "reason": f"invalidation: {type(exc).__name__}: {str(exc)[:200]}"}
+
+    def lightsail_phase(self) -> None:
+        try:
+            self.inject("lightsail")
+            if self.lightsail_preflight_error:
+                raise PublishError(self.lightsail_preflight_error)
+            rsync_lightsail(self.mirror, self.ssh_target, self.ssh_key, RSYNC_TIMEOUT)
+            try:
+                self.mem_after = server_mem_used_mb(self.ssh_target, self.ssh_key)
+            except (PublishError, ValueError):
+                self.mem_after = None  # 메모리 측정 실패는 게시 실패가 아니다
+            self.hosts["lightsail"] = {"status": "passed"}
+        except (PublishError, OSError) as exc:
+            self.hosts["lightsail"] = {"status": "failed", "reason": str(exc)[:300]}
+
+    def log_phase(self) -> dict:
+        status, reason = overall_status(self.hosts)
+        write_log(self.s3, self.bucket, self.mirror, self.prefix, self.sut, self.run_id, self.result(status, reason))
+        if self.hosts["lightsail"]["status"] == "passed":
+            try:  # 방금 쓴 publish-log를 Lightsail에도 싣는다(run 페이지가 같은 호스트에서 읽는다)
+                rsync_lightsail(self.mirror, self.ssh_target, self.ssh_key, RSYNC_TIMEOUT, runs=False)
+            except PublishError as exc:
+                self.hosts["lightsail"] = {"status": "failed", "reason": f"publish-log 동기화: {exc}"[:300]}
+                status, reason = overall_status(self.hosts)
+                write_log(self.s3, self.bucket, self.mirror, self.prefix, self.sut, self.run_id, self.result(status, reason))
+        return self.result(status, reason)
+
+    def write_failure_log(self) -> None:
+        """실패 사유를 S3 publish-log에 남긴다(잠금을 잡았고, 이미 봉인된 run이 아닐 때만 — 성공 기록을 덮어쓰지 않는다)."""
+        if self.lock is None or self.sealed_before or self.s3 is None:
+            return
+        status, reason = overall_status(self.hosts)
+        try:
+            write_log(self.s3, self.bucket, self.mirror, self.prefix, self.sut, self.run_id, self.result(status, reason), to_mirror=False)
+        except Exception:  # noqa: BLE001 - 실패 기록은 최선 노력
+            pass
+
+    # -- 실행 ----------------------------------------------------------------------------------
+    def execute(self) -> dict:
+        global _TIMINGS
+        _TIMINGS = {"uploadSeconds": None, "memBeforeMb": None, "memAfterMb": None}
+        try:
+            self.hooks.check_allowed(self.env)
+            hosting = load_hosting(self.work_dir, self.env)
+            self.bucket, self.distribution_id = hosting["bucket"], hosting["distribution_id"]
+            if self.s3 is None or self.cf is None:
+                self.s3, self.cf = _make_clients(self.env)
+            self.preflight()
+            manifest = self.render()
+            self.lock = acquire_lock(self.s3, self.bucket, self.prefix, self.attempt_id)
+            self.s3_phase(manifest)
+            written = self.index_phase()
+            self.cloudfront_phase(written)
+            self.lightsail_phase()
+            result = self.log_phase()
+        except LockHeld as exc:
+            self.hosts["s3"] = {"status": "failed", "reason": str(exc)}
+            result = self.result("failed", str(exc))
+        except PublishInterrupted as exc:
+            self.hosts["s3"] = {**self.hosts["s3"], "status": "failed", "reason": f"interrupted ({exc})"}
+            self.write_failure_log()
+            result = self.result("failed", f"interrupted ({exc})")
+        except (PublishError, self.hooks.HookRefused) as exc:
+            self.hosts["s3"] = {**self.hosts["s3"], "status": "failed", "reason": str(exc)[:600]}
+            self.write_failure_log()
+            result = self.result("failed", str(exc)[:600])
+        except Exception as exc:  # noqa: BLE001 - 예상 밖 오류도 단계를 failed로 기록한다
+            reason = f"internal error: {type(exc).__name__}: {str(exc)[:400]}"
+            self.hosts["s3"] = {**self.hosts["s3"], "status": "failed", "reason": reason}
+            self.write_failure_log()
+            result = self.result("failed", reason)
+        finally:
+            signal.signal(signal.SIGINT, signal.SIG_IGN)  # 정리 도중의 중복 신호로 잠금 해제가 끊기지 않게 한다
+            signal.signal(signal.SIGTERM, signal.SIG_IGN)
+            if self.lock is not None:
+                try:
+                    release(self.s3, self.lock)
+                except Exception as exc:  # noqa: BLE001
+                    print(f"[td] 잠금 해제 실패(수동 --force-unlock {self.lock.attempt_id} 필요): {exc}", file=sys.stderr)
+        _TIMINGS = dict(result["timings"])
+        return result
+
+
+def run_publish(sut: str, run_id: str, run_dir, env: dict | None = None, s3=None, cf=None) -> int:
+    """S13 본체. stages/S13.json을 마감하고 종료 코드(failed 1, 그 밖 0)를 돌려준다."""
+    from td import state
+    env = dict(os.environ if env is None else env)
+    root = Path(env.get("TD_ROOT", Path(__file__).resolve().parents[2]))
+    for key, value in load_local_env(root / "infra" / "local.env").items():
+        env.setdefault(key, value)  # 실제 환경 변수가 우선
+    signal.signal(signal.SIGINT, _raise_interrupted)
+    signal.signal(signal.SIGTERM, _raise_interrupted)
+    publication = Publication(sut, run_id, run_dir, env, s3, cf)
+    result = publication.execute()
+    extra = {k: result[k] for k in ("hosts", "timings", "sizeBytes")}
+    state.end(run_dir, "S13", result["status"], result["reason"], extra=extra)
+    print(f"[td] S13 {result['status']}" + (f": {result['reason']}" if result["reason"] else ""), file=sys.stderr)
+    return 1 if result["status"] == "failed" else 0
+
+
+def run_force_unlock(attempt_id: str, env: dict | None = None, s3=None) -> int:
+    env = dict(os.environ if env is None else env)
+    work_dir = Path(env.get("TD_WORK_DIR") or Path(env.get("TD_ROOT", ".")) / "work")
+    prefix = normalize_prefix(env.get("TD_SITE_PREFIX", ""))
+    try:
+        bucket = load_hosting(work_dir, env)["bucket"]
+        s3 = s3 or _make_clients(env)[0]
+        outcome = force_unlock(s3, bucket, prefix, attempt_id)
+    except LockMismatch as exc:
+        print(f"[td] {exc}", file=sys.stderr)
+        return 4
+    except PublishError as exc:
+        print(f"[td] force-unlock 실패: {exc}", file=sys.stderr)
+        return 1
+    print(f"[td] force-unlock {attempt_id}: {outcome}", file=sys.stderr)
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="td.publish")
+    sub = parser.add_subparsers(dest="cmd", required=True)
+    run = sub.add_parser("run")
+    run.add_argument("--sut", required=True)
+    run.add_argument("--run-id", required=True)
+    run.add_argument("--run-dir", required=True)
+    unlock = sub.add_parser("force-unlock")
+    unlock.add_argument("--attempt", required=True)
+    args = parser.parse_args(argv)
+    if args.cmd == "run":
+        return run_publish(args.sut, args.run_id, args.run_dir)
+    return run_force_unlock(args.attempt)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

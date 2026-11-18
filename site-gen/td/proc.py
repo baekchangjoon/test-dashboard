@@ -64,7 +64,8 @@ def run_with_timeout(timeout_sec: float, argv: list[str], kill_grace: float | No
 def _kill_group(proc: subprocess.Popen, sig: int) -> None:
     try:
         os.killpg(proc.pid, sig)
-    except ProcessLookupError:
+    except (ProcessLookupError, PermissionError):
+        # PermissionError: macOS는 좀비만 남은 그룹에 신호를 보내면 EPERM을 돌려준다(이미 끝난 그룹과 같다).
         pass
 
 

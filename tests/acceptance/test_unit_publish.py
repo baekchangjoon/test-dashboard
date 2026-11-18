@@ -196,3 +196,129 @@ def test_normalize_prefix_rejects_parent_segments():
         publish.normalize_prefix("_test/../x")
 
 
+# --- 미러 --------------------------------------------------------------------------------
+def test_sync_mirror_downloads_skips_runs_and_prunes(tmp_path):
+    s3 = FakeS3()
+    mirror = tmp_path / "mirror"
+    for key, body in {"suts.json": b"1", "suts/s/runs/r1/index.html": b"run", "suts/s/runs/r1/_COMPLETE": b"{}",
+                      "locks/publish": b"lock", "_test/x/locks/publish": b"lock"}.items():
+        s3.put_object(Bucket=BUCKET, Key=key, Body=body)
+    stats = publish.sync_mirror(s3, BUCKET, mirror)
+    assert (mirror / "suts.json").read_bytes() == b"1" and (mirror / "suts/s/runs/r1/_COMPLETE").exists()
+    assert not (mirror / "locks").exists() and not (mirror / "_test").exists()
+    assert stats.downloaded == 3
+    # 불변 run 객체는 있으면 다시 받지 않고, 인덱스 파일은 내용이 바뀌면 받는다. S3에 없는 파일은 지운다.
+    (mirror / "suts/s/runs/r1/index.html").write_bytes(b"RUN")  # 같은 크기: 건너뛰어 그대로
+    s3.put_object(Bucket=BUCKET, Key="suts.json", Body=b"22")
+    (mirror / "stray.json").write_text("x")
+    stats = publish.sync_mirror(s3, BUCKET, mirror)
+    assert (mirror / "suts/s/runs/r1/index.html").read_bytes() == b"RUN"
+    assert (mirror / "suts.json").read_bytes() == b"22" and not (mirror / "stray.json").exists()
+    assert stats.downloaded == 1 and stats.pruned == 1
+
+
+def test_sync_mirror_does_not_prune_without_marker_dir(tmp_path):
+    mirror = tmp_path / "mirror"
+    mirror.mkdir()
+    (mirror / "keep.txt").write_text("mine")
+    publish.sync_mirror(FakeS3(), BUCKET, mirror)
+    assert (mirror / "keep.txt").exists()
+
+
+# --- 무효화 경로 ---------------------------------------------------------------------------
+def test_invalidation_paths_are_explicit_without_mid_wildcards(tmp_path):
+    mirror = tmp_path
+    (mirror / "_test/x").mkdir(parents=True)
+    (mirror / "_test/x/hosting.json").write_text("{}")
+    written = [mirror / "_test/x/index.html", mirror / "_test/x/suts.json", mirror / "_test/x/suts/s/runs.json"]
+    paths = publish.invalidation_paths(mirror, written, "_test/x/", "s", "r1")
+    assert "/_test/x/index.html" in paths and "/_test/x/" in paths and "/_test/x/suts/s/runs.json" in paths
+    assert "/_test/x/hosting.json" in paths and "/_test/x/hosting.html" not in paths  # 있는 것만
+    assert "/_test/x/suts/s/publish-log/r1.json" in paths
+    assert all(p.startswith("/") and "*" not in p for p in paths) and len(paths) == len(set(paths))
+
+
+# --- 디스크 여유 -----------------------------------------------------------------------------
+def test_disk_check_fails_below_minimum():
+    publish.check_free_space("local", 3 * 1024**3, 2 * 1024**3)
+    with pytest.raises(publish.PublishError, match="local.*2.0"):
+        publish.check_free_space("local", 1 * 1024**3, 2 * 1024**3)
+
+
+# --- rsync(가짜 실행 파일) ---------------------------------------------------------------------
+def fake_rsync(tmp_path: Path, body: str) -> dict:
+    bin_dir = tmp_path / "fakebin"
+    bin_dir.mkdir(exist_ok=True)
+    script = bin_dir / "rsync"
+    script.write_text(f"#!/usr/bin/env bash\n{body}\n")
+    script.chmod(script.stat().st_mode | stat.S_IEXEC)
+    return {"PATH": f"{bin_dir}:{os.environ['PATH']}"}
+
+
+def test_rsync_runs_new_runs_first_then_overwrites_index_files(tmp_path, monkeypatch):
+    log = tmp_path / "rsync.log"
+    monkeypatch.setenv("PATH", fake_rsync(tmp_path, f'echo "$@" >> {log}')["PATH"])
+    publish.rsync_lightsail(tmp_path / "mirror", "ubuntu@203.0.113.1", "/key", timeout=30)
+    first, second = log.read_text().splitlines()
+    assert "--ignore-existing" in first and "--exclude=runs/" not in first
+    assert "--ignore-existing" not in second and "--exclude=runs/" in second
+    assert all("--delete" not in line and "locks/" in line and "ubuntu@203.0.113.1:/srv/dashboard/" in line for line in (first, second))
+    assert "BatchMode=yes" in first and "-i /key" in first
+
+
+def test_rsync_hang_times_out_and_kills_group(tmp_path, monkeypatch):
+    pid_file = tmp_path / "child.pid"
+    monkeypatch.setenv("PATH", fake_rsync(tmp_path, f"sleep 300 & echo $! > {pid_file}; wait")["PATH"])
+    monkeypatch.setenv("TD_KILL_GRACE", "1")
+    started = time.time()
+    with pytest.raises(publish.PublishError, match="timeout"):
+        publish.rsync_lightsail(tmp_path / "mirror", "ubuntu@203.0.113.1", "/key", timeout=1)
+    assert time.time() - started < 20
+    child = int(pid_file.read_text())
+    for _ in range(40):
+        try:
+            os.kill(child, 0)
+        except ProcessLookupError:
+            break
+        time.sleep(0.25)
+    else:
+        pytest.fail("rsync 자식(sleep)이 시간 초과 뒤에도 남아 있다")
+
+
+def test_rsync_failure_exit_code_is_reported(tmp_path, monkeypatch):
+    monkeypatch.setenv("PATH", fake_rsync(tmp_path, "exit 23")["PATH"])
+    with pytest.raises(publish.PublishError, match="23"):
+        publish.rsync_lightsail(tmp_path / "mirror", "ubuntu@203.0.113.1", "/key", timeout=30)
+
+
+# --- 상태 규칙(설계 §13.9) -----------------------------------------------------------------------
+def host(status, reason=None):
+    return {"status": status, **({"reason": reason} if reason else {})}
+
+
+@pytest.mark.parametrize("s3,cf,ls,expected", [
+    ("passed", "passed", "passed", "passed"),
+    ("passed", "passed", "failed", "degraded"),
+    ("passed", "failed", "passed", "degraded"),
+    ("failed", "passed", "passed", "failed"),
+    ("failed", "skipped", "failed", "failed"),
+])
+def test_overall_status_rules(s3, cf, ls, expected):
+    status, reason = publish.overall_status({"s3": host(s3, "s3 down"), "cloudfront": host(cf, "cf down"),
+                                             "lightsail": host(ls, "ls down")})
+    assert status == expected
+    assert (reason is None) == (expected == "passed")
+    if expected == "failed":
+        assert "s3 down" in reason
+    if expected == "degraded":
+        assert ("ls down" in reason) or ("cf down" in reason)
+
+
+def test_timings_default_shape():
+    assert set(publish.timings()) == {"uploadSeconds", "memBeforeMb", "memAfterMb"}
+
+
+def test_log_payload_has_shared_fields():
+    result = publish.build_result("failed", "x", {"s3": host("failed", "x")}, {"uploadSeconds": 1.5, "memBeforeMb": None, "memAfterMb": None}, 123)
+    assert result == {"status": "failed", "reason": "x", "hosts": {"s3": {"status": "failed", "reason": "x"}},
+                      "timings": {"uploadSeconds": 1.5, "memBeforeMb": None, "memAfterMb": None}, "sizeBytes": 123}
