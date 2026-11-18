@@ -54,6 +54,27 @@ def junit_test_ids(junit_dir, sources_dir=None) -> list[str]:
     return ids
 
 
+def junit_results(junit_dir, sources_dir=None) -> dict[str, str]:
+    """testId -> passed|failed|skipped. 같은 testId가 여러 번이면 failed > passed > skipped 순으로 합친다."""
+    methods = display_name_methods(sources_dir)
+    rank = {"skipped": 0, "passed": 1, "failed": 2}
+    results: dict[str, str] = {}
+    for xml_file in sorted(Path(junit_dir).glob("*.xml")):
+        for case in ET.parse(xml_file).getroot().iter("testcase"):
+            simple_name = case.get("classname", "").rsplit(".", 1)[-1]
+            name = _report_name(case.get("name", ""))
+            test_id = f"{simple_name}#{methods.get((simple_name, name)) or name}"
+            if case.find("failure") is not None or case.find("error") is not None:
+                status = "failed"
+            elif case.find("skipped") is not None:
+                status = "skipped"
+            else:
+                status = "passed"
+            if test_id not in results or rank[status] > rank[results[test_id]]:
+                results[test_id] = status
+    return results
+
+
 def exec_file_key(test_id: str) -> str:
     """testId가 .exec 파일 이름(확장자 제외)이 되는 규칙. pjacoco가 `#`를 그대로 쓰는지 실측해 맞춘다."""
     return test_id

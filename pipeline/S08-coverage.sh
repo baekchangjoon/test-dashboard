@@ -21,9 +21,10 @@ COMMIT="$(jq -r '.outputs.commit // empty' "$S00_JSON")"
 SOURCES="$(td_py -c 'import sys;from td.sut_config import load;print(load(sys.argv[1]).sources_dir(sys.argv[2]))' "$TD_SUT_FILE" "$TD_SUT_SRC")" \
   || s08_fail "sut.yaml sources를 읽지 못했다"
 SUT_JAVA_HOME="$(td_java_home "$(td_py -m td.sut_config get "$TD_SUT_FILE" java)")" || s08_fail "SUT가 요구하는 JDK를 찾지 못했다"
+TEST_SOURCES="$TD_SUT_SRC/$(td_py -m td.sut_config get "$TD_SUT_FILE" blackbox.test_sources)" || s08_fail "sut.yaml blackbox.test_sources를 읽지 못했다"
 mkdir -p "$TD_RUN_DIR/S08"
 RESULT="$(JAVA_HOME="$SUT_JAVA_HOME" td_py -m td.coverage run "$TD_RUN_DIR" --sut-file "$TD_SUT_FILE" --classes "$CLASSES" \
-  --sources "$SOURCES" --cli "$TOOLS_DIR/jacococli.jar" --commit "$COMMIT" 2>"$TD_RUN_DIR/S08/coverage.log")" \
+  --sources "$SOURCES" --cli "$TOOLS_DIR/jacococli.jar" --commit "$COMMIT" --test-sources "$TEST_SOURCES" 2>"$TD_RUN_DIR/S08/coverage.log")" \
   || s08_fail "td.coverage 실행 실패: $(tail -c 600 "$TD_RUN_DIR/S08/coverage.log")"
 jq -e . >/dev/null 2>&1 <<< "$RESULT" || s08_fail "td.coverage 출력이 JSON이 아니다: $(head -c 300 <<< "$RESULT")"
 STATUS="$(jq -r '.status' <<< "$RESULT")"
