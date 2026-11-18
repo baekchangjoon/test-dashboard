@@ -9,7 +9,9 @@
   ],
   "x-forbidden-paths": [
     "_artifact",
-    "project_root"
+    "project_root",
+    "test_classes[].methods",
+    "endpoint_coverage.*[]"
   ],
   "properties": {
     "skill": {
@@ -179,46 +181,7 @@
                 "type": "object",
                 "patternProperties": {
                   "^.+$": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "certain": {
-                          "type": "boolean"
-                        },
-                        "class": {
-                          "type": "string"
-                        },
-                        "fqn": {
-                          "type": "string"
-                        },
-                        "intent_tokens": {
-                          "type": "array",
-                          "items": {
-                            "type": "string"
-                          }
-                        },
-                        "method": {
-                          "type": "string"
-                        },
-                        "query_keys": {
-                          "type": "array",
-                          "items": {
-                            "type": "string"
-                          }
-                        },
-                        "scenario_class": {
-                          "type": "string"
-                        },
-                        "status": {
-                          "type": [
-                            "integer",
-                            "null"
-                          ]
-                        }
-                      },
-                      "additionalProperties": false
-                    }
+                    "type": "integer"
                   }
                 },
                 "additionalProperties": false
@@ -356,90 +319,6 @@
                     },
                     "is_abstract": {
                       "type": "boolean"
-                    },
-                    "methods": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "display_name": {
-                            "type": [
-                              "null",
-                              "string"
-                            ]
-                          },
-                          "endpoints": {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "properties": {
-                                "expected_status": {
-                                  "type": "array",
-                                  "items": {
-                                    "type": "integer"
-                                  }
-                                },
-                                "http_method": {
-                                  "type": "string"
-                                },
-                                "path": {
-                                  "type": "string"
-                                },
-                                "pos": {
-                                  "type": "integer"
-                                },
-                                "query_keys": {
-                                  "type": "array",
-                                  "items": {
-                                    "type": "string"
-                                  }
-                                },
-                                "raw_path": {
-                                  "type": "string"
-                                },
-                                "status_certain": {
-                                  "type": "boolean"
-                                }
-                              },
-                              "additionalProperties": false
-                            }
-                          },
-                          "expected_status": {
-                            "type": "array",
-                            "items": {
-                              "type": "integer"
-                            }
-                          },
-                          "intent_tokens": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            }
-                          },
-                          "name": {
-                            "type": "string"
-                          },
-                          "scenario_class": {
-                            "type": "string"
-                          },
-                          "signatures": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            }
-                          },
-                          "status_certain": {
-                            "type": "boolean"
-                          },
-                          "tags": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            }
-                          }
-                        },
-                        "additionalProperties": false
-                      }
                     },
                     "name": {
                       "type": "string"

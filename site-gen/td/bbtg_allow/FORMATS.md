@@ -46,3 +46,9 @@ bbtg 고정 커밋(`tools.pin.yaml`)의 7개 스킬 `cli.py --help`와 `SKILL.md
   공백 정규화 후 그대로 있으면 위반(HTTP 경로, 제네릭 타입 표기, 사람이 쓴 `display_name`은 예외), (2) `password=`/`token=` 등과 URL·JDBC 질의의 `user=`,
   `://user:pass@` 모양이 있으면 위반.
 - 이 관문은 "소스에 그대로 있는 식"만 잡는다. bbtg가 만든 가공 문장은 못 잡으므로 위 스키마 금지가 1차 방어선이다.
+
+## 수정 2차: scan-test-assets는 구조 메타데이터만
+
+사람이 쓴 기존 IT의 의도(`@DisplayName`, 테스트 메서드 이름, 이름에서 뽑은 `intent_tokens`/`signatures`)는 생성 입력이 아니다.
+`test_classes[].methods`는 금지(클래스별 `test_method_count`는 남김), `endpoint_coverage`는 엔드포인트별 개수만 남긴다.
+지원/헬퍼 클래스와 재사용 멤버 시그니처, 태그 규약, 빌드 필터는 그대로 남는다. A1 관문의 `display_name` 예외는 없앴다.

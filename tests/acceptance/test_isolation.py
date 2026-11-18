@@ -102,7 +102,8 @@ def test_req021_bbtg_allow_schema(s02_default):
         document = json.loads((run.clean_dir / f"{skill}.json").read_text())
         keys = set(_all_keys(document))
         assert not keys & {"timestamp", "scan_duration_ms", "llm_delegation_guide", "deep_inspection", "condition", "where_clause",
-                           "sql_delete", "formula", "variable_name", "wiremock_strategy"}, skill
+                           "sql_delete", "formula", "variable_name", "wiremock_strategy", "display_name",
+                           "intent_tokens", "signatures", "methods"}, skill
         for text in _all_strings(document):
             assert "package org.springframework" not in text, f"{skill}: 소스 원문 조각"
             assert str(run.sut_src) not in text and not text.startswith("/Users/") and "/private/" not in text, f"{skill}: {text[:80]}"
@@ -119,6 +120,18 @@ def test_req021_bbtg_allow_schema(s02_default):
     # 자격 증명 모양 문자열이 없다
     for skill in bbtg.SKILLS:
         assert not bbtg.credential_violations(json.loads((run.clean_dir / f"{skill}.json").read_text())), skill
+    # 기존 IT의 의도(@DisplayName, 테스트 메서드 이름)는 구조 메타데이터로만 남는다: 이름·표시 이름이 clean 어디에도 없다.
+    scan = json.loads((run.clean_dir / "scan-test-assets.json").read_text())["results"][0]["data"]
+    raw_scan = json.loads((run.out_dir / "raw" / "stdout" / "scan-test-assets.json").read_text())
+    clean_text = json.dumps(scan, ensure_ascii=False)
+    raw_methods = [m for tc in raw_scan["test_classes"] for m in tc["methods"]]
+    assert raw_methods
+    for method in raw_methods:
+        assert method["name"] not in clean_text, method["name"]
+        if method.get("display_name"):
+            assert method["display_name"] not in clean_text
+    assert [tc["test_method_count"] for tc in scan["test_classes"]] == [tc["test_method_count"] for tc in raw_scan["test_classes"]]
+    assert scan["support_classes"] and all(isinstance(n, int) for n in scan["endpoint_coverage"].values())
     clean_auth = json.loads((run.clean_dir / "inspect-auth.json").read_text())["results"][0]["data"]
     assert clean_auth["interceptor_sources"] and all("source" not in item for item in clean_auth["interceptor_sources"])
     # 원문이 raw에는 남아 있다(로컬 전용): 제거는 정제 단계의 일이다.

@@ -269,3 +269,24 @@ def test_sanitize_markdown_artifact_path(tmp_path):
     (raw / "calls.json").write_text(json.dumps({"calls": calls}))
     missing = bbtg.sanitize(raw, tmp_path / "clean2")
     assert missing.errors == ["dependency-map-C: raw unreadable (ValueError)"] and missing.written == []
+
+
+def test_scan_test_assets_keeps_structure_only(tmp_path):
+    root = _sut_with_source(tmp_path, "class S {}\n")
+    raw = tmp_path / "raw"
+    calls = [{"id": "scan-test-assets", "skill": "scan-test-assets", "key": ".", "rc": 0, "stdout": "stdout/s.json", "artifacts": []}]
+    scan = {"schema_version": "1.0", "base_package": "p",
+            "test_classes": [{"name": "OwnerApiBlackBoxIT", "fqn": "p.OwnerApiBlackBoxIT", "test_method_count": 2,
+                              "methods": [{"name": "listAllOwners", "display_name": "GET /api/owners returns (all) owners"},
+                                          {"name": "createOwner", "display_name": None}]}],
+            "endpoint_coverage": {"GET /api/owners": [{"class": "OwnerApiBlackBoxIT", "method": "listAllOwners",
+                                                       "intent_tokens": ["owners"]}]}}
+    _write_raw(raw, calls, {"s": scan}, root)
+    result = bbtg.sanitize(raw, tmp_path / "clean")
+    assert result.errors == []
+    text = (tmp_path / "clean" / "scan-test-assets.json").read_text()
+    data = json.loads(text)["results"][0]["data"]
+    assert data["test_classes"] == [{"name": "OwnerApiBlackBoxIT", "fqn": "p.OwnerApiBlackBoxIT", "test_method_count": 2}]
+    assert data["endpoint_coverage"] == {"GET /api/owners": 1}
+    assert "listAllOwners" not in text and "createOwner" not in text and "returns (all)" not in text
+    assert result.removed_counts["scan-test-assets:test_classes[].methods"] == 1
