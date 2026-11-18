@@ -21,7 +21,20 @@ while [[ $# -gt 0 ]]; do
     *) usage ;;
   esac
 done
+# 옵션 검증(run 디렉터리 예약 전)
 [[ "$REPS" =~ ^[1-9]$ ]] || die "--reps는 1~9여야 한다: $REPS"
+[[ "$STYLE" == "cucumber" || "$STYLE" == "junit" ]] || die "--style은 cucumber|junit이어야 한다: $STYLE"
+IFS=',' read -r -a arm_list <<< "$ARMS"
+[[ ${#arm_list[@]} -gt 0 ]] || die "--arms가 비었다"
+for arm in "${arm_list[@]}"; do
+  [[ "$arm" == "base" || "$arm" == "jqa" || "$arm" == "owl" ]] || die "--arms는 base,jqa,owl 중에서만 고른다: '$arm'"
+done
+if [[ -n "$ONLY" ]]; then
+  IFS=',' read -r -a only_list <<< "$ONLY"
+  for stage_id in "${only_list[@]}"; do
+    [[ "$stage_id" =~ ^S(0[0-9]|1[0-3])$ ]] || die "--only는 S00..S13만 받는다: '$stage_id'"
+  done
+fi
 [[ -n "$SUT_FILE" ]] || SUT_FILE="$TD_ROOT/suts/$SUT/sut.yaml"
 [[ -f "$SUT_FILE" ]] || die "sut 파일이 없다: $SUT_FILE"
 
@@ -32,7 +45,8 @@ fi
 STAGE_DIR="${TD_STAGE_DIR:-$TD_ROOT/pipeline}"
 
 # --- SUT 커밋 해석(run 디렉터리 예약 전) -------------------------------------------------
-eval "$(td_py -m td.sutsrc "$SUT_FILE")" || die "sut 파일을 읽지 못했다: $SUT_FILE"
+SUT_VARS="$(td_py -m td.sutsrc "$SUT_FILE")" || die "sut 파일을 읽지 못했다: $SUT_FILE"
+eval "$SUT_VARS"
 SRC_DIR="$TD_WORK_DIR/suts/$SUT_NAME/src"
 mkdir -p "$(dirname "$SRC_DIR")"
 if [[ -d "$SRC_DIR/.git" ]]; then
@@ -72,33 +86,62 @@ export TD_RUN_DIR="$RUN_DIR" TD_RUN_ID="$RUN_ID" TD_SUT_NAME="$SUT_NAME" TD_SUT_
 ORDER=()
 while IFS= read -r line; do ORDER+=("$line"); done < <(td_py -c 'from td.state import EXECUTION_ORDER; print("\n".join(EXECUTION_ORDER))')
 requested() { [[ -z "$ONLY" ]] || [[ ",$ONLY," == *",$1,"* ]]; }
+
+# 상태 기록이 실패하면 단계를 조용히 빠뜨리지 않는다. 단계를 failed로 기록하고, 그것마저 안 되면
+# run.json 자체를 쓸 수 없는 것이므로 run을 종료 코드 1로 중단한다.
+state_failed() { # <stage_id> <what> <message>
+  local msg="state error: $2: $3"
+  td_log "$1 $msg"
+  td_py -m td.state end "$RUN_DIR" "$1" failed "$msg" 2>/dev/null \
+    || { echo "run-all: run.json을 쓸 수 없어 run을 중단한다 ($msg)" >&2; exit 1; }
+}
+
 ABORTED=""
 for stage_id in "${ORDER[@]}"; do
   if ! requested "$stage_id"; then
-    td_py -m td.state skip "$RUN_DIR" "$stage_id" "not-requested"; continue
+    out="$(td_py -m td.state skip "$RUN_DIR" "$stage_id" "not-requested" 2>&1)" || state_failed "$stage_id" skip "$out"
+    continue
   fi
   if [[ -n "$ABORTED" ]]; then
-    td_py -m td.state skip "$RUN_DIR" "$stage_id" "aborted: $ABORTED failed"; continue
+    out="$(td_py -m td.state skip "$RUN_DIR" "$stage_id" "aborted: $ABORTED failed" 2>&1)" || state_failed "$stage_id" skip "$out"
+    continue
   fi
-  decision="$(td_py -m td.state prepare "$RUN_DIR" "$stage_id")"
-  [[ "$decision" == "run" ]] || continue
+  decision="$(td_py -m td.state prepare "$RUN_DIR" "$stage_id" 2>&1)"
+  prepare_rc=$?
+  if [[ $prepare_rc -ne 0 ]]; then state_failed "$stage_id" prepare "$decision"; continue; fi
+  case "$decision" in
+    run) ;;
+    skip) continue ;;
+    *) state_failed "$stage_id" prepare "unexpected output '$decision'"; continue ;;
+  esac
   script=("$STAGE_DIR/$stage_id"-*.sh)
   if [[ ! -x "${script[0]}" ]]; then
-    td_py -m td.state end "$RUN_DIR" "$stage_id" failed "stage script not found in $STAGE_DIR"; continue
+    state_failed "$stage_id" run "stage script not found in $STAGE_DIR"; continue
   fi
   "${script[0]}" "$SUT" "$RUN_ID"
   script_rc=$?
-  if [[ $script_rc -ne 0 ]] && [[ "$(td_py -c "import sys;from td.state import stage_status;print(stage_status(sys.argv[1],sys.argv[2]) or '')" "$RUN_DIR" "$stage_id")" != "failed" ]]; then
-    td_py -m td.state end "$RUN_DIR" "$stage_id" failed "stage script exited $script_rc"
+  if [[ $script_rc -ne 0 ]]; then
+    current="$(td_py -c "import sys;from td.state import stage_status;print(stage_status(sys.argv[1],sys.argv[2]) or '')" "$RUN_DIR" "$stage_id" 2>&1)" \
+      || { state_failed "$stage_id" read "$current"; continue; }
+    if [[ "$current" != "failed" ]]; then
+      state_failed "$stage_id" run "stage script exited $script_rc"
+    fi
   fi
-  td_py -m td.state post "$RUN_DIR" "$stage_id"
-  if [[ "$stage_id" == "S00" ]] && [[ "$(td_py -m td.state exit-code "$RUN_DIR")" == "1" ]]; then
-    ABORTED="S00"
+  out="$(td_py -m td.state post "$RUN_DIR" "$stage_id" 2>&1)" || state_failed "$stage_id" post "$out"
+  if [[ "$stage_id" == "S00" ]]; then
+    code="$(td_py -m td.state exit-code "$RUN_DIR" 2>&1)" || die "exit-code 판정 실패: $code"
+    [[ "$code" == "1" ]] && ABORTED="S00"
   fi
 done
 
-td_py -m td.state finalize "$RUN_DIR"
-RC="$(td_py -m td.state exit-code "$RUN_DIR")"
+# 모든 단계에 기록이 있어야 한다.
+missing="$(td_py -c 'import sys;from td.state import STAGE_IDS,stage_path;print(" ".join(s for s in STAGE_IDS if not stage_path(sys.argv[1],s).exists()))' "$RUN_DIR" 2>&1)" \
+  || die "단계 기록 점검 실패: $missing"
+for stage_id in $missing; do state_failed "$stage_id" record "no stage record was written"; done
+
+out="$(td_py -m td.state finalize "$RUN_DIR" 2>&1)" || die "finalize 실패: $out"
+RC="$(td_py -m td.state exit-code "$RUN_DIR" 2>&1)" || die "exit-code 판정 실패: $RC"
+[[ "$RC" =~ ^[0-2]$ ]] || die "exit-code 판정 결과가 이상하다: $RC"
 echo "run-all: finished runId=$RUN_ID exit=$RC" >&2
 echo "$RUN_ID"
 exit "$RC"

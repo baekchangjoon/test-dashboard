@@ -23,6 +23,7 @@ ARMS_ALL = ("base", "jqa", "owl")
 PUBLISH_STAGE = "S13"
 ABORT_STAGE = "S00"  # 실패하면 run 중단, 종료 코드 1
 STUB_INPUT_HASH = "00000000"
+NOT_REQUESTED = "not-requested"
 
 
 @dataclass(frozen=True)
@@ -59,10 +60,11 @@ ARM_DEPENDENCIES: dict[str, tuple[str, ...]] = {"base": (), "jqa": ("S03",), "ow
 # --- 시간 -----------------------------------------------------------------------
 def now(finished: bool = False) -> datetime:
     """UTC 현재 시각. 테스트는 TD_NOW(시작), TD_NOW_FINISHED(종료)로 Clock을 주입한다."""
-    raw = os.environ.get("TD_NOW_FINISHED") if finished else None
-    raw = raw or os.environ.get("TD_NOW")
-    if raw:
+    raw = (os.environ.get("TD_NOW_FINISHED") if finished else None) or os.environ.get("TD_NOW")
+    if raw and os.environ.get("TD_SITE_PREFIX"):  # Clock 주입은 테스트 전용
         return parse_utc(raw)
+    if raw:
+        print("state: TD_NOW/TD_NOW_FINISHED는 TD_SITE_PREFIX가 없으면 무시한다", file=sys.stderr)
     return datetime.now(timezone.utc)
 
 
@@ -212,8 +214,21 @@ def _available(run_dir, stage_id: str) -> bool:
     return stage_status(run_dir, stage_id) in ("passed", "degraded")
 
 
+def _neutral(run_dir, stage_id: str) -> bool:
+    """--only로 요청하지 않아 건너뛴 단계. 선택·any_of·degrade_with 의존에서는 중립이다."""
+    data = read_stage(run_dir, stage_id)
+    return bool(data) and data["status"] == "skipped" and data.get("reason") == NOT_REQUESTED
+
+
 def _why(run_dir, stage_id: str) -> str:
+    if _neutral(run_dir, stage_id):
+        return f"{stage_id} {NOT_REQUESTED}"
     return f"{stage_id} {stage_status(run_dir, stage_id) or 'not-run'}"
+
+
+def _stub_mode() -> bool:
+    """스텁 단계(TD_STAGE_DIR) 실행에서만 generation id를 만들어 낸다."""
+    return bool(os.environ.get("TD_STAGE_DIR"))
 
 
 def requested_arms(run_dir) -> list[str]:
@@ -244,9 +259,13 @@ def _s06_extra(run_dir) -> dict:
     generations = {}
     for arm, skip_reason in plan.items():
         arms[arm] = {"status": "skipped", "reason": skip_reason} if skip_reason else {"status": "passed"}
-        for rep in range(1, requested_reps(run_dir) + 1):
-            generations[stub_gen_id(arm, rep)] = {"arm": arm, **arms[arm]}
-    return {"arms": arms, "generations": generations}
+        if _stub_mode():
+            for rep in range(1, requested_reps(run_dir) + 1):
+                generations[stub_gen_id(arm, rep)] = {"arm": arm, **arms[arm]}
+    extra = {"arms": arms}
+    if generations:
+        extra["generations"] = generations
+    return extra
 
 
 def prepare(run_dir, stage_id: str) -> str | None:
@@ -307,7 +326,7 @@ def post(run_dir, stage_id: str) -> None:
         extra = _s06_extra(run_dir)
         for arm, state in (data.get("arms") or {}).items():  # 단계가 직접 쓴 값이 우선
             extra["arms"][arm] = state
-        if data.get("generations"):
+        if data.get("generations"):  # 실제 S06이 쓴 generation이 우선
             extra["generations"] = data["generations"]
         skipped = [f"{arm} ({st.get('reason')})" for arm, st in extra["arms"].items() if st["status"] == "skipped"]
         if skipped:
@@ -318,10 +337,12 @@ def post(run_dir, stage_id: str) -> None:
         if skipped:
             reasons.append("generation skipped: " + "; ".join(skipped))
     if dep.any_of:
-        gone = [_why(run_dir, sid) for sid in dep.any_of if not _available(run_dir, sid)]
+        gone = [_why(run_dir, sid) for sid in dep.any_of
+                if not _available(run_dir, sid) and not _neutral(run_dir, sid)]
         if gone:
             reasons.append("reduced input: " + ", ".join(gone))
-    gone_optional = [_why(run_dir, sid) for sid in dep.optional if not _available(run_dir, sid)]
+    gone_optional = [_why(run_dir, sid) for sid in dep.optional
+                     if not _available(run_dir, sid) and not _neutral(run_dir, sid)]
     if gone_optional:
         reasons.append("optional input missing: " + ", ".join(gone_optional))
     shrunk = [sid for sid in dep.degrade_with if stage_status(run_dir, sid) == "degraded"]
@@ -367,6 +388,7 @@ def main(argv: list[str] | None = None) -> int:
     setter.add_argument("value_json")
     args = parser.parse_args(argv)
     try:
+        _maybe_inject_fault(args)
         if args.cmd == "begin":
             begin(args.run_dir, args.stage)
         elif args.cmd == "end":
@@ -389,10 +411,17 @@ def main(argv: list[str] | None = None) -> int:
             write_run_meta(args.run_dir, runId=args.run_id, sut=args.sut, commit=args.commit,
                            trigger=args.trigger, pr=None, startedAt=fmt_utc(now()),
                            options=json.loads(args.options_json))
-    except (ValueError, KeyError) as exc:
-        print(f"state: {exc}", file=sys.stderr)
+    except Exception as exc:  # noqa: BLE001 - 호출자(run-all.sh)가 비-0을 보고 단계를 failed로 기록한다
+        print(f"state: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 1
     return 0
+
+
+def _maybe_inject_fault(args) -> None:
+    """테스트 전용: TD_STATE_FAULT=<cmd>:<stage>(예: prepare:S03)이면 그 호출을 예외로 실패시킨다."""
+    spec = os.environ.get("TD_STATE_FAULT")
+    if spec and os.environ.get("TD_SITE_PREFIX") and spec == f"{args.cmd}:{getattr(args, 'stage', '')}":
+        raise RuntimeError(f"injected state fault {spec}")
 
 
 if __name__ == "__main__":

@@ -61,6 +61,7 @@ def test_req060_clock_shift_boundaries(tmp_path, started, finished, shift, sut_d
 
 
 def test_td_now_injection(monkeypatch):
+    monkeypatch.setenv("TD_SITE_PREFIX", "_test/x/")  # Clock 주입은 테스트 전용
     monkeypatch.setenv("TD_NOW", "2026-11-18T14:59:59Z")
     assert state.fmt_utc(state.now()) == "2026-11-18T14:59:59Z"
     assert state.fmt_utc(state.now(finished=True)) == "2026-11-18T14:59:59Z"
@@ -100,3 +101,15 @@ def test_post_marks_crashed_stage_failed(run_dir):
     state.post(run_dir, "S01")
     data = state.read_stage(run_dir, "S01")
     assert data["status"] == "failed" and data["reason"]
+
+
+def test_stub_generation_ids_only_in_stub_mode(tmp_path, monkeypatch):
+    state.write_run_meta(tmp_path, options={"arms": ["base"], "reps": 1})
+    state.end(tmp_path, "S02", "passed")
+    monkeypatch.delenv("TD_STAGE_DIR", raising=False)
+    state.end(tmp_path, "S06", "passed")
+    state.post(tmp_path, "S06")
+    assert "generations" not in state.read_stage(tmp_path, "S06")  # 지어내지 않는다
+    monkeypatch.setenv("TD_STAGE_DIR", "/stub")
+    state.post(tmp_path, "S06")
+    assert list(state.read_stage(tmp_path, "S06")["generations"]) == ["base-00000000-r1"]

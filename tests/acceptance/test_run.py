@@ -1,6 +1,7 @@
 """실행 골격 수용 테스트: REQ-002, 003, 004, 006, 059, 060, td_run, 훅 거부. 스텁 단계(tests/fixtures/stub-stages)로 돈다."""
 import json
 import os
+import shutil
 import re
 import subprocess
 import time
@@ -12,6 +13,7 @@ from td import hooks
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ALL_STAGES = [f"S{i:02d}" for i in range(14)]
+STUB_DIR = REPO_ROOT / "tests" / "fixtures" / "stub-stages"
 ENUM = {"passed", "failed", "degraded", "skipped"}
 
 
@@ -77,7 +79,8 @@ def test_req006_trigger_placeholders(stub_stages):
 
 
 def test_req060_time_metadata(stub_stages):
-    run = stub_stages.run().run_json
+    # 시계를 고정해(같은 KST 날짜) 날짜 경계 우연에 흔들리지 않게 한다.
+    run = stub_stages.run(TD_NOW="2026-11-18T01:00:00Z", TD_NOW_FINISHED="2026-11-18T01:00:05Z").run_json
     iso = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
     assert iso.match(run["startedAt"]) and iso.match(run["finishedAt"])
     assert run["startedAt"] <= run["finishedAt"]
@@ -141,8 +144,8 @@ def test_hook_refused_without_prefix(stub_stages):
         hooks.should_fail("S05", env={"TD_FAIL_STAGE": "S05"})
     assert hooks.should_fail("S05", env={"TD_FAIL_STAGE": "S05", "TD_SITE_PREFIX": "_test/x/"}) is True
     assert hooks.should_fail("S05", env={}) is False  # 훅을 안 쓰면 거부도 없다
-    # run-all도 run 디렉터리 예약 전에 거부한다.
-    result = stub_stages.run(use_prefix=False, TD_FAIL_STAGE="S05")
+    # run-all도 run 디렉터리 예약 전에 거부한다. TD_STAGE_DIR 없이 TD_FAIL_STAGE만으로 거부돼야 한다.
+    result = stub_stages.run(use_prefix=False, use_stub_dir=False, TD_FAIL_STAGE="S05")
     assert result.returncode == 1
     assert "TD_SITE_PREFIX" in result.stderr
     assert not (result.work_dir / "runs").exists()
@@ -221,3 +224,102 @@ def test_td_run_timeout_escalates_to_kill_when_term_ignored(tmp_path):
     done = _td_run(f'td_run 1 -- bash -c "{script}"', TD_KILL_GRACE="1")
     assert done.returncode == 124
     assert _wait_dead(int(pid_file.read_text())), "TERM을 무시한 자손이 KILL 뒤에도 남아 있다"
+
+
+# --- not-requested 중립성 ---------------------------------------------------------------
+def test_not_requested_is_neutral_for_optional_and_any_of(stub_stages):
+    result = stub_stages.run("--only", "S00,S01,S08,S13")
+    assert result.returncode == 0, result.stderr
+    assert result.stage("S08")["status"] == "passed"  # S07은 not-requested(중립): degraded 아님
+    assert result.stage("S13")["status"] == "passed"
+    assert result.stage("S09")["reason"] == "not-requested"
+
+
+def test_not_requested_optional_input_does_not_degrade(stub_stages):
+    result = stub_stages.run("--only", "S00,S09")  # S08(선택 입력)은 요청 안 함
+    assert result.stage("S09")["status"] == "passed"
+
+
+def test_not_requested_required_dependency_skips_dependent(stub_stages):
+    result = stub_stages.run("--only", "S01")
+    assert result.returncode == 0
+    assert result.stage("S01")["status"] == "skipped"
+    assert result.stage("S01")["reason"] == "dependency S00 not-requested"
+
+
+def test_failed_optional_input_still_degrades(injected_run):
+    result = injected_run("S08", args=("--only", "S00,S01,S08,S09"))
+    assert result.stage("S09")["status"] == "degraded"
+
+
+# --- 옵션 검증 ----------------------------------------------------------------------------
+@pytest.mark.parametrize("args", [
+    ("--only", "S00,S14"), ("--only", "S1"), ("--arms", "base,foo"), ("--style", "gherkin"),
+    ("--reps", "0"), ("--reps", "10"),
+])
+def test_invalid_options_exit_1_before_run_dir(stub_stages, args):
+    result = stub_stages.run(*args)
+    assert result.returncode == 1 and result.stderr.strip()
+    assert not (result.work_dir / "runs").exists()
+
+
+def test_valid_option_values_accepted(stub_stages):
+    result = stub_stages.run("--arms", "base,owl", "--reps", "2", "--style", "junit")
+    assert result.returncode == 0, result.stderr
+    assert set(result.stage("S06")["arms"]) == {"base", "owl"}
+    assert len(result.stage("S06")["generations"]) == 4
+
+
+def test_malformed_sut_yaml_exits_1_with_message(stub_stages):
+    stub_stages.sut_file.write_text("name: [unclosed\n")
+    result = stub_stages.run()
+    assert result.returncode == 1 and "YAML" in result.stderr
+    assert not (result.work_dir / "runs").exists()
+
+
+# --- 상태 기록 실패는 조용히 지나가지 않는다 ----------------------------------------------------
+def test_state_prepare_error_records_stage_failed(stub_stages):
+    result = stub_stages.run(TD_STATE_FAULT="prepare:S03")
+    assert result.returncode == 2, result.stderr
+    s03 = result.stage("S03")
+    assert s03["status"] == "failed" and s03["reason"].startswith("state error: prepare")
+    assert sorted(result.stages()) == ALL_STAGES
+
+
+def test_state_post_error_records_stage_failed(stub_stages):
+    result = stub_stages.run(TD_STATE_FAULT="post:S01")
+    assert result.returncode == 2
+    assert result.stage("S01")["status"] == "failed"
+    assert result.stage("S01")["reason"].startswith("state error: post")
+
+
+def test_corrupt_run_json_mid_run_aborts_nonzero(stub_stages, tmp_path):
+    stages = tmp_path / "corrupting-stages"
+    shutil.copytree(STUB_DIR, stages)
+    (stages / "S02-bbtg.sh").write_text(
+        '#!/usr/bin/env bash\nsource "$TD_ROOT/pipeline/lib/common.sh"\ntd_stage_begin S02\n'
+        'echo "{broken" > "$TD_RUN_DIR/run.json"\ntd_stage_end S02 passed\n')
+    (stages / "S02-bbtg.sh").chmod(0o755)
+    result = stub_stages.run(TD_STAGE_DIR=str(stages))
+    assert result.returncode == 1, result.stderr
+    assert "run.json" in result.stderr
+    assert result.returncode != 0  # 종료 코드 0이면서 단계 기록이 빠진 run은 없다
+
+
+def test_missing_stage_record_is_marked_failed(stub_stages, tmp_path):
+    stages = tmp_path / "silent-stages"
+    shutil.copytree(STUB_DIR, stages)
+    (stages / "S10-tia.sh").write_text("#!/usr/bin/env bash\nexit 0\n")  # begin/end 없이 성공 종료
+    (stages / "S10-tia.sh").chmod(0o755)
+    result = stub_stages.run(TD_STAGE_DIR=str(stages))
+    assert result.returncode == 2
+    assert result.stage("S10")["status"] == "failed"
+    assert sorted(result.stages()) == ALL_STAGES
+
+
+def test_td_now_ignored_without_site_prefix(monkeypatch, capsys):
+    from td import state
+    monkeypatch.delenv("TD_SITE_PREFIX", raising=False)
+    monkeypatch.setenv("TD_NOW", "2001-01-01T00:00:00Z")
+    assert not state.fmt_utc(state.now()).startswith("2001")
+    assert "TD_NOW" in capsys.readouterr().err
