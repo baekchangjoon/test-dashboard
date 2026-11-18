@@ -16,6 +16,10 @@ from pathlib import Path
 
 import pytest
 
+from helpers import claude_call_log as _claude_call_log
+from helpers import docker_ids as _docker_ids
+from helpers import find_leaked_resources
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SESSION_FILE = REPO_ROOT / "work" / "acceptance-session.json"
 LOCAL_ENV_PATH = REPO_ROOT / "infra" / "local.env"
@@ -82,7 +86,8 @@ base = os.path.dirname(os.path.abspath(__file__))
 stdin_text = "" if sys.stdin.isatty() else sys.stdin.read()
 with open(os.path.join(base, "calls.jsonl"), "a") as fh:
     fh.write(json.dumps({{"argv": sys.argv[1:], "cwd": os.getcwd(),
-                         "env": dict(os.environ), "stdin": stdin_text}}) + "\\n")
+                         "env": {{k: v for k, v in os.environ.items()
+                                 if k.startswith("TD_") or k in ("PATH", "PWD")}}, "stdin": stdin_text}}) + "\\n")
 with open(os.path.join(base, "response.json")) as fh:
     sys.stdout.write(fh.read())
 """
@@ -132,15 +137,8 @@ def fake_claude(tmp_path, monkeypatch) -> FakeClaude:
 
 @pytest.fixture
 def claude_call_log():
-    """claude_call_log(run_dir) -> list[dict]: shim이 남긴 호출 기록(llm-calls.jsonl)을 읽는다."""
-
-    def read(run_dir) -> list[dict]:
-        log_file = Path(run_dir) / "llm-calls.jsonl"
-        if not log_file.exists():
-            return []
-        return [json.loads(line) for line in log_file.read_text().splitlines() if line]
-
-    return read
+    """helpers.claude_call_log(run_dir)의 얇은 fixture 별칭."""
+    return _claude_call_log
 
 
 # --- docker ----------------------------------------------------------------------------
@@ -149,16 +147,6 @@ class DockerSnap:
     containers: frozenset[str]
     networks: frozenset[str]
     volumes: frozenset[str]
-
-
-def _docker_ids(*args: str) -> frozenset[str]:
-    try:
-        result = subprocess.run(["docker", *args], capture_output=True, text=True, timeout=60)
-    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
-        pytest.fail(f"docker CLI를 쓸 수 없다: {type(exc).__name__}", pytrace=False)
-    if result.returncode != 0:
-        pytest.fail(f"docker {' '.join(args)} 실패: {result.stderr.strip()[:200]}", pytrace=False)
-    return frozenset(line for line in result.stdout.split() if line)
 
 
 def take_docker_snapshot() -> DockerSnap:
@@ -178,15 +166,27 @@ def docker_snapshot() -> DockerSnap:
 def session_resources_gate(test_run_label):
     """세션 종료 시 `test-run=td-test-<sessionId>` 라벨 자원이 0인지 확인한다. 남으면 세션 실패."""
     yield
-    flt = f"label={'test-run=' + test_run_label}"
-    leaked = {
-        "containers": _docker_ids("ps", "-aq", "--filter", flt),
-        "networks": _docker_ids("network", "ls", "-q", "--filter", flt),
-        "volumes": _docker_ids("volume", "ls", "-q", "--filter", flt),
-    }
-    remaining = {kind: sorted(ids) for kind, ids in leaked.items() if ids}
+    remaining = find_leaked_resources(test_run_label)
     if remaining:
         pytest.fail(f"테스트 자원 누수(라벨 {test_run_label}): {remaining}", pytrace=False)
+
+
+@pytest.fixture(scope="session")
+def repo_snapshot() -> dict[str, bytes]:
+    """REQ-054 검사용: 추적 파일 내용, git log -p 전체, 사이트 미러 내용을 세션당 1회만 읽는다."""
+    git = lambda *a: subprocess.run(["git", *a], cwd=REPO_ROOT, capture_output=True).stdout
+    chunks = []
+    for name in git("ls-files", "-z").split(b"\0"):
+        path = REPO_ROOT / name.decode() if name else None
+        if path is not None and path.is_file():
+            chunks.append(path.read_bytes())
+    mirror = REPO_ROOT / "work" / "site-mirror"
+    mirror_chunks = [p.read_bytes() for p in mirror.rglob("*") if p.is_file()] if mirror.exists() else []
+    return {
+        "tracked": b"\n".join(chunks),
+        "git_log": git("log", "-p", "--all"),
+        "mirror": b"\n".join(mirror_chunks),
+    }
 
 
 # --- 이후 Task가 채우는 fixture ----------------------------------------------------------

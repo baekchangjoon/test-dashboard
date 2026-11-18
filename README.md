@@ -14,4 +14,6 @@
 uv run --project site-gen pytest tests/acceptance -v
 ```
 
+Python 버전은 `site-gen/.python-version`(3.12)으로 고정되어 있어 uv가 알아서 고른다. 첫 실행 전에 한 번 `uv run --project site-gen playwright install chromium`을 실행한다.
+
 전제(AWS, SSH, Docker, claude)가 없으면 skip이 아니라 실패한다.

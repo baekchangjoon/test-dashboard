@@ -1,24 +1,40 @@
 #!/usr/bin/env bash
-# claude 호출 기록 shim. 호출 메타데이터(시각, 프롬프트 제외 argv 플래그, cwd)를
+# claude 호출 기록 shim. 호출 메타데이터(시각, 허용 목록에 있는 플래그 이름, cwd)를
 # $TD_LLM_CALL_LOG에 한 줄 JSON으로 남기고 실제 claude를 exec한다.
+# 프롬프트 본문과 플래그 값은 기록하지 않는다(허용 목록 밖의 인자는 "<other>").
 set -u
-self="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 
-json_escape() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'; }
+realpath_of() { python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$1"; }
+self="$(realpath_of "${BASH_SOURCE[0]}")"
 
 if [[ -n "${TD_LLM_CALL_LOG:-}" ]]; then
-  flags=""
-  skip_next=0
-  for arg in "$@"; do
-    if [[ $skip_next -eq 1 ]]; then skip_next=0; continue; fi
-    case "$arg" in
-      -p|--print) flags+="\"$(json_escape "$arg")\","; continue ;;
-      --*|-*) flags+="\"$(json_escape "$arg")\","; ;;
-      *) ;; # 플래그 값과 프롬프트 본문은 기록하지 않는다
-    esac
-  done
-  printf '{"ts":"%s","argv":[%s],"cwd":"%s"}\n' \
-    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${flags%,}" "$(json_escape "$PWD")" >> "$TD_LLM_CALL_LOG"
+  python3 - "$TD_LLM_CALL_LOG" "$PWD" "$@" <<'PY'
+import datetime, json, sys
+
+log_path, cwd, args = sys.argv[1], sys.argv[2], sys.argv[3:]
+BOOLEAN_FLAGS = {"-p", "--print", "--strict-mcp-config", "--verbose"}
+VALUE_FLAGS = {"--tools", "--mcp-config", "--setting-sources", "--system-prompt",
+               "--output-format", "--model", "--allowedTools", "--disallowedTools"}
+logged, skip_next = [], False
+for arg in args:
+    if skip_next:
+        skip_next = False
+        continue
+    name, has_inline_value, _ = arg.partition("=")
+    if arg in BOOLEAN_FLAGS:
+        logged.append(arg)
+    elif arg in VALUE_FLAGS:
+        logged.append(arg)
+        skip_next = True
+    elif has_inline_value and name in VALUE_FLAGS:
+        logged.append(name)
+    else:
+        logged.append("<other>")
+record = {"ts": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+          "argv": logged, "cwd": cwd}
+with open(log_path, "a") as fh:
+    fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+PY
 fi
 
 real="${TD_REAL_CLAUDE:-}"
@@ -26,7 +42,7 @@ if [[ -z "$real" ]]; then
   IFS=: read -r -a dirs <<< "$PATH"
   for d in "${dirs[@]}"; do
     cand="$d/claude"
-    if [[ -x "$cand" && "$(cd "$d" && pwd)/claude" != "$self" ]]; then real="$cand"; break; fi
+    if [[ -x "$cand" && "$(realpath_of "$cand")" != "$self" ]]; then real="$cand"; break; fi
   done
 fi
 if [[ -z "$real" ]]; then

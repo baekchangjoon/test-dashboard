@@ -1,0 +1,4 @@
+# local.env 값이 이미 공개된 SUT 기본값인 키. REQ-054 비밀 검사에서 제외한다.
+# 값은 여기에 적지 않는다. 사유만 적고, 테스트도 사유만 출력한다.
+TD_SUT_USER: "petclinic 시드 계정(admin)은 SUT 공개 소스에 있는 기본값이다"
+TD_SUT_PASS: "petclinic 시드 계정 비밀번호는 SUT 공개 소스에 있는 기본값이다"
