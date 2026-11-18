@@ -1,0 +1,11 @@
+{% extends "base.html.j2" %}
+{% block title %}테스트 실행 기록{% endblock %}
+{% block header %}<strong><a href="{{ home_href }}">test-dashboard</a></strong> / 테스트 실행 기록{% endblock %}
+{% block content %}
+<h1>테스트 실행 기록</h1>
+{% if not prefixes %}<p class="muted">테스트 접두가 없다.</p>{% endif %}
+<ul>
+{% for prefix in prefixes %}  <li><a href="{{ prefix }}/index.html">{{ prefix }}</a></li>
+{% endfor %}
+</ul>
+{% endblock %}

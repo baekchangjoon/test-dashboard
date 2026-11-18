@@ -1,0 +1,22 @@
+{% extends "base.html.j2" %}
+{% block title %}test-dashboard{% endblock %}
+{% macro pct(value) %}{% if value is number %}{{ "%.1f"|format(value * 100) }}%{% else %}—{% endif %}{% endmacro %}
+{% block content %}
+<h1>대시보드</h1>
+<p><a href="{{ test_index_href }}">테스트 실행 기록</a></p>
+{% if not suts %}<p class="muted">게시된 run이 없다.</p>{% endif %}
+<div class="cards">
+{% for sut in suts %}
+  <div class="card" data-sut="{{ sut.name }}">
+    <h3><a href="suts/{{ sut.name }}/index.html">{{ sut.name }}</a></h3>
+    <p class="muted">최신 run <a href="suts/{{ sut.name }}/runs/{{ sut.latest.runId }}/index.html">{{ sut.latest.runId }}</a> · run {{ sut.runCount }}개</p>
+    <div class="kpi">
+      <div class="kpi-item"><span class="muted">테스트 통과율</span><b>{{ pct(sut.latest.kpis.passRate) }}</b></div>
+      <div class="kpi-item"><span class="muted">귀속 라인 커버리지</span><b>{{ pct(sut.latest.kpis.line) }}</b></div>
+      <div class="kpi-item"><span class="muted">Sonar 게이트</span><b>{{ sut.latest.kpis.sonarGate or "—" }}</b></div>
+      <div class="kpi-item"><span class="muted">hotspot 1위</span><b>{{ sut.latest.kpis.hotspot1 or "—" }}</b></div>
+    </div>
+  </div>
+{% endfor %}
+</div>
+{% endblock %}

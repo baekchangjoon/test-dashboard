@@ -1,0 +1,30 @@
+{% extends "base.html.j2" %}
+{% block title %}{{ run.runId }}{% endblock %}
+{% block header %}<strong><a href="{{ home_href }}">test-dashboard</a></strong> / <a href="{{ sut_href }}">{{ run.sut }}</a>{% endblock %}
+{% block content %}
+<h1>run {{ run.runId }}</h1>
+<p class="muted">SUT {{ run.sut }} · 커밋 {{ run.commit }} · 시작 {{ run.startedAt }}{% if run.finishedAt %} · 종료 {{ run.finishedAt }}{% endif %}</p>
+
+<h2>리포트</h2>
+{% if links %}
+<ul id="reports">
+{% for link in links %}  <li><a href="{{ link.href }}">{{ link.label }}</a></li>
+{% endfor %}
+</ul>
+{% else %}
+<p class="muted">게시된 리포트가 없다.</p>
+{% endif %}
+
+<h2>단계</h2>
+<div class="scroll"><table id="stages">
+<thead><tr><th>단계</th><th>상태</th><th>사유</th></tr></thead>
+<tbody>
+{% for stage_id, stage in stages.items() %}
+  <tr><td>{{ stage_id }}</td><td class="st-{{ stage.status }}">{{ stage.status }}</td><td style="white-space: normal">{{ stage.reason or "" }}</td></tr>
+{% endfor %}
+</tbody></table></div>
+
+<h2>게시 결과(S13)</h2>
+<div id="publish-result" data-url="{{ publish_log_url }}"><p class="muted">게시 결과 없음</p></div>
+{% endblock %}
+{% block scripts %}<script src="{{ js_href }}"></script>{% endblock %}

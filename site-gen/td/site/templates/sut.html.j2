@@ -1,0 +1,22 @@
+{% extends "base.html.j2" %}
+{% block title %}{{ sut }}{% endblock %}
+{% macro pct(value) %}{% if value is number %}{{ "%.1f"|format(value * 100) }}%{% else %}—{% endif %}{% endmacro %}
+{% block header %}<strong><a href="{{ home_href }}">test-dashboard</a></strong> / {{ sut }}{% endblock %}
+{% block content %}
+<h1>{{ sut }}</h1>
+<h2>KPI 추이</h2>
+<div class="cards">
+{% for chart in charts %}<div class="card">{{ chart | safe }}</div>
+{% endfor %}
+</div>
+<h2>run 이력</h2>
+<div class="scroll"><table id="runs">
+<thead><tr><th>run</th><th>커밋</th><th>시작(UTC)</th><th class="num">통과율</th><th class="num">귀속 라인</th><th>Sonar</th><th>실패 단계</th></tr></thead>
+<tbody>
+{% for run in runs %}
+  <tr><td><a href="runs/{{ run.runId }}/index.html">{{ run.runId }}</a></td><td>{{ run.commit }}</td><td>{{ run.startedAt }}</td>
+  <td class="num">{{ pct(run.kpis.passRate) }}</td><td class="num">{{ pct(run.kpis.line) }}</td><td>{{ run.kpis.sonarGate or "—" }}</td>
+  <td>{{ run.stages.items() | selectattr(1, "equalto", "failed") | map(attribute=0) | join(", ") or "—" }}</td></tr>
+{% endfor %}
+</tbody></table></div>
+{% endblock %}
