@@ -125,6 +125,10 @@ def test_req058_tools_lock_complete(s00):
     assert lock["hotspot"]["version"] == "0.1.6"
     assert lock["jqassistantSpring"]["coordinates"].startswith("org.jqassistant.plugin:jqassistant-spring-plugin:")
     assert any("Spring" in plugin for plugin in lock["jqassistantSpring"]["plugins"]), "플러그인 목록에 Spring이 없다"
+    spring = lock["jqassistantSpring"]
+    assert spring["verified"] is True
+    assert "jqa-repo" in spring["resolvedJar"]  # 전용 로컬 저장소에서 해석된 jar
+    assert _sha256(Path(spring["resolvedJar"])) == spring["sha256"], "jQA가 로딩하는 jar가 pin한 jar와 다르다"
     claude_version = subprocess.run(["bash", "-c", "command claude --version"], capture_output=True, text=True).stdout
     assert lock["claude"]["version"] == claude_version.split()[0]
     flags = " ".join(lock["claude"]["flags"])
@@ -132,7 +136,9 @@ def test_req058_tools_lock_complete(s00):
                    "--system-prompt", "--output-format json", "--model"):
         assert needle in flags, needle
     assert "--bare" not in flags
-    assert lock["model"] == (os.environ.get("TD_LLM_MODEL") or "claude-opus-5-5")
+    configured = yaml.safe_load((REPO_ROOT / "pipeline" / "config.yaml").read_text())["llm"]["model"]
+    assert lock["model"] == configured  # _env()가 TD_*를 걸러내므로 S00이 쓴 유효 모델은 config.yaml 값이다
+    assert lock["claude"]["verified"] is True
     assert lock["claude"]["model"] == lock["model"]
 
 
@@ -229,3 +235,14 @@ def test_s00_tampered_pin_sha256_fails_and_keeps_cache(tmp_path):
     assert result.stage["status"] == "failed" and "hotspot.jar" in reason and "sha256" in reason
     assert not (result.run_dir / "tools.lock").exists()
     assert _sha256(REAL_WORK / "tools" / "hotspot.jar") == good_sha, "검증 실패가 정상 캐시를 망가뜨리면 안 된다"
+
+
+def test_s00_same_run_dir_retry_keeps_identical_lock(s00):
+    """같은 run 디렉터리에서 S00을 다시 돌려도 내용이 같으면 통과하고 tools.lock은 그대로다."""
+    before = (s00.run_dir / "tools.lock").read_text()
+    env = _env(s00.work, TD_RUN_DIR=str(s00.run_dir), TD_RUN_ID=s00.run_dir.name, TD_SUT_NAME="petclinic",
+               TD_SUT_COMMIT=BASE_COMMIT, TD_SUT_FILE=str(REPO_ROOT / "suts" / "petclinic" / "sut.yaml"),
+               TD_SUT_SRC=str(s00.work / "suts" / "petclinic" / "src"))
+    done = subprocess.run(["bash", str(S00), "petclinic", s00.run_dir.name], capture_output=True, text=True, env=env, timeout=1800)
+    assert done.returncode == 0, done.stderr[-2000:]
+    assert (s00.run_dir / "tools.lock").read_text() == before

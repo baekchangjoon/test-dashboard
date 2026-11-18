@@ -23,11 +23,36 @@ import yaml
 
 MAVEN_CENTRAL = "https://repo1.maven.org/maven2"
 DOWNLOAD_TIMEOUT_SEC = 600
-# tools.lock에 기록하는 claude 격리 플래그(실제 호출은 S00-prepare.sh와 llm.sh가 같은 집합을 쓴다).
-CLAUDE_FLAGS = ["-p", '--tools ""', "--strict-mcp-config", "--mcp-config <empty-mcp-config>",
-                '--setting-sources ""', "--system-prompt <fixed>", "--output-format json", "--model <model>"]
-CLAUDE_FLAG_NAMES = ["-p", "--tools", "--strict-mcp-config", "--mcp-config", "--setting-sources",
-                     "--system-prompt", "--output-format", "--model"]
+# claude 격리 호출의 고정 인자(단일 정의). S00은 `claude-argv`로 이 목록을 받아 실제 호출하고,
+# tools.lock에는 같은 목록의 서술형(CLAUDE_FLAGS)을 기록한다. Task 19가 llm.sh로 옮긴다.
+CLAUDE_ARGV_TEMPLATE = ["-p", "--tools", "", "--strict-mcp-config", "--mcp-config", "{mcp_config}",
+                        "--setting-sources", "", "--system-prompt", "{system_prompt}",
+                        "--output-format", "json", "--model", "{model}"]
+CLAUDE_FLAG_NAMES = [token for token in CLAUDE_ARGV_TEMPLATE if token.startswith("-")]
+
+
+def claude_argv(mcp_config: str, system_prompt: str, model: str) -> list[str]:
+    return [token.format(mcp_config=mcp_config, system_prompt=system_prompt, model=model)
+            for token in CLAUDE_ARGV_TEMPLATE]
+
+
+def _describe_flags() -> list[str]:
+    described, tokens = [], list(CLAUDE_ARGV_TEMPLATE)
+    placeholder = {"{mcp_config}": "<empty-mcp-config>", "{system_prompt}": "<fixed>", "{model}": "<model>"}
+    index = 0
+    while index < len(tokens):
+        flag = tokens[index]
+        if index + 1 < len(tokens) and not tokens[index + 1].startswith("-") and flag != "-p":
+            value = placeholder.get(tokens[index + 1], tokens[index + 1])
+            described.append(f'{flag} {value}' if value else f'{flag} ""')
+            index += 2
+        else:
+            described.append(flag)
+            index += 1
+    return described
+
+
+CLAUDE_FLAGS = _describe_flags()
 ARTIFACT_TOOLS = ("pjacoco", "jacococli", "jqassistant", "jqassistantSpring", "hotspot")
 
 
@@ -48,7 +73,8 @@ def fetch_verified(url: str, dest: Path, expected_sha256: str, record: bool = Fa
     """url을 dest로 받아 sha256을 검증하고 실제 sha256을 돌려준다.
 
     expected가 비어 있으면 record 모드(TD_PIN_RECORD=1)에서만 허용한다. 이미 받은 dest가 expected와 같으면 다시 받지 않는다.
-    다르면(손상 캐시) 한 번 다시 받고, 그래도 다르면 파일을 지우고 PrepareError를 낸다.
+    다르면(손상 캐시) 한 번 다시 받는다. 새로 받은 파일도 sha256이 다르면 PrepareError를 내고, 임시 파일만 지우며
+    기존 dest는 건드리지 않는다.
     """
     dest = Path(dest)
     if not expected_sha256 and not record:
@@ -91,6 +117,9 @@ def load_pin(path: Path | None = None) -> dict:
     missing = [tool for tool in (*ARTIFACT_TOOLS, "tia", "bbtg") if tool not in (data or {})]
     if missing:
         raise PrepareError(f"tools.pin.yaml에 항목이 없다: {missing}")
+    for tool in ("tia", "bbtg"):
+        if not re.fullmatch(r"[0-9a-f]{40}", str(data[tool].get("commit", ""))):
+            raise PrepareError(f"tools.pin.yaml: {tool}.commit은 40자 전체 sha여야 한다(짧은 sha 접두사 금지)")
     return data
 
 
@@ -158,6 +187,14 @@ def check_claude_help(help_text: str) -> None:
     missing = [flag for flag in CLAUDE_FLAG_NAMES if not re.search(rf"(?<![\w-]){re.escape(flag)}(?![\w-])", help_text)]
     if missing:
         raise PrepareError(f"claude --help에 필요한 플래그가 없다: {missing}")
+
+
+def check_claude_model(parsed: dict, model: str) -> None:
+    """응답 모델이 요청 모델과 같은지 확인한다. modelUsage가 비어 확인할 수 없으면 실패한다."""
+    if not parsed["models"]:
+        raise PrepareError("claude 응답에 modelUsage가 없어 모델을 검증할 수 없다")
+    if model not in parsed["models"]:
+        raise PrepareError(f"claude가 요청한 모델 {model}이 아닌 {parsed['models']}로 응답했다")
 
 
 def parse_claude_result(text: str) -> dict:
@@ -293,22 +330,27 @@ def check_jqa_spring_plugin(plugins: list[str], pin: dict) -> None:
         raise PrepareError(f"jQA가 Spring 플러그인 {pin['jqassistantSpring']['version']}을 로딩하지 못했다. 로딩된 목록: {plugins}")
 
 
-def check_resolved_plugin_jar(spec: dict, expected_sha: str, home: Path | None = None) -> str | None:
-    """jQA가 실제로 로딩한 플러그인 jar(~/.jqassistant/repository)가 pin한 sha256과 같은지 확인한다."""
-    repo = (home or Path.home()) / ".jqassistant" / "repository"
-    jar = repo / spec["group"].replace(".", "/") / spec["artifact"] / spec["version"] / f"{spec['artifact']}-{spec['version']}.jar"
+def resolved_plugin_jar(spec: dict, repo: Path) -> Path:
+    return (Path(repo) / spec["group"].replace(".", "/") / spec["artifact"] / spec["version"]
+            / f"{spec['artifact']}-{spec['version']}.jar")
+
+
+def check_resolved_plugin_jar(spec: dict, expected_sha: str, repo: Path) -> str:
+    """jQA가 실제로 로딩하는 플러그인 jar(전용 로컬 저장소)가 있고 pin한 sha256과 같은지 확인한다. 아니면 실패한다."""
+    jar = resolved_plugin_jar(spec, repo)
     if not jar.is_file():
-        return None
+        raise PrepareError(f"jQA가 해석한 Spring 플러그인 jar를 찾지 못해 검증할 수 없다: {jar}")
     actual = sha256_file(jar)
     if actual != expected_sha:
-        raise PrepareError(f"jQA가 로딩한 Spring 플러그인 jar의 sha256이 pin과 다르다({actual[:12]}… vs {expected_sha[:12]}…)")
+        raise PrepareError(f"jQA가 로딩하는 Spring 플러그인 jar의 sha256이 pin과 다르다({actual[:12]}… vs {expected_sha[:12]}…)")
     return str(jar)
 
 
 # --- tools.lock ---------------------------------------------------------------------------------------------
 def build_lock(pin: dict, artifacts: dict, *, run_id: str, sut_name: str, sut_commit: str, tia_commit: str,
                bbtg_commit: str, bbtg_requirements_sha256: str, claude_version: str, model: str,
-               jqa_plugins: list[str], python_version: str) -> dict:
+               jqa_plugins: list[str], jqa_resolved_jar: str, jqa_spring_verified: bool, claude_verified: bool,
+               python_version: str) -> dict:
     lock = {
         "schema": 1,
         "runId": run_id,
@@ -318,27 +360,33 @@ def build_lock(pin: dict, artifacts: dict, *, run_id: str, sut_name: str, sut_co
         "jacocoCoreEmbedded": artifacts["jacocoCoreEmbedded"],
         "jacococli": artifacts["jacococli"],
         "jqassistant": artifacts["jqassistant"],
-        "jqassistantSpring": {**artifacts["jqassistantSpring"], "plugins": jqa_plugins},
+        "jqassistantSpring": {**artifacts["jqassistantSpring"], "plugins": jqa_plugins,
+                              "resolvedJar": jqa_resolved_jar, "verified": jqa_spring_verified},
         "hotspot": artifacts["hotspot"],
         "tia": {"repo": pin["tia"]["repo"], "commit": tia_commit, "jdk": pin["tia"]["jdk"],
                 "gradleTask": pin["tia"]["gradleTask"], "version": tia_commit[:7], "sha256": None},
         "bbtg": {"repo": pin["bbtg"]["repo"], "commit": bbtg_commit, "python": python_version,
                  "requirementsSha256": bbtg_requirements_sha256, "version": bbtg_commit[:7], "sha256": None},
         "libraries": dict(pin.get("libraries") or {}),
-        "claude": {"version": claude_version, "model": model, "flags": list(CLAUDE_FLAGS), "verified": True},
+        "claude": {"version": claude_version, "model": model, "flags": list(CLAUDE_FLAGS), "verified": claude_verified},
         "model": model,
     }
-    for tool, prefix in (("tia", pin["tia"]["commit"]), ("bbtg", pin["bbtg"]["commit"])):
-        if not lock[tool]["commit"].startswith(prefix):
-            raise PrepareError(f"{tool}: 체크아웃 커밋 {lock[tool]['commit'][:7]}이 pin {prefix}과 다르다")
+    for tool in ("tia", "bbtg"):
+        if lock[tool]["commit"] != pin[tool]["commit"]:
+            raise PrepareError(f"{tool}: 체크아웃 커밋 {lock[tool]['commit']}이 pin {pin[tool]['commit']}과 다르다")
     return lock
 
 
 def write_lock(run_dir: Path, lock: dict) -> Path:
-    """run별 tools.lock을 쓴다. 이미 있으면 덮어쓰지 않고(불변) 읽기 전용으로 만든다."""
+    """run별 tools.lock을 쓴다(읽기 전용 0444). 같은 run에서 S00을 다시 돌려 이미 있으면
+    generatedAt을 뺀 내용이 같을 때만 그대로 두고, 다르면 불변 위반으로 실패한다."""
     path = Path(run_dir) / "tools.lock"
     if path.exists():
-        raise PrepareError(f"tools.lock이 이미 있다(불변): {path}")
+        existing = yaml.safe_load(path.read_text())
+        strip = lambda data: {k: v for k, v in data.items() if k != "generatedAt"}
+        if strip(existing) != strip(lock):
+            raise PrepareError(f"tools.lock이 이미 있고 내용이 다르다(불변이라 덮어쓰지 않는다): {path}")
+        return path
     path.write_text("# run별 도구 잠금(불변 사본). 기준은 tools.pin.yaml이다.\n" + yaml.safe_dump(lock, sort_keys=False, allow_unicode=True))
     path.chmod(0o444)
     return path
@@ -389,9 +437,14 @@ def _cmd_claude_help(args) -> int:
 
 def _cmd_claude_result(args) -> int:
     parsed = parse_claude_result(Path(args.file).read_text())
-    if args.model and parsed["models"] and args.model not in parsed["models"]:
-        raise PrepareError(f"claude가 요청한 모델 {args.model}이 아닌 {parsed['models']}로 응답했다")
+    if args.model:
+        check_claude_model(parsed, args.model)
     print(json.dumps(parsed, ensure_ascii=False))
+    return 0
+
+
+def _cmd_claude_argv(args) -> int:
+    sys.stdout.write("".join(token + "\0" for token in claude_argv(args.mcp_config, args.system_prompt, args.model)))
     return 0
 
 
@@ -404,19 +457,21 @@ def _cmd_jqa_plugins(args) -> int:
     plugins = parse_jqa_plugins(Path(args.file).read_text())
     pin = load_pin()
     check_jqa_spring_plugin(plugins, pin)
-    check_resolved_plugin_jar(pin["jqassistantSpring"], pin["jqassistantSpring"]["sha256"])
-    print(json.dumps(plugins))
+    resolved = check_resolved_plugin_jar(pin["jqassistantSpring"], pin["jqassistantSpring"]["sha256"], Path(args.repo))
+    print(json.dumps({"plugins": plugins, "resolvedJar": resolved, "verified": True}))
     return 0
 
 
 def _cmd_write_lock(args) -> int:
     pin = load_pin()
     artifacts = json.loads(Path(args.artifacts).read_text())
+    jqa = json.loads(Path(args.jqa_plugins).read_text())
     lock = build_lock(
         pin, artifacts, run_id=args.run_id, sut_name=args.sut, sut_commit=args.sut_commit,
         tia_commit=args.tia_commit, bbtg_commit=args.bbtg_commit,
         bbtg_requirements_sha256=args.bbtg_requirements_sha256, claude_version=args.claude_version,
-        model=args.model, jqa_plugins=json.loads(Path(args.jqa_plugins).read_text()),
+        model=args.model, jqa_plugins=jqa["plugins"], jqa_resolved_jar=jqa["resolvedJar"],
+        jqa_spring_verified=jqa.get("verified") is True, claude_verified=args.claude_verified == "true",
         python_version=args.python_version)
     path = write_lock(Path(args.run_dir), lock)
     print(path)
@@ -443,11 +498,12 @@ def main(argv: list[str] | None = None) -> int:
     add("claude-version", _cmd_claude_version, "file")
     add("claude-help", _cmd_claude_help, "file")
     add("claude-result", _cmd_claude_result, "file", model=False)
+    add("claude-argv", _cmd_claude_argv, mcp_config=True, system_prompt=True, model=True)
     add("jqa-config", _cmd_jqa_config)
-    add("jqa-plugins", _cmd_jqa_plugins, "file")
+    add("jqa-plugins", _cmd_jqa_plugins, "file", repo=True)
     add("write-lock", _cmd_write_lock, run_dir=True, run_id=True, sut=True, sut_commit=True, artifacts=True,
         tia_commit=True, bbtg_commit=True, bbtg_requirements_sha256=True, claude_version=True, model=True,
-        jqa_plugins=True, python_version=True)
+        jqa_plugins=True, python_version=True, claude_verified=True)
     args = parser.parse_args(argv)
     try:
         return args.func(args)

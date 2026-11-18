@@ -56,9 +56,9 @@ fetch_git_tool() { # <dir> <gh|https> <repo-slug> <pin-commit>
     if [[ "$mode" == "gh" ]]; then td_run 600 -- gh repo clone "$slug" "$dir" -- --quiet -c core.hooksPath=/dev/null >&2
     else td_run 600 -- git -c core.hooksPath=/dev/null clone --quiet "https://github.com/$slug.git" "$dir" >&2; fi || return 1
   elif ! git -C "$dir" cat-file -e "${pin}^{commit}" 2>/dev/null; then
-    td_run 600 -- git -C "$dir" fetch --quiet --tags origin >&2 || return 1
+    td_run 600 -- git -c core.hooksPath=/dev/null -C "$dir" fetch --quiet --tags origin >&2 || return 1
   fi
-  td_run 120 -- git -c core.hooksPath=/dev/null -C "$dir" checkout --detach --force --quiet "$pin" >&2 || return 1
+  td_run 120 -- git -c core.hooksPath=/dev/null -C "$dir" checkout --detach --force --quiet "${pin}^{commit}" >&2 || return 1
   git -C "$dir" rev-parse HEAD
 }
 
@@ -66,7 +66,7 @@ s00_py pin-get tia.commit; TIA_PIN="$S00_OUT"
 s00_py pin-get tia.repo; TIA_REPO="$S00_OUT"
 TIA_SRC="$TOOLS_DIR/tia-src"
 TIA_COMMIT="$(fetch_git_tool "$TIA_SRC" https "$TIA_REPO" "$TIA_PIN")" || s00_fail "TIA 소스 확보 실패($TIA_REPO@$TIA_PIN)"
-[[ "$TIA_COMMIT" == "$TIA_PIN"* ]] || s00_fail "TIA 체크아웃 커밋 ${TIA_COMMIT:0:7}이 pin $TIA_PIN과 다르다"
+[[ "$TIA_COMMIT" == "$TIA_PIN" ]] || s00_fail "TIA 체크아웃 커밋 $TIA_COMMIT이 pin $TIA_PIN과 다르다"
 if [[ "$(cat "$TOOLS_DIR/tia/.commit" 2>/dev/null)" != "$TIA_COMMIT" || ! -x "$TOOLS_DIR/tia/bin/tia" ]]; then
   td_run 1800 -- env JAVA_HOME="$JAVA17" "$TIA_SRC/gradlew" -p "$TIA_SRC" --no-daemon -q ":tia-cli:installDist" >&2 \
     || s00_fail "TIA 빌드 실패(:tia-cli:installDist, JDK 17)"
@@ -82,7 +82,7 @@ s00_py pin-get bbtg.repo; BBTG_REPO="$S00_OUT"
 BBTG_DIR="$TOOLS_DIR/bbtg"
 BBTG_COMMIT="$(fetch_git_tool "$BBTG_DIR" gh "$BBTG_REPO" "$BBTG_PIN")" \
   || s00_fail "bbtg 소스 확보 실패($BBTG_REPO@$BBTG_PIN): 비공개 레포라 gh 인증이 필요하다"
-[[ "$BBTG_COMMIT" == "$BBTG_PIN"* ]] || s00_fail "bbtg 체크아웃 커밋 ${BBTG_COMMIT:0:7}이 pin $BBTG_PIN과 다르다"
+[[ "$BBTG_COMMIT" == "$BBTG_PIN" ]] || s00_fail "bbtg 체크아웃 커밋 $BBTG_COMMIT이 pin $BBTG_PIN과 다르다"
 s00_py pin-get bbtg.python; PY_VERSION="$S00_OUT"
 PYTHON_BIN="$(command -v "python$PY_VERSION")" || s00_fail "python$PY_VERSION이 없다(bbtg 전용 venv에 필요)"
 REQ_SHA="$(shasum -a 256 "$BBTG_DIR/requirements.txt" | cut -d' ' -f1)"
@@ -97,14 +97,16 @@ fi
 
 # jQA: 설정 파일로 Spring 플러그인을 로딩해 보고 플러그인 목록을 얻는다(Maven Central에서 받아 온다).
 JQA_VERIFY_DIR="$TOOLS_DIR/jqassistant-verify"
+# 사용자 전역 ~/.jqassistant 대신 전용 로컬 저장소를 쓰고, 거기서 해석된 플러그인 jar의 sha256을 pin과 대조한다.
+JQA_REPO="$TOOLS_DIR/jqa-repo"
 mkdir -p "$JQA_VERIFY_DIR"
 td_py -m td.prepare jqa-config > "$JQA_VERIFY_DIR/.jqassistant.yml" || s00_fail "jQA 검증 설정 생성 실패"
 (cd "$JQA_VERIFY_DIR" && td_run 900 -- env JAVA_HOME="$JAVA17" "$TOOLS_DIR/jqassistant/bin/jqassistant" effective-configuration \
-  -C "$JQA_VERIFY_DIR/.jqassistant.yml") > "$SCRATCH/jqa-effective.txt" 2>&1 \
+  -C "$JQA_VERIFY_DIR/.jqassistant.yml" -Djqassistant.repositories.local="$JQA_REPO") > "$SCRATCH/jqa-effective.txt" 2>&1 \
   || s00_fail "jQA 실행 실패: $(tail -5 "$SCRATCH/jqa-effective.txt")"
-s00_py jqa-plugins "$SCRATCH/jqa-effective.txt"
+s00_py jqa-plugins "$SCRATCH/jqa-effective.txt" --repo "$JQA_REPO"
 printf '%s\n' "$S00_OUT" > "$TD_RUN_DIR/S00/jqa-plugins.json"
-td_log "S00 jQA plugins: $(jq -c '.' "$TD_RUN_DIR/S00/jqa-plugins.json")"
+td_log "S00 jQA plugins: $(jq -c '.plugins' "$TD_RUN_DIR/S00/jqa-plugins.json")"
 
 # --- 4. claude CLI와 격리 플래그 검증 -------------------------------------------------------------
 command -v claude >/dev/null 2>&1 || s00_fail "claude CLI를 찾지 못했다"
@@ -116,9 +118,11 @@ s00_py model "$TD_ROOT/pipeline/config.yaml"; MODEL="$S00_OUT"
 # 무해한 프롬프트 1회를 고정 플래그 전체로 실제 호출한다(cwd는 임시 디렉터리, --bare는 OAuth를 못 읽어 쓰지 않는다).
 mkdir -p "$SCRATCH/llm-cwd"
 echo '{"mcpServers":{}}' > "$SCRATCH/empty-mcp.json"
-(cd "$SCRATCH/llm-cwd" && td_run 900 -- claude -p --tools "" --strict-mcp-config --mcp-config "$SCRATCH/empty-mcp.json" \
-  --setting-sources "" --system-prompt "You are a terse assistant." --output-format json --model "$MODEL" \
-  "reply with OK") > "$SCRATCH/claude-call.json" 2> "$SCRATCH/claude-call.err" \
+CLAUDE_ARGV=()
+while IFS= read -r -d '' token; do CLAUDE_ARGV+=("$token"); done < <(td_py -m td.prepare claude-argv \
+  --mcp-config "$SCRATCH/empty-mcp.json" --system-prompt "You are a terse assistant." --model "$MODEL")
+[[ ${#CLAUDE_ARGV[@]} -gt 0 ]] || s00_fail "claude 인자 목록을 얻지 못했다(td.prepare claude-argv)"
+(cd "$SCRATCH/llm-cwd" && td_run 900 -- claude "${CLAUDE_ARGV[@]}" "reply with OK") > "$SCRATCH/claude-call.json" 2> "$SCRATCH/claude-call.err" \
   || s00_fail "claude 격리 플래그 호출 실패(model=$MODEL): $(head -c 400 "$SCRATCH/claude-call.err") $(head -c 400 "$SCRATCH/claude-call.json")"
 s00_py claude-result "$SCRATCH/claude-call.json" --model "$MODEL"
 
@@ -140,7 +144,7 @@ CLASSES_DIR="$TD_SUT_SRC/$(sut_get classes)"
 s00_py write-lock --run-dir "$TD_RUN_DIR" --run-id "$TD_RUN_ID" --sut "$TD_SUT_NAME" --sut-commit "$TD_SUT_COMMIT" \
   --artifacts "$TD_RUN_DIR/S00/artifacts.json" --tia-commit "$TIA_COMMIT" --bbtg-commit "$BBTG_COMMIT" \
   --bbtg-requirements-sha256 "$REQ_SHA" --claude-version "$CLAUDE_VERSION" --model "$MODEL" \
-  --jqa-plugins "$TD_RUN_DIR/S00/jqa-plugins.json" --python-version "$PY_VERSION"
+  --jqa-plugins "$TD_RUN_DIR/S00/jqa-plugins.json" --python-version "$PY_VERSION" --claude-verified true
 LOCK_FILE="$S00_OUT"
 TOOLS_SUMMARY="$(jq -c --arg model "$MODEL" --arg cv "$CLAUDE_VERSION" \
   '{pjacoco: .pjacoco.version, jacococli: .jacococli.version, jqassistant: .jqassistant.version,

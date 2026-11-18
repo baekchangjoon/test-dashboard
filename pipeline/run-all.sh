@@ -50,7 +50,7 @@ eval "$SUT_VARS"
 SRC_DIR="$TD_WORK_DIR/suts/$SUT_NAME/src"
 mkdir -p "$(dirname "$SRC_DIR")"
 if [[ -d "$SRC_DIR/.git" ]]; then
-  td_run 600 -- git -C "$SRC_DIR" fetch --tags --prune origin >&2 || die "SUT fetch 실패: $SUT_REPO"
+  td_run 600 -- git -c core.hooksPath=/dev/null -C "$SRC_DIR" fetch --tags --prune origin >&2 || die "SUT fetch 실패: $SUT_REPO"
 else
   td_run 600 -- git -c init.templateDir= -c core.hooksPath=/dev/null clone "$SUT_REPO" "$SRC_DIR" >&2 || die "SUT clone 실패: $SUT_REPO"
 fi
