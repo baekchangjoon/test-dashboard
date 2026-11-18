@@ -5,11 +5,16 @@ S08이 없는 run은 `--only S00,S09`로 따로 돌려 degraded 경로를 본다
 """
 import hashlib
 import json
+import re
+import subprocess
+import time
 from pathlib import Path
 
 import pytest
 import yaml
 
+from helpers import PETCLINIC_SRC, pid_alive, run_pids
+from td import envctl
 from td.site import pages
 
 
@@ -103,15 +108,6 @@ def test_req037_sonar_export(s11_run):
 
 
 # --- S10 TIA(REQ-036, REQ-011) ---------------------------------------------------------------------
-import re
-import signal
-import subprocess
-import time
-
-from helpers import PETCLINIC_SRC, pid_alive, run_pids
-from td import envctl
-
-
 def _worktrees() -> str:
     return subprocess.run(["git", "-C", str(PETCLINIC_SRC), "worktree", "list", "--porcelain"],
                           capture_output=True, text=True).stdout
@@ -143,45 +139,34 @@ def test_req036_tia_base(s10_run):
     testwise = json.loads((root / "testwise.json").read_text())
     assert testwise, "testwise.json이 비었다"
     assert (root / "base-head.diff").stat().st_size > 0
+    # scenarios.json은 tia report 계약의 시나리오 목록이고, 선택 수가 단계 요약과 impact.json에 일치한다
     scenarios = json.loads((root / "scenarios.json").read_text())
-    assert scenarios is not None
+    impact_doc = json.loads((root / "impact.json").read_text())
+    assert isinstance(scenarios, list) and len(scenarios) == 1
+    (scenario,) = scenarios
+    assert scenario["count"] == len(scenario["selected"]) == len(impact_doc["tests"]) == stage["impact"]["selected"]
+    assert stage["impact"]["indexedTests"] == scenario["total"] == len(testwise["tests"]) == stage["execCount"]
+    assert all(set(item) == {"confidence", "testId"} for item in scenario["selected"])
+    assert scenario["conservative"] is stage["impact"]["allSelectedConservative"]
     html = (root / "tia" / "tia.html").read_text()
-    assert base in html or base[:7] in html, "TIA 리포트의 commit이 base와 다르다"
+    # tia report는 --commit을 내장 데이터 D.commit에 채운다. 사전 검사에서 해석한 base와 같아야 한다.
+    embedded, _ = json.JSONDecoder().raw_decode(html[html.index("const D = ") + len("const D = "):])
+    assert embedded["commit"] == base and embedded["sut"] == "petclinic", {k: embedded[k] for k in ("commit", "sut")}
+    assert isinstance(embedded["scenarios"], list) and len(embedded["scenarios"]) == 1
+    assert stage["incompleteAttribution"] == ["ConcurrencyBlackBoxIT#concurrentPetCreatesForSameOwnerAreAllPersisted"]
     assert stage["tcCount"] >= 1 and stage["execCount"] >= 1
     # run 페이지가 TIA 리포트에 링크하고 게시 사본에 들어간다
     site_dir = pages.render_run(run.run_dir, run.run_dir).parent
     assert 'href="tia/tia.html"' in (site_dir / "index.html").read_text()
     assert (site_dir / "tia" / "tia.html").is_file()
     assert not (site_dir / "tia" / "base").exists() and not list(site_dir.rglob("tia.db"))
+    # 게시 사본에는 run 디렉터리와 홈 경로가 없다(test_req037과 같은 검사)
+    home = str(Path.home())
+    for path in (site_dir / "tia").rglob("*"):
+        if path.is_file() and path.suffix in {".html", ".json", ".txt"}:
+            text = path.read_text()
+            assert str(run.run_dir) not in text and home not in text, path
     # 정리: worktree와 라벨 자원이 남지 않는다
     assert not (root / "base").exists()
     assert _worktrees() == s10_run["before_worktrees"]
     assert s10_run["leak"].owned == [], s10_run["leak"]
-
-
-def test_req011_s10_interrupt_removes_worktree(real_pipeline_run_async):
-    """S10 base 빌드 중 SIGINT: worktree 등록과 디렉터리가 남지 않고 라벨 자원도 0이다."""
-    before_worktrees = _worktrees()
-    before = envctl.snapshot()
-    handle = real_pipeline_run_async("S00,S10")
-    try:
-        base_dir = None
-        deadline = time.time() + 900
-        while time.time() < deadline and handle.proc.poll() is None:
-            found = list(handle.work.glob("runs/*/S10/base/.git"))
-            if found:
-                base_dir = found[0].parent
-                break
-            time.sleep(1)
-        assert base_dir is not None, "S10 base worktree가 만들어지지 않았다"
-        assert str(base_dir) in _worktrees()
-        time.sleep(3)
-        handle.interrupt()
-        assert handle.wait(120), "SIGINT 후 프로세스 그룹이 남았다"
-    finally:
-        handle.kill_if_alive()
-    assert not base_dir.exists()
-    assert _worktrees() == before_worktrees
-    assert envctl.diff(before, envctl.snapshot()).owned == []
-    pids = run_pids(handle.work / "runs" / base_dir.parents[1].name)
-    assert not any(pid_alive(pid) for pid in pids.values()), pids

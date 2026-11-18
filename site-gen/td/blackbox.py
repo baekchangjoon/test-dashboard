@@ -160,13 +160,15 @@ def summarize(junit_dir, exec_dir, sources_dir=None) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """`python -m td.blackbox evaluate <junit_dir> <exec_dir> [<test_sources_dir> [<expected_tests.yaml>]]`: 판정 JSON을 stdout에 낸다."""
+    """`python -m td.blackbox evaluate <junit_dir> <exec_dir> [<test_sources_dir> [<expected_tests.yaml>]]`(엄격)
+    또는 `summarize <junit_dir> <exec_dir> [<test_sources_dir>]`(관대, S10 base용): 판정 JSON을 stdout에 낸다."""
     args = sys.argv[1:] if argv is None else argv
     if len(args) in (3, 4) and args[0] == "summarize":
         print(json.dumps(summarize(args[1], args[2], args[3] if len(args) > 3 else None), ensure_ascii=False))
         return 0
     if len(args) not in (3, 4, 5) or args[0] != "evaluate":
-        print("usage: td.blackbox evaluate <junit_dir> <exec_dir> [<test_sources_dir> [<expected_tests.yaml>]]", file=sys.stderr)
+        print("usage: td.blackbox evaluate <junit_dir> <exec_dir> [<test_sources_dir> [<expected_tests.yaml>]]\n"
+              "       td.blackbox summarize <junit_dir> <exec_dir> [<test_sources_dir>]", file=sys.stderr)
         return 2
     print(json.dumps(evaluate(args[1], args[2], args[3] if len(args) > 3 else None, args[4] if len(args) > 4 else None), ensure_ascii=False))
     return 0

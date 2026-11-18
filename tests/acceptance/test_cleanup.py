@@ -194,3 +194,36 @@ td_pid_register bgsleep $!
     assert after_worktrees == before_worktrees and "tia" not in after_worktrees.lower()
     new_daemons = _gradle_daemon_ids() - before_daemons
     assert new_daemons == set(), f"run 뒤 남은 Gradle daemon: {new_daemons}"
+
+
+def _s10_worktrees() -> str:
+    return subprocess.run(["git", "-C", str(PETCLINIC_SRC), "worktree", "list", "--porcelain"],
+                          capture_output=True, text=True).stdout
+
+
+def test_req011_s10_interrupt_removes_worktree(real_pipeline_run_async):
+    """S10 base 빌드 중 SIGINT: worktree 등록과 디렉터리가 남지 않고 라벨 자원도 0이다."""
+    before_worktrees = _s10_worktrees()
+    before = envctl.snapshot()
+    handle = real_pipeline_run_async("S00,S10")
+    try:
+        base_dir = None
+        deadline = time.time() + 900
+        while time.time() < deadline and handle.proc.poll() is None:
+            found = list(handle.work.glob("runs/*/S10/base/.git"))
+            if found:
+                base_dir = found[0].parent
+                break
+            time.sleep(1)
+        assert base_dir is not None, "S10 base worktree가 만들어지지 않았다"
+        assert str(base_dir) in _s10_worktrees()
+        time.sleep(3)
+        handle.interrupt()
+        assert handle.wait(120), "SIGINT 후 프로세스 그룹이 남았다"
+    finally:
+        handle.kill_if_alive()
+    assert not base_dir.exists()
+    assert _s10_worktrees() == before_worktrees
+    assert envctl.diff(before, envctl.snapshot()).owned == []
+    pids = run_pids(handle.work / "runs" / base_dir.parents[1].name)
+    assert not any(pid_alive(pid) for pid in pids.values()), pids

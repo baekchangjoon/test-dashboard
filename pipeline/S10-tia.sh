@@ -48,13 +48,14 @@ BASE="$(td_py -m td.tia resolve-base --sut-file "$TD_SUT_FILE" --repo "$TD_SUT_S
 td_log "S10 base=$BASE head=$HEAD_COMMIT"
 
 # --- base worktree(훅 비활성, detach) -----------------------------------------------------------------
+td_run 60 -- git -C "$TD_SUT_SRC" worktree prune >/dev/null 2>&1 || true  # 이전 중단 run이 남긴 등록 정리
 td_run 300 -- git -c core.hooksPath=/dev/null -C "$TD_SUT_SRC" worktree add --detach "$BASE_DIR" "$BASE" >"$S10_DIR/worktree.log" 2>&1 \
   || s10_fail "base worktree 생성 실패: $(tail -c 500 "$S10_DIR/worktree.log")"
 
 REASONS=()
 BB_RAN=0
 BB_EXTRA_JSON='{}'
-PRECHECK="$(td_py -m td.tia precheck "$BASE_DIR" 2>&1)" || s10_fail "base 사전 검사 실패: ${PRECHECK:0:500}"
+PRECHECK="$(td_py -m td.tia precheck "$BASE_DIR" 2>"$S10_DIR/precheck.log")" || s10_fail "base 사전 검사 실패: $(tail -c 500 "$S10_DIR/precheck.log")"
 if [[ -n "$PRECHECK" ]]; then
   REASONS+=("blackbox suite skipped: $(tr '\n' ';' <<< "$PRECHECK" | sed 's/;$//')")
   td_log "S10 ${REASONS[0]}"
@@ -88,7 +89,6 @@ CLASSES_REL="$(sut_get classes)"
 # in-process 스레드 커버리지 손실 TC(ConcurrencyBlackBoxIT 등, expected-tests.yaml no_attribution)는 convert를 막지 않고 기록만 한다.
 tia convert --allow-incomplete --exec-dir "$S10_DIR/tia-base/exec" --classes "$BASE_DIR/$CLASSES_REL" --out "$S10_DIR/testwise.json" >"$S10_DIR/convert.log" 2>&1 \
   || s10_fail "tia convert 실패: $(tail -c 500 "$S10_DIR/convert.log" | tr '\n' ' ')"
-INCOMPLETE="$(sed -n 's/^ *incomplete  *//p' "$S10_DIR/convert.log" | jq -R . | jq -cs .)"
 rm -f "$S10_DIR/tia.db"
 tia index --report "$S10_DIR/testwise.json" --repo "$(sut_get name)" --commit "$BASE" --db "$S10_DIR/tia.db" >"$S10_DIR/index.log" 2>&1 \
   || s10_fail "tia index 실패: $(tail -c 500 "$S10_DIR/index.log" | tr '\n' ' ')"
@@ -115,6 +115,6 @@ s10_cleanup  # 단계 JSON을 쓰기 전에 worktree를 지우고, 남았는지 
 if git -C "$TD_SUT_SRC" worktree list --porcelain | grep -qF "$BASE_DIR" || [[ -e "$BASE_DIR" ]]; then
   s10_fail "base worktree가 남아 있다: $BASE_DIR"
 fi
-EXTRA="$(jq -cn --arg base "$BASE" --arg head "$HEAD_COMMIT" --arg range "$(sut_get tia.range)" --argjson bb "$BB_EXTRA_JSON" --argjson impact "$SUMMARY" --argjson incomplete "${INCOMPLETE:-[]}" \
-  '$bb + {base: $base, head: $head, range: $range, impact: $impact, incompleteAttribution: $incomplete}')"
+EXTRA="$(jq -cn --arg base "$BASE" --arg head "$HEAD_COMMIT" --arg range "$(sut_get tia.range)" --argjson bb "$BB_EXTRA_JSON" --argjson impact "$SUMMARY" \
+  '$bb + {base: $base, head: $head, range: $range, impact: ($impact | del(.incompleteAttribution)), incompleteAttribution: $impact.incompleteAttribution}')"
 td_stage_end S10 degraded "$REASON_TEXT" --outputs-json "$(jq -cn --arg dir "$TIA_OUT" '{tia: $dir}')" --extra-json "$EXTRA"

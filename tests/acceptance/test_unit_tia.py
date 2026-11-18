@@ -95,12 +95,12 @@ def test_impact_summary_counts_selected_tests():
     doc = {"tests": [{"id": "A#x", "confidence": "DETERMINISTIC"}, {"id": "B#y", "confidence": "CONSERVATIVE"}]}
     summary = tia.impact_summary(doc, indexed_tests=5)
     assert summary["selected"] == 2 and summary["indexedTests"] == 5
-    assert summary["deterministic"] == 1 and summary["conservative"] == 1 and summary["conservativeSelectAll"] is False
+    assert summary["deterministic"] == 1 and summary["conservative"] == 1 and summary["allSelectedConservative"] is False
 
 
 def test_impact_summary_select_all_when_every_test_conservative():
     doc = {"tests": [{"id": "A#x", "confidence": "CONSERVATIVE"}]}
-    assert tia.impact_summary(doc, 1)["conservativeSelectAll"] is True
+    assert tia.impact_summary(doc, 1)["allSelectedConservative"] is True
 
 
 def test_build_scenarios_matches_report_contract_and_truncates_diff():
@@ -112,3 +112,27 @@ def test_build_scenarios_matches_report_contract_and_truncates_diff():
     assert scenario["conservative"] is True and scenario["total"] == 3 and scenario["count"] == 1
     assert scenario["diff"].count("\n") <= tia.MAX_DIFF_LINES and "base-head.diff" in scenario["diff"]
     assert scenario["reasons"] == ["new file"]
+
+
+def test_build_scenarios_rejects_non_impact_documents():
+    for bad in ([], "x", {"selected": []}, {"tests": "nope"}):
+        with pytest.raises(tia.TiaError):
+            tia.build_scenarios(bad, "", 1, "a" * 40, "b" * 40)
+
+
+def test_lost_attribution_reads_machine_readable_fields():
+    doc = {"tests": [{"uniformPath": "A#x", "incompleteAttribution": True}, {"uniformPath": "B#y", "droppedProbes": 2},
+                     {"uniformPath": "C#z", "droppedProbes": 0}, {"uniformPath": "D#w"}]}
+    assert tia.lost_attribution(doc) == ["A#x", "B#y"]
+    with pytest.raises(tia.TiaError):
+        tia.lost_attribution({})
+
+
+def test_scenarios_cli_reports_clean_error_on_bad_impact(tmp_path, capsys):
+    impact = tmp_path / "impact.json"
+    impact.write_text("[]")
+    (tmp_path / "d.diff").write_text("")
+    (tmp_path / "t.json").write_text('{"tests": []}')
+    rc = tia.main(["scenarios", "--impact", str(impact), "--diff", str(tmp_path / "d.diff"), "--testwise", str(tmp_path / "t.json"),
+                   "--out", str(tmp_path / "o.json"), "--base", "a" * 40, "--head", "b" * 40])
+    assert rc == 1 and "tia:" in capsys.readouterr().err
