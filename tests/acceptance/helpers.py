@@ -96,3 +96,33 @@ def run_pids(run_dir: Path) -> dict[str, int]:
     if not pids_dir.exists():
         return {}
     return {p.stem: int(p.read_text().strip()) for p in pids_dir.glob("*.pid")}
+
+
+# --- 사이트 생성 fixture(Task 7) ---------------------------------------------------------
+def make_site_run(site_base: Path, sut: str, run_id: str, *, complete: bool = True, kpis: dict | None = None,
+                  stages: dict | None = None, s09_top10=None, coverage_dir: bool = False, commit: str = "b6f9393") -> Path:
+    """`<site_base>/suts/<sut>/runs/<runId>/`에 게시된 run 모양의 디렉터리를 만든다(run.json, stages/, 선택 S08 산출물)."""
+    run_dir = Path(site_base) / "suts" / sut / "runs" / run_id
+    (run_dir / "stages").mkdir(parents=True)
+    stage_status = stages or {"S00": "passed", "S01": "passed", "S08": "passed"}
+    started = f"{run_id[:4]}-{run_id[4:6]}-{run_id[6:8]}T{run_id[9:11]}:{run_id[11:13]}:{run_id[13:15]}Z"
+    (run_dir / "run.json").write_text(json.dumps({
+        "runId": run_id, "sut": sut, "commit": commit, "trigger": "manual", "startedAt": started,
+        "finishedAt": started, "kpis": kpis or {}, "stages": {**stage_status, "S13": "publishing"}}))
+    for stage_id, status in stage_status.items():
+        data = {"id": stage_id, "status": status, "reason": None if status == "passed" else "x", "outputs": {}}
+        if stage_id == "S09" and s09_top10 is not None:
+            data["top10"] = s09_top10
+        if stage_id == "S08" and coverage_dir:
+            data["outputs"] = {"coverage": str(run_dir / "S08")}
+        (run_dir / "stages" / f"{stage_id}.json").write_text(json.dumps(data))
+    if coverage_dir:
+        cov = run_dir / "S08"
+        (cov / "blackbox" / "attributed" / "exec").mkdir(parents=True)
+        (cov / "blackbox" / "attributed" / "exec" / "a.exec").write_bytes(b"\x00")
+        (cov / "coverage.html").write_text("<html>stale</html>")
+        (cov / "coverage.json").write_text(json.dumps({"suites": {}, "classes": [], "integrity": {"violations": [], "classIdWarnings": 0, "probes": []}, "merged": {}}))
+        (cov / "site.css").write_text("/*dup*/")
+    if complete:
+        (run_dir / "_COMPLETE").write_text("")
+    return run_dir

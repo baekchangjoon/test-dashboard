@@ -62,3 +62,12 @@ input[type="search"], select { font: inherit; color: var(--fg); background: var(
 .src-line.hit { background: var(--hit); color: var(--hit-fg); }
 #detail h3, #detail p { overflow-wrap: anywhere; }
 .src-file { overflow: hidden; max-width: 100%; }
+/* 대시보드(홈, SUT, run) */
+.st-passed { color: var(--hit-fg); } .st-failed { color: var(--bad); font-weight: 600; } .st-degraded, .st-skipped { color: var(--muted); }
+.kpi-item { min-width: 0; }
+.kpi-item b { font-size: 1.3rem; display: block; overflow-wrap: anywhere; }
+.chart { max-width: 100%; height: auto; }
+.chart .axis { stroke: var(--border); stroke-width: 1; }
+.chart .line { fill: none; stroke: var(--accent); stroke-width: 2; }
+.chart .dot { fill: var(--accent); }
+.chart text { fill: var(--muted); font-size: 11px; }
