@@ -50,7 +50,8 @@ def test_req066_token_not_leaked(s11_run):
     token = s11_run.token
     assert token, "토큰 관측 훅 파일이 비어 있다"
     # 실행 중 모든 프로세스 argv 폴링에서 토큰이 한 번도 보이지 않았다(스캐너·gradle·ssh·curl 포함).
-    assert any("sonar" in line for line in s11_run.ps_lines), "폴링이 스캐너 프로세스를 보지 못했다(검사가 무의미)"
+    scanner = [line for line in s11_run.ps_lines if "-Dsonar.host.url=" in line or ("gradlew" in line and "sonar" in line)]
+    assert scanner, "폴링이 스캐너 프로세스를 보지 못했다(검사가 무의미)"
     assert not [line for line in s11_run.ps_lines if token in line]
     # work/** 전체(관측 훅 파일은 이미 지웠다)와 단계 로그에 토큰 문자열이 없다.
     leaked = []
@@ -141,3 +142,25 @@ def test_req039_degraded_publish(real_pipeline_run, local_env, site_prefix):
     mirror = result.work_dir / "site-mirror" / site_prefix / "suts" / "petclinic" / "runs" / result.run_id / "index.html"
     html = mirror.read_text()
     assert 'data-stage="S11"' in html and "Sonar" in html
+
+
+# --- 단계 수준: 가짜 Sonar(CE FAILED)와 가짜 스캐너로 S11 failed + ceTaskId를 확인한다 ----------------------------
+def test_req037_stage_ce_failed_records_ceTaskId(real_pipeline_run, local_env, tmp_path):
+    import yaml
+    from fake_sonar import start_fake_sonar
+    fixtures = REPO_ROOT / "tests" / "fixtures" / "sonar-api"
+    sut = yaml.safe_load((REPO_ROOT / "suts" / "petclinic" / "sut.yaml").read_text())
+    sut["sonar"]["cmd_build"] = "true"
+    sut["sonar"]["cmd_scan"] = f"bash {fixtures / 'fake-scan.sh'}"
+    sut_file = tmp_path / "petclinic.yaml"
+    sut_file.write_text(yaml.safe_dump(sut))
+    fake, stop = start_fake_sonar()
+    fake.ce_sequence["AZ-task-1"] = ["IN_PROGRESS", "FAILED"]
+    before = token_count(local_env)
+    try:
+        result = real_pipeline_run("S00,S11", sut_file=str(sut_file), TD_SONAR_URL_OVERRIDE=fake.url)
+    finally:
+        stop()
+    stage = _s11(result)
+    assert stage["status"] == "failed" and "AZ-task-1" in stage["reason"] and "FAILED" in stage["reason"], stage
+    assert token_rows(local_env, f"td-{result.run_id}") == [] and token_count(local_env) == before

@@ -93,10 +93,7 @@ def test_req037_sonar_export(s11_run):
     site_dir = pages.render_run(run.run_dir, run.run_dir).parent
     assert 'href="sonar/sonar.html"' in (site_dir / "index.html").read_text()
     assert (site_dir / "sonar" / "sonar.html").is_file() and (site_dir / "sonar" / "sonar.json").is_file()
-    # KPI와 스캔 입력(REQ-063: S11은 S08 병합 XML을 그대로 썼다)
-    assert run.run_json["kpis"]["sonar"]["gate"] == doc["qualityGate"]["status"]
-    merged = run.run_dir / "S08" / "merged" / "aggregate.xml"
-    assert stage["coverageXmlSha256"] == hashlib.sha256(merged.read_bytes()).hexdigest()
+    assert run.run_json["kpis"]["sonar"]["gate"] == doc["qualityGate"]["status"]  # REQ-063 대응은 test_coverage.py
     assert stage["ceTaskId"] and stage["projectKey"] == doc["projectKey"]
     # 게시 사본에는 로컬 홈 경로가 없다
     home = str(Path.home())

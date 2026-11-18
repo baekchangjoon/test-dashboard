@@ -63,8 +63,8 @@ class SanitizeError(RuntimeError):
     pass
 
 
-def _path_variants(path) -> list[str]:
-    """경로의 원본·resolve 표기(중복 제거, 긴 것 먼저)."""
+def path_variants(path) -> list[str]:
+    """경로의 원본·resolve 표기(중복 제거, 긴 것 먼저). 공개 보조: 게시 치환과 S13 홈 경로 게이트가 함께 쓴다."""
     path = Path(path)
     variants = {str(path), str(path.resolve())}
     return sorted((v for v in variants if len(v) > 1), key=len, reverse=True)
@@ -74,8 +74,8 @@ def sanitize_site(out_dir, run_dir, repo_root=None) -> list[Path]:
     """게시 전 텍스트 파일의 로컬 절대 경로를 치환한다: run 디렉터리 -> <run>, 저장소 루트 -> <repo>, 홈 -> ~.
     치환 뒤에도 홈 경로가 남으면 SanitizeError(게이트). 바이너리는 건드리지 않는다. 바뀐 파일 목록을 돌려준다."""
     repo_root = Path(repo_root or os.environ.get("TD_ROOT") or SITE_DIR.parents[2])
-    rules = ([(v, "<run>") for v in _path_variants(run_dir)] + [(v, "<repo>") for v in _path_variants(repo_root)]
-             + [(v, "~") for v in _path_variants(Path.home())])
+    rules = ([(v, "<run>") for v in path_variants(run_dir)] + [(v, "<repo>") for v in path_variants(repo_root)]
+             + [(v, "~") for v in path_variants(Path.home())])
     changed = []
     for path in _text_files(out_dir):
         try:
@@ -98,7 +98,7 @@ def _text_files(out_dir) -> list[Path]:
 
 def check_no_home(out_dir) -> None:
     """게이트: 텍스트 파일에 홈 경로가 남아 있으면 SanitizeError."""
-    home_variants = _path_variants(Path.home())
+    home_variants = path_variants(Path.home())
     leaked = []
     for path in _text_files(out_dir):
         try:

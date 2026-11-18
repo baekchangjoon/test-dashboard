@@ -33,7 +33,9 @@ SCHEMA_VERSION = 1
 
 
 class SonarError(RuntimeError):
-    pass
+    def __init__(self, message: str, http_status: int | None = None):
+        super().__init__(message)
+        self.http_status = http_status
 
 
 def redact(text: str, token: str | None = None) -> str:
@@ -80,7 +82,7 @@ class SonarClient:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
                 body = response.read()
         except urllib.error.HTTPError as exc:
-            raise SonarError(f"HTTP {exc.code} {method} {path}") from exc
+            raise SonarError(f"HTTP {exc.code} {method} {path}", http_status=exc.code) from exc
         except (urllib.error.URLError, OSError, TimeoutError) as exc:
             reason = getattr(exc, "reason", exc)
             raise SonarError(f"연결 실패 {method} {path}: {type(reason).__name__}") from exc
@@ -145,8 +147,10 @@ def wait_ce(task_id: str, timeout: float = CE_TIMEOUT_SECONDS, *, client: SonarC
     while True:
         try:
             status = (client.get("/api/ce/task", id=task_id).get("task") or {}).get("status")
-        except SonarError:
-            status = None
+        except SonarError as exc:
+            if exc.http_status is not None and 400 <= exc.http_status < 500:
+                raise  # 인증·권한·태스크 없음 같은 4xx는 재시도해도 소용없다: 바로 실패
+            status = None  # 5xx와 연결 오류만 재시도
         if status in ("SUCCESS", "FAILED", "CANCELED"):
             return status
         if clock() >= deadline:
@@ -154,7 +158,9 @@ def wait_ce(task_id: str, timeout: float = CE_TIMEOUT_SECONDS, *, client: SonarC
         sleep(interval)
 
 
-def ce_failure_reason(task_id: str, status: str) -> str:
+def ce_failure_reason(task_id: str, status: str, detail: str = "") -> str:
+    if status == "ERROR":
+        return f"Sonar CE 폴링 실패(ceTaskId={task_id}): {detail}"
     if status == "TIMEOUT":
         return f"Sonar CE 태스크가 {CE_TIMEOUT_SECONDS}초 안에 끝나지 않았다(ceTaskId={task_id}, status=TIMEOUT)"
     return f"Sonar CE 태스크 실패(ceTaskId={task_id}, status={status})"
@@ -193,7 +199,7 @@ def export(key: str, *, client: SonarClient | None = None, ce_task_id: str | Non
     for measure in component.get("measures") or []:
         if measure.get("metric") in measures:
             measures[measure["metric"]] = measure.get("value")
-    issue_total, issue_rows = _paged(client, "/api/issues/search", "issues", {"componentKeys": key})
+    issue_total, issue_rows = _paged(client, "/api/issues/search", "issues", {"componentKeys": key, "resolved": "false"})
     hotspot_total, hotspot_rows = _paged(client, "/api/hotspots/search", "hotspots", {"projectKey": key})
     quoted = urllib.parse.quote(key, safe="")
     issues = [{"key": row["key"], "rule": row.get("rule"), "severity": row.get("severity"), "type": row.get("type"),
@@ -305,7 +311,11 @@ def cmd_report_task(args) -> int:
 
 
 def cmd_wait_ce(args) -> int:
-    status = wait_ce(args.task_id, args.timeout, client=SonarClient(args.url))
+    try:
+        status = wait_ce(args.task_id, args.timeout, client=SonarClient(args.url))
+    except SonarError as exc:  # 4xx: 사유는 stderr, 상태는 ERROR
+        print(redact(str(exc)), file=sys.stderr)
+        status = "ERROR"
     print(status)
     return 0 if status == "SUCCESS" else 1
 
