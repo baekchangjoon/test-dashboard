@@ -15,8 +15,9 @@ import yaml
 from td import bbtg
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-PETCLINIC_CONTROLLERS = {"AuthController", "OwnerRestController", "PetRestController", "ReservationRestController",
-                         "VetRestController"}
+# 기대 컨트롤러 목록은 사람이 소스를 읽고 적은 suts/petclinic/expected-endpoints.yaml에서 읽는다(Task 17).
+PETCLINIC_CONTROLLERS = {fqcn.rsplit(".", 1)[-1] for fqcn in yaml.safe_load(
+    (REPO_ROOT / "suts" / "petclinic" / "expected-endpoints.yaml").read_text())["controllers"]}
 
 
 def _grep_rest_controllers(src: Path) -> set[str]:

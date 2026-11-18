@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "온톨로지 그래프(S03 ontology-jqa.json, S05 ontology-owl.json 공통)",
+  "type": "object",
+  "required": ["nodes", "edges", "meta"],
+  "additionalProperties": false,
+  "properties": {
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "label", "props"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "kind": {"enum": ["Endpoint", "Controller", "Service", "Repository", "Entity", "Field", "Exception", "DTO"]},
+          "label": {"type": "string", "minLength": 1},
+          "props": {"type": "object"}
+        },
+        "if": {"properties": {"kind": {"const": "Endpoint"}}},
+        "then": {
+          "properties": {
+            "props": {
+              "type": "object",
+              "required": ["method", "path", "handler", "view"],
+              "properties": {
+                "method": {"type": "string", "minLength": 1},
+                "path": {"type": "string", "pattern": "^/"},
+                "handler": {"type": "string", "pattern": "^[^#\\s]+#[^#\\s]+$"},
+                "view": {"type": "boolean"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["source", "target", "kind"],
+        "additionalProperties": false,
+        "properties": {
+          "source": {"type": "string", "minLength": 1},
+          "target": {"type": "string", "minLength": 1},
+          "kind": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "meta": {
+      "type": "object",
+      "required": ["tool", "version", "commit", "fallbacks"],
+      "additionalProperties": false,
+      "properties": {
+        "tool": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "commit": {"type": "string", "minLength": 1},
+        "fallbacks": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}

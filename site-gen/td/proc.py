@@ -26,22 +26,26 @@ def run_with_timeout(timeout_sec: float, argv: list[str], kill_grace: float | No
     호출자의 핸들러(예: 게시기의 잠금 해제)가 실행되게 한다.
     cwd/stdout/stderr/env는 파이썬 호출자(예: td.bbtg)가 출력을 파일로 받을 때 쓴다(기본은 상속)."""
     grace = float(os.environ.get("TD_KILL_GRACE", "10")) if kill_grace is None else kill_grace
-    try:
-        proc = subprocess.Popen(argv, start_new_session=True, cwd=cwd, stdout=stdout, stderr=stderr, env=env)
-    except OSError as exc:
-        print(f"td_run: 실행 실패 {argv[0]}: {exc}", file=sys.stderr)
-        return 127
-
+    proc: subprocess.Popen | None = None
     received: list[int] = []
 
     def forward(signum, _frame):
-        # 호출자가 TERM/INT를 받으면 자식 그룹도 정리한다.
+        # 호출자가 TERM/INT를 받으면 자식 그룹도 정리한다. 자식을 띄우기 전에 받은 신호는 띄운 직후에 처리한다
+        # (백그라운드로 띄운 서버를 곧바로 끄는 경우, 자식이 신호 핸들러 설치 전에 고아가 되지 않게 한다).
         received.append(signum)
-        _kill_group(proc, signal.SIGTERM)
+        if proc is not None:
+            _kill_group(proc, signal.SIGTERM)
 
     old_term = signal.signal(signal.SIGTERM, forward)
     old_int = signal.signal(signal.SIGINT, forward)
     try:
+        try:
+            proc = subprocess.Popen(argv, start_new_session=True, cwd=cwd, stdout=stdout, stderr=stderr, env=env)
+        except OSError as exc:
+            print(f"td_run: 실행 실패 {argv[0]}: {exc}", file=sys.stderr)
+            return 127
+        if received:
+            _kill_group(proc, signal.SIGTERM)
         try:
             return proc.wait(timeout=timeout_sec)
         except subprocess.TimeoutExpired:

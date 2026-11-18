@@ -1,0 +1,21 @@
+# S03 jQAssistant 설정. 실행마다 달라지는 값(전용 로컬 저장소, store 위치, 포트)은 pipeline/S03-jqa.sh가 -D로 덮어쓴다.
+# 플러그인 버전은 tools.pin.yaml의 jqassistantSpring과 같아야 한다(S03이 시작할 때 대조한다).
+jqassistant:
+  plugins:
+    - group-id: org.jqassistant.plugin
+      artifact-id: jqassistant-spring-plugin
+      version: 2.9.0
+  analyze:
+    concepts:
+      - spring-component:Controller
+      - spring-mvc:RestController
+      - spring-component:Service
+      - spring-component:Repository
+      - spring-data:ImplementedRepository
+      - spring-data:AnnotatedRepository
+  store:
+    embedded:
+      # server 모드의 Bolt 연결은 루프백에만 연다. 포트는 S03이 빈 포트를 골라 -D로 넘긴다.
+      # (jQA 2.9.1의 HTTP 포트는 Neo4j 브라우저 정적 파일만 서빙한다. 질의는 Bolt로 한다.)
+      listen-address: 127.0.0.1
+      connector-enabled: true

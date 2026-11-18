@@ -1,0 +1,33 @@
+# 기준 SUT 커밋의 /api/** 핸들러 기대 목록. 사람이 소스(src/main/java/**/*RestController.java, AuthController.java)를
+# 읽고 적었다. 생산 코드(S03 Cypher, td.ontology_jqa)와 독립적이다. 커밋이 바뀌면 소스를 다시 읽고 갱신한다.
+# path는 클래스 수준 @RequestMapping과 메서드 수준 경로를 결합한 값이다(path variable은 소스의 {name} 그대로).
+commit: b6f939355e8790202ddfc71e3f3507252745ed37
+controllers:
+  - org.springframework.samples.petclinic.vet.VetRestController
+  - org.springframework.samples.petclinic.owner.OwnerRestController
+  - org.springframework.samples.petclinic.owner.PetRestController
+  - org.springframework.samples.petclinic.security.AuthController
+  - org.springframework.samples.petclinic.boarding.ReservationRestController
+endpoints:
+  # VetRestController @RequestMapping("/api/vets")
+  - {method: GET, path: /api/vets, handler: "org.springframework.samples.petclinic.vet.VetRestController#getAllVets"}
+  - {method: GET, path: "/api/vets/{vetId}", handler: "org.springframework.samples.petclinic.vet.VetRestController#getVet"}
+  # OwnerRestController @RequestMapping("/api/owners")
+  - {method: GET, path: /api/owners, handler: "org.springframework.samples.petclinic.owner.OwnerRestController#getAllOwners"}
+  - {method: GET, path: "/api/owners/{ownerId}", handler: "org.springframework.samples.petclinic.owner.OwnerRestController#getOwner"}
+  - {method: POST, path: /api/owners, handler: "org.springframework.samples.petclinic.owner.OwnerRestController#createOwner"}
+  - {method: PUT, path: "/api/owners/{ownerId}", handler: "org.springframework.samples.petclinic.owner.OwnerRestController#updateOwner"}
+  # PetRestController @RequestMapping("/api/pets")
+  - {method: GET, path: /api/pets/types, handler: "org.springframework.samples.petclinic.owner.PetRestController#getPetTypes"}
+  - {method: GET, path: "/api/pets/{petId}", handler: "org.springframework.samples.petclinic.owner.PetRestController#getPet"}
+  - {method: POST, path: /api/pets, handler: "org.springframework.samples.petclinic.owner.PetRestController#createPet"}
+  - {method: PUT, path: "/api/pets/{petId}", handler: "org.springframework.samples.petclinic.owner.PetRestController#updatePet"}
+  # AuthController @RequestMapping("/api/auth")
+  - {method: POST, path: /api/auth/login, handler: "org.springframework.samples.petclinic.security.AuthController#login"}
+  - {method: POST, path: /api/auth/validate, handler: "org.springframework.samples.petclinic.security.AuthController#validateToken"}
+  # ReservationRestController @RequestMapping("/api/reservations")
+  - {method: POST, path: /api/reservations, handler: "org.springframework.samples.petclinic.boarding.ReservationRestController#create"}
+  - {method: GET, path: "/api/reservations/{id}", handler: "org.springframework.samples.petclinic.boarding.ReservationRestController#get"}
+  - {method: GET, path: /api/reservations, handler: "org.springframework.samples.petclinic.boarding.ReservationRestController#list"}
+  - {method: PUT, path: "/api/reservations/{id}", handler: "org.springframework.samples.petclinic.boarding.ReservationRestController#update"}
+  - {method: DELETE, path: "/api/reservations/{id}", handler: "org.springframework.samples.petclinic.boarding.ReservationRestController#delete"}
