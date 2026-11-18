@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# claude 호출 기록 shim. 호출 메타데이터(시각, 프롬프트 제외 argv 플래그, cwd)를
+# $TD_LLM_CALL_LOG에 한 줄 JSON으로 남기고 실제 claude를 exec한다.
+set -u
+self="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+
+json_escape() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'; }
+
+if [[ -n "${TD_LLM_CALL_LOG:-}" ]]; then
+  flags=""
+  skip_next=0
+  for arg in "$@"; do
+    if [[ $skip_next -eq 1 ]]; then skip_next=0; continue; fi
+    case "$arg" in
+      -p|--print) flags+="\"$(json_escape "$arg")\","; continue ;;
+      --*|-*) flags+="\"$(json_escape "$arg")\","; ;;
+      *) ;; # 플래그 값과 프롬프트 본문은 기록하지 않는다
+    esac
+  done
+  printf '{"ts":"%s","argv":[%s],"cwd":"%s"}\n' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${flags%,}" "$(json_escape "$PWD")" >> "$TD_LLM_CALL_LOG"
+fi
+
+real="${TD_REAL_CLAUDE:-}"
+if [[ -z "$real" ]]; then
+  IFS=: read -r -a dirs <<< "$PATH"
+  for d in "${dirs[@]}"; do
+    cand="$d/claude"
+    if [[ -x "$cand" && "$(cd "$d" && pwd)/claude" != "$self" ]]; then real="$cand"; break; fi
+  done
+fi
+if [[ -z "$real" ]]; then
+  echo "claude-shim: 실제 claude 바이너리를 찾을 수 없다(TD_REAL_CLAUDE 설정 필요)" >&2
+  exit 127
+fi
+exec "$real" "$@"
