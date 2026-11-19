@@ -65,21 +65,35 @@ def test_req027_generation_suffix_and_validation():
             testid.make(*bad, "a.feature", 3, set())
 
 
-def test_req027_slug_collision_suffix_deterministic():
-    features = {"b/owner.feature": 5, "a/owner.feature": 5}   # slug가 같고 줄도 같다
-    ids = {}
+def test_req027_slug_collision_suffix_per_feature():
+    # a/owner.feature {L5, L9}, b/owner.feature {L5, L7}: slug는 feature 단위. b의 모든 id가 owner_2를 쓴다.
+    features = {"a/owner.feature": [5, 9], "b/owner.feature": [5, 7], "c/owner.feature": [1]}
+
+    def build():
+        slugs: dict[str, str] = {}
+        taken: set[str] = set()
+        return {path: [testid.make("owl", HASH, 1, None, path, line, taken, slugs=slugs) for line in lines]
+                for path, lines in sorted(features.items())}
+
+    ids = build()
+    assert ids["a/owner.feature"] == ["E2E_owl_01234567r1_owner#L5", "E2E_owl_01234567r1_owner#L9"]
+    assert ids["b/owner.feature"] == ["E2E_owl_01234567r1_owner_2#L5", "E2E_owl_01234567r1_owner_2#L7"]
+    assert ids["c/owner.feature"] == ["E2E_owl_01234567r1_owner_3#L1"]
+    assert build() == ids
+    flat = [t for group in ids.values() for t in group]
+    assert len(set(flat)) == len(flat) and all(TEST_ID_RE.match(t) for t in flat)
+    # 호출 순서가 아니라 feature가 slug를 소유한다: b를 먼저 말해도 같은 feature 안에서는 일정하다
+    slugs: dict[str, str] = {}
+    first = testid.make("owl", HASH, 1, None, "b/owner.feature", 5, set(), slugs=slugs)
+    again = testid.make("owl", HASH, 1, None, "b/owner.feature", 7, set(), slugs=slugs)
+    assert first.split("#")[0] == again.split("#")[0]
+
+
+def test_req027_duplicate_id_without_registry_is_error():
     taken: set[str] = set()
-    for path in sorted(features):                               # 상대 경로 순서
-        ids[path] = testid.make("owl", HASH, 1, None, path, features[path], taken)
-    assert ids == {"a/owner.feature": "E2E_owl_01234567r1_owner#L5", "b/owner.feature": "E2E_owl_01234567r1_owner_2#L5"}
-    # 세 번째 충돌은 _3
-    assert testid.make("owl", HASH, 1, None, "c/owner.feature", 5, taken) == "E2E_owl_01234567r1_owner_3#L5"
-    assert all(TEST_ID_RE.match(t) for t in ids.values())
-    # 같은 호출을 다시 해도 같다
-    again, taken2 = {}, set()
-    for path in sorted(features):
-        again[path] = testid.make("owl", HASH, 1, None, path, features[path], taken2)
-    assert again == ids
+    testid.make("owl", HASH, 1, None, "a/owner.feature", 5, taken)
+    with pytest.raises(ValueError):
+        testid.make("owl", HASH, 1, None, "a/owner.feature", 5, taken)
 
 
 def test_req027_korean_names_use_path_hash():
@@ -95,3 +109,16 @@ def test_req027_korean_names_use_path_hash():
     taken: set[str] = set()
     made = testid.make("base", HASH, 3, None, "features/소유자.feature", 4, taken, name="소유자 조회")
     assert TEST_ID_RE.match(made) and "_f" in made
+
+
+def test_req027_nonascii_slug_is_checkout_independent():
+    # 해시는 generation 루트 기준 상대 경로만 쓴다: 체크아웃(루트)이 달라도 같고, 절대 경로는 명확한 오류다.
+    relative = "features/소유자_조회.feature"
+    roots = ["/tmp/checkout-one/gen", "/var/other/deeper/path/gen"]
+    slugs = {root: testid.feature_slug(relative, "소유자 조회") for root in roots}
+    assert len(set(slugs.values())) == 1
+    for root in roots:
+        with pytest.raises(ValueError, match="상대 경로"):
+            testid.feature_slug(f"{root}/{relative}", "소유자 조회")
+        with pytest.raises(ValueError, match="상대 경로"):
+            testid.make("base", HASH, 1, None, f"{root}/{relative}", 3, set())

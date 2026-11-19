@@ -475,7 +475,7 @@ E2E는 `pipeline/run-all.sh petclinic`을 실제로 실행한 뒤 산출물과 �
 - **접두와 미러**: 로컬 미러 `work/site-mirror/`는 버킷 전체(`_test/` 포함)를 미러링하고 Lightsail로 그대로 동기화한다(과정 보존). CloudFront 무효화는 게시한 접두의 인덱스 경로만 한다.
 - **arm 상태**: `stages/S06.json.arms.<arm>`, `stages/S07.json.generations.<genId>`에 `status`와 `reason`을 둔다. 일부만 skip되면 단계는 `degraded`다.
 - **입력 해시 안정성**: bbtg 정제에서 타임스탬프, 소요 시간, 절대 경로를 제거하거나 상대화한다. S05 LLM 산출물도 입력 해시 키로 스냅샷해 재사용한다. 번들은 `S05/bundle/`, `S06/bundles/<arm>/`에 항상 조립해 보존한다.
-- **`claude` 호출 기록**: `llm.sh`는 PATH의 shim을 거쳐 실제 CLI를 부르고, shim이 호출 기록을 `work/runs/<runId>/llm-calls.log`에 남긴다(토큰 수 등 메타만 기록, 프롬프트 원문은 번들에 이미 있음).
+- **`claude` 호출 기록**: `llm.sh`는 PATH의 shim을 거쳐 실제 CLI를 부르고, shim이 호출 기록을 `work/runs/<runId>/llm-calls.jsonl`에 남긴다(토큰 수 등 메타만 기록, 프롬프트 원문은 번들에 이미 있음).
 - **Sonar CE 폴링**: 상한 10분. FAILED, CANCELED, 시간 초과, `report-task.txt` 없음은 S11 `failed`(사유에 ceTaskId와 상태)다.
 - **주입 훅 식별자**(`TD_FAIL_STAGE`, 쉼표로 복수 지정, `TD_SITE_PREFIX`가 없으면 거부):
 
