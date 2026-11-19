@@ -9,7 +9,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from td.site.layout import COPY_IGNORE, LINK_ONLY_IF_PRESENT, REPORTS, REPORTS_EXTRA, RERENDER, SITE_LAYOUT
+from td.site.layout import COPY_IGNORE, LINK_ONLY_IF_PRESENT, REPORTS, REPORTS_EXTRA, RERENDER, expand_layout
 
 SITE_DIR = Path(__file__).parent
 TEMPLATES_DIR = SITE_DIR / "templates"
@@ -124,23 +124,23 @@ def render_run(run_dir, out_dir) -> Path:
     for stage_id in sorted(run.get("stages", {})):
         stages[stage_id] = read_json(run_dir / "stages" / f"{stage_id}.json", {"status": run["stages"][stage_id], "reason": None})
     links = []
-    for key, site_rel in SITE_LAYOUT.items():
-        stage_id, output_key = key.split("/", 1)
-        stage = stages.get(stage_id) or {}
+    for stage_id, stage in stages.items():
         if stage.get("status") not in PUBLISHABLE_STATUSES:  # 실패·건너뜀 단계의 부분 산출물은 게시하지 않는다
             continue
-        src = (stage.get("outputs") or {}).get(output_key)
-        if not src or not Path(src).is_dir():
-            continue
-        target = out_dir / site_rel.rstrip("/")
-        shutil.copytree(src, target, dirs_exist_ok=True, ignore=shutil.ignore_patterns(*COPY_IGNORE))
-        if site_rel in RERENDER:
-            RERENDER[site_rel](target, f"{RUN_DEPTH_TO_ROOT}{'../' * (site_rel.strip('/').count('/') + 1)}static/site.css")
-        label, entry = REPORTS[site_rel]
-        for label, entry in [(label, entry), *REPORTS_EXTRA.get(site_rel, [])]:
-            if site_rel in LINK_ONLY_IF_PRESENT and not (target / entry).exists():
+        outputs = stage.get("outputs") or {}
+        for output_key, site_rel, report_key in expand_layout(stage_id, outputs):
+            src = outputs.get(output_key)
+            if not src or not Path(src).is_dir():
                 continue
-            links.append({"label": label, "href": f"{site_rel}{entry}"})
+            target = out_dir / site_rel.rstrip("/")
+            shutil.copytree(src, target, dirs_exist_ok=True, ignore=shutil.ignore_patterns(*COPY_IGNORE))
+            if site_rel in RERENDER:
+                RERENDER[site_rel](target, f"{RUN_DEPTH_TO_ROOT}{'../' * (site_rel.strip('/').count('/') + 1)}static/site.css")
+            label, entry = REPORTS[report_key]
+            for label, entry in [(label, entry), *REPORTS_EXTRA.get(site_rel, [])]:
+                if site_rel in LINK_ONLY_IF_PRESENT and not (target / entry).exists():
+                    continue
+                links.append({"label": label.replace("{}", site_rel.strip("/").split("/")[-1]), "href": f"{site_rel}{entry}"})
     if (run_dir / "run.json").exists():
         shutil.copy2(run_dir / "run.json", out_dir / "run.json")
     for stage_id, stage in stages.items():

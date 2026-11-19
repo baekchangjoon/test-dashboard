@@ -90,4 +90,25 @@ class RequestCounterTest {
         }
         assertThat(RequestCounter.count("T1")).isZero();
     }
+
+    @Test
+    void requestSentButResponseReadTimesOutStillCounts() {
+        server.createContext("/slow", exchange -> {
+            try {
+                Thread.sleep(1500);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+            exchange.sendResponseHeaders(204, -1);
+            exchange.close();
+        });
+        Pjacoco.setCurrentTestId("T1");
+        Harness.install();
+        io.restassured.config.RestAssuredConfig config = RestAssured.config().httpClient(
+                io.restassured.config.HttpClientConfig.httpClientConfig()
+                        .setParam("http.socket.timeout", 300).setParam("http.connection.timeout", 300));
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> RestAssured.given().config(config).baseUri(baseUrl).get("/slow")).isInstanceOf(Exception.class);
+        assertThat(RequestCounter.count("T1")).isEqualTo(1);
+    }
 }

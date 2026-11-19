@@ -190,17 +190,18 @@ public final class TestIds {
         }
 
         /**
-         * Cucumber가 주는 uri({@code classpath:features/a.feature}, {@code file:///.../features/a.feature})와 줄 번호로
-         * 항목을 찾는다. 없으면 null이다.
+         * Cucumber가 주는 uri로 항목을 찾는다. {@code classpath:features/a.feature}는 경로가 정확히 같아야 하고,
+         * {@code file:///.../features/a.feature}는 generation 루트 기준 상대 경로로 끝나야 한다(가장 긴 경로가 이긴다).
+         * 경로나 줄이 등록돼 있지 않으면 null이다(더 짧은 경로로 되돌아가 다른 항목을 집지 않는다).
          */
         public Entry lookup(String uri, int line) {
             String normalized = uri.replace('\\', '/');
+            boolean classpath = normalized.startsWith("classpath:");
+            String target = classpath ? normalized.substring("classpath:".length()).replaceFirst("^/+", "") : normalized;
             for (String path : pathsLongestFirst) {
-                if (normalized.equals(path) || normalized.endsWith("/" + path) || normalized.endsWith(":" + path)) {
-                    Entry entry = byPathAndLine.get(path + ":" + line);
-                    if (entry != null) {
-                        return entry;
-                    }
+                boolean matches = classpath ? target.equals(path) : target.equals(path) || target.endsWith("/" + path);
+                if (matches) {
+                    return byPathAndLine.get(path + ":" + line);
                 }
             }
             return null;

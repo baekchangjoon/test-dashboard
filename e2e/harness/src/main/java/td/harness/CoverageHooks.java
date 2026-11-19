@@ -25,7 +25,7 @@ import java.util.Map;
  * HTTP 어댑터를 두지 않았다. 선택 결과는 {@link #COVERAGE_ADAPTER}이고, 결과 파일이 아니라 같은 디렉터리의
  * {@code generation-meta.json}의 {@code coverageAdapter} 키에 기록한다.
  *
- * <p>속성: {@code td.control-url}(없으면 커버리지 경계 없이 요청만 센다), {@code td.testids}(S07이 만든 testids.json),
+ * <p>속성: {@code td.control-url}(없거나 공백이면 start/stop 없이 요청만 세고 exec는 null), {@code td.testids}(S07이 만든 testids.json),
  * {@code td.results}(scenario-results.json 경로). {@code exec}는 결과 파일 기준 상대 경로 {@code exec/<testId>.exec}이다.
  */
 public class CoverageHooks {
@@ -57,19 +57,30 @@ public class CoverageHooks {
     /** 경계 열기: 활성 testId 설정과 start 호출. 제어 호출 실패는 testkit이 삼킨다. */
     void begin(String testId) {
         Harness.install();
-        String controlUrl = System.getProperty("td.control-url");
-        if (controlUrl != null && !controlUrl.isBlank()) {
+        String controlUrl = controlUrl();
+        if (controlUrl != null) {
             System.setProperty("pjacoco.control-url", controlUrl);
         }
         RequestCounter.reset(testId);
         Pjacoco.setCurrentTestId(testId);
-        Pjacoco.start(testId, null);
+        if (controlUrl != null) {
+            Pjacoco.start(testId, null);
+        }
+    }
+
+    /** 제어 URL(없거나 공백이면 null): 없으면 start/stop 호출 없이 요청만 센다. */
+    private static String controlUrl() {
+        String value = System.getProperty("td.control-url");
+        return value == null || value.isBlank() ? null : value;
     }
 
     /** 경계 닫기와 결과 한 줄 쓰기. */
     void finish(String testId, Status status) {
         String result = statusOf(status);
-        Pjacoco.stop(testId, "passed".equals(result) ? "passed" : "failed");
+        boolean hasControl = controlUrl() != null;
+        if (hasControl) {
+            Pjacoco.stop(testId, "passed".equals(result) ? "passed" : "failed");
+        }
         Pjacoco.clearCurrentTestId();
         int requests = RequestCounter.take(testId);
         Map<String, Object> line = new LinkedHashMap<>();
@@ -77,7 +88,7 @@ public class CoverageHooks {
         line.put("status", result);
         line.put("requests", requests);
         // pjacoco는 커버 클래스가 0개인 스토어의 .exec를 쓰지 않는다: 요청이 없으면 .exec도 없다.
-        line.put("exec", requests == 0 ? null : "exec/" + testId + ".exec");
+        line.put("exec", requests == 0 || !hasControl ? null : "exec/" + testId + ".exec");
         append(JsonOutput.toJson(line));
     }
 

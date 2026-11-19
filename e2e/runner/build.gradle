@@ -1,0 +1,124 @@
+import groovy.json.JsonSlurper
+
+// S07 Cucumber 실행기. generation 하나(`-Pgen=<dir>`)의 features와 glue(step 정의 Java)를 실행한다.
+//
+// generation 배치: <gen>/features/**/*.feature, <gen>/glue/**/*.java (td.scenarios가 같은 배치를 가정한다)
+//
+// 속성
+//   -Pgen=<dir>        generation 디렉터리(없으면 비어 있는 실행기)
+//   -Pexcluded=<json>  compile-excluded.json({"classes": ["glue/X.java"], "features": ["features/x.feature"]}): 컴파일/실행에서 뺀다
+//   -Pout=<dir>        리포트 출력 디렉터리
+//   -Pdryrun=true      dry-run만(SUT 없이, step 정의 매칭만 본다): dryrun.json만 쓴다
+//   -Ptd.*             하네스 속성(td.base-url, td.control-url, td.testids, td.results, td.auth.*)을 테스트 JVM으로 넘긴다.
+//                      비밀번호는 -P가 아니라 환경 변수 TD_AUTH_PASS로 넘긴다(하네스가 읽는다).
+// 병렬도는 1이다(cucumber.execution.parallel.enabled=false). 시나리오 실패는 Gradle 실패가 아니다(결과 데이터다).
+
+dependencies {
+    testImplementation project(':harness')
+    testImplementation platform("org.junit:junit-bom:${junitVersion}")
+    testImplementation 'org.junit.platform:junit-platform-suite'
+    testImplementation "io.cucumber:cucumber-junit-platform-engine:${cucumberVersion}"
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    // Cucumber 8.1.0의 json/message/html 플러그인이 요구하는 JSON 라이브러리
+    testRuntimeOnly "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
+    testRuntimeOnly "com.fasterxml.jackson.datatype:jackson-datatype-jdk8:${jacksonVersion}"
+}
+
+def genProperty = project.findProperty('gen')
+def genDir = genProperty ? file(genProperty.toString()) : null
+def outProperty = project.findProperty('out')
+def outDir = outProperty ? file(outProperty.toString()) : layout.buildDirectory.dir('cucumber').get().asFile
+def dryRun = 'true'.equalsIgnoreCase(String.valueOf(project.findProperty('dryrun')))
+def excluded = [classes: [], features: []]
+if (project.findProperty('excluded')) {
+    def parsed = new JsonSlurper().parse(file(project.property('excluded').toString()))
+    excluded = [classes: parsed.classes ?: [], features: parsed.features ?: []]
+}
+
+sourceSets {
+    test {
+        if (genDir != null) {
+            java {
+                srcDir genDir
+                include 'td/runner/**/*.java', 'glue/**/*.java'  // 앞은 실행기 자신, 뒤는 generation
+                excluded.classes.each { exclude it.toString() }
+            }
+            resources {
+                srcDir genDir
+                include 'features/**'
+                excluded.features.each { exclude it.toString() }
+            }
+        }
+    }
+}
+
+// glue 패키지: 하네스 훅(td.harness)과 컴파일 대상 glue 소스의 package 선언
+def gluePackages = { ->
+    def packages = new LinkedHashSet<String>(['td.harness'])
+    if (genDir != null && new File(genDir, 'glue').directory) {
+        fileTree(dir: genDir, include: 'glue/**/*.java').matching { patterns ->
+            excluded.classes.each { patterns.exclude it.toString() }
+        }.each { source ->
+            def matcher = source.getText('UTF-8') =~ /(?m)^\s*package\s+([\w.]+)\s*;/
+            if (matcher.find()) {
+                packages << matcher.group(1)
+            }
+        }
+    }
+    packages.join(',')
+}
+
+def cucumberProperties = tasks.register('writeCucumberProperties') {
+    def target = layout.buildDirectory.file('generated/cucumber/junit-platform.properties')
+    outputs.file(target)
+    outputs.upToDateWhen { false }
+    doLast {
+        def plugins = dryRun ? ["json:${outDir}/dryrun.json"] : [
+                "message:${outDir}/cucumber.ndjson", "json:${outDir}/cucumber.json",
+                "html:${outDir}/html/index.html", "junit:${outDir}/junit.xml"]
+        def file = target.get().asFile
+        file.parentFile.mkdirs()
+        file.text = [
+                "cucumber.glue=${gluePackages()}",
+                "cucumber.plugin=${plugins.join(',')}",
+                "cucumber.execution.dry-run=${dryRun}",
+                "cucumber.execution.parallel.enabled=false",
+                "cucumber.publish.quiet=true",
+                "cucumber.object-factory=io.cucumber.core.backend.DefaultObjectFactory",
+        ].join('\n') + '\n'
+    }
+}
+
+tasks.named('processTestResources') {
+    dependsOn cucumberProperties
+    from(layout.buildDirectory.dir('generated/cucumber')) {
+        include 'junit-platform.properties'
+    }
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+    ignoreFailures = true
+    outputs.upToDateWhen { false }
+    doFirst {
+        outDir.mkdirs()
+    }
+    // td.* 속성은 -P로 받는다(비밀번호 제외)
+    project.properties.each { key, value ->
+        if (key.startsWith('td.') && value != null) {
+            systemProperty key, value.toString()
+        }
+    }
+    testLogging {
+        events 'failed'
+        exceptionFormat = 'full'
+    }
+}
+
+// td.scenarios.compile_check가 javac에 줄 클래스패스(하네스, Cucumber, REST Assured, AssertJ)를 쓴다.
+tasks.register('writeCompileClasspath') {
+    inputs.files(sourceSets.test.compileClasspath)
+    doLast {
+        file(project.property('classpathOut').toString()).text = sourceSets.test.compileClasspath.asPath
+    }
+}

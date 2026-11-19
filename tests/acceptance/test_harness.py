@@ -146,6 +146,7 @@ import yaml
 E2E_DIR = REPO_ROOT / "e2e"
 SUT_FILE = REPO_ROOT / "suts" / "petclinic" / "sut.yaml"
 HARNESS_RESULTS = E2E_DIR / "harness" / "build" / "test-results" / "test"
+HARNESS_IT_RESULTS = E2E_DIR / "harness" / "build" / "test-results" / "integrationTest"
 
 
 def _java17_home() -> str:
@@ -164,14 +165,14 @@ def _gradle(args: list[str], *, properties: dict[str, str] | None = None, timeou
     return subprocess.run(command, cwd=E2E_DIR, capture_output=True, text=True, env=env, timeout=timeout)
 
 
-def _testcases(report_name: str) -> list[ET.Element]:
-    report = HARNESS_RESULTS / f"TEST-td.harness.{report_name}.xml"
+def _testcases(report_name: str, results_dir: Path = HARNESS_RESULTS) -> list[ET.Element]:
+    report = results_dir / f"TEST-td.harness.{report_name}.xml"
     assert report.is_file(), f"JUnit XML이 없다: {report}"
     return list(ET.parse(report).getroot().iter("testcase"))
 
 
-def _assert_all_passed(report_name: str, minimum: int):
-    cases = _testcases(report_name)
+def _assert_all_passed(report_name: str, minimum: int, results_dir: Path = HARNESS_RESULTS):
+    cases = _testcases(report_name, results_dir)
     assert len(cases) >= minimum, [c.get("name") for c in cases]
     bad = [c.get("name") for c in cases if c.find("failure") is not None or c.find("error") is not None
            or c.find("skipped") is not None]
@@ -183,6 +184,15 @@ def test_req027_java_testids_match_python_table():
     result = _gradle([":harness:test", "--tests", "td.harness.TestIdsTest", "--rerun-tasks"])
     assert result.returncode == 0, (result.stdout + result.stderr)[-4000:]
     _assert_all_passed("TestIdsTest", minimum=12)
+
+
+def test_harness_unit_task_excludes_integration_tests():
+    """Int: :harness:test는 *IT를 돌리지 않는다(SUT 없이 통과해야 한다). integrationTest 태스크가 따로 있다."""
+    result = _gradle([":harness:test", "--rerun-tasks"])
+    assert result.returncode == 0, (result.stdout + result.stderr)[-4000:]
+    assert not (HARNESS_RESULTS / "TEST-td.harness.HarnessAuthIT.xml").exists()
+    listing = _gradle([":harness:tasks", "--all"])
+    assert "integrationTest" in listing.stdout
 
 
 def test_harness_unit_suites_pass():
@@ -212,12 +222,12 @@ def test_req026_auth_harness(sut_env, local_env):
     script = f'''
 td_sut_up "$TD_RUN_DIR" S07 req026 || {{ echo "UPFAIL=$TD_SUT_FAIL_REASON"; td_sut_down; exit 1; }}
 cd "{E2E_DIR}"
-JAVA_HOME="{java_home}" ./gradlew --no-daemon --console=plain :harness:test --tests td.harness.HarnessAuthIT --rerun-tasks \\
-  -Ptd.base-url="$TD_BASE_URL" -Ptd.control-url="$TD_CONTROL_URL" -Ptd.auth.user="$AUTH_USER" -Ptd.auth.pass="$AUTH_PASS" {prop_args}
+JAVA_HOME="{java_home}" ./gradlew --no-daemon --console=plain :harness:integrationTest --tests td.harness.HarnessAuthIT --rerun-tasks \\
+  -Ptd.base-url="$TD_BASE_URL" -Ptd.control-url="$TD_CONTROL_URL" -Ptd.auth.user="$AUTH_USER" {prop_args}
 echo "GRADLE_RC=$?"
 td_sut_down
 '''
-    result = env.bash(script, timeout=900, AUTH_USER=local_env["TD_SUT_USER"], AUTH_PASS=local_env["TD_SUT_PASS"])
+    result = env.bash(script, timeout=900, AUTH_USER=local_env["TD_SUT_USER"], TD_AUTH_PASS=local_env["TD_SUT_PASS"])
     assert "UPFAIL=" not in result.stdout, result.stdout[-2000:]
     assert "GRADLE_RC=0" in result.stdout, (result.stdout + result.stderr)[-4000:]
-    _assert_all_passed("HarnessAuthIT", minimum=3)
+    _assert_all_passed("HarnessAuthIT", minimum=3, results_dir=HARNESS_IT_RESULTS)

@@ -16,6 +16,8 @@ SITE_LAYOUT: dict[str, str] = {
     "S09/hotspot": "hotspot/",
     "S10/tia": "tia/",
     "S11/sonar": "sonar/",
+    # generation마다 하나: 키 `html:<genId>` -> `cucumber/<genId>/`(Cucumber 내장 HTML, REQ-062)
+    "S07/html:*": "cucumber/*/",
 }
 
 # run 페이지의 링크: 사이트 경로(SITE_LAYOUT 값) -> (표시 이름, 진입 파일)
@@ -25,6 +27,7 @@ REPORTS: dict[str, tuple[str, str]] = {
     "hotspot/": ("hotspot", "hotspots.html"),
     "tia/": ("TIA", "tia.html"),
     "sonar/": ("Sonar 품질 결과", "sonar.html"),
+    "cucumber/*/": ("Cucumber 리포트 {}", "index.html"),
 }
 
 # 같은 디렉터리의 추가 진입 파일(파일이 있을 때만 링크한다): 사이트 경로 -> [(표시 이름, 진입 파일)]
@@ -36,6 +39,23 @@ LINK_ONLY_IF_PRESENT = {"ontology/"}
 
 # 게시하지 않는 파일 패턴(.exec는 크고 사이트에서 쓰지 않는다)
 COPY_IGNORE = ("*.exec", "exec", "site.css")
+
+
+def expand_layout(stage_id: str, outputs: dict) -> list[tuple[str, str, str]]:
+    """단계 outputs에 맞는 (outputs 키, 사이트 경로, REPORTS 키) 목록. 키 끝이 `*`이면 generation 같은 가변 항목이다
+    (`html:*`는 outputs의 `html:<id>` 키마다 사이트 경로의 `*`를 `<id>`로 바꾼다)."""
+    entries: list[tuple[str, str, str]] = []
+    for key, site_rel in SITE_LAYOUT.items():
+        layout_stage, output_key = key.split("/", 1)
+        if layout_stage != stage_id:
+            continue
+        if output_key.endswith("*"):
+            prefix = output_key[:-1]
+            for actual in sorted(k for k in outputs if k.startswith(prefix) and len(k) > len(prefix)):
+                entries.append((actual, site_rel.replace("*", actual[len(prefix):]), site_rel))
+        else:
+            entries.append((output_key, site_rel, site_rel))
+    return entries
 
 
 # 복사된 리포트를 사이트 공통 CSS로 다시 만드는 훅: 사이트 경로 -> fn(복사된 디렉터리, css_href)
