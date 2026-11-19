@@ -1,0 +1,1 @@
+{"a": [["public class OwnerService {"], [{"x": "private final OwnerRepository ownerRepository;"}, ["public OwnerService(OwnerRepository ownerRepository) {", ["this.ownerRepository = ownerRepository;"]]], {"deep": {"er": ["public List<Owner> findByLastName(String lastName) {"]}}]}
