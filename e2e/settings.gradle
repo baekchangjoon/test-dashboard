@@ -1,0 +1,8 @@
+// e2e는 SUT와 무관한 독립 Gradle 멀티 프로젝트다(Spring Boot BOM 없음).
+// runner는 Task 21이 만든다. 디렉터리가 있을 때만 포함해 빈 프로젝트 경고를 피한다.
+rootProject.name = 'td-e2e'
+
+include 'harness'
+if (file('runner').directory) {
+    include 'runner'
+}

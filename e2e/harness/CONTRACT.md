@@ -1,10 +1,11 @@
-# E2E 하네스 계약 (DRAFT)
-
-> 이 문서는 Task 19가 만든 초안이다. Task 20이 하네스 구현과 맞춰 확정한다.
-> 생성 입력 번들에 들어가는 유일한 `.md` 파일이므로 도메인 지식(엔드포인트, 필드, 업무 규칙)은 적지 않는다.
+# E2E 하네스 계약
 
 step 정의(Java, Cucumber)가 쓸 수 있는 하네스 API는 아래 세 가지뿐이다.
-모든 메서드는 `e2e.harness.Harness`의 정적 메서드다.
+모든 메서드는 `td.harness.Harness`의 정적 메서드다.
+
+```java
+import td.harness.Harness;
+```
 
 | 메서드 | 반환 | 설명 |
 |---|---|---|
@@ -22,4 +23,5 @@ step 정의(Java, Cucumber)가 쓸 수 있는 하네스 API는 아래 세 가지
 - 시나리오가 만든 데이터를 정리하는 일은 요구하지 않는다. 서버는 generation마다 새로 뜬다.
 - step 클래스는 feature별로 하나이고, 하네스 이외의 의존성을 추가하지 않는다. 사용 가능한 라이브러리는
   Cucumber 8.1.0, REST Assured 5.5.1, AssertJ다.
+- 시나리오 시작과 종료 처리(훅)는 하네스가 이미 갖고 있다. step 클래스에 `@Before`, `@After` 훅을 만들지 않는다.
 - `@ignore`, `@Disabled`, `@wip` 같은 실행 제외 표식은 쓰지 않는다.

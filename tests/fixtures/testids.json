@@ -1,0 +1,237 @@
+{
+ "_comment": "Python td.testid.make와 Java td.harness.TestIds가 같은 id를 만드는지 두 쪽에서 검증하는 공유 표. features는 경로 순서로 make를 부른다. gen이 null이면 g접미사가 없다.",
+ "cases": [
+  {
+   "name": "outline-rows-and-plain",
+   "arm": "jqa",
+   "inputHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "rep": 2,
+   "gen": null,
+   "features": [
+    {
+     "path": "features/owner.feature",
+     "name": "Owner search",
+     "pickles": [
+      5,
+      16,
+      17,
+      21,
+      24
+     ]
+    }
+   ],
+   "expected": [
+    "E2E_jqa_01234567r2_Owner_search#L5",
+    "E2E_jqa_01234567r2_Owner_search#L16",
+    "E2E_jqa_01234567r2_Owner_search#L17",
+    "E2E_jqa_01234567r2_Owner_search#L21",
+    "E2E_jqa_01234567r2_Owner_search#L24"
+   ]
+  },
+  {
+   "name": "generation-suffix",
+   "arm": "base",
+   "inputHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "rep": 1,
+   "gen": 2,
+   "features": [
+    {
+     "path": "a.feature",
+     "name": "X",
+     "pickles": [
+      3
+     ]
+    }
+   ],
+   "expected": [
+    "E2E_base_01234567r1g2_X#L3"
+   ]
+  },
+  {
+   "name": "slug-collision-across-features",
+   "arm": "owl",
+   "inputHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "rep": 1,
+   "gen": null,
+   "features": [
+    {
+     "path": "a/owner.feature",
+     "name": null,
+     "pickles": [
+      5,
+      9
+     ]
+    },
+    {
+     "path": "b/owner.feature",
+     "name": null,
+     "pickles": [
+      5,
+      7
+     ]
+    },
+    {
+     "path": "c/owner.feature",
+     "name": null,
+     "pickles": [
+      1
+     ]
+    }
+   ],
+   "expected": [
+    "E2E_owl_01234567r1_owner#L5",
+    "E2E_owl_01234567r1_owner#L9",
+    "E2E_owl_01234567r1_owner_2#L5",
+    "E2E_owl_01234567r1_owner_2#L7",
+    "E2E_owl_01234567r1_owner_3#L1"
+   ]
+  },
+  {
+   "name": "korean-names-path-hash",
+   "arm": "base",
+   "inputHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "rep": 3,
+   "gen": null,
+   "features": [
+    {
+     "path": "features/소유자_조회.feature",
+     "name": "소유자 조회",
+     "pickles": [
+      4,
+      9
+     ]
+    },
+    {
+     "path": "features/수의사_조회.feature",
+     "name": "수의사 조회",
+     "pickles": [
+      4
+     ]
+    }
+   ],
+   "expected": [
+    "E2E_base_01234567r3_fad4a410b#L4",
+    "E2E_base_01234567r3_fad4a410b#L9",
+    "E2E_base_01234567r3_f95d66f76#L4"
+   ]
+  },
+  {
+   "name": "mixed-and-punctuation-names",
+   "arm": "jqa",
+   "inputHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "rep": 9,
+   "gen": 12,
+   "features": [
+    {
+     "path": "f.feature",
+     "name": "Owner 조회 API!",
+     "pickles": [
+      2
+     ]
+    },
+    {
+     "path": "features/vet-list.feature",
+     "name": null,
+     "pickles": [
+      1
+     ]
+    },
+    {
+     "path": "features/pet__types  &  more.feature",
+     "name": "__Pet types -- & more__",
+     "pickles": [
+      7
+     ]
+    },
+    {
+     "path": "features/long.feature",
+     "name": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA tail",
+     "pickles": [
+      3
+     ]
+    }
+   ],
+   "expected": [
+    "E2E_jqa_01234567r9g12_Owner_API#L2",
+    "E2E_jqa_01234567r9g12_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA#L3",
+    "E2E_jqa_01234567r9g12_Pet_types_more#L7",
+    "E2E_jqa_01234567r9g12_vet_list#L1"
+   ]
+  },
+  {
+   "name": "hash-prefix-truncated-to-8",
+   "arm": "owl",
+   "inputHash": "deadbeefcafef00d000000000000000000000000000000000000000000000000",
+   "rep": 5,
+   "gen": null,
+   "features": [
+    {
+     "path": "x.feature",
+     "name": "Y",
+     "pickles": [
+      1
+     ]
+    }
+   ],
+   "expected": [
+    "E2E_owl_deadbeefr5_Y#L1"
+   ]
+  }
+ ],
+ "errors": [
+  {
+   "name": "unknown-arm",
+   "arm": "zzz",
+   "inputHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "rep": 1,
+   "gen": null,
+   "path": "a.feature",
+   "line": 3
+  },
+  {
+   "name": "rep-zero",
+   "arm": "jqa",
+   "inputHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "rep": 0,
+   "gen": null,
+   "path": "a.feature",
+   "line": 3
+  },
+  {
+   "name": "rep-ten",
+   "arm": "jqa",
+   "inputHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "rep": 10,
+   "gen": null,
+   "path": "a.feature",
+   "line": 3
+  },
+  {
+   "name": "bad-hash",
+   "arm": "jqa",
+   "inputHash": "xyz",
+   "rep": 1,
+   "gen": null,
+   "path": "a.feature",
+   "line": 3
+  },
+  {
+   "name": "gen-zero",
+   "arm": "jqa",
+   "inputHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "rep": 1,
+   "gen": 0,
+   "path": "a.feature",
+   "line": 3
+  },
+  {
+   "name": "absolute-path",
+   "arm": "base",
+   "inputHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "rep": 1,
+   "gen": null,
+   "path": "/tmp/checkout/features/a.feature",
+   "line": 3
+  }
+ ]
+}
