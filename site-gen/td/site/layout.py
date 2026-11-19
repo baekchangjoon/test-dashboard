@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Callable
 
 SITE_LAYOUT: dict[str, str] = {
+    "S04/ontology": "ontology/",
     "S08/coverage": "coverage/",
     "S09/hotspot": "hotspot/",
     "S10/tia": "tia/",
@@ -19,11 +20,19 @@ SITE_LAYOUT: dict[str, str] = {
 
 # run 페이지의 링크: 사이트 경로(SITE_LAYOUT 값) -> (표시 이름, 진입 파일)
 REPORTS: dict[str, tuple[str, str]] = {
+    "ontology/": ("jQA 온톨로지 그래프", "jqa.html"),
     "coverage/": ("커버리지", "coverage.html"),
     "hotspot/": ("hotspot", "hotspots.html"),
     "tia/": ("TIA", "tia.html"),
     "sonar/": ("Sonar 품질 결과", "sonar.html"),
 }
+
+# 같은 디렉터리의 추가 진입 파일(파일이 있을 때만 링크한다): 사이트 경로 -> [(표시 이름, 진입 파일)]
+REPORTS_EXTRA: dict[str, list[tuple[str, str]]] = {
+    "ontology/": [("OWL 온톨로지 그래프", "owl.html")],
+}
+# 주 진입 파일이 없으면 링크하지 않는 디렉터리(S04는 jqa/owl 중 한쪽만 있을 수 있다)
+LINK_ONLY_IF_PRESENT = {"ontology/"}
 
 # 게시하지 않는 파일 패턴(.exec는 크고 사이트에서 쓰지 않는다)
 COPY_IGNORE = ("*.exec", "exec", "site.css")
