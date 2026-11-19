@@ -111,4 +111,11 @@ class RequestCounterTest {
                 () -> RestAssured.given().config(config).baseUri(baseUrl).get("/slow")).isInstanceOf(Exception.class);
         assertThat(RequestCounter.count("T1")).isEqualTo(1);
     }
+
+    @Test
+    void connectTimeoutsCountAsNeverConnected() {
+        assertThat(RequestCounter.neverConnected(new RuntimeException(new java.net.SocketTimeoutException("connect timed out")))).isTrue();
+        assertThat(RequestCounter.neverConnected(new java.net.ConnectException("refused"))).isTrue();
+        assertThat(RequestCounter.neverConnected(new java.net.SocketTimeoutException("Read timed out"))).isFalse();
+    }
 }
