@@ -12,17 +12,38 @@ dependencies {
     testImplementation 'org.junit.platform:junit-platform-launcher'
 }
 
+// 단위 테스트(:harness:test)는 SUT 없이 돈다. 이름이 *IT인 클래스는 실제 SUT가 필요하므로 integrationTest로 분리한다.
+def passTdProperties = { Test task ->
+    // 공유 fixture 표 경로(tests/fixtures/testids.json)와 `-Ptd.*` 속성을 테스트 JVM의 시스템 속성으로 넘긴다.
+    task.systemProperty 'td.fixtures.testids', rootProject.file('../tests/fixtures/testids.json').absolutePath
+    project.properties.each { key, value ->
+        if (key.startsWith('td.') && value != null) {
+            task.systemProperty key, value.toString()
+        }
+    }
+}
+
 tasks.named('test') {
     useJUnitPlatform()
+    exclude '**/*IT.class'
     testLogging {
         events 'failed', 'skipped'
         exceptionFormat = 'full'
     }
-    // 공유 fixture 표 경로(tests/fixtures/testids.json)와 `-Ptd.*` 속성을 테스트 JVM의 시스템 속성으로 넘긴다.
-    systemProperty 'td.fixtures.testids', rootProject.file('../tests/fixtures/testids.json').absolutePath
-    project.properties.each { key, value ->
-        if (key.startsWith('td.') && value != null) {
-            systemProperty key, value.toString()
-        }
+    passTdProperties(delegate)
+}
+
+tasks.register('integrationTest', Test) {
+    description = '실제 SUT가 필요한 *IT 클래스(-Ptd.* 속성으로 SUT 주소와 인증 정보를 넘긴다).'
+    group = 'verification'
+    useJUnitPlatform()
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    include '**/*IT.class'
+    outputs.upToDateWhen { false }
+    testLogging {
+        events 'failed', 'skipped'
+        exceptionFormat = 'full'
     }
+    passTdProperties(delegate)
 }

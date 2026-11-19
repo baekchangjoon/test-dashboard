@@ -92,6 +92,16 @@ class CoverageHooksTest {
     }
 
     @Test
+    void blankControlUrlSkipsStartStopAndHasNoExec() throws Exception {
+        System.setProperty("td.control-url", "  ");
+        scenario("E2E_jqa_01234567r1_Owner#L7", 2, Status.PASSED);
+        assertThat(controlCalls).isEmpty();
+        Map<String, Object> line = lines().get(0);
+        assertThat(line.get("requests")).isEqualTo(2);
+        assertThat(line.get("exec")).isNull();
+    }
+
+    @Test
     void scenarioWithoutRequestsHasNullExec() throws Exception {
         scenario("E2E_jqa_01234567r1_Owner#L9", 0, Status.PASSED);
         Map<String, Object> line = lines().get(0);

@@ -54,8 +54,12 @@ final class AuthSession {
         }
     }
 
+    /** 비밀값은 명령줄에 싣지 않도록 환경 변수(TD_AUTH_PASS, TD_AUTH_USER)도 받는다. 시스템 속성이 우선이다. */
     private static String required(String key) {
         String value = System.getProperty(key);
+        if (value == null || value.isBlank()) {
+            value = System.getenv(key.replace("td.auth.", "TD_AUTH_").toUpperCase());
+        }
         if (value == null || value.isBlank()) {
             throw new IllegalStateException("시스템 속성 " + key + "가 필요하다");
         }

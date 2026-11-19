@@ -106,4 +106,18 @@ class TestIdsTest {
         assertThat(registry.lookup("classpath:features/b.feature", 5)).isNull();
         assertThat(registry.size()).isEqualTo(3);
     }
+
+    @Test
+    void lookupIsExactForClasspathAndNeverFallsBackToAShorterPath(@TempDir Path dir) throws Exception {
+        Path file = dir.resolve("testids.json");
+        Files.writeString(file, "{\"arm\":\"jqa\",\"inputHash\":\"0123456789abcdef\",\"rep\":1,\"gen\":null,"
+                + "\"features\":[{\"path\":\"features/a.feature\",\"name\":\"A\",\"pickles\":[{\"line\":2,\"name\":\"y\"}]},"
+                + "{\"path\":\"x/features/a.feature\",\"name\":\"B\",\"pickles\":[{\"line\":9,\"name\":\"z\"}]}]}");
+        TestIds.Registry registry = TestIds.Registry.load(file);
+        assertThat(registry.lookup("classpath:other/features/a.feature", 2)).isNull();
+        // x/features/a.feature에는 2줄이 없다: 더 짧은 features/a.feature의 2줄을 집으면 안 된다
+        assertThat(registry.lookup("file:///work/x/features/a.feature", 2)).isNull();
+        assertThat(registry.lookup("file:///work/x/features/a.feature", 9).scenarioName()).isEqualTo("z");
+        assertThat(registry.lookup("classpath:features/a.feature", 2).scenarioName()).isEqualTo("y");
+    }
 }
