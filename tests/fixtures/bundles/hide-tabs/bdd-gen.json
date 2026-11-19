@@ -1,0 +1,1 @@
+{"notes": "\tpublic\tclass\tOwnerService\t{\n\tprivate\tfinal\tOwnerRepository\townerRepository;\n\tpublic\tOwnerService(OwnerRepository\townerRepository)\t{\n\tthis.ownerRepository\t=\townerRepository;\n\tpublic\tList<Owner>\tfindByLastName(String\tlastName)\t{"}

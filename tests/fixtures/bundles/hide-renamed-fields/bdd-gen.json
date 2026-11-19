@@ -1,0 +1,1 @@
+{"alpha": "public class OwnerService {", "zz_other": "private final OwnerRepository ownerRepository;", "q": "public OwnerService(OwnerRepository ownerRepository) {", "note": "this.ownerRepository = ownerRepository;", "k9": "public List<Owner> findByLastName(String lastName) {"}

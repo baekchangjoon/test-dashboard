@@ -1,0 +1,1 @@
+{"notes": "public class OwnerService {\n\n   \nprivate final OwnerRepository ownerRepository;\n\n   \npublic OwnerService(OwnerRepository ownerRepository) {\n\n   \nthis.ownerRepository = ownerRepository;\n\n   \npublic List<Owner> findByLastName(String lastName) {"}
