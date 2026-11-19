@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # 격리된 LLM 호출 래퍼(설계 §13.4). S05와 S06의 모든 claude 호출(수리 포함)은 이 스크립트 하나만 거친다.
 # 사용: llm.sh <bundle_dir> <prompt_file> <out_json>
+#   - 번들은 `td.bundle build`가 쓴 검사 서명(.td-bundle-verified.json)과 일치해야 한다(아니면 exit 2, claude 미호출).
 #   - cwd는 번들을 복사한 임시 디렉터리다(번들 원본과 repo, SUT 어디도 아니다). 종료 시 지운다.
 #   - 프롬프트(+ 번들 인라인)는 stdin으로만 넘긴다. argv에는 본문이 없다.
 #   - 인자 목록은 td.prepare의 CLAUDE_ARGV_TEMPLATE 하나에서 받는다(S00의 검증 호출과 어긋나지 않게).
@@ -21,6 +22,9 @@ fi
 [[ -f "$prompt_file" ]] || { echo "llm.sh: 프롬프트 파일이 없다: $prompt_file" >&2; exit 2; }
 mkdir -p "$(dirname "$out_json")"
 
+# A1 심층 방어: td.bundle build가 검사하고 서명한 번들만 받는다(서명 없음, 파일 추가·변조, 심볼릭 링크는 claude 호출 전에 거부).
+td_py -m td.bundle verify "$bundle_dir" || { echo "llm.sh: 검증되지 않은 번들이라 호출을 거부한다" >&2; exit 2; }
+
 scratch="$(mktemp -d "${TMPDIR:-/tmp}/td-llm.XXXXXX")" || exit 2
 cleanup_llm() { rm -rf "$scratch"; }
 trap cleanup_llm EXIT
@@ -28,6 +32,7 @@ trap 'exit 143' INT TERM
 
 mkdir "$scratch/cwd"
 cp -R "$bundle_dir"/. "$scratch/cwd"/
+rm -f "$scratch/cwd/.td-bundle-verified.json"
 { cat "$prompt_file"; printf '\n\n'; td_py -m td.bundle inline "$bundle_dir"; } > "$scratch/stdin.txt" \
   || { echo "llm.sh: 번들 인라인 실패" >&2; exit 2; }
 
@@ -52,7 +57,7 @@ call_log="${TD_LLM_CALL_LOG:-}"
 rc=0
 ( cd "$scratch/cwd" && \
   TD_LLM_CALL_LOG="$call_log" td_run "${TD_LLM_TIMEOUT:-900}" -- \
-    env -u TD_SUT_USER -u TD_SUT_PASS -u SONAR_TOKEN -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN \
+    env -u TD_SUT_USER -u TD_SUT_PASS -u SONAR_TOKEN -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 \
     "$TD_ROOT/pipeline/lib/claude-shim" "${argv[@]}" < "$scratch/stdin.txt" > "$scratch/out.json" 2> "$scratch/err.txt" ) || rc=$?
 if [[ $rc -ne 0 ]]; then
   echo "llm.sh: claude 호출 실패(rc=$rc): $(head -c 600 "$scratch/err.txt") $(head -c 300 "$scratch/out.json")" >&2

@@ -15,18 +15,30 @@ ARMS = ("base", "jqa", "owl")
 MAX_SLUG_LENGTH = 60
 
 
+def _relative_posix(path: str) -> str:
+    text = str(path).replace("\\", "/")
+    if text.startswith("/") or re.match(r"^[A-Za-z]:/", text):
+        raise ValueError(f"feature 경로는 generation 루트 기준 상대 경로여야 한다(절대 경로 금지): {path!r}")
+    return text
+
+
 def feature_slug(path: str, name: str | None) -> str:
     """feature 이름(없으면 파일 이름)에서 ASCII 영숫자와 `_`만 남긴 slug.
-    남는 글자가 없으면(모두 비ASCII) feature 경로의 sha1 앞 8자리로 만든 `f<hash>`다."""
-    source = name if name else PurePosixPath(str(path).replace("\\", "/")).stem
+    남는 글자가 없으면(모두 비ASCII) generation 루트 기준 상대 경로의 sha1 앞 8자리로 만든 `f<hash>`다
+    (체크아웃 위치와 무관하다). 절대 경로는 ValueError."""
+    relative = _relative_posix(path)
+    source = name if name else PurePosixPath(relative).stem
     slug = re.sub(r"_+", "_", re.sub(r"[^A-Za-z0-9]+", "_", source)).strip("_")[:MAX_SLUG_LENGTH].strip("_")
     if not slug:
-        slug = "f" + hashlib.sha1(str(path).replace("\\", "/").encode("utf-8")).hexdigest()[:8]
+        slug = "f" + hashlib.sha1(relative.encode("utf-8")).hexdigest()[:8]
     return slug
 
 
 def make(arm: str, input_hash: str, rep: int, gen: int | None, feature_path: str, pickle_line: int,
-         taken: set[str], *, name: str | None = None) -> str:
+         taken: set[str], *, name: str | None = None, slugs: dict[str, str] | None = None) -> str:
+    """testId 하나. slug는 feature 단위로 정해진다: `slugs`(feature 경로 -> slug, 호출자가 한 generation 동안 공유)에
+    처음 등장한 feature가 기본 slug를, 같은 slug를 가진 뒤따르는 feature가 `_2`, `_3`을 받고 그 feature의 모든 pickle이
+    같은 slug를 쓴다. feature를 상대 경로 순으로 넘기면 결정적이다. `slugs`가 없으면 중복 testId는 ValueError다."""
     if arm not in ARMS:
         raise ValueError(f"알 수 없는 arm: {arm!r}")
     if not isinstance(rep, int) or not 1 <= rep <= 9:
@@ -37,11 +49,21 @@ def make(arm: str, input_hash: str, rep: int, gen: int | None, feature_path: str
     if gen is not None and (not isinstance(gen, int) or gen < 1):
         raise ValueError(f"gen은 1 이상이어야 한다: {gen!r}")
     prefix = f"E2E_{arm}_{hash8}r{rep}{f'g{gen}' if gen else ''}_"
-    slug = feature_slug(feature_path, name)
-    candidate, serial = f"{prefix}{slug}#L{pickle_line}", 1
-    while candidate in taken:
-        serial += 1
-        candidate = f"{prefix}{slug}_{serial}#L{pickle_line}"
+    key = _relative_posix(feature_path)
+    if slugs is None:
+        slug = feature_slug(key, name)
+    elif key in slugs:
+        slug = slugs[key]
+    else:
+        base = feature_slug(key, name)
+        used, slug, serial = set(slugs.values()), base, 1
+        while slug in used:
+            serial += 1
+            slug = f"{base}_{serial}"
+        slugs[key] = slug
+    candidate = f"{prefix}{slug}#L{pickle_line}"
+    if candidate in taken:
+        raise ValueError(f"중복 testId: {candidate}")
     taken.add(candidate)
     return candidate
 
