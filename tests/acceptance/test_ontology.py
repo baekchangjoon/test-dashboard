@@ -646,3 +646,29 @@ def test_s04_stage_without_inputs_fails(tmp_path):
     run_dir, done = _s04_run(tmp_path, jqa=False, owl=False)
     stage = json.loads((run_dir / "stages" / "S04.json").read_text())
     assert done.returncode != 0 and stage["status"] == "failed", stage
+
+
+# --- Task 18 보강: 실제 파이프라인(S00,S03,S04)의 진짜 ontology-jqa.json으로 REQ-016 --------------------------------
+@pytest.fixture(scope="module")
+def real_s04(real_pipeline_run):
+    return real_pipeline_run("S00,S03,S04")
+
+
+def test_req016_real_s03_ontology_renders_offline(real_s04, viz_browser):
+    run_dir = real_s04.run_dir
+    stages = {sid: json.loads((run_dir / "stages" / f"{sid}.json").read_text()) for sid in ("S03", "S04")}
+    assert stages["S03"]["status"] in ("passed", "degraded"), stages["S03"]
+    assert stages["S04"]["status"] in ("passed", "degraded"), stages["S04"]
+    real_json = json.loads((run_dir / "S03" / "ontology-jqa.json").read_text())
+    html_path = run_dir / "S04" / "ontology" / "jqa.html"
+    assert html_path.exists() and len(real_json["nodes"]) > 10
+    context, page, blocked, console_errors, page_errors = _open_offline(viz_browser, html_path)
+    try:
+        assert page.evaluate("window.__td_cy.nodes().length") == len(real_json["nodes"])
+        assert blocked == [] and console_errors == [] and page_errors == []
+        endpoint_id = next(n["id"] for n in real_json["nodes"] if n["kind"] == "Endpoint")
+        page.select_option("#endpoint-select", endpoint_id)
+        shown = page.evaluate("window.__td_cy.nodes().filter(n => n.style('display') !== 'none').length")
+        assert 1 < shown < len(real_json["nodes"])
+    finally:
+        context.close()
