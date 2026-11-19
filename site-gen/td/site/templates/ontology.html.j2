@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }}</title>
+<style>
+{{ site_css | safe }}
+{{ viz_css | safe }}
+</style>
+</head>
+<body>
+<header class="site-header"><div class="wrap"><strong>test-dashboard</strong> / <a href="{{ back_href }}">run 상세</a></div></header>
+<main class="wrap">
+<h1>{{ title }}</h1>
+<p class="muted">도구 {{ meta.tool }} {{ meta.version }} · 커밋 {{ meta.commit }} · 노드 {{ node_count }} · 간선 {{ edge_count }}{% if meta.fallbacks %} · 대체 쿼리 {{ meta.fallbacks | join(", ") }}{% endif %}</p>
+
+<div class="toolbar">
+  <input type="search" id="search" placeholder="노드 검색(라벨, id)" aria-label="노드 검색">
+  <span id="search-count" class="muted" aria-live="polite"></span>
+  <select id="endpoint-select" aria-label="엔드포인트 하위 그래프">
+    <option value="">엔드포인트 하위 그래프...</option>
+  </select>
+  <button type="button" id="reset-view">전체 보기</button>
+</div>
+<ul id="legend" class="legend" aria-label="kind 범례와 필터"></ul>
+
+<div id="viz">
+  <div id="cy" role="img" aria-label="{{ title }}"></div>
+  <aside id="panel" aria-live="polite"><p class="muted">노드를 누르면 속성이 보인다.</p></aside>
+</div>
+</main>
+<script type="application/json" id="td-data">{{ data_json | safe }}</script>
+<script>
+{{ cytoscape_js | safe }}
+</script>
+<script>
+{{ viz_js | safe }}
+</script>
+</body>
+</html>

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from td.site.layout import COPY_IGNORE, REPORTS, RERENDER, SITE_LAYOUT
+from td.site.layout import COPY_IGNORE, LINK_ONLY_IF_PRESENT, REPORTS, REPORTS_EXTRA, RERENDER, SITE_LAYOUT
 
 SITE_DIR = Path(__file__).parent
 TEMPLATES_DIR = SITE_DIR / "templates"
@@ -137,7 +137,10 @@ def render_run(run_dir, out_dir) -> Path:
         if site_rel in RERENDER:
             RERENDER[site_rel](target, f"{RUN_DEPTH_TO_ROOT}{'../' * (site_rel.strip('/').count('/') + 1)}static/site.css")
         label, entry = REPORTS[site_rel]
-        links.append({"label": label, "href": f"{site_rel}{entry}"})
+        for label, entry in [(label, entry), *REPORTS_EXTRA.get(site_rel, [])]:
+            if site_rel in LINK_ONLY_IF_PRESENT and not (target / entry).exists():
+                continue
+            links.append({"label": label, "href": f"{site_rel}{entry}"})
     if (run_dir / "run.json").exists():
         shutil.copy2(run_dir / "run.json", out_dir / "run.json")
     for stage_id, stage in stages.items():

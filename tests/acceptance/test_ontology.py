@@ -381,3 +381,268 @@ def test_unit_reap_pids_by_name_removes_only_those_files(tmp_path):
     finally:
         other.kill()
         other.wait(timeout=10)
+
+
+# --- Task 18: S04 온톨로지 시각화(REQ-016, REQ-017) --------------------------------------------------------------
+# 합성 온톨로지(스키마 통과)로 렌더 결과를 본다. 실제 S03/S05 산출물이 없어도 돌고, 네트워크는 전부 막는다.
+S04_SCRIPT = REPO_ROOT / "pipeline" / "S04-onto-viz.sh"
+HOSTILE_LABEL = "<img src=x onerror=window.__pwned=1>&amp;</script><script>window.__pwned=2</script>"
+
+
+def _synthetic_ontology(tool: str = "jqassistant", extra_nodes: int = 40) -> dict:
+    kinds = ["Controller", "Service", "Repository", "Entity", "Field", "Exception", "DTO"]
+    nodes = [{"id": "ep:GET /owners", "kind": "Endpoint", "label": "GET /owners",
+              "props": {"method": "GET", "path": "/owners", "handler": "OwnerController#list", "view": False}},
+             {"id": "ep:GET /vets", "kind": "Endpoint", "label": "GET /vets",
+              "props": {"method": "GET", "path": "/vets", "handler": "VetController#list", "view": False}},
+             {"id": "c:OwnerController", "kind": "Controller", "label": "OwnerController", "props": {"fqn": "a.OwnerController"}},
+             {"id": "c:VetController", "kind": "Controller", "label": "VetController", "props": {}},
+             {"id": "s:OwnerService", "kind": "Service", "label": "OwnerService", "props": {"n": 3, "nested": {"k": [1, 2]}}},
+             {"id": "r:OwnerRepository", "kind": "Repository", "label": "OwnerRepository", "props": {}},
+             {"id": "e:Owner", "kind": "Entity", "label": "Owner", "props": {}},
+             {"id": "x:hostile", "kind": "Exception", "label": HOSTILE_LABEL, "props": {"note": HOSTILE_LABEL}}]
+    edges = [{"source": "ep:GET /owners", "target": "c:OwnerController", "kind": "HANDLED_BY"},
+             {"source": "ep:GET /vets", "target": "c:VetController", "kind": "HANDLED_BY"},
+             {"source": "c:OwnerController", "target": "s:OwnerService", "kind": "DEPENDS_ON"},
+             {"source": "s:OwnerService", "target": "r:OwnerRepository", "kind": "DEPENDS_ON"},
+             {"source": "r:OwnerRepository", "target": "e:Owner", "kind": "MANAGES"},
+             {"source": "s:OwnerService", "target": "x:hostile", "kind": "THROWS"},
+             {"source": "c:OwnerController", "target": "missing:node", "kind": "DANGLING"}]  # 끝점이 없는 간선은 무시된다
+    for index in range(extra_nodes):
+        nodes.append({"id": f"n{index}", "kind": kinds[index % len(kinds)], "label": f"Node{index}", "props": {}})
+        edges.append({"source": "c:VetController", "target": f"n{index}", "kind": "REL"})
+    doc = {"nodes": nodes, "edges": edges, "meta": {"tool": tool, "version": "1", "commit": "b6f9393", "fallbacks": []}}
+    jsonschema.validate(doc, json.loads(SCHEMA_FILE.read_text()))
+    return doc
+
+
+@pytest.fixture(scope="module")
+def viz_browser():
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as playwright:
+        instance = playwright.chromium.launch()
+        yield instance
+        instance.close()
+
+
+@pytest.fixture(scope="module")
+def viz_pages(tmp_path_factory):
+    """jqa.html, owl.html을 합성 데이터로 만든다."""
+    from td import ontology_html
+    base = tmp_path_factory.mktemp("viz")
+    out = {}
+    for name, tool in (("jqa", "jqassistant"), ("owl", "owl")):
+        doc = _synthetic_ontology(tool)
+        source = base / f"ontology-{name}.json"
+        source.write_text(json.dumps(doc))
+        target = base / "ontology" / f"{name}.html"
+        ontology_html.render(source, target)
+        out[name] = (target, doc)
+    return out
+
+
+def _open_offline(browser, html_path: Path, **context_kwargs):
+    """http(s) 등 file/data 이외의 요청은 모두 막고, 시도된 외부 요청과 콘솔 오류를 모은다."""
+    context = browser.new_context(**context_kwargs)
+    blocked, console_errors, page_errors = [], [], []
+
+    def guard(route):
+        if route.request.url.startswith(("file:", "data:")):
+            route.continue_()
+        else:
+            blocked.append(route.request.url)
+            route.abort()
+    context.route("**/*", guard)
+    page = context.new_page()
+    page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
+    page.on("pageerror", lambda exc: page_errors.append(str(exc)))
+    page.goto(html_path.as_uri())
+    page.wait_for_function("window.__td_cy && window.__td_ready === true", timeout=30000)
+    return context, page, blocked, console_errors, page_errors
+
+
+@pytest.mark.parametrize("name", ["jqa", "owl"])
+def test_req016_offline_render(viz_browser, viz_pages, name):
+    """REQ-016: 네트워크를 막아도 콘솔 오류 0, 렌더된 노드 수 == JSON 노드 수. 외부 요청 시도도 0이다."""
+    html_path, doc = viz_pages[name]
+    context, page, blocked, console_errors, page_errors = _open_offline(viz_browser, html_path)
+    try:
+        assert page.evaluate("window.__td_cy.nodes().length") == len(doc["nodes"])
+        assert page.evaluate("window.__td_cy.edges().length") == len(doc["edges"]) - 1  # 끝점 없는 간선 1개 제외
+        assert blocked == [] and console_errors == [] and page_errors == []
+        assert page.title() in ("jQA 온톨로지 그래프", "OWL 온톨로지 그래프")
+    finally:
+        context.close()
+
+
+def test_req016_html_is_self_contained(viz_pages):
+    text = viz_pages["jqa"][0].read_text()
+    import re
+    assert not re.search(r"""(src|href)\s*=\s*["']https?:""", text), "외부 URL을 참조한다"
+    assert "<link " not in text and "<script src" not in text, "외부 파일을 참조한다"
+    assert "Cytoscape Consortium" in text  # 라이브러리와 라이선스 머리말이 인라인된다
+
+
+def test_req016_hostile_text_is_escaped(viz_browser, viz_pages):
+    """데이터의 HTML·script 조각은 텍스트로만 보이고 실행되지 않는다."""
+    html_path, _ = viz_pages["jqa"]
+    context, page, blocked, console_errors, page_errors = _open_offline(viz_browser, html_path)
+    try:
+        page.evaluate("window.__td_select('x:hostile')")
+        panel = page.locator("#panel")
+        assert HOSTILE_LABEL in panel.inner_text()
+        assert page.evaluate("window.__pwned") is None
+        assert page.locator("#panel img, #legend img, #panel script").count() == 0
+        assert console_errors == [] and page_errors == []
+    finally:
+        context.close()
+
+
+def test_req016_filter_search_panel_and_endpoint_subgraph(viz_browser, viz_pages):
+    html_path, doc = viz_pages["jqa"]
+    context, page, *_ = _open_offline(viz_browser, html_path)
+    try:
+        visible = "window.__td_cy.nodes().filter(n => n.style('display') !== 'none').length"
+        total = len(doc["nodes"])
+        assert page.evaluate(visible) == total
+        # kind 필터: Service 체크 해제 -> Service 노드가 숨고, 다시 켜면 돌아온다.
+        service_count = sum(1 for n in doc["nodes"] if n["kind"] == "Service")
+        page.locator('#legend input[data-kind="Service"]').uncheck()
+        assert page.evaluate(visible) == total - service_count
+        page.locator('#legend input[data-kind="Service"]').check()
+        assert page.evaluate(visible) == total
+        assert page.locator("#legend li").count() >= 8  # kind별 색 범례(합성 데이터는 8종 전부)
+        # 검색: 일치 노드 강조와 개수 표시
+        page.fill("#search", "owner")
+        page.wait_for_function("window.__td_cy.nodes('.match').length > 0")
+        matched = page.evaluate("window.__td_cy.nodes('.match').map(n => n.id()).sort()")
+        expected = sorted(n["id"] for n in doc["nodes"] if "owner" in (n["label"] + n["id"]).lower())
+        assert matched == expected
+        page.fill("#search", "")
+        page.wait_for_function("window.__td_cy.nodes('.match').length === 0")
+        # 노드 클릭 -> 속성 패널(키·값)
+        page.evaluate("window.__td_cy.getElementById('s:OwnerService').emit('tap')")
+        panel_text = page.locator("#panel").inner_text()
+        assert "OwnerService" in panel_text and "Service" in panel_text and "nested" in panel_text
+        # 엔드포인트 하위 그래프: GET /vets 선택 -> 그 엔드포인트에서 닿는 노드만 보인다(vet 컨트롤러 + 연결된 40개 + 자신)
+        page.select_option("#endpoint-select", "ep:GET /vets")
+        shown = page.evaluate(f"{visible}")
+        reachable = 1 + 1 + 40
+        assert shown == reachable
+        assert page.evaluate("window.__td_cy.getElementById('ep:GET /owners').style('display')") == "none"
+        page.click("#reset-view")
+        assert page.evaluate(visible) == total
+    finally:
+        context.close()
+
+
+def test_req017_responsive_dark(viz_browser, viz_pages):
+    html_path, _ = viz_pages["jqa"]
+    context, page, *_ = _open_offline(viz_browser, html_path, viewport={"width": 360, "height": 740})
+    try:
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+        graph_box = page.locator("#cy").bounding_box()
+        panel_box = page.locator("#panel").bounding_box()
+        assert panel_box["y"] >= graph_box["y"] + graph_box["height"] - 1, "패널이 그래프 아래에 오지 않는다"
+        assert graph_box["width"] > 200 and graph_box["height"] >= 240
+        light_bg = page.evaluate("getComputedStyle(document.body).backgroundColor")
+        page.emulate_media(color_scheme="dark")
+        dark_bg = page.evaluate("getComputedStyle(document.body).backgroundColor")
+        assert light_bg != dark_bg
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    finally:
+        context.close()
+    # 데스크톱 폭에서는 패널이 그래프 오른쪽이다(좁을 때만 아래로 내려간다).
+    context, page, *_ = _open_offline(viz_browser, html_path, viewport={"width": 1280, "height": 800})
+    try:
+        graph_box, panel_box = page.locator("#cy").bounding_box(), page.locator("#panel").bounding_box()
+        assert panel_box["x"] >= graph_box["x"] + graph_box["width"] - 1
+    finally:
+        context.close()
+
+
+def test_unit_ontology_html_render_escapes_script_terminator(tmp_path):
+    from td import ontology_html
+    doc = _synthetic_ontology()
+    source = tmp_path / "o.json"
+    source.write_text(json.dumps(doc))
+    target = ontology_html.render(source, tmp_path / "out" / "jqa.html")
+    text = Path(target).read_text()
+    assert HOSTILE_LABEL not in text and "<img src=x" not in text  # 원문이 그대로 들어가면 </script>가 문서를 깬다
+    assert text.count("</script>") == text.count("<script")
+
+
+def test_unit_ontology_html_rejects_schema_violation(tmp_path):
+    from td import ontology_html
+    source = tmp_path / "bad.json"
+    source.write_text(json.dumps({"nodes": [{"id": "a"}], "edges": [], "meta": {}}))
+    with pytest.raises(Exception):
+        ontology_html.render(source, tmp_path / "jqa.html")
+    assert not (tmp_path / "jqa.html").exists()
+
+
+def _s04_run(tmp_path: Path, *, jqa: bool, owl: bool, s05_status: str = "skipped") -> tuple[Path, subprocess.CompletedProcess]:
+    base = tmp_path / "work"
+    run_dir = base / "runs" / "20990101-000000Z-s04test-manual-00000000"
+    env = {k: v for k, v in os.environ.items() if not k.startswith("TD_")}
+    env.update(TD_ROOT=str(REPO_ROOT), TD_WORK_DIR=str(base), TD_RUN_DIR=str(run_dir), TD_SUT_FILE=str(SUT_FILE),
+               TD_SUT_COMMIT=RUN_COMMIT, TD_SITE_PREFIX="_test/s04-stage/")
+    init = subprocess.run([sys.executable, "-m", "td.state", "init", str(run_dir), "--run-id", run_dir.name, "--sut",
+                           "petclinic", "--commit", RUN_COMMIT], capture_output=True, text=True,
+                          env={**env, "PYTHONPATH": str(REPO_ROOT / "site-gen")})
+    assert init.returncode == 0, init.stderr
+    (run_dir / "stages").mkdir(parents=True, exist_ok=True)
+
+    def put(stage: str, name: str, tool: str, status: str) -> None:
+        out = run_dir / stage
+        out.mkdir()
+        (out / name).write_text(json.dumps(_synthetic_ontology(tool)))
+        (run_dir / "stages" / f"{stage}.json").write_text(json.dumps(
+            {"id": stage, "status": status, "reason": None, "outputs": {"ontology": str(out / name)}}))
+    if jqa:
+        put("S03", "ontology-jqa.json", "jqassistant", "passed")
+    else:
+        (run_dir / "stages" / "S03.json").write_text(json.dumps({"id": "S03", "status": "failed", "reason": "x", "outputs": {}}))
+    if owl:
+        put("S05", "ontology-owl.json", "owl", "passed")
+    else:
+        (run_dir / "stages" / "S05.json").write_text(json.dumps({"id": "S05", "status": s05_status, "reason": "x", "outputs": {}}))
+    done = subprocess.run(["bash", str(S04_SCRIPT), "petclinic", run_dir.name], capture_output=True, text=True, env=env, timeout=120)
+    subprocess.run([sys.executable, "-m", "td.state", "post", str(run_dir), "S04"], capture_output=True, text=True,
+                   env={**env, "PYTHONPATH": str(REPO_ROOT / "site-gen")})
+    return run_dir, done
+
+
+def test_s04_stage_both_inputs_passed_and_published_in_run_page(tmp_path):
+    from td.site import pages
+    run_dir, done = _s04_run(tmp_path, jqa=True, owl=True)
+    assert done.returncode == 0, done.stderr[-1500:]
+    stage = json.loads((run_dir / "stages" / "S04.json").read_text())
+    assert stage["status"] == "passed", stage
+    out = Path(stage["outputs"]["ontology"])
+    assert (out / "jqa.html").exists() and (out / "owl.html").exists()
+    site = tmp_path / "site"
+    pages.render_run(run_dir, site)
+    assert (site / "ontology" / "jqa.html").exists() and (site / "ontology" / "owl.html").exists()
+    index = (site / "index.html").read_text()
+    assert 'href="ontology/jqa.html"' in index and 'href="ontology/owl.html"' in index
+
+
+def test_s04_stage_only_jqa_is_degraded(tmp_path):
+    from td.site import pages
+    run_dir, done = _s04_run(tmp_path, jqa=True, owl=False)
+    assert done.returncode == 0, done.stderr[-1500:]
+    stage = json.loads((run_dir / "stages" / "S04.json").read_text())
+    assert stage["status"] == "degraded" and "S05" in stage["reason"], stage
+    out = Path(stage["outputs"]["ontology"])
+    assert (out / "jqa.html").exists() and not (out / "owl.html").exists()
+    site = tmp_path / "site"
+    pages.render_run(run_dir, site)
+    index = (site / "index.html").read_text()
+    assert 'href="ontology/jqa.html"' in index and "owl.html" not in index
+
+
+def test_s04_stage_without_inputs_fails(tmp_path):
+    run_dir, done = _s04_run(tmp_path, jqa=False, owl=False)
+    stage = json.loads((run_dir / "stages" / "S04.json").read_text())
+    assert done.returncode != 0 and stage["status"] == "failed", stage
