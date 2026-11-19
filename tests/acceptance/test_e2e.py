@@ -1,7 +1,9 @@
 """E2E 계열 수용 테스트. 이 파일에는 REQ-027(결정적 testId)의 Unit 부분이 있다.
 Int 부분(dry-run 두 번의 testId 집합 비교)은 러너를 만드는 Task가 덧붙인다.
 """
+import json
 import re
+from pathlib import Path
 
 import pytest
 
@@ -122,3 +124,28 @@ def test_req027_nonascii_slug_is_checkout_independent():
             testid.feature_slug(f"{root}/{relative}", "소유자 조회")
         with pytest.raises(ValueError, match="상대 경로"):
             testid.make("base", HASH, 1, None, f"{root}/{relative}", 3, set())
+
+
+FIXTURE_TABLE = Path(__file__).resolve().parents[1] / "fixtures" / "testids.json"
+
+
+def _table() -> dict:
+    return json.loads(FIXTURE_TABLE.read_text())
+
+
+@pytest.mark.parametrize("case", _table()["cases"], ids=lambda case: case["name"])
+def test_req027_python_matches_shared_table(case):
+    """Java TestIds와 공유하는 표(tests/fixtures/testids.json)의 Python 쪽 검증. feature는 상대 경로 순서로 부른다."""
+    slugs: dict[str, str] = {}
+    taken: set[str] = set()
+    made = [testid.make(case["arm"], case["inputHash"], case["rep"], case["gen"], feature["path"], line, taken,
+                        name=feature["name"], slugs=slugs)
+            for feature in sorted(case["features"], key=lambda f: f["path"]) for line in feature["pickles"]]
+    assert made == case["expected"]
+    assert len(set(made)) == len(made) and all(TEST_ID_RE.match(item) for item in made)
+
+
+@pytest.mark.parametrize("error", _table()["errors"], ids=lambda error: error["name"])
+def test_req027_python_rejects_shared_table_errors(error):
+    with pytest.raises(ValueError):
+        testid.make(error["arm"], error["inputHash"], error["rep"], error["gen"], error["path"], error["line"], set())

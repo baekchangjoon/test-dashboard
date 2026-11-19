@@ -135,3 +135,89 @@ def test_gate_detects_labeled_container(session_id):
         if container_id:
             subprocess.run(["docker", "rm", "-f", container_id], capture_output=True)
     assert find_leaked_resources(label_value) == {}
+
+
+# --- E2E 하네스(Task 20, REQ-026/027): Gradle 서브프로젝트를 실제로 실행한다 -----------------------------------
+import os
+import xml.etree.ElementTree as ET
+
+import yaml
+
+E2E_DIR = REPO_ROOT / "e2e"
+SUT_FILE = REPO_ROOT / "suts" / "petclinic" / "sut.yaml"
+HARNESS_RESULTS = E2E_DIR / "harness" / "build" / "test-results" / "test"
+
+
+def _java17_home() -> str:
+    out = subprocess.run(["/usr/libexec/java_home", "-v", "17"], capture_output=True, text=True)
+    assert out.returncode == 0, f"JDK 17이 필요하다: {out.stderr.strip()}"
+    return out.stdout.strip()
+
+
+def _gradle(args: list[str], *, properties: dict[str, str] | None = None, timeout: int = 900,
+            env_extra: dict[str, str] | None = None) -> subprocess.CompletedProcess:
+    """e2e/gradlew --no-daemon. 시스템 속성은 -D로 넘기지 않고 JAVA_TOOL_OPTIONS 없이 build.gradle이 전달하는 -Ptd.* 로 넘긴다."""
+    command = ["./gradlew", "--no-daemon", "--console=plain", *args]
+    for key, value in (properties or {}).items():
+        command.append(f"-P{key}={value}")
+    env = {**os.environ, "JAVA_HOME": _java17_home(), **(env_extra or {})}
+    return subprocess.run(command, cwd=E2E_DIR, capture_output=True, text=True, env=env, timeout=timeout)
+
+
+def _testcases(report_name: str) -> list[ET.Element]:
+    report = HARNESS_RESULTS / f"TEST-td.harness.{report_name}.xml"
+    assert report.is_file(), f"JUnit XML이 없다: {report}"
+    return list(ET.parse(report).getroot().iter("testcase"))
+
+
+def _assert_all_passed(report_name: str, minimum: int):
+    cases = _testcases(report_name)
+    assert len(cases) >= minimum, [c.get("name") for c in cases]
+    bad = [c.get("name") for c in cases if c.find("failure") is not None or c.find("error") is not None
+           or c.find("skipped") is not None]
+    assert not bad, bad
+
+
+def test_req027_java_testids_match_python_table():
+    """Int: Java TestIds가 공유 표(tests/fixtures/testids.json)에서 Python testid.make와 같은 id를 만든다."""
+    result = _gradle([":harness:test", "--tests", "td.harness.TestIdsTest", "--rerun-tasks"])
+    assert result.returncode == 0, (result.stdout + result.stderr)[-4000:]
+    _assert_all_passed("TestIdsTest", minimum=12)
+
+
+def test_harness_unit_suites_pass():
+    """Int: 요청 계수, 시나리오 결과 NDJSON, 커버리지 수명주기를 가짜 서버로 검증하는 단위 테스트."""
+    result = _gradle([":harness:test", "--tests", "td.harness.RequestCounterTest",
+                      "--tests", "td.harness.CoverageHooksTest",
+                      "--tests", "td.harness.CucumberLifecycleTest", "--rerun-tasks"])
+    assert result.returncode == 0, (result.stdout + result.stderr)[-4000:]
+    _assert_all_passed("RequestCounterTest", minimum=2)
+    _assert_all_passed("CoverageHooksTest", minimum=5)
+    _assert_all_passed("CucumberLifecycleTest", minimum=1)
+
+
+def test_req026_auth_harness(sut_env, local_env):
+    """Int: 실제 SUT 컨테이너에서 authed() probe는 2xx, anonymous()는 sut.yaml의 unauthenticated_status다(HarnessAuthIT)."""
+    from td import sut_config
+    sut = sut_config.load(SUT_FILE)
+    env = sut_env("req026")
+    login = sut.auth_login
+    probe = sut.auth_probe_spec
+    props = {
+        "td.auth.login": login, "td.auth.probe": probe,
+        "td.auth.unauthenticated-status": str(sut.auth_unauthenticated_status),
+    }
+    prop_args = " ".join(f"-P{key}='{value}'" for key, value in props.items())
+    java_home = _java17_home()
+    script = f'''
+td_sut_up "$TD_RUN_DIR" S07 req026 || {{ echo "UPFAIL=$TD_SUT_FAIL_REASON"; td_sut_down; exit 1; }}
+cd "{E2E_DIR}"
+JAVA_HOME="{java_home}" ./gradlew --no-daemon --console=plain :harness:test --tests td.harness.HarnessAuthIT --rerun-tasks \\
+  -Ptd.base-url="$TD_BASE_URL" -Ptd.control-url="$TD_CONTROL_URL" -Ptd.auth.user="$AUTH_USER" -Ptd.auth.pass="$AUTH_PASS" {prop_args}
+echo "GRADLE_RC=$?"
+td_sut_down
+'''
+    result = env.bash(script, timeout=900, AUTH_USER=local_env["TD_SUT_USER"], AUTH_PASS=local_env["TD_SUT_PASS"])
+    assert "UPFAIL=" not in result.stdout, result.stdout[-2000:]
+    assert "GRADLE_RC=0" in result.stdout, (result.stdout + result.stderr)[-4000:]
+    _assert_all_passed("HarnessAuthIT", minimum=3)

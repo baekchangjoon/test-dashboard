@@ -1,0 +1,26 @@
+// 공통 설정: Java 17 toolchain, Maven Central. 버전은 tools.pin.yaml과 같다(Cucumber 8.1.0, REST Assured 5.5.1).
+subprojects {
+    apply plugin: 'java-library'
+
+    repositories {
+        mavenCentral()
+    }
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(17)
+        }
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+    }
+
+    ext {
+        cucumberVersion = '8.1.0'
+        restAssuredVersion = '5.5.1'
+        pjacocoTestkitVersion = '2.0.0'
+        junitVersion = '5.10.2'
+        assertjVersion = '3.26.3'
+    }
+}

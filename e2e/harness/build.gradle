@@ -1,0 +1,28 @@
+// 사람이 쓰는 고정 하네스. generation(생성된 step 정의)이 이 프로젝트를 클래스패스로 쓴다.
+dependencies {
+    api "io.cucumber:cucumber-java:${cucumberVersion}"
+    api "io.rest-assured:rest-assured:${restAssuredVersion}"
+    // pjacoco testkit: start/stop과 baggage 헤더. 선택 기록은 CoverageHooks.COVERAGE_ADAPTER.
+    api "io.github.beltian.pjacoco:pjacoco-testkit-restassured:${pjacocoTestkitVersion}"
+    api "org.assertj:assertj-core:${assertjVersion}"
+
+    testImplementation platform("org.junit:junit-bom:${junitVersion}")
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation "io.cucumber:cucumber-junit-platform-engine:${cucumberVersion}"
+    testImplementation 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+    testLogging {
+        events 'failed', 'skipped'
+        exceptionFormat = 'full'
+    }
+    // 공유 fixture 표 경로(tests/fixtures/testids.json)와 `-Ptd.*` 속성을 테스트 JVM의 시스템 속성으로 넘긴다.
+    systemProperty 'td.fixtures.testids', rootProject.file('../tests/fixtures/testids.json').absolutePath
+    project.properties.each { key, value ->
+        if (key.startsWith('td.') && value != null) {
+            systemProperty key, value.toString()
+        }
+    }
+}
