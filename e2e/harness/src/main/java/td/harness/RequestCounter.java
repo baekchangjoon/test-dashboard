@@ -40,7 +40,9 @@ public final class RequestCounter {
         for (Throwable cause = failure; cause != null; cause = cause.getCause() == cause ? null : cause.getCause()) {
             if (cause instanceof java.net.ConnectException || cause instanceof java.net.UnknownHostException
                     || cause instanceof java.net.NoRouteToHostException
-                    || cause.getClass().getSimpleName().contains("ConnectTimeout")) {
+                    || cause.getClass().getSimpleName().contains("ConnectTimeout")
+                    || (cause instanceof java.net.SocketTimeoutException && cause.getMessage() != null
+                            && cause.getMessage().toLowerCase().contains("connect timed out"))) {
                 return true;
             }
         }

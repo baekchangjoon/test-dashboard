@@ -21,7 +21,11 @@ import td.harness.Harness;
   이미 들어 있는 데이터가 있다고 가정하지 않고, 다른 시나리오가 만든 데이터에 기대지 않는다.
 - 데이터를 만들 때 값이 겹치지 않도록 시나리오마다 고유한 값을 쓴다(예: 시나리오 안에서 만든 난수 접미사).
 - 시나리오가 만든 데이터를 정리하는 일은 요구하지 않는다. 서버는 generation마다 새로 뜬다.
-- step 클래스는 feature별로 하나이고 `glue/<feature 파일 이름을 PascalCase로>Steps.java`에 둔다(예: `vet_lookup.feature` -> `glue/VetLookupSteps.java`). 클래스에는 `package` 선언이 있어야 하고, 하네스 이외의 의존성을 추가하지 않는다. 사용 가능한 라이브러리는
+- step 클래스는 feature마다 하나이고 `glue/<feature 파일 이름을 PascalCase로>Steps.java`에 둔다(예: `sample_flow.feature` -> `glue/SampleFlowSteps.java`).
+  파일 이름에 ASCII 영숫자가 없으면 `glue/F<feature 경로 sha1 앞 8자리>Steps.java`로 한다.
+- 여러 feature가 함께 쓰는 보조 클래스는 `glue/support/` 아래에만 둔다. 이 두 자리를 벗어난 클래스는 거부된다.
+- 모든 glue 클래스에는 `package` 선언이 있어야 하고, 하네스 이외의 의존성을 추가하지 않는다. 사용 가능한 라이브러리는
   Cucumber 8.1.0, REST Assured 5.5.1, AssertJ다.
+- feature의 step 클래스가 컴파일되지 않으면 그 feature의 시나리오는 실행되지 않고, `glue/support/` 클래스가 컴파일되지 않으면 generation의 모든 시나리오가 실행되지 않는다.
 - 시나리오 시작과 종료 처리(훅)는 하네스가 이미 갖고 있다. step 클래스에 `@Before`, `@After` 훅을 만들지 않는다.
 - `@ignore`, `@Disabled`, `@wip` 같은 실행 제외 표식은 쓰지 않는다.

@@ -17,6 +17,7 @@ S07 단계가 쓰는 함수: `write_testids`(td.testids 입력), `reconcile`/`ap
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -123,11 +124,49 @@ def write_testids(gen_dir, ident: GenIdent, out_path) -> Path:
     return out
 
 
+SUPPORT_DIR = f"{GLUE_DIR}/support"
+
+
+class LayoutError(ScenariosError):
+    """glue 배치 규약 위반(S06 수리 루프에 되먹임한다)."""
+
+
 def glue_class_for_feature(feature_relative: str) -> str:
-    """feature에 대응하는 glue 클래스 파일(generation 루트 기준)."""
-    stem = PurePosixPath(feature_relative).stem
+    """feature에 대응하는 glue 클래스 파일(generation 루트 기준): `glue/<Pascal(stem)>Steps.java`.
+    stem에 ASCII 영숫자가 없으면(비ASCII) td.testid의 slug와 같은 규칙으로 상대 경로 sha1 앞 8자리를 써서 `glue/F<sha8>Steps.java`다."""
+    relative = feature_relative.replace("\\", "/")
+    stem = PurePosixPath(relative).stem
     pascal = "".join(part[:1].upper() + part[1:] for part in re.split(r"[^A-Za-z0-9]+", stem) if part)
+    if not pascal:
+        pascal = "F" + hashlib.sha1(relative.encode("utf-8")).hexdigest()[:8]
     return f"{GLUE_DIR}/{pascal}Steps.java"
+
+
+def glue_files(gen_dir) -> list[str]:
+    root = Path(gen_dir)
+    return sorted(path.relative_to(root).as_posix() for path in (root / GLUE_DIR).rglob("*.java"))
+
+
+def layout_violations(gen_dir) -> list[str]:
+    """어떤 feature의 Steps 클래스도 아니고 glue/support/ 아래도 아닌 glue 클래스. 컴파일이 실패하면 어느 시나리오가 영향을
+    받는지 알 수 없어(undefined로 새어 나온다) 규약 위반이다."""
+    mapped = {glue_class_for_feature(item) for item in feature_files(gen_dir)}
+    return [item for item in glue_files(gen_dir) if item not in mapped and not item.startswith(SUPPORT_DIR + "/")]
+
+
+def _check_layout(gen_dir) -> None:
+    stray = layout_violations(gen_dir)
+    if stray:
+        raise LayoutError("glue 배치 규약 위반(feature의 Steps 클래스 `glue/<Pascal(stem)>Steps.java`도 `glue/support/` 아래도 아니다): "
+                          + ", ".join(stray))
+
+
+def features_affected_by(gen_dir, excluded: set[str]) -> list[str]:
+    """제외된 glue 클래스 때문에 실행할 수 없는 feature. support 클래스가 빠지면 generation 전체, 아니면 그 feature만이다."""
+    features = feature_files(gen_dir)
+    if any(item.startswith(SUPPORT_DIR + "/") for item in excluded):
+        return features
+    return [item for item in features if glue_class_for_feature(item) in excluded]
 
 
 # --- 실행 환경 ------------------------------------------------------------------------------------
@@ -189,6 +228,7 @@ def compile_check(gen_dir, classpath: str, out_dir) -> CompileResult:
     `compile.log`로 out_dir에 쓴다."""
     root, out = Path(gen_dir).resolve(), Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
+    _check_layout(root)
     remaining = sorted(path.relative_to(root).as_posix() for path in (root / GLUE_DIR).rglob("*.java"))
     excluded: list[str] = []
     outputs: list[str] = []
@@ -211,7 +251,7 @@ def compile_check(gen_dir, classpath: str, out_dir) -> CompileResult:
             excluded.extend(sorted(failing))
             remaining = [item for item in remaining if item not in failing]
     excluded_set = set(excluded)
-    features = [item for item in feature_files(root) if glue_class_for_feature(item) in excluded_set]
+    features = features_affected_by(root, excluded_set)
     compiler_output = "".join(outputs)
     (out / "compile.log").write_text(compiler_output, encoding="utf-8")
     (out / "compile-excluded.json").write_text(json.dumps(
@@ -299,6 +339,7 @@ def validate_generation(gen_dir, out_dir) -> ValidationResult:
     """S06 수리 루프용: 컴파일 확인과 dry-run을 차례로 한다(SUT 불필요). out_dir은 호출자의 임시 디렉터리다."""
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
+    _check_layout(gen_dir)
     (out / "compile-excluded.json").unlink(missing_ok=True)
     classpath = runner_classpath(out / "classpath.txt")
     compile_result = compile_check(gen_dir, classpath, out)
@@ -349,6 +390,10 @@ def reconcile(feature_dir, dryrun: DryRun, results: list[dict], compile_excluded
     by_id: dict[str, dict] = {}
     problems: list[str] = []
     for line in results:
+        if (not isinstance(line, dict) or set(line) != {"testId", "status", "requests", "exec"}
+                or not isinstance(line["requests"], int) or isinstance(line["requests"], bool)
+                or not (line["exec"] is None or isinstance(line["exec"], str))):
+            raise ReconcileError(f"하네스 결과 줄의 모양이 맞지 않는다(testId,status,requests(int),exec): {str(line)[:160]}")
         test_id = line.get("testId")
         if test_id not in known:
             problems.append(f"알 수 없는 testId: {test_id}")

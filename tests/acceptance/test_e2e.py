@@ -2,12 +2,18 @@
 Int 부분(dry-run 두 번의 testId 집합 비교)은 러너를 만드는 Task가 덧붙인다.
 """
 import json
+import os
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
 
-from td import testid
+from conftest import SutEnv
+from helpers import find_leaked_resources, make_site_run
+from td import coverage, scenarios, testid
+from td.site import pages
 
 TEST_ID_RE = re.compile(r"^E2E_(base|jqa|owl)_[0-9a-f]{8}r[1-9](g[0-9]+)?_[A-Za-z0-9_]+#L\d+$")
 HASH = "0123456789abcdef" * 4
@@ -152,12 +158,6 @@ def test_req027_python_rejects_shared_table_errors(error):
 
 
 # --- S07 Cucumber 실행기(Task 21, REQ-028, REQ-029, REQ-062) ------------------------------------------------------------
-import os
-import shutil
-import subprocess
-
-from td import coverage, scenarios
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SAMPLE_GENERATION = REPO_ROOT / "tests" / "fixtures" / "generated-sample"
 SUT_FILE = REPO_ROOT / "suts" / "petclinic" / "sut.yaml"
@@ -285,7 +285,6 @@ def test_req028_verify_exec_counts_and_missing(tmp_path):
 @pytest.fixture(scope="module")
 def s07_run(tmp_path_factory, session_id, local_env):
     """샘플 generation을 pipeline/lib/e2e.sh의 td_e2e_generation으로 한 번 실행한다(SUT 컨테이너 기동과 정리 포함)."""
-    from conftest import SutEnv
     work = tmp_path_factory.mktemp("s07")
     env = SutEnv(work, session_id, "s07")
     gen_dir = _copy_sample(work / "generated")
@@ -366,8 +365,6 @@ def test_req029_undefined_ratio(s07_run):
 
 
 def test_req062_cucumber_reports(s07_run, tmp_path):
-    from helpers import make_site_run
-    from td.site import pages
     _status(s07_run)
     for name in ("cucumber.ndjson", "cucumber.json", "junit.xml", "html/index.html", "dryrun.json"):
         assert (s07_run.out / name).stat().st_size > 0, name
@@ -387,7 +384,6 @@ def test_req062_cucumber_reports(s07_run, tmp_path):
 
 def test_req028_resources_cleaned_up(s07_run, session_id):
     _status(s07_run)
-    from helpers import find_leaked_resources
     assert find_leaked_resources(f"td-test-{session_id}") == {}
 
 
@@ -430,8 +426,6 @@ def test_req028_finalize_fails_listing_testids_when_exec_is_missing(tmp_path):
 
 def test_req028_sut_start_failure_fails_generation_and_cleans_up(tmp_path_factory, session_id, local_env):
     """주입: SUT jar가 없어 기동할 수 없다 -> 멈추지 않고 failed, 사유에 SUT, 남은 컨테이너 없음."""
-    from conftest import SutEnv
-    from helpers import find_leaked_resources
     work = tmp_path_factory.mktemp("s07fail")
     env = SutEnv(work, session_id, "s07fail")
     gen_dir = _copy_sample(work / "generated")
@@ -452,7 +446,6 @@ echo "E2E_STATUS=$E2E_STATUS"; echo "E2E_REASON=$E2E_REASON"
 
 def test_req028_stage_script_records_generations_and_degrades_on_failed_one(tmp_path_factory, session_id, local_env):
     """S07-e2e.sh: S06 generation 중 하나가 실패(디렉터리 없음)해도 다른 generation은 진행되고 단계는 degraded다."""
-    from conftest import SutEnv
     work = tmp_path_factory.mktemp("s07stage")
     env = SutEnv(work, session_id, "s07stage")
     gen_dir = _copy_sample(work / "generated")
@@ -483,3 +476,64 @@ def test_req028_stage_script_records_generations_and_degrades_on_failed_one(tmp_
         assert not (run_dir / "S07" / "owl-01234567-r1").exists()
     finally:
         env.cleanup()
+
+
+# --- glue 배치 규약과 제외 범위(리뷰 라운드 1) ---------------------------------------------------------------------------------
+def test_req028_glue_mapping_ascii_and_non_ascii_stems():
+    import hashlib
+    assert scenarios.glue_class_for_feature("features/sample_flow.feature") == "glue/SampleFlowSteps.java"
+    relative = "features/소유자_조회.feature"
+    sha = hashlib.sha1(relative.encode("utf-8")).hexdigest()[:8]
+    assert scenarios.glue_class_for_feature(relative) == f"glue/F{sha}Steps.java"
+
+
+def test_req028_stray_glue_class_is_a_layout_error(tmp_path):
+    gen_dir = _copy_sample(tmp_path)
+    (gen_dir / "glue" / "Helper.java").write_text("package glue;\npublic class Helper {}\n")
+    assert scenarios.layout_violations(gen_dir) == ["glue/Helper.java"]
+    with pytest.raises(scenarios.LayoutError, match="glue/Helper.java"):
+        scenarios.validate_generation(gen_dir, tmp_path / "validate")
+    with pytest.raises(scenarios.LayoutError):
+        scenarios.compile_check(gen_dir, "", tmp_path / "out")
+    (gen_dir / "glue" / "Helper.java").rename(gen_dir / "glue" / "support_helper.java")  # 여전히 규약 밖
+    assert scenarios.layout_violations(gen_dir)
+    (gen_dir / "glue" / "support_helper.java").unlink()
+    (gen_dir / "glue" / "support").mkdir()
+    (gen_dir / "glue" / "support" / "Helper.java").write_text("package glue.support;\npublic class Helper {}\n")
+    assert scenarios.layout_violations(gen_dir) == []
+
+
+def test_req028_broken_support_class_makes_every_scenario_uncompilable(tmp_path, runner_classpath):
+    gen_dir = _copy_sample(tmp_path)
+    (gen_dir / "glue" / "support").mkdir()
+    (gen_dir / "glue" / "support" / "Shared.java").write_text("package glue.support;\npublic class Shared { int x = \"no\"; }\n")
+    result = scenarios.compile_check(gen_dir, runner_classpath, tmp_path / "out")
+    assert "glue/support/Shared.java" in result.excluded
+    assert result.excluded_features == scenarios.feature_files(gen_dir)       # generation 전체
+    refs = scenarios.pickle_refs(gen_dir, SAMPLE_IDENT)
+    merged = scenarios.reconcile(gen_dir / "features", _dryrun(tmp_path), [], result, ident=SAMPLE_IDENT)
+    assert len(merged) == len(refs) == SAMPLE_PICKLE_COUNT and {m.status for m in merged} == {"uncompilable"}
+    dry = scenarios.dry_run(gen_dir, tmp_path / "out")                        # 실행할 feature가 없으므로 Gradle 없이 빈 결과
+    assert dry.pickle_count == 0 and dry.undefined_steps == []
+
+
+def test_req028_non_ascii_feature_with_broken_steps_class_is_uncompilable_not_undefined(tmp_path, runner_classpath):
+    gen_dir = _copy_sample(tmp_path)
+    feature = "features/소유자_조회.feature"
+    (gen_dir / feature).write_text("Feature: 소유자 조회\n\n  Scenario: 목록\n    When 한글 단계\n")
+    glue_path = gen_dir / scenarios.glue_class_for_feature(feature)
+    glue_path.write_text("package glue;\nimport io.cucumber.java.en.When;\npublic class "
+                         + glue_path.stem + " { @When(\"한글 단계\") public void step() { int n = \"x\"; } }\n")
+    result = scenarios.compile_check(gen_dir, runner_classpath, tmp_path / "out")
+    assert set(result.excluded) == {"glue/BrokenSteps.java", glue_path.relative_to(gen_dir).as_posix()}
+    assert set(result.excluded_features) == {"features/broken.feature", feature}
+    dry = scenarios.dry_run(gen_dir, tmp_path / "out")
+    assert [item["feature"] for item in dry.undefined_steps] == ["features/undefined.feature"]   # 제외 feature는 undefined로 새지 않는다
+
+
+def test_req028_reconcile_rejects_malformed_harness_lines(tmp_path):
+    gen_dir = _copy_sample(tmp_path)
+    for bad in ({"testId": "x", "status": "passed"}, {"testId": "x", "status": "passed", "requests": "1", "exec": None},
+                {"testId": "x", "status": "passed", "requests": 1, "exec": 5}):
+        with pytest.raises(scenarios.ReconcileError, match="모양"):
+            scenarios.reconcile(gen_dir / "features", _dryrun(tmp_path), [bad], [], ident=SAMPLE_IDENT)
