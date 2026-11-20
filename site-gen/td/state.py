@@ -338,6 +338,13 @@ def post(run_dir, stage_id: str) -> None:
         skipped = [f"{gid} ({g['reason']})" for gid, g in extra["generations"].items() if g["status"] == "skipped"]
         if skipped:
             reasons.append("generation skipped: " + "; ".join(skipped))
+        # 실제 S06은 건너뛴 arm의 genId를 만들지 않는다(입력 해시가 없다). 그 arm이 빠진 것도 S07의 축소 실행이다.
+        s06_arms = (read_stage(run_dir, "S06") or {}).get("arms") or {}
+        with_gens = {g.get("arm") for g in extra["generations"].values()}
+        arm_gone = [f"{arm} ({st.get('reason')})" for arm, st in s06_arms.items()
+                    if st.get("status") == "skipped" and arm not in with_gens]
+        if arm_gone:
+            reasons.append("arm skipped: " + "; ".join(arm_gone))
     if dep.any_of:
         gone = [_why(run_dir, sid) for sid in dep.any_of
                 if not _available(run_dir, sid) and not _neutral(run_dir, sid)]

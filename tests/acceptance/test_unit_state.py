@@ -122,3 +122,17 @@ def test_s13_rebegin_keeps_frozen_finished_at(run_dir):
     state.end(run_dir, "S13", "failed", "x")
     state.begin(run_dir, "S13")
     assert (run_dir / "run.json").read_bytes() == frozen
+
+
+def test_s07_degraded_when_s06_arm_skipped_without_generations(run_dir, monkeypatch):
+    """실제 S06은 건너뛴 arm의 genId를 만들 수 없다(입력 해시 없음). 그래도 S07은 arm 부족을 degraded로 남긴다(REQ-059)."""
+    monkeypatch.delenv("TD_STAGE_DIR", raising=False)
+    state.end(run_dir, "S06", "degraded", "arm skipped: owl (dependency S05 failed)", extra={
+        "arms": {"base": {"status": "passed", "generations": ["base-12345678-r1"]},
+                 "owl": {"status": "skipped", "reason": "dependency S05 failed"}},
+        "generations": {"base-12345678-r1": {"arm": "base", "rep": 1, "status": "passed"}}})
+    state.end(run_dir, "S07", "passed", extra={"generations": {"base-12345678-r1": {"arm": "base", "status": "passed"}}})
+    state.post(run_dir, "S07")
+    s07 = state.read_stage(run_dir, "S07")
+    assert s07["status"] == "degraded" and "owl" in s07["reason"] and "S05" in s07["reason"]
+    assert s07["generations"]["base-12345678-r1"]["status"] == "passed"

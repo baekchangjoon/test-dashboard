@@ -118,6 +118,32 @@ def test_req059_skip_propagation_s05(injected_run):
     assert "arm" in result.stage("S12")["reason"]
 
 
+def test_req059_skip_propagation_s05_real_stages(real_pipeline_run):
+    """실제 단계 버전(Task 24): TD_FAIL_STAGE=S05 주입 실행. owl arm은 S06에서 skipped(사유에 S05)이고 owl generation은
+    S07에서 실행되지 않는다. base와 jqa는 실제로 생성(스냅샷 재사용 가능)·실행된다. S06/S07은 degraded, S04는 jQA만 그려
+    degraded, S12는 '판정 불가(arm 부족)'로 degraded다. S08의 교차 오염 탐침이 블랙박스 스위트를 요구해 S01을 함께 돌린다."""
+    result = real_pipeline_run("S00,S01,S02,S03,S05,S04,S06,S07,S08,S12", args=("--reps", "1"), TD_FAIL_STAGE="S05")
+    assert result.returncode == 2, result.stderr[-3000:]
+    s05 = result.stage("S05")
+    assert s05["status"] == "failed" and "S05" in s05["reason"]
+    s06, s07 = result.stage("S06"), result.stage("S07")
+    assert s06["arms"]["owl"]["status"] == "skipped" and "S05" in s06["arms"]["owl"]["reason"]
+    assert s06["arms"]["base"]["status"] in ("passed", "degraded") and s06["arms"]["jqa"]["status"] in ("passed", "degraded")
+    assert s06["status"] == "degraded" and "owl" in s06["reason"]
+    assert not any(g["arm"] == "owl" for g in s06.get("generations", {}).values())
+    ran = {g["arm"] for g in s07["generations"].values() if g["status"] != "skipped"}
+    assert ran == {"base", "jqa"} and not any(g["arm"] == "owl" and g["status"] != "skipped"
+                                              for g in s07["generations"].values())
+    assert s07["status"] == "degraded" and "owl" in s07["reason"]
+    s04 = result.stage("S04")
+    assert s04["status"] == "degraded" and "S05" in s04["reason"]
+    ontology_dir = result.run_dir / "S04" / "ontology"
+    assert (ontology_dir / "jqa.html").exists() and not (ontology_dir / "owl.html").exists()
+    s12 = result.stage("S12")
+    assert s12["status"] == "degraded" and "판정 불가" in s12["reason"], s12
+    assert not (result.run_dir / "S05" / "ontology-owl.ttl").exists()
+
+
 def test_req059_skip_propagation_s02(injected_run):
     result = injected_run("S02")
     assert result.returncode == 2

@@ -419,8 +419,9 @@ def test_req041_fake_claude_stdin_has_no_oracle_text(fake_claude, tmp_path):
         stdin = _normalize(call.stdin)
         assert not [d for d in descriptions if d in stdin]
     # S06이 oracle.yaml을 번들 검사에 실제로 넘겼는지: 번들 빌드 로그 대신, 같은 경로 규약을 코드로 확인한다
-    from td import bddgen
-    assert 'oracle.yaml' in Path(bddgen.__file__).read_text()
+    # (번들 빌드는 S05와 S06이 td.snapshot.build_bundle을 함께 쓴다)
+    from td import bddgen, snapshot
+    assert 'oracle.yaml' in Path(snapshot.__file__).read_text() and "snapshot.build_bundle" in Path(bddgen.__file__).read_text()
 
 
 # --- 실제 파일럿 run --------------------------------------------------------------------------------

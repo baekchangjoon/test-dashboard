@@ -181,7 +181,8 @@ def test_render_run_ignores_outputs_of_failed_stage(tmp_path):
 
 # --- REQ-050 멀티 SUT(E2E-inj) ---------------------------------------------------------------------
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SUT_NEUTRAL_DIRS = ("pipeline", "site-gen", "e2e/harness", "e2e/runner", "ontology", "prompts", "env")
+# ontology/generated/<sut>/는 e2e/generated처럼 SUT별 생성 산출물(스냅샷)이라 검사 대상이 아니다.
+SUT_NEUTRAL_DIRS = ("pipeline", "site-gen", "e2e/harness", "e2e/runner", "ontology/jqa", "ontology/owl", "prompts", "env")
 
 
 def _s3_bytes(s3, bucket, key):

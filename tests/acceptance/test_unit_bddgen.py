@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from td import bddgen, state
+from td import bddgen, snapshot, state
 from td.bundle import Bundle
 
 FEATURE = "Feature: X\n  Scenario: s\n    When a\n"
@@ -241,8 +241,8 @@ def test_stale_reclaim_backs_off_when_owner_changed(tmp_path, monkeypatch):
     lock = arm_dir / ".reserve" / "base-00000000-r1"
     lock.mkdir(parents=True)
     owners = iter([{"pid": 999999, "host": "h"}, {"pid": 4242, "host": "h"}])
-    monkeypatch.setattr(bddgen, "_owner", lambda path: next(owners))
-    monkeypatch.setattr(bddgen, "_stale", lambda path, owner: True)
+    monkeypatch.setattr(snapshot, "_owner", lambda path: next(owners))
+    monkeypatch.setattr(snapshot, "_stale", lambda path, owner: True)
     assert bddgen.try_reserve(arm_dir, "base-00000000-r1") is None
     assert lock.is_dir() and not list((arm_dir / ".reserve").glob("*.stale-*"))
 
