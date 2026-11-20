@@ -231,3 +231,87 @@ td_sut_down
     assert "UPFAIL=" not in result.stdout, result.stdout[-2000:]
     assert "GRADLE_RC=0" in result.stdout, (result.stdout + result.stderr)[-4000:]
     _assert_all_passed("HarnessAuthIT", minimum=3, results_dir=HARNESS_IT_RESULTS)
+
+
+def _exec_hits(path: Path) -> dict[str, int]:
+    """JaCoCo .exec(0x01 헤더, 0x10 세션, 0x11 실행 데이터)에서 클래스 이름 -> 켜진 프로브 수."""
+    import struct
+    data, i, hits = path.read_bytes(), 0, {}
+
+    def utf(pos):
+        size = struct.unpack(">H", data[pos:pos + 2])[0]
+        return data[pos + 2:pos + 2 + size].decode("utf-8", "replace"), pos + 2 + size
+
+    while i < len(data):
+        block, i = data[i], i + 1
+        if block == 0x01:
+            i += 4
+        elif block == 0x10:
+            _, i = utf(i)
+            i += 16
+        elif block == 0x11:
+            i += 8
+            name, i = utf(i)
+            count = shift = 0
+            while True:
+                byte, i = data[i], i + 1
+                count |= (byte & 0x7F) << shift
+                shift += 7
+                if not byte & 0x80:
+                    break
+            bits = data[i:i + (count + 7) // 8]
+            i += (count + 7) // 8
+            hits[name] = hits.get(name, 0) + sum(bits[k // 8] >> (k % 8) & 1 for k in range(count))
+        else:
+            raise AssertionError(f"알 수 없는 exec 블록 {block:#x} @ {i}: {path}")
+    return hits
+
+
+def test_e2e_coverage_attribution_matches_direct_path(sut_env, local_env):
+    """Int(실제 SUT): 하네스 경로(CoverageHooks + authed())의 per-test 귀속이 블랙박스 확장과 같은 직접 HTTP 경로와 같다.
+
+    pjacoco 의미(설계 §13.9): recordedProbes는 store에 켜진 서로 다른 프로브 수, droppedProbes는 테스트 컨텍스트 없이 실행된
+    프로브 '적중 횟수'다(active 테스트가 정확히 1개일 때만 그 테스트에 센다). 컨텍스트는 HttpServlet#service에서 묶이므로
+    보안 필터 체인(JwtAuthenticationFilter 등) 코드는 요청마다 드롭되고, 직렬 실행에서는 그 테스트의 droppedProbes가 된다.
+    그래서 incompleteAttribution=true는 하네스 결함이 아니라 SUT 구조의 결과이고, 하네스와 직접 경로가 같은 값을 내야 한다.
+    하네스 고유의 드롭(로그인 요청이 시나리오 안에서 일어나 첫 시나리오에 붙는 것)은 없어야 한다."""
+    from td import sut_config
+    sut = sut_config.load(SUT_FILE)
+    env = sut_env("attr")
+    java_home = _java17_home()
+    script = f'''
+td_sut_up "$TD_RUN_DIR" S07 attr || {{ echo "UPFAIL=$TD_SUT_FAIL_REASON"; td_sut_down; exit 1; }}
+cd "{E2E_DIR}"
+JAVA_HOME="{java_home}" ./gradlew --no-daemon --console=plain :harness:integrationTest --tests td.harness.CoverageAttributionIT --rerun-tasks \\
+  -Ptd.base-url="$TD_BASE_URL" -Ptd.control-url="$TD_CONTROL_URL" -Ptd.auth.user="$AUTH_USER" -Ptd.auth.login='{sut.auth_login}'
+echo "GRADLE_RC=$?"
+td_sut_down
+'''
+    result = env.bash(script, timeout=900, AUTH_USER=local_env["TD_SUT_USER"], TD_AUTH_PASS=local_env["TD_SUT_PASS"])
+    assert "UPFAIL=" not in result.stdout, result.stdout[-2000:]
+    assert "GRADLE_RC=0" in result.stdout, (result.stdout + result.stderr)[-4000:]
+    _assert_all_passed("CoverageAttributionIT", minimum=3, results_dir=HARNESS_IT_RESULTS)
+
+    exec_dir = env.run_dir / "S07" / "attr" / "exec"
+    ids = ("ATTR_harness_first", "ATTR_harness_second", "ATTR_direct")
+    sidecars = {tid: json.loads((exec_dir / f"{tid}.json").read_text()) for tid in ids}
+    hits = {tid: _exec_hits(exec_dir / f"{tid}.exec") for tid in ids}
+    summary = {tid: {k: s.get(k) for k in ("classCount", "recordedProbes", "droppedProbes", "incompleteAttribution")}
+               for tid, s in sidecars.items()}
+
+    # 컨트롤러 코드가 귀속된다(블랙박스 VetApiBlackBoxIT#listAllVets와 같은 클래스 집합).
+    for tid in ids:
+        assert any(name.endswith("/VetRestController") for name in hits[tid]), (tid, sorted(hits[tid]))
+        assert sum(hits[tid].values()) > 0, summary
+    # 하네스 경로와 직접 경로가 같은 커버리지를 기록한다. 첫 요청은 SUT의 @Cacheable("vets")가 비어 있어 엔티티 적재 코드가
+    # 더 돌므로(같은 이유로 E2E 실행에서 같은 엔드포인트를 뒤에 부른 TC는 프로브가 더 적다) 첫 시나리오는 상위 집합만 요구한다.
+    assert hits["ATTR_harness_second"] == hits["ATTR_direct"], summary
+    first = hits["ATTR_harness_first"]
+    assert all(first.get(name, 0) >= count for name, count in hits["ATTR_direct"].items()), summary
+    # 드롭은 요청당 필터 체인 적중 수로 셋이 같다: 첫 시나리오에 로그인 드롭이 더해지지 않는다(하네스 결함 회귀 방지).
+    dropped = {tid: sidecars[tid].get("droppedProbes", 0) for tid in ids}
+    assert dropped["ATTR_harness_second"] == dropped["ATTR_direct"], summary
+    assert dropped["ATTR_harness_first"] == dropped["ATTR_direct"], summary
+    # 필터 체인이 HttpServlet#service 바깥이므로 인증된 요청의 TC는 직렬 실행에서 incompleteAttribution=true가 정확한 값이다.
+    assert all(sidecars[tid].get("incompleteAttribution") is True for tid in ids), summary
+    assert dropped["ATTR_direct"] > 0, summary
