@@ -271,6 +271,7 @@ sonar: { projectKey: spring-petclinic-td, cmd_build: "./gradlew --no-daemon buil
     - 통과율 ≥ 70%
     - 엔드포인트 커버 ≥ 80%
   - 온톨로지 **효과 있음**: 온톨로지 arm의 범위가 `base` arm의 범위와 겹치지 않으면서, 엔드포인트 커버, 귀속 브랜치 커버리지, 오라클 커버 중 하나 이상에서 더 높다. 범위가 겹치면 "차이 불명확"으로 판정한다.
+  - **판정 불가**: base나 온톨로지 arm이 skip됐거나 측정된 generation이 없으면 "판정 불가(arm 부족)"다. 지표 평균이 없는(None) arm은 그 지표를 판정할 수 없다. 다른 지표가 이미 미달이면 그 arm은 미달이고, 아니면 판정 불가다. 어느 arm도 기준을 충족하지 못하고 판정 불가 arm이 하나라도 있으면 결과는 불성립/차이 불명확이 아니라 판정 불가다(생성 가설과 효과 모두. 보수적 확장, Task 23).
   - 표본은 3회라서 모든 비교는 **탐색적 관찰**로 표기한다.
 - `compare.html`: arm × 지표 표, generation별 점 그래프, 판정 결과와 한계 서술
 
@@ -312,6 +313,7 @@ sonar: { projectKey: spring-petclinic-td, cmd_build: "./gradlew --no-daemon buil
   suts/<sut>/runs/<runId>/{ontology,coverage,hotspot,tia,sonar,cucumber/<genId>,compare}/…
   ```
 - 크기: run 크기를 KPI로 기록하고, 200MB를 넘으면 경고한다. 보존 정책은 이번에는 전부 보존한다.
+- 홈 KPI의 원천(`run.json.kpis`): 테스트 통과율은 S08이 쓰는 `kpis.tests`(기존 블랙박스 IT의 TC 결과 중 skipped를 뺀 passed 비율. 생성 E2E 스위트는 실험 데이터라 넣지 않고 arm별 통과율은 `compare.json`에 있다), 귀속 라인 커버리지는 `kpis.blackbox.line`, Sonar 게이트는 `kpis.sonar.gate`, hotspot 1위는 `stages/S09.json.top10[0]`이다(Task 25에서 `kpis.tests` 누락을 발견해 추가).
 - **정적 호스팅**(`infra/static/`, Terraform): 비공개 S3 버킷(퍼블릭 차단, OAC), CloudFront, ACM(us-east-1) `reports.<domain>`, Route53 alias
 - **Lightsail**(짧은 중단 허용, 사용자 승인 2026-11-18):
   - 기존 compose의 `caddy` 서비스에 `/srv/dashboard:/srv/dashboard:ro` 볼륨을 추가한다. Caddyfile에는 `dash.<domain> { root * /srv/dashboard; encode gzip; file_server }` 블록을 추가한다.

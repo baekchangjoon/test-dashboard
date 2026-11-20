@@ -148,7 +148,7 @@
     2. `run-all`(운영 게시)
     3. after 스냅샷과 게시 객체 ETag 목록
     4. 두 번째 run
-    5. `llm-calls.log` 건수
+    5. `llm-calls.jsonl` 건수
     6. 결과를 `work/acceptance-session.json`에 저장
   - 디버깅 재실행은 `TD_SITE_PREFIX`로 하거나 S13을 빼고 한다. 운영 게시는 최종 2회만 한다.
   - "남은 `baseline` 테스트 red 0" 확인을 넣는다.
@@ -635,7 +635,7 @@ Python 모듈은 `uv run --project site-gen python -m td.<module> …`로 부른
   - `bundle.check_paths(bundle, sut_root) -> list[Violation]`
   - `normalize.lines(file) -> list[str]`(요구사항명세 REQ-020 절차)
   - `bundle.check_content(bundle, sut_src, oracle) -> list[Violation]`
-  - `llm.sh <bundle_dir> <prompt_file> <out_json>`: stdin 프롬프트(번들 인라인), Global Constraints의 플래그, 결과 JSON, `llm-calls.log` 메타
+  - `llm.sh <bundle_dir> <prompt_file> <out_json>`: stdin 프롬프트(번들 인라인), Global Constraints의 플래그, 결과 JSON, `llm-calls.jsonl` 메타
   - `testid.make(arm, input_hash, rep, gen, feature_path, pickle_line, taken:set) -> str`, `testid.feature_slug(path, name) -> str`
 
 - [ ] **Step 1:** 테스트를 작성한다.
