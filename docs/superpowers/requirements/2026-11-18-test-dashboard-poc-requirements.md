@@ -569,7 +569,7 @@
 | REQ-048 | Lightsail 호스트 | test_baseline.py::test_req048_baseline_lightsail_crawl<br>test_hosting.py::test_req048_lightsail_crawl | E2E | 🟢 passed |
 | REQ-070 | Lightsail 따라잡기 | test_publish.py::test_req070_lightsail_catch_up | E2E-inj | 🟢 passed |
 | REQ-071 | 게시 상태 기준 파일 | test_baseline.py::test_req071_baseline_publish_status_files<br>test_publish.py::test_req071_publish_status_files | E2E | 🟢 passed |
-| REQ-049 | 홈·SUT 페이지 | test_baseline.py::test_req049_baseline_home_sut_run_pages<br>test_site.py::test_req049_home_sut_run_pages | E2E | 🔴 failing |
+| REQ-049 | 홈·SUT 페이지 | test_baseline.py::test_req049_baseline_home_sut_run_pages<br>test_coverage.py::test_req049_home_pass_rate_from_real_s08_output<br>test_site.py::test_req049_home_sut_run_pages | E2E | 🔴 failing |
 | REQ-050 | 멀티 SUT | test_site.py::test_req050_multi_sut<br>test_site.py::test_req050_no_sut_hardcode_in_pipeline_code | E2E-inj | 🟢 passed |
 | REQ-072 | 설명 파일 값 사용 | test_unit_config.py::test_req072_descriptor_driven | Unit | 🟢 passed |
 | REQ-051 | 호스팅 정량 비교 | test_baseline.py::test_req051_baseline_quantitative<br>test_hosting.py::test_req051_quantitative | E2E | 🟢 passed |
