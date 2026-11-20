@@ -16,6 +16,7 @@ SITE_LAYOUT: dict[str, str] = {
     "S09/hotspot": "hotspot/",
     "S10/tia": "tia/",
     "S11/sonar": "sonar/",
+    "S12/compare": "compare/",
     # generation마다 하나: 키 `html:<genId>` -> `cucumber/<genId>/`(Cucumber 내장 HTML, REQ-062)
     "S07/html:*": "cucumber/*/",
 }
@@ -27,6 +28,7 @@ REPORTS: dict[str, tuple[str, str]] = {
     "hotspot/": ("hotspot", "hotspots.html"),
     "tia/": ("TIA", "tia.html"),
     "sonar/": ("Sonar 품질 결과", "sonar.html"),
+    "compare/": ("arm 비교 판정", "compare.html"),
     "cucumber/*/": ("Cucumber 리포트 {}", "index.html"),
 }
 
@@ -71,7 +73,14 @@ def _rerender_sonar(target: Path, css_href: str) -> None:
         sonar.render(json.loads((target / "sonar.json").read_text()), target, css_href=css_href, copy_css=False)
 
 
+def _rerender_compare(target: Path, css_href: str) -> None:
+    if (target / "compare.json").exists():
+        from td import compare
+        compare.render_page(target, json.loads((target / "compare.json").read_text()), css_href=css_href, copy_css=False)
+
+
 RERENDER: dict[str, Callable[[Path, str], None]] = {
     "coverage/": _rerender_coverage,
     "sonar/": _rerender_sonar,
+    "compare/": _rerender_compare,
 }

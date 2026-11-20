@@ -1,0 +1,47 @@
+# 규칙 오라클(평가 전용, 설계 §6.12). 생성 입력(번들)에 들어가면 안 된다: td.bundle check_content가 각 description을
+# 정규화해 번들 텍스트에 부분 문자열로 있는지 검사한다(S06이 이 파일을 --oracle로 넘긴다).
+# 사람이 기준 커밋(b6f9393)의 ReservationService.java를 읽고 적었다. line은 그 파일에서 분기 probe가 있는
+# 라인이며(jacoco XML의 cb+mb > 0), 규칙이 "커버됐다"는 것은 arm 귀속 XML에서 그 라인의 cb > 0(분기 하나 이상 실행)이라는 뜻이다.
+# description은 소스의 예외 메시지나 주석을 옮기지 않고 따로 쓴 문장이다(번들에 우연히 들어 있을 가능성을 줄인다).
+commit: b6f939355e8790202ddfc71e3f3507252745ed37
+rules:
+  - id: ORC-01
+    class: org.springframework.samples.petclinic.boarding.ReservationService
+    line: 76
+    description: "A single room accepts at most two confirmed bookings; a third confirmed booking is refused as a conflict"
+  - id: ORC-02
+    class: org.springframework.samples.petclinic.boarding.ReservationService
+    line: 49
+    description: "Boarding length is accepted only from one night up to thirty nights on creation"
+  - id: ORC-03
+    class: org.springframework.samples.petclinic.boarding.ReservationService
+    line: 52
+    description: "Room numbers outside the hundred-to-four-ninety-nine band are rejected on creation"
+  - id: ORC-04
+    class: org.springframework.samples.petclinic.boarding.ReservationService
+    line: 55
+    description: "A booking must carry between one and four animals"
+  - id: ORC-05
+    class: org.springframework.samples.petclinic.boarding.ReservationService
+    line: 70
+    description: "Arrival date must fall strictly after today; today itself and past dates are refused"
+  - id: ORC-06
+    class: org.springframework.samples.petclinic.boarding.ReservationService
+    line: 159
+    description: "Removing a booking is blocked when arrival is less than forty-eight hours away"
+  - id: ORC-07
+    class: org.springframework.samples.petclinic.boarding.ReservationService
+    line: 73
+    description: "Deposit must cover the stay at the nightly rate of the chosen price tier, with a ten percent tolerance"
+  - id: ORC-08
+    class: org.springframework.samples.petclinic.boarding.ReservationService
+    line: 64
+    description: "The top price tier demands a minimum loyalty balance of five hundred points"
+  - id: ORC-09
+    class: org.springframework.samples.petclinic.boarding.ReservationService
+    line: 124
+    description: "A booking whose arrival day has already begun can no longer be edited"
+  - id: ORC-10
+    class: org.springframework.samples.petclinic.boarding.ReservationService
+    line: 128
+    description: "Status changes follow the allowed transition graph; other jumps are refused as conflicts"

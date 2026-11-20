@@ -521,7 +521,7 @@ def build_bundle(arm: str, run_dir: Path, sut_src: Path, sut_file: Path):
     stdout_path = run_dir / "S06" / f"bundle-{arm}.json"
     argv = [sys.executable, "-m", "td.bundle", "build", "--arm", arm, "--run-dir", str(run_dir), "--out", str(out),
             "--sut-src", str(sut_src)]
-    oracle = Path(sut_file).parent / "oracle.json"
+    oracle = Path(sut_file).parent / "oracle.yaml"
     if oracle.is_file():
         argv += ["--oracle", str(oracle)]
     env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
