@@ -506,83 +506,85 @@
 
 | REQ-ID | 요구사항 | 수용 테스트 | Level | Status |
 |---|---|---|---|---|
-| REQ-001 | 전체 히스토리 clone·커밋 고정 | test_prepare.py::test_req001_full_clone_pinned_commit | Int | 🔴 planned |
-| REQ-058 | tools.lock 완전성 | test_prepare.py::test_req058_tools_lock_complete | Int | 🔴 planned |
-| REQ-002 | 단계 상태 기록 | test_run.py::test_req002_all_stages_recorded | E2E | 🔴 planned |
-| REQ-003 | 종료 코드 규칙 | test_run.py::test_req003_exit_codes | E2E-inj | 🔴 planned |
-| REQ-004 | 단계 선택 실행 | test_run.py::test_req004_only_marks_not_requested | Int | 🔴 planned |
-| REQ-059 | 건너뜀 전파 | test_run.py::test_req059_skip_propagation | E2E-inj | 🔴 planned |
-| REQ-005 | 고유 runId | test_unit_runid.py::test_req005_unique_runid | Unit | 🔴 planned |
-| REQ-006 | 트리거 자리 | test_run.py::test_req006_trigger_placeholders | E2E | 🔴 planned |
-| REQ-060 | 실행 시간 메타데이터 | test_run.py::test_req060_time_metadata | E2E/Unit | 🔴 planned |
-| REQ-007 | 컨테이너 per-test 수집 | test_env.py::test_req007_control_endpoint_loopback | Int | 🔴 planned |
-| REQ-008 | TC 수=.exec 수 게이트 | test_blackbox.py::test_req008_exec_count_gate | E2E/E2E-inj | 🔴 planned |
-| REQ-009 | Docker 자원 누수 0 | test_cleanup.py::test_req009_no_resource_leak | E2E/Int | 🔴 planned |
-| REQ-010 | 중단 시 정리 | test_cleanup.py::test_req010_sigint_cleanup | E2E-inj | 🔴 planned |
-| REQ-011 | PID·worktree·데몬 정리 | test_cleanup.py::test_req011_pids_worktrees_daemons | E2E/E2E-inj | 🔴 planned |
-| REQ-012 | 기존 BB IT 실행 | test_blackbox.py::test_req012_blackbox_artifacts | E2E | 🔴 planned |
-| REQ-013 | bbtg 7개 스킬 | test_bbtg.py::test_req013_bbtg_seven_skills | E2E/Int | 🔴 planned |
-| REQ-014 | 엔드포인트 완전성 | test_ontology.py::test_req014_endpoints_match_expected | E2E | 🔴 planned |
-| REQ-015 | 온톨로지 스키마 | test_ontology.py::test_req015_schema_and_kinds | E2E | 🔴 planned |
-| REQ-016 | 온톨로지 HTML 오프라인 | test_ontology.py::test_req016_offline_render | E2E | 🔴 planned |
-| REQ-017 | 온톨로지 HTML 반응형 | test_ontology.py::test_req017_responsive_dark | E2E | 🔴 planned |
-| REQ-018 | OWL 의미 대응 | test_ontology.py::test_req018_owl_correspondence | E2E/Int | 🔴 planned |
-| REQ-019 | 번들 경로 검사 | test_isolation.py::test_req019_bundle_paths | E2E/Int | 🔴 planned |
-| REQ-020 | 번들 내용 검사 | test_isolation.py::test_req020_bundle_content | E2E/Unit | 🔴 planned |
-| REQ-021 | bbtg 허용 스키마 | test_isolation.py::test_req021_bbtg_allow_schema | E2E | 🔴 planned |
-| REQ-022 | LLM 호출 격리 | test_isolation.py::test_req022_llm_isolation_captured | Int | 🔴 planned |
-| REQ-023 | 세 arm·반복 | test_bdd_gen.py::test_req023_arms_and_reps | E2E | 🔴 planned |
-| REQ-024 | 스냅샷 재사용·보존 | test_bdd_gen.py::test_req024_snapshot_reuse_preserve | Int | 🔴 planned |
-| REQ-025 | 수리 루프 제한 | test_bdd_gen.py::test_req025_repair_bounded_captured | Int | 🔴 planned |
-| REQ-061 | 생성 메타데이터 | test_bdd_gen.py::test_req061_gen_metadata_schema | E2E | 🔴 planned |
-| REQ-075 | 입력 해시 안정성 | test_bdd_gen.py::test_req075_input_hash_stable | Int/E2E | 🔴 planned |
-| REQ-026 | 인증 하네스 | test_harness.py::test_req026_auth_harness (→ HarnessAuthIT) | Int | 🔴 planned |
-| REQ-027 | 결정적 testId | test_e2e.py::test_req027_deterministic_testids | Unit/Int | 🔴 planned |
-| REQ-028 | 시나리오 수 보존 | test_e2e.py::test_req028_scenario_conservation | E2E | 🔴 planned |
-| REQ-029 | undefined 비율 | test_e2e.py::test_req029_undefined_ratio | E2E | 🔴 planned |
+| REQ-001 | 전체 히스토리 clone·커밋 고정 | test_prepare.py::test_req001_full_clone_pinned_commit<br>test_prepare.py::test_req001_s00_records_build_outputs | Int | 🟢 passed |
+| REQ-058 | tools.lock 완전성 | test_prepare.py::test_req058_tools_lock_complete<br>test_prepare.py::test_req058_jacococli_matches_pjacoco_embedded_jacoco<br>test_prepare.py::test_req058_tools_layout_and_hashes_match_files<br>test_prepare.py::test_req058_tia_cli_and_bbtg_venv_work | Int | 🟢 passed |
+| REQ-002 | 단계 상태 기록 | test_baseline.py::test_req002_baseline_all_stages_recorded<br>test_run.py::test_req002_all_stages_recorded | E2E | 🟢 passed |
+| REQ-003 | 종료 코드 규칙 | test_run.py::test_req003_exit_codes_single_stage_2<br>test_run.py::test_req003_exit_codes_publish_and_prepare_1<br>test_run.py::test_req003_exit_codes_combined_and_clean<br>test_run.py::test_req003_point_hooks_only_match_their_point<br>test_unit_state.py::test_req003_exit_code_function | E2E-inj | 🟢 passed |
+| REQ-004 | 단계 선택 실행 | test_run.py::test_req004_only_marks_not_requested | Int | 🟢 passed |
+| REQ-059 | 건너뜀 전파 | test_run.py::test_req059_skip_propagation_s05<br>test_run.py::test_req059_skip_propagation_s05_real_stages<br>test_run.py::test_req059_skip_propagation_s02<br>test_run.py::test_req059_skip_propagation_s03_jqa_arm | E2E-inj | 🟢 passed |
+| REQ-005 | 고유 runId | test_unit_runid.py::test_req005_unique_runid<br>test_unit_runid.py::test_req005_collision_retries_then_succeeds<br>test_unit_runid.py::test_req005_fifth_collision_raises | Unit | 🟢 passed |
+| REQ-006 | 트리거 자리 | test_baseline.py::test_req006_baseline_trigger_placeholders<br>test_run.py::test_req006_trigger_placeholders | E2E | 🟢 passed |
+| REQ-060 | 실행 시간 메타데이터 | test_baseline.py::test_req060_baseline_time_metadata<br>test_compare.py::test_req060_clock_shift_warning_shown_on_compare_html<br>test_run.py::test_req060_time_metadata<br>test_run.py::test_req060_time_metadata_midnight_boundaries<br>test_unit_state.py::test_req060_clock_shift_boundaries | E2E/Unit | 🟢 passed |
+| REQ-007 | 컨테이너 per-test 수집 | test_env.py::test_req007_control_endpoint_loopback | Int | 🟢 passed |
+| REQ-008 | TC 수=.exec 수 게이트 | test_baseline.py::test_req008_baseline_exec_count_gate<br>test_blackbox.py::test_req008_exec_count_gate | E2E/E2E-inj | 🟢 passed |
+| REQ-009 | Docker 자원 누수 0 | test_baseline.py::test_req009_baseline_no_docker_leak<br>test_cleanup.py::test_req009_compose_labels_on_every_resource<br>test_cleanup.py::test_req009_unlabeled_compose_fails_gate<br>test_cleanup.py::test_req009_no_resource_leak | E2E/Int | 🟢 passed |
+| REQ-010 | 중단 시 정리 | test_cleanup.py::test_req010_sigint_cleanup<br>test_ontology.py::test_req010_s03_sigint_cleanup | E2E-inj | 🟢 passed |
+| REQ-011 | PID·worktree·데몬 정리 | test_baseline.py::test_req011_baseline_pids_worktrees_daemons<br>test_cleanup.py::test_req011_pids_worktrees_daemons<br>test_cleanup.py::test_req011_s10_interrupt_removes_worktree | E2E/E2E-inj | 🟢 passed |
+| REQ-012 | 기존 BB IT 실행 | test_baseline.py::test_req012_baseline_blackbox_artifacts<br>test_blackbox.py::test_req012_blackbox_artifacts<br>test_blackbox.py::test_req012_evaluate_stderr_does_not_corrupt_summary | E2E | 🟢 passed |
+| REQ-013 | bbtg 7개 스킬 | test_baseline.py::test_req013_baseline_bbtg_manifest<br>test_bbtg.py::test_req013_bbtg_seven_skills<br>test_bbtg.py::test_req013_failed_skill_degrades_stage<br>test_bbtg.py::test_req013_all_skills_failed_is_failed<br>test_bbtg.py::test_req013_hung_skill_times_out_and_is_killed<br>test_bbtg.py::test_req013_failure_reasons_do_not_carry_stderr<br>test_bbtg.py::test_req013_children_get_minimal_environment<br>test_bbtg.py::test_req013_injected_failure_hook<br>test_bbtg.py::test_req013_in_real_pipeline_run | E2E/Int | 🟢 passed |
+| REQ-014 | 엔드포인트 완전성 | test_baseline.py::test_req014_baseline_endpoints_match_expected<br>test_ontology.py::test_req014_endpoints_match_expected | E2E | 🟢 passed |
+| REQ-015 | 온톨로지 스키마 | test_baseline.py::test_req015_baseline_schema_and_kinds<br>test_ontology.py::test_req015_schema_and_kinds<br>test_ontology.py::test_req015_server_listens_on_loopback_only_and_pids_scoped<br>test_ontology.py::test_req015_schema_rejects_bad_documents<br>test_ontology.py::test_req015_tampered_plugin_jar_fails_stage_before_scan<br>test_ontology.py::test_req015_missing_classes_dir_fails_stage | E2E | 🟢 passed |
+| REQ-016 | 온톨로지 HTML 오프라인 | test_baseline.py::test_req016_baseline_offline_render<br>test_ontology.py::test_req016_offline_render<br>test_ontology.py::test_req016_html_is_self_contained<br>test_ontology.py::test_req016_hostile_text_is_escaped<br>test_ontology.py::test_req016_filter_search_panel_and_endpoint_subgraph<br>test_ontology.py::test_req016_real_s03_ontology_renders_offline | E2E | 🟢 passed |
+| REQ-017 | 온톨로지 HTML 반응형 | test_ontology.py::test_req017_responsive_dark | E2E | 🟢 passed |
+| REQ-018 | OWL 의미 대응 | test_baseline.py::test_req018_baseline_owl_correspondence<br>test_ontology.py::test_req018_owl_correspondence<br>test_ontology.py::test_req018_skeleton_is_deterministic_and_complete<br>test_ontology.py::test_req018_real_owl_snapshot_and_render | E2E/Int | 🟢 passed |
+| REQ-019 | 번들 경로 검사 | test_baseline.py::test_req019_baseline_bundle_paths<br>test_isolation.py::test_req019_bundle_paths<br>test_isolation.py::test_req019_extra_origin_rules | E2E/Int | 🟢 passed |
+| REQ-020 | 번들 내용 검사 | test_baseline.py::test_req020_baseline_bundle_content<br>test_isolation.py::test_req020_bundle_content<br>test_isolation.py::test_req020_bundle_content_four_lines_pass<br>test_isolation.py::test_req020_oracle_descriptions_substring<br>test_isolation.py::test_req020_normalization_procedure | E2E/Unit | 🟢 passed |
+| REQ-021 | bbtg 허용 스키마 | test_baseline.py::test_req021_baseline_bbtg_allow_schema<br>test_isolation.py::test_req021_bbtg_allow_schema | E2E | 🟢 passed |
+| REQ-022 | LLM 호출 격리 | test_baseline.py::test_req022_baseline_llm_calls_isolated<br>test_bdd_gen.py::test_req022_s06_stage_level_capture<br>test_isolation.py::test_req022_llm_isolation_captured<br>test_isolation.py::test_req022_llm_wrapper_failures<br>test_isolation.py::test_req022_llm_refuses_unverified_bundles<br>test_isolation.py::test_req022_inline_refuses_symlinks<br>test_isolation.py::test_req022_canary_real_claude_no_tool_use<br>test_isolation.py::test_req022_llm_hang_is_killed_by_timeout<br>test_ontology.py::test_req022_s05_stage_level_capture | Int | 🟢 passed |
+| REQ-023 | 세 arm·반복 | test_baseline.py::test_req023_arms_and_reps | E2E | 🟢 passed |
+| REQ-024 | 스냅샷 재사용·보존 | test_bdd_gen.py::test_req024_snapshot_reuse_preserve<br>test_bdd_gen.py::test_req024_concurrent_same_input_writes_once<br>test_ontology.py::test_req024_owl_snapshot_reuse_and_tamper<br>test_ontology.py::test_req024_owl_concurrent_same_input_writes_once | Int | 🟢 passed |
+| REQ-025 | 수리 루프 제한 | test_bdd_gen.py::test_req025_repair_bounded_captured<br>test_bdd_gen.py::test_req025_undefined_steps_feed_repair | Int | 🟢 passed |
+| REQ-061 | 생성 메타데이터 | test_baseline.py::test_req061_baseline_gen_metadata_schema<br>test_bdd_gen.py::test_req061_gen_metadata_schema<br>test_ontology.py::test_req061_owl_gen_metadata_schema | E2E | 🟢 passed |
+| REQ-075 | 입력 해시 안정성 | test_baseline.py::test_req075_baseline_second_run_reuses_snapshots<br>test_bdd_gen.py::test_req075_input_hash_stable<br>test_bdd_gen.py::test_req075_bundle_hash_stable_across_checkouts | Int/E2E | 🟢 passed |
+| REQ-026 | 인증 하네스 | test_harness.py::test_req026_auth_harness | Int | 🟢 passed |
+| REQ-027 | 결정적 testId | test_e2e.py::test_req027_deterministic_testids<br>test_e2e.py::test_req027_generation_suffix_and_validation<br>test_e2e.py::test_req027_slug_collision_suffix_per_feature<br>test_e2e.py::test_req027_duplicate_id_without_registry_is_error<br>test_e2e.py::test_req027_korean_names_use_path_hash<br>test_e2e.py::test_req027_nonascii_slug_is_checkout_independent<br>test_e2e.py::test_req027_python_matches_shared_table<br>test_e2e.py::test_req027_python_rejects_shared_table_errors<br>test_harness.py::test_req027_java_testids_match_python_table | Unit/Int | 🟢 passed |
+| REQ-028 | 시나리오 수 보존 | test_baseline.py::test_req028_baseline_scenario_conservation<br>test_e2e.py::test_req028_compile_check_excludes_only_the_broken_class<br>test_e2e.py::test_req028_testids_json_matches_python_ids<br>test_e2e.py::test_req028_reconcile_appends_uncompilable_and_undefined<br>test_e2e.py::test_req028_reconcile_rejects_missing_duplicate_and_unknown<br>test_e2e.py::test_req028_verify_exec_counts_and_missing<br>test_e2e.py::test_req028_scenario_conservation<br>test_e2e.py::test_req028_resources_cleaned_up<br>test_e2e.py::test_req028_password_not_on_command_lines<br>test_e2e.py::test_req028_finalize_fails_listing_testids_when_exec_is_missing<br>test_e2e.py::test_req028_sut_start_failure_fails_generation_and_cleans_up<br>test_e2e.py::test_req028_stage_script_records_generations_and_degrades_on_failed_one<br>test_e2e.py::test_req028_glue_mapping_ascii_and_non_ascii_stems<br>test_e2e.py::test_req028_stray_glue_class_is_a_layout_error<br>test_e2e.py::test_req028_broken_support_class_makes_every_scenario_uncompilable<br>test_e2e.py::test_req028_non_ascii_feature_with_broken_steps_class_is_uncompilable_not_undefined<br>test_e2e.py::test_req028_reconcile_rejects_malformed_harness_lines | E2E | 🟢 passed |
+| REQ-029 | undefined 비율 | test_baseline.py::test_req029_baseline_undefined_ratio<br>test_e2e.py::test_req029_dry_run_finds_undefined_steps_without_sut<br>test_e2e.py::test_req029_undefined_ratio | E2E | 🟢 passed |
 | REQ-030 | JUnit 대체 스타일 | test_e2e.py::test_req030_junit_style | Int | 🔵 deferred (Could) |
-| REQ-062 | Cucumber 리포트 게시 | test_e2e.py::test_req062_cucumber_reports | E2E | 🔴 planned |
-| REQ-031 | 귀속·집계 커버리지 | test_coverage.py::test_req031_suite_coverage | E2E | 🔴 planned |
-| REQ-063 | 병합 집계 XML | test_coverage.py::test_req063_merged_aggregate | E2E | 🔴 planned |
-| REQ-032 | 커버리지 무결성 | test_coverage.py::test_req032_integrity | E2E | 🔴 planned |
-| REQ-033 | TC별 커버리지 화면 | test_coverage.py::test_req033_per_tc_view | E2E | 🔴 planned |
-| REQ-034 | 커버리지 반응형 | test_coverage.py::test_req034_responsive | E2E | 🔴 planned |
-| REQ-035 | hotspot 리포트 | test_reports.py::test_req035_hotspot | E2E | 🔴 planned |
-| REQ-036 | TIA base 일치 | test_reports.py::test_req036_tia_base | E2E | 🔴 planned |
-| REQ-037 | Sonar export | test_reports.py::test_req037_sonar_export | E2E/Unit | 🔴 planned |
-| REQ-038 | 토큰 정리(성공) | test_sonar.py::test_req038_own_token_removed | E2E | 🔴 planned |
-| REQ-064 | 토큰 정리(실패) | test_sonar.py::test_req064_token_cleanup_on_failure | E2E-inj | 🔴 planned |
-| REQ-065 | 사전 청소 범위 | test_sonar.py::test_req065_preclean_expired_only | E2E-inj | 🔴 planned |
-| REQ-066 | 토큰 비노출 | test_sonar.py::test_req066_token_not_leaked | E2E-inj | 🔴 planned |
-| REQ-039 | Sonar 장애 축소 게시 | test_sonar.py::test_req039_degraded_publish | E2E-inj | 🔴 planned |
-| REQ-040 | 비교 데이터 | test_compare.py::test_req040_compare_json | E2E | 🔴 planned |
-| REQ-067 | 비교 화면 | test_compare.py::test_req067_compare_html | E2E | 🔴 planned |
-| REQ-041 | 오라클 격리·실체성 | test_compare.py::test_req041_oracle | E2E | 🔴 planned |
-| REQ-042 | 판정 규칙 | test_unit_verdict.py::test_req042_verdict_rules | Unit | 🔴 planned |
-| REQ-043 | 게시 원자성 | test_publish.py::test_req043_atomic_publish | E2E-inj | 🔴 planned |
-| REQ-044 | 이력 누적 | test_publish.py::test_req044_history_accumulates | E2E | 🔴 planned |
-| REQ-045 | 인덱스 멱등 | test_unit_index.py::test_req045_idempotent | Unit | 🔴 planned |
-| REQ-046 | 게시 잠금 | test_publish.py::test_req046_lock | E2E-inj | 🔴 planned |
-| REQ-068 | 캐시 헤더 | test_hosting.py::test_req068_cache_headers | E2E | 🔴 planned |
-| REQ-047 | 정적 호스트 | test_hosting.py::test_req047_static_host_crawl | E2E | 🔴 planned |
-| REQ-069 | S3 직접 접근 차단 | test_hosting.py::test_req069_s3_direct_forbidden | E2E | 🔴 planned |
-| REQ-048 | Lightsail 호스트 | test_hosting.py::test_req048_lightsail_crawl | E2E | 🔴 planned |
-| REQ-070 | Lightsail 따라잡기 | test_publish.py::test_req070_lightsail_catch_up | E2E-inj | 🔴 planned |
-| REQ-071 | 게시 상태 기준 파일 | test_publish.py::test_req071_publish_status_files | E2E | 🔴 planned |
-| REQ-049 | 홈·SUT 페이지 | test_site.py::test_req049_home_sut_run_pages | E2E | 🔴 planned |
-| REQ-050 | 멀티 SUT | test_site.py::test_req050_multi_sut, test_site.py::test_req050_no_sut_hardcode_in_pipeline_code | E2E-inj | 🔴 planned |
-| REQ-072 | 설명 파일 값 사용 | test_unit_config.py::test_req072_descriptor_driven | Unit | 🔴 planned |
-| REQ-051 | 호스팅 정량 비교 | test_hosting.py::test_req051_quantitative | E2E | 🔴 planned |
-| REQ-073 | 호스팅 정성 비교 | test_hosting.py::test_req073_qualitative | E2E | 🔴 planned |
-| REQ-052 | Sonar 서버 건강 | test_infra.py::test_req052_sonar_healthy | E2E | 🔴 planned |
-| REQ-053 | Route53 보존 | test_infra.py::test_req053_route53_preserved | E2E/Unit | 🔴 planned |
-| REQ-054 | 식별자 비공개 | test_infra.py::test_req054_identifiers_private | Int | 🔴 planned |
-| REQ-055 | arc 레포 동기화 | test_infra.py::test_req055_arc_repo_synced | Int | 🔴 planned |
-| REQ-074 | Lightsail 안전 적용 | test_infra.py::test_req074_caddy_apply_rollback | Int | 🔴 planned |
+| REQ-062 | Cucumber 리포트 게시 | test_baseline.py::test_req062_baseline_cucumber_reports<br>test_e2e.py::test_req062_cucumber_reports | E2E | 🟢 passed |
+| REQ-031 | 귀속·집계 커버리지 | test_baseline.py::test_req031_baseline_suite_coverage<br>test_coverage.py::test_req031_suite_coverage<br>test_coverage.py::test_req031_tc_results_match_junit | E2E | 🟢 passed |
+| REQ-063 | 병합 집계 XML | test_baseline.py::test_req063_baseline_merged_aggregate<br>test_coverage.py::test_req063_merged_aggregate<br>test_coverage.py::test_req063_s11_scans_the_merged_aggregate | E2E | 🟢 passed |
+| REQ-032 | 커버리지 무결성 | test_baseline.py::test_req032_baseline_integrity<br>test_coverage.py::test_req032_integrity | E2E | 🟢 passed |
+| REQ-033 | TC별 커버리지 화면 | test_coverage.py::test_req033_per_tc_view | E2E | 🟢 passed |
+| REQ-034 | 커버리지 반응형 | test_coverage.py::test_req034_responsive | E2E | 🟢 passed |
+| REQ-035 | hotspot 리포트 | test_baseline.py::test_req035_baseline_hotspot<br>test_reports.py::test_req035_hotspot<br>test_reports.py::test_req035_hotspot_degraded_without_merged_coverage | E2E | 🟢 passed |
+| REQ-036 | TIA base 일치 | test_baseline.py::test_req036_baseline_tia_base<br>test_reports.py::test_req036_tia_base | E2E | 🟢 passed |
+| REQ-037 | Sonar export | test_baseline.py::test_req037_baseline_sonar_export<br>test_reports.py::test_req037_sonar_export<br>test_sonar.py::test_req037_stage_ce_failed_records_ceTaskId<br>test_unit_sonar.py::test_req037_export_multi_page_invariants<br>test_unit_sonar.py::test_req037_export_caps_at_10000_and_marks_truncated<br>test_unit_sonar.py::test_req037_export_empty_results<br>test_unit_sonar.py::test_req037_export_matches_schema_and_measure_keys<br>test_unit_sonar.py::test_req037_export_links_point_at_sonar_pages<br>test_unit_sonar.py::test_req037_wait_ce_failed_or_canceled<br>test_unit_sonar.py::test_req037_wait_ce_timeout_uses_cap | E2E/Unit | 🟢 passed |
+| REQ-038 | 토큰 정리(성공) | test_baseline.py::test_req038_baseline_own_token_removed<br>test_sonar.py::test_req038_own_token_removed | E2E | 🟢 passed |
+| REQ-064 | 토큰 정리(실패) | test_sonar.py::test_req064_token_cleanup_on_failure<br>test_sonar.py::test_req064_cleanup_ssh_failure_leaves_token_expiring | E2E-inj | 🟢 passed |
+| REQ-065 | 사전 청소 범위 | test_sonar.py::test_req065_preclean_expired_only | E2E-inj | 🟢 passed |
+| REQ-066 | 토큰 비노출 | test_sonar.py::test_req066_token_not_leaked | E2E-inj | 🟢 passed |
+| REQ-039 | Sonar 장애 축소 게시 | test_sonar.py::test_req039_degraded_publish | E2E-inj | 🟢 passed |
+| REQ-040 | 비교 데이터 | test_baseline.py::test_req040_baseline_compare_json<br>test_compare.py::test_req040_compare_json<br>test_compare.py::test_req040_no_blackbox_leaves_deltas_empty<br>test_compare.py::test_req040_missing_inputs_fail_clearly<br>test_compare.py::test_req040_all_ontology_arms_skipped_is_undecidable<br>test_compare.py::test_req040_s12_stage_site_and_run_json<br>test_compare.py::test_req040_s12_fails_without_coverage_and_records_reason<br>test_compare.py::test_req040_compare_json_on_pilot_run<br>test_compare.py::test_req040_null_blackbox_kpis_are_schema_valid<br>test_compare.py::test_req040_endpoint_warnings_in_json_and_page | E2E | 🟢 passed |
+| REQ-067 | 비교 화면 | test_baseline.py::test_req067_baseline_compare_html<br>test_compare.py::test_req067_compare_html<br>test_compare.py::test_req067_focus_labels_and_theme_tokens | E2E | 🟢 passed |
+| REQ-041 | 오라클 격리·실체성 | test_baseline.py::test_req041_baseline_oracle_absent_from_bundles<br>test_compare.py::test_req041_oracle_rules_have_substance<br>test_compare.py::test_req041_oracle_lines_are_branch_probes_in_jacoco_xml<br>test_compare.py::test_req041_oracle_descriptions_absent_from_preserved_bundles<br>test_compare.py::test_req041_oracle_rejected_in_bundle_cli<br>test_compare.py::test_req041_fake_claude_stdin_has_no_oracle_text<br>test_compare.py::test_req041_s06_blocks_oracle_text_before_any_claude_call<br>test_compare.py::test_req041_build_bundle_passes_oracle_yaml_of_sut_dir<br>test_compare.py::test_req041_empty_oracle_file_is_an_error | E2E | 🟢 passed |
+| REQ-042 | 판정 규칙 | test_unit_verdict.py::test_req042_verdict_rules<br>test_unit_verdict.py::test_req042_threshold_boundaries<br>test_unit_verdict.py::test_req042_mean_not_min_decides_generation<br>test_unit_verdict.py::test_req042_effect_needs_disjoint_and_higher_on_one_metric<br>test_unit_verdict.py::test_req042_empty_measured_arm_counts_as_skipped<br>test_unit_verdict.py::test_req042_missing_metric_means_undecidable_not_failed | Unit | 🟢 passed |
+| REQ-043 | 게시 원자성 | test_publish.py::test_req043_atomic_publish | E2E-inj | 🟢 passed |
+| REQ-044 | 이력 누적 | test_baseline.py::test_req044_baseline_history_accumulates<br>test_publish.py::test_req044_history_accumulates<br>test_publish.py::test_req044_history_third_run_keeps_first_etags | E2E | 🟢 passed |
+| REQ-045 | 인덱스 멱등 | test_unit_index.py::test_req045_idempotent | Unit | 🟢 passed |
+| REQ-046 | 게시 잠금 | test_publish.py::test_req046_lock | E2E-inj | 🟢 passed |
+| REQ-068 | 캐시 헤더 | test_baseline.py::test_req068_baseline_cache_headers<br>test_hosting.py::test_req068_cache_headers | E2E | 🟢 passed |
+| REQ-047 | 정적 호스트 | test_baseline.py::test_req047_baseline_static_host_crawl<br>test_hosting.py::test_req047_static_host_crawl | E2E | 🟢 passed |
+| REQ-069 | S3 직접 접근 차단 | test_hosting.py::test_req069_s3_direct_forbidden | E2E | 🟢 passed |
+| REQ-048 | Lightsail 호스트 | test_baseline.py::test_req048_baseline_lightsail_crawl<br>test_hosting.py::test_req048_lightsail_crawl | E2E | 🟢 passed |
+| REQ-070 | Lightsail 따라잡기 | test_publish.py::test_req070_lightsail_catch_up | E2E-inj | 🟢 passed |
+| REQ-071 | 게시 상태 기준 파일 | test_baseline.py::test_req071_baseline_publish_status_files<br>test_publish.py::test_req071_publish_status_files | E2E | 🟢 passed |
+| REQ-049 | 홈·SUT 페이지 | test_baseline.py::test_req049_baseline_home_sut_run_pages<br>test_site.py::test_req049_home_sut_run_pages | E2E | 🔴 failing |
+| REQ-050 | 멀티 SUT | test_site.py::test_req050_multi_sut<br>test_site.py::test_req050_no_sut_hardcode_in_pipeline_code | E2E-inj | 🟢 passed |
+| REQ-072 | 설명 파일 값 사용 | test_unit_config.py::test_req072_descriptor_driven | Unit | 🟢 passed |
+| REQ-051 | 호스팅 정량 비교 | test_baseline.py::test_req051_baseline_quantitative<br>test_hosting.py::test_req051_quantitative | E2E | 🟢 passed |
+| REQ-073 | 호스팅 정성 비교 | test_baseline.py::test_req073_baseline_qualitative<br>test_hosting.py::test_req073_qualitative | E2E | 🟢 passed |
+| REQ-052 | Sonar 서버 건강 | test_baseline.py::test_req052_baseline_sonar_healthy<br>test_infra.py::test_req052_sonar_healthy | E2E | 🟢 passed |
+| REQ-053 | Route53 보존 | test_hosting.py::test_req053_route53_preserved<br>test_hosting.py::test_req053_conflict_aborts_with_stub<br>test_hosting.py::test_req053_no_conflict_when_name_free | E2E/Unit | 🟢 passed |
+| REQ-054 | 식별자 비공개 | test_infra.py::test_req054_local_env_is_gitignored<br>test_infra.py::test_req054_all_keys_classified<br>test_infra.py::test_req054_identifiers_private<br>test_infra.py::test_req054_secrets_private | Int | 🟢 passed |
+| REQ-055 | arc 레포 동기화 | test_infra.py::test_req055_arc_repo_synced | Int | 🟢 passed |
+| REQ-074 | Lightsail 안전 적용 | test_infra.py::test_req074_caddy_apply_success<br>test_infra.py::test_req074_caddy_backups_pruned_to_five<br>test_infra.py::test_req074_caddy_apply_invalid_block_restores_bytes<br>test_infra.py::test_req074_caddy_apply_failure_after_mutation_rolls_back<br>test_infra.py::test_req074_caddy_apply_sigterm_after_mutation_restores<br>test_infra.py::test_req074_apply_rolls_back_created_dns_record<br>test_infra.py::test_req074_apply_sigterm_dns_rollback_only_after_server_restore<br>test_infra.py::test_req074_dash_site_live | Int | 🟢 passed |
 | REQ-056 | CI 자동 실행 | – | – | 🔵 out-of-scope (Won't) |
 | REQ-057 | 접근 제어 | – | – | 🔵 out-of-scope (Won't) |
 
-Coverage: 0/72 green (0%) — target 100% (대상: Must 65 + Should 7). 제외: Could 1 deferred(🔵 REQ-030), Won't 2(🔵 REQ-056, REQ-057).
+Coverage: 71/72 green (99%) — target 100% (대상: Must 65 + Should 7). 제외: Could 1 deferred(🔵 REQ-030), Won't 2(🔵 REQ-056, REQ-057). 판정 근거: 같은 REQ 번호의 test_req<NNN>_* 테스트가 전체 수용 스위트 JUnit XML에서 모두 passed.
+
+미달 1건(2026-11-20, Task 25): **REQ-049**. 운영 홈의 '테스트 통과율' KPI가 "—"다. 원인은 어느 단계도 `run.json.kpis.tests`를 쓰지 않았던 것이다(기존 Unit 테스트는 fixture에 값을 직접 넣어 통과했다). S08이 `kpis.tests`(블랙박스 IT passed 비율)를 쓰도록 고쳤고, 주입 환경 게시(`_test/t25kpi01/`)에서 두 SUT 모두 값이 보인다. 운영의 기준 run과 두 번째 run은 수정 전에 게시돼 불변이므로, 운영 홈에서 green이 되려면 운영 게시가 1회 더 필요하다(승인 범위 밖이라 보류).
 
 ## 자기검토 결과
 
