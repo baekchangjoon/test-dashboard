@@ -77,12 +77,12 @@ JQA_COVERED = BASE_COVERED | {f"org.springframework.samples.petclinic.boarding.R
     "org.springframework.samples.petclinic.owner.PetRestController#createPet"}
 
 
-def make_compare_run(tmp_path: Path, *, with_blackbox: bool = True, started="2026-11-19T01:00:00Z", clock_shift=None,
+def make_compare_run(tmp_path: Path, *, with_blackbox: bool = True, started="2026-11-19T01:00:00Z", finished=None, clock_shift=None,
                      owl_skipped: bool = True) -> Path:
     run_dir = tmp_path / "20261119-010000Z-b6f9393-manual-aaaaaaaa"
     run_dir.mkdir()
     state.write_run_meta(run_dir, runId=run_dir.name, sut="petclinic", commit=COMMIT, trigger="manual", startedAt=started,
-                         options={"arms": ["base", "jqa", "owl"], "reps": 2, "style": "cucumber"})
+                         **({"finishedAt": finished} if finished else {}), options={"arms": ["base", "jqa", "owl"], "reps": 2, "style": "cucumber"})
     if clock_shift is not None:
         state.set_run_field(run_dir, "clockShift", clock_shift)
     # S03: view=false 17개(+ 화면 2개)
@@ -135,8 +135,6 @@ def make_compare_run(tmp_path: Path, *, with_blackbox: bool = True, started="202
 
 
 def collect(run_dir, **kwargs) -> dict:
-    from datetime import datetime, timezone
-    kwargs.setdefault("now", datetime(2026, 11, 19, 2, 0, tzinfo=timezone.utc))  # run 시작과 같은 SUT 날짜(Clock 주입)
     return compare.collect(run_dir, sut_file=SUT_FILE, **kwargs)
 
 
@@ -249,26 +247,34 @@ def test_req067_compare_html(tmp_path):
 
 
 def test_req060_clock_shift_warning_shown_on_compare_html(tmp_path):
-    """run.json clockShift=true이거나 Clock 주입으로 비교 시점이 SUT 날짜를 넘기면 경고가 보인다(경계 포함)."""
-    from datetime import datetime, timezone
-    cases = [  # (startedAt, now, 경고 여부): Asia/Seoul 자정 = 15:00:00Z
-        ("2026-11-19T14:59:00Z", datetime(2026, 11, 19, 14, 59, 59, tzinfo=timezone.utc), False),  # 자정 직전
-        ("2026-11-19T14:59:00Z", datetime(2026, 11, 19, 15, 0, 0, tzinfo=timezone.utc), True),     # 정확히 자정
-        ("2026-11-19T14:59:00Z", datetime(2026, 11, 19, 15, 0, 1, tzinfo=timezone.utc), True),     # 자정 직후
+    """clockShift는 run.json(clockShift 또는 startedAt/finishedAt)만으로 정해진다. 경계: 자정 직전/정각/직후."""
+    cases = [  # (finishedAt, 경고 여부): Asia/Seoul 자정 = 15:00:00Z, 시작은 23:59 KST
+        ("2026-11-19T14:59:59Z", False),  # 자정 직전
+        ("2026-11-19T15:00:00Z", True),   # 정확히 자정
+        ("2026-11-19T15:00:01Z", True),   # 자정 직후
     ]
-    for index, (started, now, expected) in enumerate(cases):
-        run_dir = make_compare_run(tmp_path / f"c{index}" if (tmp_path / f"c{index}").mkdir() is None else tmp_path, started=started)
-        document = collect(run_dir, now=now)
-        assert document["clock"]["clockShift"] is expected, (started, now)
+    for index, (finished, expected) in enumerate(cases):
+        base = tmp_path / f"c{index}"
+        base.mkdir()
+        run_dir = make_compare_run(base, started="2026-11-19T14:59:00Z", finished=finished)
+        document = collect(run_dir)
+        assert document["clock"]["clockShift"] is expected, finished
         out = tmp_path / f"html{index}"
         out.mkdir()
         html = compare.render_page(out, document).read_text()
         assert ('id="clock-shift"' in html) is expected
         if expected:
             assert "Asia/Seoul" in html and "시계 경계 경고" in html
-    # run.json에 이미 clockShift=true가 기록돼 있으면(종료 시각 기준) 비교 시점과 무관하게 경고한다
-    flagged = make_compare_run(tmp_path / "flag" if (tmp_path / "flag").mkdir() is None else tmp_path, clock_shift=True)
-    assert collect(flagged, now=datetime(2026, 11, 19, 2, 0, tzinfo=timezone.utc))["clock"]["clockShift"] is True
+    # run.json에 clockShift=true가 기록돼 있으면 경고한다
+    flag_base = tmp_path / "flag"
+    flag_base.mkdir()
+    assert collect(make_compare_run(flag_base, clock_shift=True))["clock"]["clockShift"] is True
+    # 종료 시각이 아직 없으면(S12는 S13 앞) 현재 시각과 비교하지 않는다: 아주 오래전 시작이어도 false이고, 다시 렌더링해도 같다
+    open_base = tmp_path / "open"
+    open_base.mkdir()
+    old = make_compare_run(open_base, started="2020-01-01T00:00:00Z")
+    first = collect(old)
+    assert first["clock"]["clockShift"] is False and collect(old)["clock"] == first["clock"]
 
 
 # --- 단계 스크립트와 사이트 --------------------------------------------------------------------------
@@ -431,3 +437,104 @@ def test_req040_compare_json_on_pilot_run():
         assert metrics["scenarios"]["mean"] > 0 and metrics["focusLine"]["mean"] is not None
     assert document["arms"]["owl"]["status"] == "skipped" and document["arms"]["owl"]["reason"]
     assert document["verdict"]["label"] == "탐색적 관찰"
+
+
+# --- 리뷰 보완: 연결, 경고, 라벨 ---------------------------------------------------------------------
+def test_req041_s06_blocks_oracle_text_before_any_claude_call(fake_claude, tmp_path):
+    """E2E 연결: 주입 파일에 oracle description이 있으면 S06 arm이 번들 조립에서 실패하고 claude는 한 번도 호출되지 않는다."""
+    from test_bdd_gen import S06Env, VALID
+    description = yaml.safe_load(ORACLE_FILE.read_text())["rules"][1]["description"]
+    leak = tmp_path / "leak.txt"
+    leak.write_text(f"unrelated line one\n{description}\nunrelated line two\n")  # 줄 사이에 끼워 정규화로 일치시킨다
+    env = S06Env(tmp_path)
+    fake_claude.respond(VALID)
+    run_dir = env.new_run(arms=("base",))
+    done = env.run(run_dir, TD_BUNDLE_EXTRA=str(leak))
+    stage = env.stage(run_dir)
+    assert stage["status"] == "failed", (stage, done.stderr)
+    assert stage["arms"]["base"]["status"] == "failed" and "oracle" in stage["arms"]["base"]["reason"]
+    assert fake_claude.calls == []
+
+
+def test_req041_build_bundle_passes_oracle_yaml_of_sut_dir(tmp_path, monkeypatch):
+    """단위: bddgen.build_bundle이 sut.yaml 옆 oracle.yaml을 --oracle로 넘기고, 없으면 넘기지 않는다."""
+    from td import bddgen, proc
+    seen = []
+
+    def fake_run(timeout, argv, **kwargs):
+        seen.append(list(argv))
+        return 1  # 번들 검사 실패로 끝내 BddGenError를 받는다
+
+    monkeypatch.setattr(proc, "run_with_timeout", fake_run)
+    run_dir = tmp_path / "run"
+    (run_dir / "S06").mkdir(parents=True)
+    sut_dir = tmp_path / "sut"
+    sut_dir.mkdir()
+    (sut_dir / "sut.yaml").write_text("name: x\n")
+    for with_oracle in (False, True):
+        if with_oracle:
+            (sut_dir / "oracle.yaml").write_text("rules: []\n")
+        with pytest.raises(bddgen.BddGenError):
+            bddgen.build_bundle("base", run_dir, tmp_path / "src", sut_dir / "sut.yaml")
+    assert "--oracle" not in seen[0]
+    assert seen[1][seen[1].index("--oracle") + 1] == str(sut_dir / "oracle.yaml")
+
+
+def test_req041_empty_oracle_file_is_an_error(tmp_path):
+    empty = tmp_path / "oracle.yaml"
+    empty.write_text("rules: []\n")
+    with pytest.raises(bundle.BundleError, match="description"):
+        bundle.load_oracle_descriptions(empty)
+    empty.write_text("[]\n")
+    empty.rename(tmp_path / "o.json")
+    with pytest.raises(bundle.BundleError):
+        bundle.load_oracle_descriptions(tmp_path / "o.json")
+
+
+def test_req040_null_blackbox_kpis_are_schema_valid(tmp_path):
+    run_dir = make_compare_run(tmp_path)
+    coverage = json.loads((run_dir / "S08" / "coverage.json").read_text())
+    coverage["suites"]["blackbox"]["kpis"] = {"line": None}
+    coverage["suites"]["e2e-base-aaaaaaaa-r1"]["kpis"] = {"line": 0.2, "branch": None}
+    (run_dir / "S08" / "coverage.json").write_text(json.dumps(coverage))
+    document = collect(run_dir)
+    jsonschema.validate(document, json.loads(SCHEMA.read_text()))
+    assert document["blackbox"] == {"line": None, "branch": None}
+    base = document["arms"]["base"]["metrics"]
+    assert base["lineDelta"]["n"] == 0 and base["branchDelta"]["n"] == 0
+    out = tmp_path / "out"
+    out.mkdir()
+    compare.render_page(out, document)
+
+
+def test_req040_endpoint_warnings_in_json_and_page(tmp_path):
+    run_dir = make_compare_run(tmp_path)
+    ontology = json.loads((run_dir / "S03" / "ontology-jqa.json").read_text())
+    ontology["nodes"].append({"id": "endpoint:GET /api/ghost", "kind": "Endpoint", "label": "g",
+                              "props": {"method": "GET", "path": "/api/ghost", "handler": "x.Ghost#gone", "view": False}})
+    (run_dir / "S03" / "ontology-jqa.json").write_text(json.dumps(ontology))
+    document = collect(run_dir)
+    jsonschema.validate(document, json.loads(SCHEMA.read_text()))
+    assert document["endpoints"]["denominator"] == 18
+    joined = " ".join(document["warnings"])
+    assert "18" in joined and "17" in joined and "x.Ghost#gone" in joined
+    out = tmp_path / "out"
+    out.mkdir()
+    html = compare.render_page(out, document).read_text()
+    assert 'id="compare-warnings"' in html and "x.Ghost#gone" in html
+    clean_base = tmp_path / "clean"
+    clean_base.mkdir()
+    clean = collect(make_compare_run(clean_base))
+    assert clean["warnings"] == []
+
+
+def test_req067_focus_labels_and_theme_tokens(tmp_path):
+    out = tmp_path / "out"
+    out.mkdir()
+    html = compare.render_page(out, collect(make_compare_run(tmp_path))).read_text()
+    assert "Reservation 범위" not in html
+    assert "Focus 범위 (org.springframework.samples.petclinic.boarding.*) 라인" in html
+    # SVG 색은 사이트 테마 토큰이다(하드코딩 색 없음)
+    assert "var(--arm-jqa)" in html and "#0969da" not in html
+    css = (REPO_ROOT / "site-gen" / "td" / "site" / "static" / "site.css").read_text()
+    assert css.count("--arm-jqa") >= 3  # 라이트, 어두운 모드(OS), data-theme=dark

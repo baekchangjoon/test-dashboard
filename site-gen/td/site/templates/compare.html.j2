@@ -5,7 +5,12 @@
 <p class="muted">SUT {{ doc.sut }} · 커밋 {{ doc.commit }} · run {{ doc.runId }} · arm당 반복 횟수 <b id="reps">{{ doc.reps if doc.reps is not none else "—" }}</b>회</p>
 <p class="note" id="exploratory"><b>{{ doc.label }}</b>: 표본이 작아 아래 수치와 판정은 가설을 점검하는 참고 자료이며 통계적 결론이 아니다.</p>
 {% if doc.clock.clockShift %}
-<p class="note" id="clock-shift" role="alert"><b>시계 경계 경고</b>: 이 run은 시작({{ doc.clock.startedAt }})과 종료({{ doc.clock.finishedAt or "비교 시점" }})가 {{ doc.clock.tz }} 기준 서로 다른 날짜에 걸쳤다. 날짜에 의존하는 규칙(체크인 미래 여부, 48시간 취소 제한)의 결과가 실행 중 바뀌었을 수 있다.</p>
+<p class="note" id="clock-shift" role="alert"><b>시계 경계 경고</b>: 이 run은 시작({{ doc.clock.startedAt }})과 종료({{ doc.clock.finishedAt or "미기록" }})가 {{ doc.clock.tz }} 기준 서로 다른 날짜에 걸쳤다. 날짜에 의존하는 규칙(체크인 미래 여부, 48시간 취소 제한)의 결과가 실행 중 바뀌었을 수 있다.</p>
+{% endif %}
+
+{% if doc.warnings %}
+<div class="note" id="compare-warnings" role="alert"><b>데이터 경고</b>
+<ul>{% for w in doc.warnings %}<li>{{ w }}</li>{% endfor %}</ul></div>
 {% endif %}
 
 <h2>판정</h2>
@@ -23,7 +28,7 @@
 </section>
 
 <h2>arm × 지표</h2>
-<p class="muted">각 칸은 평균(최소–최대). 엔드포인트 분모는 {{ doc.endpoints.denominator }}개(view=false), 오라클 규칙은 {{ doc.oracle.rules }}개{% if doc.focus %}, Reservation 범위는 <code>{{ doc.focus }}</code>{% endif %}이다.{% if doc.blackbox %} blackbox 기준 라인 {{ "%.1f"|format(doc.blackbox.line * 100) }}%, 브랜치 {{ "%.1f"|format(doc.blackbox.branch * 100) }}%.{% else %} blackbox 스위트가 이번 run에 없어 blackbox 대비 값은 비어 있다.{% endif %}</p>
+<p class="muted">각 칸은 평균(최소–최대). 엔드포인트 분모는 {{ doc.endpoints.denominator }}개(view=false), 오라클 규칙은 {{ doc.oracle.rules }}개{% if doc.focus %}, Focus 범위는 <code>{{ doc.focus }}</code>{% endif %}이다.{% if doc.blackbox %} blackbox 기준 라인 {{ ("%.1f%%"|format(doc.blackbox.line * 100)) if doc.blackbox.line is not none else "—" }}, 브랜치 {{ ("%.1f%%"|format(doc.blackbox.branch * 100)) if doc.blackbox.branch is not none else "—" }}.{% else %} blackbox 스위트가 이번 run에 없어 blackbox 대비 값은 비어 있다.{% endif %}</p>
 <div class="scroll"><table id="compare-table">
 <thead><tr><th>지표</th>{% for arm, entry in doc.arms.items() %}<th class="num" data-arm="{{ arm }}">{{ arm }}{% if entry.status != "ok" %} (skipped){% else %} (n={{ entry.measured }}/{{ entry.reps if entry.reps is not none else "?" }}){% endif %}</th>{% endfor %}</tr></thead>
 <tbody>
@@ -54,8 +59,8 @@
       {% for row in plot.rows %}
       <text x="{{ plot.left - 6 }}" y="{{ row.y + 4 }}" font-size="12" text-anchor="end" fill="currentColor">{{ row.arm }}</text>
       {% if row.skipped %}<text x="{{ plot.left + 6 }}" y="{{ row.y + 4 }}" font-size="11" fill="currentColor" fill-opacity="0.6">skipped</text>{% endif %}
-      {% if row.range %}<line x1="{{ row.range[0] }}" x2="{{ row.range[1] }}" y1="{{ row.y }}" y2="{{ row.y }}" stroke="{{ row.color }}" stroke-width="3" stroke-opacity="0.35"/>{% endif %}
-      {% for point in row.points %}<circle cx="{{ point }}" cy="{{ row.y }}" r="5" fill="{{ row.color }}" stroke="currentColor" stroke-opacity="0.5" data-arm="{{ row.arm }}"><title>{{ row.arm }} {{ row.values[loop.index0] }}</title></circle>{% endfor %}
+      {% if row.range %}<line x1="{{ row.range[0] }}" x2="{{ row.range[1] }}" y1="{{ row.y }}" y2="{{ row.y }}" style="stroke:{{ row.color }}" stroke-width="3" stroke-opacity="0.35"/>{% endif %}
+      {% for point in row.points %}<circle cx="{{ point }}" cy="{{ row.y }}" r="5" style="fill:{{ row.color }}" stroke="currentColor" stroke-opacity="0.5" data-arm="{{ row.arm }}"><title>{{ row.arm }} {{ row.values[loop.index0] }}</title></circle>{% endfor %}
       {% endfor %}
     </svg>
   </div>

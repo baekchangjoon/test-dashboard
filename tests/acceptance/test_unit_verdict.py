@@ -79,3 +79,19 @@ def test_req042_empty_measured_arm_counts_as_skipped():
     empty = ArmStats(status="ok", metrics={name: [] for name in GOOD})
     assert verdict.judge({"base": base_arm(), "jqa": empty}).generation == "판정 불가"
     assert verdict.judge({"base": empty, "jqa": arm()}).effect == "판정 불가"
+
+
+def test_req042_missing_metric_means_undecidable_not_failed():
+    """평균이 없는(측정되지 않은) 지표는 미달이 아니라 판정 불가다. 다른 지표가 이미 미달이면 불성립이다."""
+    missing_pass = arm(passed=[])
+    result = verdict.judge({"base": base_arm(), "jqa": missing_pass})
+    assert result.generation == "판정 불가"
+    assert result.detail["generation"]["armChecks"]["jqa"]["result"] == "undecidable"
+    # 다른 지표가 확실히 미달이면 불성립
+    assert verdict.judge({"base": base_arm(), "jqa": arm(passed=[], compile=[0.5])}).generation == "불성립"
+    # 한 arm이 충족하면 다른 arm이 판정 불가여도 성립
+    assert verdict.judge({"base": base_arm(), "jqa": arm(), "owl": arm(passed=[])}).generation == "성립"
+    # 효과: 비교 지표가 전부 측정되지 않아 겹침을 알 수 없으면 판정 불가
+    no_branch = arm(branch=[], oracle=[], endpoint=[0.45, 0.99, 0.99])
+    assert verdict.judge({"base": base_arm(), "jqa": no_branch}).effect == "판정 불가"
+    assert verdict.judge({"base": base_arm(), "jqa": arm(branch=[])}).effect == "효과 있음"

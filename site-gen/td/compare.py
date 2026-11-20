@@ -116,6 +116,10 @@ class XmlFacts:
                     slot = (fqcn, method.get("name"))
                     self.method_covered[slot] = self.method_covered.get(slot, False) or covered
 
+    def handler_known(self, handler: str) -> bool:
+        klass, _, method = handler.partition("#")
+        return (klass, method) in self.method_covered
+
     def handler_covered(self, handler: str) -> bool:
         klass, _, method = handler.partition("#")
         return self.method_covered.get((klass, method), False)
@@ -139,6 +143,10 @@ class XmlFacts:
 
 def _source_key(fqcn: str) -> str:
     return fqcn.split("$", 1)[0].replace(".", "/") + ".java"
+
+
+def _delta(value, base) -> float | None:
+    return None if value is None or base is None else value - base
 
 
 def _ratio(covered: int, total: int) -> float | None:
@@ -181,6 +189,9 @@ def _generation_entry(gen_id: str, arm: str, ctx: dict) -> dict:
     kpis = suite.get("kpis") or {}
     entry["line"], entry["branch"] = kpis.get("line"), kpis.get("branch")
     endpoints, rules, focus = ctx["endpoints"], ctx["rules"], ctx["focus"]
+    for item in endpoints:
+        if not facts.handler_known(item["handler"]):
+            ctx["warnings"].add(f"핸들러가 jacoco XML에 없다(커버 0으로 센다): {item['handler']} ({gen_id})")
     hit = [item for item in endpoints if facts.handler_covered(item["handler"])]
     entry["endpointCovered"] = len(hit)
     entry["endpoint"] = _ratio(len(hit), len(endpoints))
@@ -190,8 +201,8 @@ def _generation_entry(gen_id: str, arm: str, ctx: dict) -> dict:
     entry["oracle"] = _ratio(entry["oracleCovered"], len(rules))
     blackbox = ctx.get("blackbox")
     if blackbox:
-        entry["lineDelta"] = None if kpis.get("line") is None else kpis["line"] - blackbox["kpis"]["line"]
-        entry["branchDelta"] = None if kpis.get("branch") is None else kpis["branch"] - blackbox["kpis"]["branch"]
+        entry["lineDelta"] = _delta(kpis.get("line"), blackbox["kpis"].get("line"))
+        entry["branchDelta"] = _delta(kpis.get("branch"), blackbox["kpis"].get("branch"))
         entry["uniqueLines"] = len(facts.covered_lines - blackbox["facts"].covered_lines)
     if focus:
         counts_focus = facts.focus_counts(focus)
@@ -235,7 +246,7 @@ def arm_stats(arm_entry: dict) -> ArmStats:
 
 
 # --- 수집 --------------------------------------------------------------------------------------
-def collect(run_dir, *, sut_file=None, oracle_path=None, now=None) -> dict:
+def collect(run_dir, *, sut_file=None, oracle_path=None) -> dict:
     run_dir = Path(run_dir)
     run = state.read_run(run_dir)
     coverage = _read_json(run_dir / "S08" / "coverage.json")
@@ -266,7 +277,7 @@ def collect(run_dir, *, sut_file=None, oracle_path=None, now=None) -> dict:
     if bb_suite and bb_xml and (run_dir / "S08" / bb_xml).is_file():
         blackbox = {"kpis": bb_suite["kpis"], "facts": XmlFacts(run_dir / "S08" / bb_xml)}
     ctx = {"run_dir": run_dir, "bddgen": bddgen, "s06_stage": s06_generations, "suites": suites, "endpoints": endpoints,
-           "rules": rules, "focus": focus, "blackbox": blackbox}
+           "rules": rules, "focus": focus, "blackbox": blackbox, "warnings": set()}
 
     options = run.get("options") or {}
     requested = options.get("arms") or list(s06_arms) or ["base"]
@@ -286,23 +297,27 @@ def collect(run_dir, *, sut_file=None, oracle_path=None, now=None) -> dict:
             continue
         generations = [_generation_entry(gid, arm, ctx) for gid in sorted(gen_ids)]
         arms[arm] = _arm_entry(arm, "ok", None, generations, reps)
+    warnings = sorted(ctx["warnings"])
+    if expected is not None and expected != len(endpoints):
+        warnings.insert(0, f"엔드포인트 분모({len(endpoints)})가 기대 목록 수({expected})와 다르다")
     result = verdict.judge({name: arm_stats(entry) for name, entry in arms.items()})
 
-    now = now or state.now()
+    # clockShift는 run.json 기록(clockShift, 없으면 startedAt/finishedAt)만 쓴다. 현재 시각과 비교하지 않으므로
+    # 다른 날 다시 렌더링해도 값이 바뀌지 않는다.
     tz = run.get("tz") or state.TZ_NAME
-    started = run.get("startedAt")
+    started, finished = run.get("startedAt"), run.get("finishedAt")
     shift = bool(run.get("clockShift"))
-    if started and not shift:
+    if not shift and started and finished:
         from zoneinfo import ZoneInfo
-        shift = state.parse_utc(started).astimezone(ZoneInfo(tz)).date() != now.astimezone(ZoneInfo(tz)).date()
+        shift = state.parse_utc(started).astimezone(ZoneInfo(tz)).date() != state.parse_utc(finished).astimezone(ZoneInfo(tz)).date()
     document = {
         "schema": 1, "runId": run.get("runId"), "sut": run.get("sut"), "commit": run.get("commit"),
         "label": verdict.EXPLORATORY, "reps": reps,
         "endpoints": {"denominator": len(endpoints), "expected": expected, "ids": [item["id"] for item in endpoints]},
         "oracle": {"rules": len(rules), "ids": [rule["id"] for rule in rules]},
-        "focus": focus, "blackbox": ({"line": blackbox["kpis"]["line"], "branch": blackbox["kpis"]["branch"]} if blackbox else None),
-        "arms": arms, "verdict": result.as_dict(),
-        "clock": {"clockShift": shift, "tz": tz, "startedAt": started, "finishedAt": run.get("finishedAt")},
+        "focus": focus, "blackbox": ({"line": blackbox["kpis"].get("line"), "branch": blackbox["kpis"].get("branch")} if blackbox else None),
+        "arms": arms, "verdict": result.as_dict(), "warnings": warnings,
+        "clock": {"clockShift": shift, "tz": tz, "startedAt": started, "finishedAt": finished},
         "limitations": LIMITATIONS,
     }
     return document
@@ -332,8 +347,8 @@ DISPLAY = [
     ("passed", "통과율", "pct"), ("endpoint", "엔드포인트 커버 비율", "pct"), ("line", "귀속 라인 커버", "pct"),
     ("branch", "귀속 브랜치 커버", "pct"), ("lineDelta", "라인 blackbox 대비", "dpct"), ("branchDelta", "브랜치 blackbox 대비", "dpct"),
     ("uniqueLines", "blackbox에 없던 고유 라인", "int"), ("oracle", "오라클 커버 비율", "pct"),
-    ("focusLine", "Reservation 범위 라인", "pct"), ("focusBranch", "Reservation 범위 브랜치", "pct"),
-    ("focusEndpoint", "Reservation 범위 엔드포인트", "pct"), ("focusOracle", "Reservation 범위 오라클", "pct"),
+    ("focusLine", "Focus 범위 라인", "pct"), ("focusBranch", "Focus 범위 브랜치", "pct"),
+    ("focusEndpoint", "Focus 범위 엔드포인트", "pct"), ("focusOracle", "Focus 범위 오라클", "pct"),
     ("tokens", "토큰(입력+출력)", "int"), ("seconds", "생성 시간(초)", "sec"),
 ]
 
@@ -361,12 +376,14 @@ def display_rows(document: dict) -> list[dict]:
             else:
                 cells[arm] = {"mean": format_value(stat["mean"], kind), "min": format_value(stat["min"], kind),
                               "max": format_value(stat["max"], kind), "n": stat["n"]}
+        if key.startswith("focus") and document.get("focus"):
+            label = label.replace("Focus 범위", f"Focus 범위 ({document['focus']})")
         rows.append({"key": key, "label": label, "cells": cells})
     return rows
 
 
 DOT_METRICS = [("endpoint", "엔드포인트 커버"), ("branch", "귀속 브랜치"), ("oracle", "오라클 커버"), ("passed", "통과율")]
-DOT_COLORS = {"base": "#8c959f", "jqa": "#0969da", "owl": "#bf8700"}  # 색만으로 구분하지 않도록 arm 이름도 라벨로 적는다.
+DOT_COLORS = {"base": "var(--arm-base)", "jqa": "var(--arm-jqa)", "owl": "var(--arm-owl)"}  # site.css 토큰(라이트/다크)  # 색만으로 구분하지 않도록 arm 이름도 라벨로 적는다.
 
 
 def dot_plots(document: dict) -> list[dict]:
