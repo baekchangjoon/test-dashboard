@@ -521,3 +521,59 @@ def test_publish_log_redacts_home_path(exec_env):
     text = s3.objects[key]["data"].decode()
     assert str(Path.home()) not in text and "~/x" in text
     assert str(Path.home()) not in (run_dir / "mirror" / key).read_text()
+
+
+# --- PR 게이트 수정: JSON 안의 인용된 ARN, 자르기 경계의 식별자 ------------------------------------------------
+QUOTED_ARN_TEXT = ('An error occurred (AccessDenied): User: arn:aws:iam::999988887777:user/fake-publisher-user is not '
+                   'authorized to perform: s3:PutObject on resource: "arn:aws:s3:::fake-bucket/key" because no policy')
+
+
+class QuotedArnCloudFront:
+    def create_invalidation(self, **kwargs):
+        raise RuntimeError(QUOTED_ARN_TEXT)
+
+
+def _assert_clean(text):
+    assert "arn:aws:" not in text and "999988887777" not in text and "fake-publisher-user" not in text
+
+
+def test_write_log_with_quoted_arn_reason_is_valid_json(exec_env):
+    run_id, run_dir, env, _ = exec_env
+    s3 = FakeS3()
+    key = publish.write_log(s3, BUCKET, run_dir / "mirror", "_test/u/", "sutx", run_id,
+                            publish.build_result("degraded", QUOTED_ARN_TEXT, {"cloudfront": {"status": "failed", "reason": QUOTED_ARN_TEXT}}, {}, 0),
+                            env={**env, "TD_AWS_ACCOUNT_ID": "999988887777", "TD_IAM_USER": "fake-publisher-user"})
+    text = s3.objects[key]["data"].decode()
+    doc = json.loads(text)
+    _assert_clean(text)
+    assert "<arn>" in doc["reason"]
+
+
+def test_run_publish_with_quoted_arn_reason_keeps_valid_json(exec_env, monkeypatch):
+    run_id, run_dir, env, _ = exec_env
+    env = {**env, "TD_AWS_ACCOUNT_ID": "999988887777", "TD_IAM_USER": "fake-publisher-user"}
+    monkeypatch.setattr(publish.Publication, "hosting_phase", lambda self: None)
+    s3 = FakeS3()
+    code = publish.run_publish("sutx", run_id, run_dir, env, s3, QuotedArnCloudFront())
+    assert code == 0
+    stage_text = (run_dir / "stages" / "S13.json").read_text()
+    stage = json.loads(stage_text)
+    assert stage["status"] == "degraded"
+    _assert_clean(stage_text)
+    log_text = s3.objects[f"_test/u/suts/sutx/publish-log/{run_id}.json"]["data"].decode()
+    json.loads(log_text)
+    _assert_clean(log_text)
+
+
+def test_identifier_cut_at_truncation_boundary_is_still_masked(exec_env):
+    run_id, run_dir, env, _ = exec_env
+    env = {**env, "TD_AWS_ACCOUNT_ID": "999988887777"}
+
+    class BoundaryCloudFront:
+        def create_invalidation(self, **kwargs):
+            raise RuntimeError("x" * 193 + " 999988887777 tail")  # str(exc)[:200]이 계정 번호를 6자리에서 자른다
+
+    s3 = FakeS3()
+    result = execute(run_id, run_dir, env, s3, BoundaryCloudFront())
+    log_text = s3.objects[f"_test/u/suts/sutx/publish-log/{run_id}.json"]["data"].decode()
+    assert "999988" not in log_text and "999988" not in json.dumps(result)

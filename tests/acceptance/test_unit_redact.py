@@ -124,3 +124,16 @@ def test_upload_files_gate_rejects_leaky_index_file(tmp_path, monkeypatch, fake_
     with pytest.raises(publish.PublishError):
         publish.upload_files(s3, "b", mirror, [mirror / "_test/u/index.html"])
     assert s3.objects == {}
+
+
+def test_redact_obj_walks_nested_strings_and_keeps_structure(fake_env):
+    doc = {"reason": 'on resource: "arn:aws:s3:::b/k" by 198.51.100.77', "list": ["999988887777", 3, None], "n": 1}
+    out = redact.redact_obj(doc, env=fake_env)
+    assert out == {"reason": 'on resource: "<arn>" by <redacted>', "list": ["<redacted>", 3, None], "n": 1}
+    assert json.loads(json.dumps(out)) == out
+
+
+def test_arn_inside_json_text_keeps_escapes_valid(fake_env):
+    text = json.dumps({"r": 'x "arn:aws:s3:::b/k" y'})
+    out = redact.redact_text(text, env=fake_env)
+    assert json.loads(out) == {"r": 'x "<arn>" y'}

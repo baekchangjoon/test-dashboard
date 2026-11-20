@@ -16,7 +16,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 IDENTIFIER_KEYS = ("TD_AWS_ACCOUNT_ID", "TD_IAM_USER", "TD_LIGHTSAIL_IP", "TD_SSH_KEY_PATH")
-ARN_PATTERN = re.compile(r"arn:aws:[^\s\"'<>]+")
+# 역슬래시도 끊는다: JSON 텍스트의 `\"arn:...\"`에서 이스케이프 역슬래시를 먹으면 JSON이 깨진다.
+ARN_PATTERN = re.compile(r"arn:aws:[^\s\"'<>\\]+")
 # 임시 디렉터리가 현재 TMPDIR과 다른 세션에서 만들어졌어도(macOS 사용자별 /var/folders/<a>/<b>/T) 가린다.
 MAC_TMP_PATTERN = re.compile(r"(?:/private)?/var/folders/[^/\s\"'<>]+/[^/\s\"'<>]+/T(?=[/\s\"'<>]|$)")
 # 게시물에 있으면 안 되는 로컬 절대 경로 접두. 앞이 단어 문자면(URL 경로 `example.com/home/`) 경로로 보지 않는다.
@@ -80,6 +81,19 @@ def redact_text(text: str, run_dir=None, repo_root=None, env: dict | None = None
     for old, new in path_rules(run_dir, repo_root, env):
         text = text.replace(old, new)
     return MAC_TMP_PATTERN.sub("<tmp>", text)
+
+
+def redact_obj(obj, run_dir=None, repo_root=None, env: dict | None = None):
+    """dict/list를 따라 내려가 문자열 값(과 키)에 redact_text를 적용한 사본. JSON으로 쓰기 전에 쓴다(직렬화 뒤 텍스트 치환은
+    이스케이프를 깨뜨릴 수 있다)."""
+    if isinstance(obj, str):
+        return redact_text(obj, run_dir, repo_root, env)
+    if isinstance(obj, dict):
+        return {redact_obj(key, run_dir, repo_root, env) if isinstance(key, str) else key: redact_obj(value, run_dir, repo_root, env)
+                for key, value in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [redact_obj(value, run_dir, repo_root, env) for value in obj]
+    return obj
 
 
 def find_leaks(text: str, env: dict | None = None) -> list[str]:
