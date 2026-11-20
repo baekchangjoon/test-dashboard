@@ -115,10 +115,11 @@ def _worktrees() -> str:
 
 @pytest.fixture(scope="session")
 def s10_run(real_pipeline_run):
-    """`--only S00,S10` 실제 run 1회. 실행 전후의 worktree 목록과 라벨 자원을 함께 기록한다."""
+    """`--only S00,S02,S06,S10 --arms base` 실제 run 1회. S06은 커밋된 스냅샷(e2e/generated/petclinic/base)을 재사용하므로
+    입력 해시가 같으면 claude를 부르지 않는다(값싼 generation 하나). 실행 전후의 worktree 목록과 라벨 자원을 함께 기록한다."""
     before_worktrees = _worktrees()
     before = envctl.snapshot()
-    result = real_pipeline_run("S00,S10")
+    result = real_pipeline_run("S00,S02,S06,S10", args=("--arms", "base", "--reps", "1"))
     return {"result": result, "before_worktrees": before_worktrees, "leak": envctl.diff(before, envctl.snapshot())}
 
 
@@ -126,8 +127,11 @@ def test_req036_tia_base(s10_run):
     run = s10_run["result"]
     assert run.returncode == 0, run.stderr[-3000:]
     stage = run.stage("S10")
-    # M1에는 e2e 스위트가 없으므로 블랙박스만으로 끝나는 S10은 degraded다(Task 22 이후 passed).
-    assert stage["status"] == "degraded" and stage["reason"] == "e2e suites not attached", stage
+    # base 블랙박스에 arm별 rep1 e2e generation이 붙으면 S10은 passed다(Task 22).
+    assert run.stage("S06")["status"] == "passed", run.stage("S06")
+    assert stage["status"] == "passed" and stage["reason"] is None, stage
+    [(gen_id, e2e)] = stage["e2e"].items()
+    assert gen_id.startswith("base-") and gen_id.endswith("-r1") and e2e["execMerged"] >= 1 and stage["e2eAttached"] == 1
     base = stage["base"]
     assert re.fullmatch(r"[0-9a-f]{40}", base)
     head = run.stage("S00")["outputs"]["commit"]
@@ -145,7 +149,11 @@ def test_req036_tia_base(s10_run):
     assert isinstance(scenarios, list) and len(scenarios) == 1
     (scenario,) = scenarios
     assert scenario["count"] == len(scenario["selected"]) == len(impact_doc["tests"]) == stage["impact"]["selected"]
-    assert stage["impact"]["indexedTests"] == scenario["total"] == len(testwise["tests"]) == stage["execCount"]
+    # 인덱스 = 블랙박스 per-test .exec + base에서 돌린 e2e per-test .exec(testId가 E2E_로 시작)
+    test_ids = [t["uniformPath"] for t in testwise["tests"]]
+    e2e_ids = [t for t in test_ids if str(t).startswith("E2E_base_")]
+    assert len(e2e_ids) == e2e["execMerged"], test_ids[:5]
+    assert stage["impact"]["indexedTests"] == scenario["total"] == len(testwise["tests"]) == stage["execCount"] + len(e2e_ids)
     assert all(set(item) == {"confidence", "testId"} for item in scenario["selected"])
     assert scenario["conservative"] is stage["impact"]["allSelectedConservative"]
     html = (root / "tia" / "tia.html").read_text()
@@ -153,7 +161,10 @@ def test_req036_tia_base(s10_run):
     embedded, _ = json.JSONDecoder().raw_decode(html[html.index("const D = ") + len("const D = "):])
     assert embedded["commit"] == base and embedded["sut"] == "petclinic", {k: embedded[k] for k in ("commit", "sut")}
     assert isinstance(embedded["scenarios"], list) and len(embedded["scenarios"]) == 1
-    assert stage["incompleteAttribution"] == ["ConcurrencyBlackBoxIT#concurrentPetCreatesForSameOwnerAreAllPersisted"]
+    # 블랙박스의 귀속 손실은 문서화된 1건뿐이다. e2e TC는 testkit이 필터 체인(HttpServlet#service 바깥) 프로브를
+    # droppedProbes로 보고하므로 incompleteAttribution 목록에 함께 나온다(설계 §13.9 귀속 한계, 기록만 한다).
+    assert [t for t in stage["incompleteAttribution"] if not t.startswith("E2E_")] == \
+        ["ConcurrencyBlackBoxIT#concurrentPetCreatesForSameOwnerAreAllPersisted"]
     assert stage["tcCount"] >= 1 and stage["execCount"] >= 1
     # run 페이지가 TIA 리포트에 링크하고 게시 사본에 들어간다
     site_dir = pages.render_run(run.run_dir, run.run_dir).parent

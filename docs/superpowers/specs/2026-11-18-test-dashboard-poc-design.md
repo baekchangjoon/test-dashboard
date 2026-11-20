@@ -447,6 +447,8 @@ E2E는 `pipeline/run-all.sh petclinic`을 실제로 실행한 뒤 산출물과 �
 
 ### 13.5 식별·경로 규약
 - genId: `<arm>-<inputHash8>-r<rep>`. `--regenerate`를 쓰면 `-g<n>`을 붙인다. 같은 입력 해시의 스냅샷이 있으면 기본으로 재사용한다(두 번째 run은 LLM을 부르지 않음).
+  - S06의 입력 해시(전체 64자)는 번들 해시, 생성·수리 프롬프트 해시, 모델, 수리 상한을 묶은 sha256이다(프롬프트나 모델이 바뀌면 새 genId). 스냅샷은 임시 디렉터리에서 검증한 뒤 `_COMPLETE`(입력 해시, 파일별 sha256, 생성 메타)를 쓰고 rename으로 확정하며, `<arm>/.reserve/<genId>` 원자적 mkdir로 예약한다. `_COMPLETE`가 맞지 않는 스냅샷은 재사용도 덮어쓰기도 하지 않고 그 generation을 failed로 둔다.
+  - S10은 base SUT에서 arm별 rep1 generation을 실행해 per-test `.exec`를 `S10/exec/`에 블랙박스와 합친다. e2e 스위트가 하나 이상 붙으면 S10은 passed다.
 - testId: `E2E_<arm>_<inputHash8>r<rep>[g<n>]_<featureSlug>#L<line>`
 - 백그라운드 PID 기록: `work/runs/<runId>/pids/<name>.pid`
 - 병합 집계 XML: `S08/merged/aggregate.xml`(blackbox와 모든 e2e 스위트). S09와 S11은 이 파일 하나를 쓴다.

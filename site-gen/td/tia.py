@@ -104,6 +104,23 @@ def build_scenarios(doc, diff_text: str, indexed_tests: int, base: str, head: st
              "total": indexed_tests, "count": len(selected), "reasons": list(doc.get("warnings") or [])}]
 
 
+_REP1_RE = re.compile(r"^(base|jqa|owl)-[0-9a-f]{8}-r1(?:-g([0-9]+))?$")
+
+
+def base_generations(s06_stage: dict) -> list[tuple[str, str, str]]:
+    """S10이 base SUT에서 돌릴 generation: arm마다 실행 가능한(passed|degraded) rep 1 하나.
+    같은 arm에 `-g<n>`(--regenerate)이 여럿이면 접미사 없는 것, 없으면 가장 작은 n을 고른다. [(genId, arm, dir)]"""
+    chosen: dict[str, tuple[int, str, str]] = {}
+    for gen_id, gen in (s06_stage.get("generations") or {}).items():
+        match = _REP1_RE.match(gen_id)
+        if not match or not isinstance(gen, dict) or gen.get("status") not in ("passed", "degraded"):
+            continue
+        arm, order = match.group(1), int(match.group(2) or 0)
+        if arm not in chosen or order < chosen[arm][0]:
+            chosen[arm] = (order, gen_id, str(gen.get("dir") or ""))
+    return [(gen_id, arm, directory) for arm, (_, gen_id, directory) in sorted(chosen.items())]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="td.tia")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -120,9 +137,14 @@ def main(argv: list[str] | None = None) -> int:
     scen.add_argument("--out", required=True)
     scen.add_argument("--base", required=True)
     scen.add_argument("--head", required=True)
+    gens = sub.add_parser("e2e-generations", help="S06 단계 JSON에서 base에서 돌릴 arm별 rep1 generation(TSV: genId arm dir)")
+    gens.add_argument("s06_json")
     args = parser.parse_args(argv)
     try:
-        if args.cmd == "resolve-base":
+        if args.cmd == "e2e-generations":
+            for row in base_generations(json.loads(Path(args.s06_json).read_text())):
+                print("\t".join(row))
+        elif args.cmd == "resolve-base":
             config = sut_config.load(args.sut_file)
             print(resolve_base(args.repo, args.commit, config.tia_range_spec, config.tia_first_parent))
         elif args.cmd == "scenarios":

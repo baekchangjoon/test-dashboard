@@ -136,3 +136,18 @@ def test_scenarios_cli_reports_clean_error_on_bad_impact(tmp_path, capsys):
     rc = tia.main(["scenarios", "--impact", str(impact), "--diff", str(tmp_path / "d.diff"), "--testwise", str(tmp_path / "t.json"),
                    "--out", str(tmp_path / "o.json"), "--base", "a" * 40, "--head", "b" * 40])
     assert rc == 1 and "tia:" in capsys.readouterr().err
+
+
+def test_base_generations_pick_runnable_rep1_per_arm():
+    stage = {"generations": {
+        "base-0123abcd-r1": {"status": "passed", "dir": "/g/base-0123abcd-r1"},
+        "base-0123abcd-r2": {"status": "passed", "dir": "/g/base-0123abcd-r2"},
+        "base-0123abcd-r1-g1": {"status": "passed", "dir": "/g/base-0123abcd-r1-g1"},
+        "jqa-89abcdef-r1-g2": {"status": "degraded", "dir": "/g/jqa-2"},
+        "jqa-89abcdef-r1-g1": {"status": "failed", "dir": None},
+        "jqa-89abcdef-r1-g3": {"status": "passed", "dir": "/g/jqa-3"},
+        "owl-00000000-r1": {"status": "failed", "reason": "x"},
+    }}
+    assert tia.base_generations(stage) == [("base-0123abcd-r1", "base", "/g/base-0123abcd-r1"),
+                                       ("jqa-89abcdef-r1-g2", "jqa", "/g/jqa-2")]
+    assert tia.base_generations({}) == []
