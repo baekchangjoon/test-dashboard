@@ -23,7 +23,8 @@ while [[ $# -gt 0 ]]; do
 done
 # 옵션 검증(run 디렉터리 예약 전)
 [[ "$REPS" =~ ^[1-9]$ ]] || die "--reps는 1~9여야 한다: $REPS"
-[[ "$STYLE" == "cucumber" || "$STYLE" == "junit" ]] || die "--style은 cucumber|junit이어야 한다: $STYLE"
+[[ "$STYLE" != "junit" ]] || die "--style junit은 아직 지원하지 않는다(REQ-030 연기): 지금은 cucumber만 생성한다"
+[[ "$STYLE" == "cucumber" ]] || die "--style은 cucumber여야 한다: $STYLE"
 IFS=',' read -r -a arm_list <<< "$ARMS"
 [[ ${#arm_list[@]} -gt 0 ]] || die "--arms가 비었다"
 for arm in "${arm_list[@]}"; do

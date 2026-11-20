@@ -290,10 +290,17 @@ def test_invalid_options_exit_1_before_run_dir(stub_stages, args):
 
 
 def test_valid_option_values_accepted(stub_stages):
-    result = stub_stages.run("--arms", "base,owl", "--reps", "2", "--style", "junit")
+    result = stub_stages.run("--arms", "base,owl", "--reps", "2", "--style", "cucumber")
     assert result.returncode == 0, result.stderr
     assert set(result.stage("S06")["arms"]) == {"base", "owl"}
     assert len(result.stage("S06")["generations"]) == 4
+
+
+def test_style_junit_is_rejected_as_deferred(stub_stages):
+    """REQ-030(junit 스타일)은 연기됐다: 조용히 cucumber로 돌지 않고 분명한 메시지로 멈춘다(M-1)."""
+    result = stub_stages.run("--style", "junit")
+    assert result.returncode == 1 and "junit" in result.stderr and "REQ-030" in result.stderr
+    assert not (result.work_dir / "runs").exists()
 
 
 def test_default_options_are_three_arms_three_reps(stub_stages):
