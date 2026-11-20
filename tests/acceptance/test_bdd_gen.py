@@ -5,8 +5,10 @@ import hashlib
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import jsonschema
@@ -285,6 +287,7 @@ def test_req025_repair_bounded_captured(s06, fake_claude):
     assert len(calls) == 3
     [gen] = s06.meta(run_dir)["generations"]
     assert gen["repairs"] == 2 and gen["status"] == "degraded"       # 남은 컴파일 실패는 S07에서 uncompilable로 집계
+    assert s06.stage(run_dir)["status"] == "degraded" and "degraded" in s06.stage(run_dir)["reason"]
     gen_stdin, repairs = calls[0].stdin, calls[1:]
     assert gen_stdin.startswith((PROMPTS / "bdd-gen.md").read_text().rstrip()[:200])
     repair_template_head = (PROMPTS / "bdd-repair.md").read_text().splitlines()[0]
@@ -358,6 +361,7 @@ def test_req061_gen_metadata_schema(s06, fake_claude):
     assert base["flags"] == prepare.CLAUDE_FLAGS
     assert base["strippedFields"] == ["a/b"] == meta["strippedFields"]
     assert base["seconds"] > 0 and len(base["inputHash"]) == 64
+    assert base["scenarios"] == {"initial": 1, "final": 1}
     assert by_arm["jqa"]["bundleHash"] != base["bundleHash"]
     # 단계 JSON: arm 상태와 generation 목록, run.json arms.generations
     stage = s06.stage(run_dir)
@@ -424,3 +428,52 @@ def test_req022_s06_stage_level_capture(s06, fake_claude, claude_call_log):
     assert len(cwds) == 2                                         # 호출마다 새 임시 디렉터리
     records = claude_call_log(run_dir)
     assert len(records) == 2 and all("--tools" in r["argv"] for r in records)
+
+
+def test_partial_final_dir_without_complete_is_not_reused(s06, fake_claude):
+    """최종 경로에 `_COMPLETE` 없는 디렉터리(부분 결과)가 있으면 재사용하지도 덮어쓰지도 않는다(그 generation failed, claude 0회)."""
+    fake_claude.respond(VALID)
+    first = s06.new_run()
+    assert s06.run(first).returncode == 0
+    [gen_id] = s06.stage(first)["generations"]
+    snapshot = s06.generated / "petclinic" / "base" / gen_id
+    (snapshot / "_COMPLETE").unlink()
+    before = tree_hashes(snapshot)
+    second = s06.new_run()
+    done = s06.run(second)
+    gen = s06.stage(second)["generations"][gen_id]
+    assert done.returncode != 0 and gen["status"] == "failed" and "_COMPLETE이 없다" in gen["reason"]
+    assert len(fake_claude.calls) == 1 and tree_hashes(snapshot) == before
+    assert s06.meta(second)["generations"][0]["status"] == "failed"     # bdd-gen.json은 실패해도 쓰인다
+
+
+def test_sigterm_aborts_s06_and_cleans_up(s06, fake_claude):
+    """claude 호출 중 S06 프로세스 그룹에 SIGTERM: 그 뒤 claude 호출 없음, 예약·임시 디렉터리 없음, 비-0 종료."""
+    fake_claude.respond(VALID)
+    fake_claude.delay(30)
+    run_dir = s06.new_run(reps=2)
+    proc = subprocess.Popen(["bash", str(S06_SCRIPT), "petclinic", run_dir.name], stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, text=True, env=s06.env(run_dir), start_new_session=True)
+    deadline = time.monotonic() + 300
+    while not fake_claude.calls and time.monotonic() < deadline:
+        time.sleep(0.5)
+    assert fake_claude.calls, "claude 호출이 시작되지 않았다"
+    assert list((s06.generated / "petclinic" / "base").glob(".tmp-*"))      # 생성 중에는 임시 디렉터리가 있다
+    os.killpg(proc.pid, signal.SIGTERM)
+    proc.communicate(timeout=120)
+    # bash가 먼저 끝나도 파이썬 자식이 정리를 마칠 때까지(그룹이 빌 때까지) 기다린다
+    deadline = time.monotonic() + 120
+    while time.monotonic() < deadline:
+        try:
+            os.killpg(proc.pid, 0)
+        except ProcessLookupError:
+            break
+        time.sleep(0.5)
+    else:
+        os.killpg(proc.pid, signal.SIGKILL)
+        pytest.fail("S06 프로세스 그룹이 SIGTERM 뒤 120초 안에 끝나지 않았다")
+    time.sleep(1)
+    assert proc.returncode != 0
+    assert len(fake_claude.calls) == 1                                       # rep 2로 넘어가지 않았다
+    assert leftovers(s06.generated) == []
+    assert not list((s06.generated / "petclinic" / "base").glob("base-*"))   # 확정된 스냅샷도 없다

@@ -17,6 +17,7 @@ S07 단계가 쓰는 함수: `write_testids`(td.testids 입력), `reconcile`/`ap
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -191,24 +192,30 @@ def java_home(version: int = 17) -> str:
     raise ScenariosError(f"JDK {version}을 찾지 못했다")
 
 
+@contextlib.contextmanager
+def _gradle_lock():
+    """e2e 프로젝트의 build 디렉터리(runner/build)는 하나라서 동시에 두 Gradle이 돌면 서로의 산출물을 덮는다
+    (예: 병렬 S06 두 개의 dry-run). 파이썬 쪽 호출과 bash 쪽(`gradle-locked`)을 e2e/build/.td-gradle.lock 파일 잠금으로 직렬화한다."""
+    import fcntl
+    lock_path = e2e_dir() / "build" / ".td-gradle.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
+
+
 def run_gradle(args: list[str], log_path: Path, *, timeout: float = GRADLE_TIMEOUT_SEC, extra_env: dict | None = None) -> int:
     """e2e/gradlew --no-daemon. 시간 제한과 프로세스 그룹 정리는 td.proc가 맡는다. 출력은 log_path로 간다.
-    e2e 프로젝트의 build 디렉터리(runner/build)는 하나라서 동시에 두 Gradle이 돌면 서로의 산출물을 덮는다
-    (예: 병렬 S06 두 개의 dry-run). 그래서 파이썬 쪽 호출은 e2e/build/.td-gradle.lock 파일 잠금으로 직렬화한다."""
-    import fcntl
-
+    실행 중 받은 TERM/INT는 Gradle 그룹을 정리한 뒤 호출자에게 다시 전달한다(reraise: S06이 중단되고 정리된다)."""
     from td import proc
     log_path.parent.mkdir(parents=True, exist_ok=True)
     env = {**os.environ, "JAVA_HOME": java_home(17), **(extra_env or {})}
-    lock_path = e2e_dir() / "build" / ".td-gradle.lock"
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with lock_path.open("a") as lock, log_path.open("w", encoding="utf-8") as log:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        try:
-            return proc.run_with_timeout(timeout, ["./gradlew", "--no-daemon", "--console=plain", *args], cwd=e2e_dir(),
-                                         stdout=log, stderr=subprocess.STDOUT, env=env)
-        finally:
-            fcntl.flock(lock, fcntl.LOCK_UN)
+    with _gradle_lock(), log_path.open("w", encoding="utf-8") as log:
+        return proc.run_with_timeout(timeout, ["./gradlew", "--no-daemon", "--console=plain", *args], cwd=e2e_dir(),
+                                     stdout=log, stderr=subprocess.STDOUT, env=env, reraise=True)
 
 
 def runner_classpath(out_file) -> str:
@@ -569,17 +576,12 @@ def _cmd_validate(args) -> int:
 def _cmd_gradle_locked(args) -> int:
     """`gradle-locked --timeout N -- <cmd…>`: run_gradle과 같은 e2e Gradle 잠금을 잡고 td_run과 같은 규칙(새 프로세스 그룹,
     시간 초과 시 그룹 TERM -> KILL, 종료 코드 124)으로 명령을 실행한다. bash 쪽(S07/S10의 td_e2e_generation)이 쓴다."""
-    import fcntl
-
     from td import proc
     command = args.command_argv[1:] if args.command_argv[:1] == ["--"] else args.command_argv
     if not command:
         raise ScenariosError("실행할 명령이 없다")
-    lock_path = e2e_dir() / "build" / ".td-gradle.lock"
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with lock_path.open("a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        return proc.run_with_timeout(args.timeout, command)
+    with _gradle_lock():
+        return proc.run_with_timeout(args.timeout, command, reraise=True)
 
 
 def _cmd_auth_env(args) -> int:

@@ -16,8 +16,11 @@ Fix the reported problems:
   per feature with `package glue;`, shared static helpers only in `glue/support/` with
   `package glue.support;`. A "layout violation" means a class is in the wrong place or has the wrong
   name.
-- Keep the intent and coverage of the scenarios. Change or drop a scenario only when it cannot be
-  made to compile or match its steps. Use only information from the bundle, as before.
+- Never remove a scenario, a feature file, or an Examples row. Every scenario of the previous files
+  must still be present in your reply. If you cannot make a step class compile, leave it as it is:
+  its scenarios will be counted as uncompilable, which is the honest outcome. Fix the code instead of
+  deleting the tests, and keep the intent of each scenario. Use only information from the bundle, as
+  before.
 
 Reply with exactly one JSON object and nothing else — no prose and no Markdown code fences — that
 contains the COMPLETE corrected file set (every file, including the ones you did not change):
