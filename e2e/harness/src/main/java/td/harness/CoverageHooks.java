@@ -61,6 +61,8 @@ public class CoverageHooks {
         if (controlUrl != null) {
             System.setProperty("pjacoco.control-url", controlUrl);
         }
+        // 로그인은 start 전에: 시나리오 안에서 일어나면 그 처리 코드가 이 시나리오의 droppedProbes로 잡힌다(AuthSession.prewarm).
+        AuthSession.prewarm();
         RequestCounter.reset(testId);
         Pjacoco.setCurrentTestId(testId);
         if (controlUrl != null) {

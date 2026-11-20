@@ -91,6 +91,38 @@ class CoverageHooksTest {
         assertThat(line.get("exec")).isEqualTo("exec/E2E_jqa_01234567r1_Owner#L5.exec");
     }
 
+    /** 로그인은 start 전에 끝난다: 시나리오 안에서 로그인하면 pjacoco가 그 처리 코드를 시나리오의 droppedProbes로 센다. */
+    @Test
+    void loginHappensBeforeCoverageStartAndIsNotCounted() throws Exception {
+        List<String> order = controlCalls;
+        server.createContext("/api/auth/login", exchange -> {
+            order.add("login baggage=" + exchange.getRequestHeaders().getFirst("baggage"));
+            byte[] body = "{\"token\":\"t0\"}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        System.setProperty("td.auth.login", "POST /api/auth/login");
+        System.setProperty("td.auth.user", "u");
+        System.setProperty("td.auth.pass", "p");
+        AuthSession.forget();
+        try {
+            String testId = "E2E_jqa_01234567r1_Owner#L11";
+            hooks.begin(testId);
+            Harness.authed().get("/api/ping").then().statusCode(204);
+            hooks.finish(testId, Status.PASSED);
+            assertThat(order).containsExactly("login baggage=null", "start?testId=" + testId,
+                    "stop?testId=" + testId + "&result=passed");
+            assertThat(AuthSession.loginCount()).isEqualTo(1);
+            assertThat(lines().get(0).get("requests")).isEqualTo(1);
+        } finally {
+            for (String key : new String[] {"td.auth.login", "td.auth.user", "td.auth.pass"}) {
+                System.clearProperty(key);
+            }
+            AuthSession.forget();
+        }
+    }
+
     @Test
     void blankControlUrlSkipsStartStopAndHasNoExec() throws Exception {
         System.setProperty("td.control-url", "  ");

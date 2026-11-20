@@ -39,6 +39,33 @@ final class AuthSession {
         return current;
     }
 
+    /**
+     * 커버리지 경계를 열기 전에 로그인을 끝내 둔다(인증 속성이 없으면 아무것도 하지 않는다).
+     *
+     * <p>로그인 요청에는 baggage가 없다. 시나리오 안(start 뒤)에서 처음 로그인하면 pjacoco는 active 테스트가 하나뿐이라
+     * 로그인 처리 중 실행된 SUT 코드를 그 시나리오의 droppedProbes로 센다(첫 시나리오만 incompleteAttribution 비율이 부풀었다).
+     * start 전에 로그인하면 active 테스트가 없으므로 전역 unattributedDrops로만 집계된다.
+     * 실패는 여기서 삼키고 표준 오류에 남긴다: authed()가 다시 로그인하며 같은 예외를 step 실패로 드러낸다.
+     */
+    static void prewarm() {
+        if (!configured("td.auth.login")) {
+            return;
+        }
+        try {
+            token();
+        } catch (IllegalStateException failure) {
+            System.err.println("[td.harness] 사전 로그인 실패(authed() 호출 때 다시 시도한다): " + failure.getMessage());
+        }
+    }
+
+    private static boolean configured(String key) {
+        String value = System.getProperty(key);
+        if (value == null || value.isBlank()) {
+            value = System.getenv(key.replace("td.auth.", "TD_AUTH_").toUpperCase());
+        }
+        return value != null && !value.isBlank();
+    }
+
     /** 이 JVM에서 실제로 로그인한 횟수(테스트용). */
     static int loginCount() {
         synchronized (LOCK) {
