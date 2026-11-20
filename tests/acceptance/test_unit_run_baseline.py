@@ -91,7 +91,8 @@ def test_stop_group_kills_term_ignoring_group():
     started = time.monotonic()
     run_baseline.stop_group(proc, signal.SIGTERM, grace_sec=1.0)
     assert proc.returncode is not None and time.monotonic() - started < 10
-    with pytest.raises(ProcessLookupError):
+    # macOS는 좀비만 남은 그룹에 EPERM을 돌려주기도 한다(이미 끝난 그룹과 같다).
+    with pytest.raises((ProcessLookupError, PermissionError)):
         import os
         os.killpg(proc.pid, 0)
 
