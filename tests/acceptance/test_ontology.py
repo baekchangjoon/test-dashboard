@@ -672,3 +672,381 @@ def test_req016_real_s03_ontology_renders_offline(real_s04, viz_browser):
         assert 1 < shown < len(real_json["nodes"])
     finally:
         context.close()
+
+
+# =====================================================================================
+# Task 24: S05 OWL 온톨로지(REQ-018, REQ-022 S05 캡처, REQ-024 OWL 스냅샷, REQ-061 owl-gen.json)
+# 가짜 claude(PATH 앞)로 S05 단계 스크립트를 가짜 run 디렉터리에서 실행한다. 입력은 실제 run에서 복사한
+# jQA JSON과 정제 bbtg(derive-test-data) fixture다. 스냅샷 루트는 TD_ONTOLOGY_GENERATED_DIR(임시)다.
+# =====================================================================================
+S05_SCRIPT = REPO_ROOT / "pipeline" / "S05-owl-build.sh"
+OWL_FIXTURES = REPO_ROOT / "tests" / "fixtures" / "owl"
+SHAPES_FILE = REPO_ROOT / "ontology" / "owl" / "shapes.ttl"
+OWL_GEN_SCHEMA = REPO_ROOT / "site-gen" / "td" / "schemas" / "owl-gen.schema.json"
+TD_NS = "http://test-dashboard.local/ontology#"
+
+VALID_ADDITIONS = """\
+td:Owner rdfs:label "Pet owner"@en ;
+    rdfs:comment "A person who registers pets and visits."@en ;
+    rdfs:subClassOf [ a owl:Restriction ; owl:onProperty td:Owner_lastName ;
+                      owl:minCardinality "1"^^xsd:nonNegativeInteger ] .
+td:Pet_type a owl:FunctionalProperty ;
+    rdfs:comment "The species classification of a pet."@en .
+"""
+BROKEN_TURTLE = 'td:Owner rdfs:label "unterminated .\n'
+TAMPER_PROVENANCE = 'td:Owner td:fromJqa "entity:forged.Owner" .\n'
+NEW_TERM = 'td:InventedConcept a owl:Class ; rdfs:label "Invented"@en .\n'
+
+
+def owl_reply(text: str, tokens_in: int = 900, tokens_out: int = 150) -> dict:
+    return {"type": "result", "subtype": "success", "is_error": False, "result": text, "duration_ms": 10,
+            "usage": {"input_tokens": tokens_in, "cache_creation_input_tokens": 3, "cache_read_input_tokens": 4,
+                      "output_tokens": tokens_out}}
+
+
+class S05Env:
+    """가짜 run 디렉터리(S02 정제 bbtg, S03 jQA JSON)를 만들고 pipeline/S05-owl-build.sh를 실행한다."""
+
+    def __init__(self, tmp_path: Path):
+        self.tmp_path = tmp_path
+        self.generated = tmp_path / "ontology-generated"
+        self.count = 0
+
+    def new_run(self) -> Path:
+        from test_isolation import make_run_dir
+        self.count += 1
+        run_dir = make_run_dir(self.tmp_path, f"run-{self.count}")
+        shutil.rmtree(run_dir / "S05")
+        shutil.copyfile(OWL_FIXTURES / "ontology-jqa.json", run_dir / "S03" / "ontology-jqa.json")
+        shutil.copyfile(OWL_FIXTURES / "derive-test-data.json", run_dir / "S02" / "bbtg" / "clean" / "derive-test-data.json")
+        init = subprocess.run([sys.executable, "-m", "td.state", "init", str(run_dir), "--run-id", run_dir.name, "--sut",
+                               "petclinic", "--commit", RUN_COMMIT], capture_output=True, text=True,
+                              env={**os.environ, "PYTHONPATH": str(REPO_ROOT / "site-gen")})
+        assert init.returncode == 0, init.stderr
+        (run_dir / "stages").mkdir(exist_ok=True)
+        for stage in ("S00", "S02", "S03"):
+            (run_dir / "stages" / f"{stage}.json").write_text(json.dumps({"id": stage, "status": "passed", "reason": None,
+                                                                          "outputs": {}}))
+        (run_dir / "tools.lock").write_text("schema: 1\nclaude:\n  version: 9.9.9-test\n  model: claude-opus-5-5\n")
+        return run_dir
+
+    def env(self, run_dir: Path, **extra: str) -> dict:
+        from test_isolation import FIXTURE_SUT
+        env = {k: v for k, v in os.environ.items() if not k.startswith("TD_")}
+        env.update(TD_ROOT=str(REPO_ROOT), TD_RUN_DIR=str(run_dir), TD_WORK_DIR=str(run_dir.parent),
+                   TD_SUT_SRC=str(FIXTURE_SUT), TD_SUT_FILE=str(SUT_FILE), TD_ONTOLOGY_GENERATED_DIR=str(self.generated),
+                   TD_SITE_PREFIX="_test/s05/", **extra)
+        return env
+
+    def run(self, run_dir: Path, **extra: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["bash", str(S05_SCRIPT), "petclinic", run_dir.name], capture_output=True, text=True,
+                              env=self.env(run_dir, **extra), timeout=600)
+
+    def popen(self, run_dir: Path, **extra: str) -> subprocess.Popen:
+        return subprocess.Popen(["bash", str(S05_SCRIPT), "petclinic", run_dir.name], stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, text=True, env=self.env(run_dir, **extra))
+
+    @staticmethod
+    def stage(run_dir: Path) -> dict:
+        return json.loads((run_dir / "stages" / "S05.json").read_text())
+
+    @staticmethod
+    def meta(run_dir: Path) -> dict:
+        return json.loads((run_dir / "S05" / "owl-gen.json").read_text())
+
+    def snapshots(self) -> list[Path]:
+        root = self.generated / "petclinic"
+        return sorted(p for p in root.iterdir() if p.is_dir() and not p.name.startswith(".")) if root.exists() else []
+
+
+@pytest.fixture
+def s05(tmp_path) -> S05Env:
+    return S05Env(tmp_path)
+
+
+def _owl_tree_hashes(root: Path) -> dict[str, str]:
+    import hashlib
+    return {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(root.rglob("*"))
+            if p.is_file()}
+
+
+def assert_owl_correspondence(ttl_path: Path, jqa: dict) -> dict:
+    """REQ-018 판정을 rdflib/pySHACL로 직접 한다(구현 모듈의 집계 함수에 기대지 않는다)."""
+    import rdflib
+    from rdflib.namespace import OWL, RDF
+    from pyshacl import validate
+    graph = rdflib.Graph().parse(ttl_path, format="turtle")
+    from_jqa = rdflib.URIRef(TD_NS + "fromJqa")
+    node_ids = {n["id"] for n in jqa["nodes"]}
+    entity_ids = {n["id"] for n in jqa["nodes"] if n["kind"] == "Entity"}
+    classes = set(graph.subjects(RDF.type, OWL.Class))
+    class_provenance = {str(o) for c in classes for o in graph.objects(c, from_jqa)}
+    matched = entity_ids & class_provenance
+    assert entity_ids and len(matched) / len(entity_ids) >= 0.9, (len(matched), len(entity_ids))
+    object_properties = set(graph.subjects(RDF.type, OWL.ObjectProperty))
+    assert len(object_properties) >= 3
+    terms = classes | object_properties | set(graph.subjects(RDF.type, OWL.DatatypeProperty))
+    for term in terms:   # 모든 클래스·속성에 jQA 노드 id를 가리키는 provenance가 있다
+        values = {str(o) for o in graph.objects(term, from_jqa)}
+        assert values and values <= node_ids, (term, values)
+    shapes = rdflib.Graph().parse(SHAPES_FILE, format="turtle")
+    conforms, _, report = validate(graph, shacl_graph=shapes)
+    assert conforms, report
+    violating = rdflib.Graph().parse(OWL_FIXTURES / "violating.ttl", format="turtle")
+    bad_conforms, _, bad_report = validate(violating, shacl_graph=shapes)
+    assert bad_conforms is False and "fromJqa" in bad_report and "range" in bad_report
+    return {"graph": graph, "classes": classes, "objectProperties": object_properties}
+
+
+def test_req018_owl_correspondence(s05, fake_claude):
+    """S05 완료 뒤: ttl 파싱, Entity 대응 ≥ 90%와 provenance, 객체 속성 ≥ 3, shapes conforms, 위반 fixture는 false.
+    LLM 보강(@en 라벨, 제약)이 골격에 합쳐지고, JSON이 온톨로지 스키마를 통과해 S04가 owl.html을 그린다."""
+    import rdflib
+    from td import ontology_html
+    fake_claude.respond(owl_reply(VALID_ADDITIONS))
+    run_dir = s05.new_run()
+    done = s05.run(run_dir)
+    assert done.returncode == 0, done.stderr[-3000:]
+    stage = s05.stage(run_dir)
+    assert stage["status"] == "passed", stage
+    ttl = run_dir / "S05" / "ontology-owl.ttl"
+    jqa = json.loads((OWL_FIXTURES / "ontology-jqa.json").read_text())
+    checked = assert_owl_correspondence(ttl, jqa)
+    graph = checked["graph"]
+    owner = rdflib.URIRef(TD_NS + "Owner")
+    assert rdflib.Literal("Pet owner", lang="en") in set(graph.objects(owner, rdflib.RDFS.label))
+    assert (rdflib.URIRef(TD_NS + "Pet_type"), rdflib.RDF.type, rdflib.OWL.FunctionalProperty) in graph
+    # 시각화용 JSON: 스키마 통과, Entity 노드와 객체 속성 간선, S04 렌더
+    doc = json.loads((run_dir / "S05" / "ontology-owl.json").read_text())
+    jsonschema.validate(doc, json.loads(SCHEMA_FILE.read_text()))
+    assert doc["meta"]["tool"] == "owl" and doc["meta"]["commit"] == RUN_COMMIT
+    entity_nodes = [n for n in doc["nodes"] if n["kind"] == "Entity"]
+    assert len(entity_nodes) == len([n for n in jqa["nodes"] if n["kind"] == "Entity"])
+    assert all(n["props"]["fromJqa"] for n in doc["nodes"])
+    owner_node = next(n for n in entity_nodes if n["props"]["iri"] == TD_NS + "Owner")
+    assert owner_node["label"] == "Pet owner" and owner_node["props"]["comment"]
+    entity_iris = {n["id"] for n in entity_nodes}
+    assert len([e for e in doc["edges"] if e["source"] in entity_iris and e["target"] in entity_iris]) >= 3
+    assert any(n["kind"] == "Endpoint" for n in doc["nodes"])
+    ontology_html.render(run_dir / "S05" / "ontology-owl.json", tmp := run_dir / "S04" / "owl.html", "owl")
+    assert tmp.exists()
+    # 단계 산출물 경로: S04가 outputs.ontology를 읽고, S06 owl arm은 S05/ontology-owl.ttl을 번들에 넣는다
+    assert stage["outputs"]["ontology"] == str(run_dir / "S05" / "ontology-owl.json")
+    assert stage["outputs"]["ttl"] == str(ttl)
+    assert (run_dir / "S05" / "bundle" / "ontology" / "skeleton.ttl").is_file()
+
+
+def test_req018_skeleton_is_deterministic_and_complete():
+    """골격은 jQA JSON + 정제 bbtg의 결정적 함수다(두 번 만들면 바이트 동일). LLM 없이도 대응·provenance·shapes를 만족한다."""
+    from td import ontology_owl
+    jqa = json.loads((OWL_FIXTURES / "ontology-jqa.json").read_text())
+    bbtg = {"derive-test-data": json.loads((OWL_FIXTURES / "derive-test-data.json").read_text())}
+    first = ontology_owl.serialize(ontology_owl.skeleton(jqa, bbtg))
+    second = ontology_owl.serialize(ontology_owl.skeleton(json.loads(json.dumps(jqa)), bbtg))
+    assert first == second
+    path = Path(__import__("tempfile").mkdtemp()) / "skeleton.ttl"
+    path.write_text(first)
+    checked = assert_owl_correspondence(path, jqa)
+    names = {str(p).split("#")[1] for p in checked["objectProperties"]}
+    # bbtg 관계(OneToMany 등)와 필드 이름으로 정한 속성 이름: 필드 타입 일치, bbtg 관계 유일 후보, 그 밖은 일반 이름
+    assert {"Pet_type", "Owner_pets", "Pet_visits", "Vet_specialties"} <= names, names
+    assert "petclinic" not in (REPO_ROOT / "site-gen" / "td" / "ontology_owl.py").read_text().lower()
+    assert "petclinic" not in (REPO_ROOT / "prompts" / "owl-gen.md").read_text().lower()
+
+
+def test_unit_owl_additions_contract():
+    """LLM 추가분 계약: 골격의 기존 용어(또는 제한용 빈 노드)만 설명하고, provenance(td:fromJqa, td:kind)는 쓸 수 없다."""
+    from td import ontology_owl
+    jqa = json.loads((OWL_FIXTURES / "ontology-jqa.json").read_text())
+    skeleton = ontology_owl.skeleton(jqa, {})
+    merged, problems = ontology_owl.merge_additions(skeleton, VALID_ADDITIONS)
+    assert problems == [] and len(merged) > len(skeleton)
+    for text, needle in ((BROKEN_TURTLE, "Turtle"), (TAMPER_PROVENANCE, "fromJqa"), (NEW_TERM, "InventedConcept"),
+                         ('td:Owner rdfs:subClassOf [ a owl:Restriction ; owl:onProperty td:NoSuchProperty ; '
+                          'owl:maxCardinality 1 ] .\n', "NoSuchProperty"),
+                         ('td:Owner rdfs:domain td:Pet .\n', "domain")):
+        merged, problems = ontology_owl.merge_additions(skeleton, text)
+        assert problems and any(needle in p for p in problems), (text, problems)
+        assert merged is None
+    # 골격의 provenance는 합친 뒤에도 그대로다
+    merged, _ = ontology_owl.merge_additions(skeleton, VALID_ADDITIONS)
+    from_jqa = __import__("rdflib").URIRef(TD_NS + "fromJqa")
+    assert set(skeleton.triples((None, from_jqa, None))) == set(merged.triples((None, from_jqa, None)))
+
+
+def test_req022_s05_stage_level_capture(s05, fake_claude, claude_call_log):
+    """S05 단계 수준: 생성과 수리 호출이 모두 llm.sh를 거친다(cwd = 번들 임시 디렉터리, 격리 플래그, stdin에 SUT 소스 없음).
+    수리 입력은 오류 문구와 직전 출력뿐이다(번들은 llm.sh가 뒤에 붙인다)."""
+    from test_isolation import FIXTURE_SUT
+    fake_claude.respond_sequence([owl_reply(BROKEN_TURTLE), owl_reply(VALID_ADDITIONS)])
+    run_dir = s05.new_run()
+    done = s05.run(run_dir)
+    assert done.returncode == 0, done.stderr[-3000:]
+    calls = fake_claude.calls
+    assert len(calls) == 2
+    sut_text = [line.strip() for p in (FIXTURE_SUT / "src").rglob("*") if p.is_file()
+                for line in p.read_text(errors="replace").splitlines() if len(line.strip()) > 30]
+    cwds = set()
+    for call in calls:
+        cwd = Path(call.cwd).resolve()
+        cwds.add(cwd)
+        assert cwd.name == "cwd" and cwd.parent.name.startswith("td-llm.")
+        for forbidden in (REPO_ROOT, FIXTURE_SUT, run_dir):
+            assert not cwd.is_relative_to(Path(forbidden).resolve()), (cwd, forbidden)
+        assert not cwd.exists()
+        argv = call.argv
+        assert argv[argv.index("--tools") + 1] == "" and "--strict-mcp-config" in argv
+        assert json.loads(argv[argv.index("--mcp-config") + 1]) == {"mcpServers": {}}
+        assert argv[argv.index("--setting-sources") + 1] == ""
+        assert not [line for line in sut_text if line in call.stdin]
+        assert "TD_SUT_PASS" not in call.env and "TD_SUT_USER" not in call.env
+        assert "=== FILE: ontology/skeleton.ttl ===" in call.stdin and "=== FILE: bbtg/derive-test-data.json ===" in call.stdin
+        assert "=== FILE: harness/CONTRACT.md ===" not in call.stdin
+    assert len(cwds) == 2
+    repair_head = calls[1].stdin.split("=== FILE:")[0]
+    assert "=== ERRORS ===" in repair_head and "=== PREVIOUS OUTPUT ===" in repair_head
+    assert BROKEN_TURTLE.strip() in repair_head and "Turtle" in repair_head
+    assert len(claude_call_log(run_dir)) == 2
+    meta = s05.meta(run_dir)
+    assert meta["repairs"] == 1 and meta["status"] == "passed"
+
+
+def test_req024_owl_snapshot_reuse_and_tamper(s05, fake_claude):
+    """같은 입력 키의 스냅샷이 있으면 claude를 부르지 않고 재사용한다. 변조된 스냅샷은 재사용도 덮어쓰기도 하지 않는다."""
+    fake_claude.respond(owl_reply(VALID_ADDITIONS))
+    first = s05.new_run()
+    assert s05.run(first).returncode == 0
+    [snapshot] = s05.snapshots()
+    assert (snapshot / "_COMPLETE").is_file() and (snapshot / "ontology-owl.ttl").is_file()
+    key = s05.meta(first)["inputHash"]
+    assert snapshot.name == key[:8] and len(key) == 64
+    assert (first / "S05" / "ontology-owl.ttl").read_bytes() == (snapshot / "ontology-owl.ttl").read_bytes()
+    second = s05.new_run()
+    done = s05.run(second)
+    assert done.returncode == 0, done.stderr[-2000:]
+    assert len(fake_claude.calls) == 1                                 # 재사용: claude 0회
+    meta = s05.meta(second)
+    assert meta["reused"] is True and meta["inputHash"] == key and s05.stage(second)["status"] == "passed"
+    assert (second / "S05" / "ontology-owl.ttl").read_bytes() == (snapshot / "ontology-owl.ttl").read_bytes()
+    assert (second / "S05" / "bundle" / "ontology" / "skeleton.ttl").is_file()   # 재사용해도 번들은 조립·보존한다
+    # 변조: 재사용·덮어쓰기 없이 failed
+    ttl = snapshot / "ontology-owl.ttl"
+    ttl.write_text(ttl.read_text() + "\n# tampered\n")
+    before = _owl_tree_hashes(snapshot)
+    third = s05.new_run()
+    done = s05.run(third)
+    assert done.returncode != 0 and s05.stage(third)["status"] == "failed"
+    assert "_COMPLETE" in s05.stage(third)["reason"]
+    assert len(fake_claude.calls) == 1 and _owl_tree_hashes(snapshot) == before
+    leftovers = [p for p in (s05.generated / "petclinic").rglob("*") if p.is_dir() and
+                 (p.name.startswith(".tmp-") or p.parent.name == ".reserve")]
+    assert leftovers == []
+
+
+def test_req024_owl_concurrent_same_input_writes_once(s05, fake_claude):
+    """같은 입력의 S05 두 개를 동시에 돌리면 claude는 1회, 한쪽은 예약이 풀린 뒤 스냅샷을 재사용한다."""
+    fake_claude.respond(owl_reply(VALID_ADDITIONS))
+    fake_claude.delay(4)
+    runs = [s05.new_run(), s05.new_run()]
+    procs = [s05.popen(run_dir) for run_dir in runs]
+    for proc in procs:
+        _, err = proc.communicate(timeout=300)
+        assert proc.returncode == 0, err[-2000:]
+    assert len(fake_claude.calls) == 1
+    assert sorted(s05.meta(run_dir)["reused"] for run_dir in runs) == [False, True]
+    assert len(s05.snapshots()) == 1
+
+
+def test_owl_repair_bounded_then_fails_without_snapshot(s05, fake_claude):
+    """수리는 최대 2회다. [provenance 위조, 깨진 Turtle, 깨진 Turtle] -> 호출 3회, S05 failed, 스냅샷 없음.
+    [새 용어, 정상] -> 수리 1회로 passed, 위조나 새 용어는 결과에 없다."""
+    fake_claude.respond_sequence([owl_reply(TAMPER_PROVENANCE), owl_reply(BROKEN_TURTLE), owl_reply(BROKEN_TURTLE)])
+    run_dir = s05.new_run()
+    done = s05.run(run_dir)
+    assert done.returncode != 0
+    stage = s05.stage(run_dir)
+    assert stage["status"] == "failed" and "2" in stage["reason"], stage
+    assert len(fake_claude.calls) == 3 and s05.snapshots() == []
+    meta = s05.meta(run_dir)
+    assert meta["repairs"] == 2 and meta["status"] == "failed"
+    assert not (run_dir / "S05" / "ontology-owl.ttl").exists()
+
+    fake_claude.respond_sequence([owl_reply(NEW_TERM)] * 4 + [owl_reply(VALID_ADDITIONS)])  # 호출 수는 전체 기준(4번째부터)
+    run_dir = s05.new_run()
+    done = s05.run(run_dir)
+    assert done.returncode == 0, done.stderr[-2000:]
+    assert len(fake_claude.calls) == 5 and s05.meta(run_dir)["repairs"] == 1
+    text = (run_dir / "S05" / "ontology-owl.ttl").read_text()
+    assert "InventedConcept" not in text and "forged" not in text
+
+
+def test_owl_malformed_llm_reply_fails_without_repair(s05, fake_claude):
+    """claude 응답 자체가 오류(is_error)면 수리하지 않고 S05 failed(사유 포함), 스냅샷 없음."""
+    fake_claude.respond({"type": "result", "subtype": "error", "is_error": True, "result": "boom"})
+    run_dir = s05.new_run()
+    done = s05.run(run_dir)
+    assert done.returncode != 0 and s05.stage(run_dir)["status"] == "failed"
+    assert len(fake_claude.calls) == 1 and s05.snapshots() == []
+    assert s05.meta(run_dir)["repairs"] == 0
+
+
+def test_req061_owl_gen_metadata_schema(s05, fake_claude):
+    """owl-gen.json: 입력 해시, 프롬프트 해시, 모델, CLI 버전, 플래그, 수리 횟수, 토큰, 시간, strippedFields가 스키마를 통과한다."""
+    fake_claude.respond(owl_reply(VALID_ADDITIONS, tokens_in=1200, tokens_out=300))
+    run_dir = s05.new_run()
+    assert s05.run(run_dir).returncode == 0
+    meta = s05.meta(run_dir)
+    schema = json.loads(OWL_GEN_SCHEMA.read_text())
+    jsonschema.validate(meta, schema)
+    import hashlib
+    assert meta["promptHash"] == hashlib.sha256((REPO_ROOT / "prompts" / "owl-gen.md").read_bytes()).hexdigest()
+    assert meta["model"] == "claude-opus-5-5" and meta["cliVersion"] == "9.9.9-test"
+    assert any(flag.startswith("--tools") for flag in meta["flags"]) and meta["repairs"] == 0
+    assert meta["tokens"] == {"in": 1207, "out": 300} and meta["seconds"] >= 0
+    assert meta["strippedFields"] == ["a/b"] and meta["bundleHash"] and meta["conforms"] is True
+    assert meta["stats"]["entityCoverage"] >= 0.9 and meta["stats"]["objectProperties"] >= 3
+    for required in ("inputHash", "promptHash", "model", "cliVersion", "flags", "repairs", "tokens", "seconds",
+                     "strippedFields"):
+        broken = {k: v for k, v in meta.items() if k != required}
+        with pytest.raises(jsonschema.ValidationError):
+            jsonschema.validate(broken, schema)
+
+
+def test_s05_injected_bundle_contamination_fails_before_llm(s05, fake_claude, tmp_path):
+    """S05 번들도 A1 검사를 거친다: SUT docs 파일을 주입하면 LLM 호출 전에 failed."""
+    from test_isolation import FIXTURE_SUT
+    fake_claude.respond(owl_reply(VALID_ADDITIONS))
+    doc = tmp_path / "design.md"
+    doc.write_text("# notes\n")
+    run_dir = s05.new_run()
+    done = s05.run(run_dir, TD_BUNDLE_EXTRA=str(doc))
+    assert done.returncode != 0 and s05.stage(run_dir)["status"] == "failed"
+    assert "A1" in s05.stage(run_dir)["reason"] and fake_claude.calls == []
+
+
+# --- 실제 파이프라인: 커밋된 OWL 스냅샷 재사용(claude 0회), 실제 데이터 대응, owl.html 오프라인 렌더 -----------------
+@pytest.fixture(scope="module")
+def real_s05(real_pipeline_run):
+    return real_pipeline_run("S00,S02,S03,S05,S04")
+
+
+def test_req018_real_owl_snapshot_and_render(real_s05, viz_browser, claude_call_log):
+    run_dir = real_s05.run_dir
+    stages = {sid: json.loads((run_dir / "stages" / f"{sid}.json").read_text()) for sid in ("S03", "S05", "S04")}
+    assert stages["S05"]["status"] == "passed", stages["S05"]
+    meta = json.loads((run_dir / "S05" / "owl-gen.json").read_text())
+    assert meta["reused"] is True, "커밋된 ontology/generated 스냅샷을 재사용해야 한다(입력 키가 바뀌었으면 스냅샷을 다시 만든다)"
+    assert claude_call_log(run_dir) == []
+    snapshot = REPO_ROOT / "ontology" / "generated" / "petclinic" / meta["inputHash"][:8]
+    assert (snapshot / "_COMPLETE").is_file()
+    jqa = json.loads((run_dir / "S03" / "ontology-jqa.json").read_text())
+    assert_owl_correspondence(run_dir / "S05" / "ontology-owl.ttl", jqa)
+    assert stages["S04"]["status"] == "passed", stages["S04"]
+    html_path = run_dir / "S04" / "ontology" / "owl.html"
+    doc = json.loads((run_dir / "S05" / "ontology-owl.json").read_text())
+    context, page, blocked, console_errors, page_errors = _open_offline(viz_browser, html_path)
+    try:
+        assert page.evaluate("window.__td_cy.nodes().length") == len(doc["nodes"])
+        assert blocked == [] and console_errors == [] and page_errors == []
+    finally:
+        context.close()

@@ -25,30 +25,26 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import re
 import shutil
 import signal
-import socket
-import subprocess
 import sys
 import time
-import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import jsonschema
 
+from td import snapshot
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCHEMA_DIR = Path(__file__).resolve().parent / "schemas"
 MAX_REPAIRS = 2
-COMPLETE_NAME = "_COMPLETE"
-RESERVE_DIR = ".reserve"
-TMP_PREFIX = ".tmp-"
-LLM_TIMEOUT_SEC = 1000          # llm.sh 안의 td_run(기본 900초)보다 조금 길게
-BUNDLE_TIMEOUT_SEC = 600
+COMPLETE_NAME = snapshot.COMPLETE_NAME
+RESERVE_DIR = snapshot.RESERVE_DIR
+TMP_PREFIX = snapshot.TMP_PREFIX
 COMPILER_OUTPUT_LIMIT = 20000   # 수리 프롬프트에 넣는 컴파일러 출력 상한(문자)
 UNDEFINED_LIMIT = 200
 
@@ -66,8 +62,7 @@ class LlmCallError(BddGenError):
 
 
 # --- 경로와 해시 ------------------------------------------------------------------------------------
-def _root() -> Path:
-    return Path(os.environ.get("TD_ROOT") or REPO_ROOT)
+_root = snapshot.root
 
 
 def prompt_paths() -> tuple[Path, Path]:
@@ -80,8 +75,7 @@ def generated_root(sut: str) -> Path:
     return Path(base) / sut
 
 
-def sha256_bytes(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
+sha256_bytes = snapshot.sha256_bytes
 
 
 def generation_key(bundle_hash: str, gen_prompt: bytes, repair_prompt: bytes, model: str) -> str:
@@ -145,48 +139,19 @@ def write_files(target: Path, files: list[dict]) -> None:
         path.write_text(item["content"], encoding="utf-8")
 
 
-def tree_files(root: Path) -> list[str]:
-    return sorted(p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file() and p.name != COMPLETE_NAME)
+tree_files = snapshot.tree_files
 
 
-# --- LLM 호출 -------------------------------------------------------------------------------------
-@dataclass(frozen=True)
-class LlmReply:
-    text: str
-    tokens_in: int
-    tokens_out: int
-    seconds: float
-
-
-def _usage(data: dict) -> tuple[int, int]:
-    usage = data.get("usage") or {}
-    tokens_in = sum(int(usage.get(key) or 0) for key in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
-    return tokens_in, int(usage.get("output_tokens") or 0)
+# --- LLM 호출(td.snapshot.call_llm) -----------------------------------------------------------------
+LlmReply = snapshot.LlmReply
 
 
 def call_llm(bundle_dir: Path, prompt_file: Path, out_json: Path) -> LlmReply:
     """llm.sh로 한 번 부른다(격리, 서명 검사, 호출 기록은 llm.sh가 맡는다)."""
-    from td import proc
-    out_json.parent.mkdir(parents=True, exist_ok=True)
-    err_path = out_json.with_suffix(".err")
-    started = time.monotonic()
-    with err_path.open("w", encoding="utf-8") as err:
-        status = proc.run_with_timeout(LLM_TIMEOUT_SEC, ["bash", str(_root() / "pipeline" / "lib" / "llm.sh"),
-                                                         str(bundle_dir), str(prompt_file), str(out_json)],
-                                       stdout=subprocess.DEVNULL, stderr=err, reraise=True)
-    seconds = time.monotonic() - started
-    if status != 0:
-        tail = err_path.read_text(encoding="utf-8", errors="replace")[-600:].strip()
-        raise LlmCallError(f"llm.sh 실패(exit {status}): {tail}")
     try:
-        data = json.loads(out_json.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise LlmCallError(f"llm.sh 출력이 JSON이 아니다: {exc}") from exc
-    result = data.get("result") if isinstance(data, dict) else None
-    if not isinstance(result, str):
-        raise LlmCallError("claude 결과에 result 텍스트가 없다")
-    tokens_in, tokens_out = _usage(data)
-    return LlmReply(result, tokens_in, tokens_out, seconds)
+        return snapshot.call_llm(bundle_dir, prompt_file, out_json)
+    except snapshot.LlmCallError as exc:
+        raise LlmCallError(str(exc)) from exc
 
 
 # --- 검증 -----------------------------------------------------------------------------------------
@@ -242,91 +207,10 @@ def render_repair(template: str, issues: Issues, files: list[dict]) -> str:
             .replace("{{PREVIOUS_FILES}}", previous))
 
 
-# --- 스냅샷: _COMPLETE와 예약 ----------------------------------------------------------------------
-def complete_problem(gen_dir: Path, key: str) -> str | None:
-    """재사용 가능한 완성 스냅샷이면 None, 아니면 사유."""
-    marker = gen_dir / COMPLETE_NAME
-    if not marker.is_file():
-        return f"{COMPLETE_NAME}이 없다"
-    try:
-        recorded = json.loads(marker.read_text(encoding="utf-8"))
-        expected = {item["path"]: item["sha256"] for item in recorded["files"]}
-    except (ValueError, KeyError, TypeError):
-        return f"{COMPLETE_NAME}을 읽을 수 없다"
-    if recorded.get("inputHash") != key:
-        return f"{COMPLETE_NAME}의 입력 해시가 다르다"
-    actual = tree_files(gen_dir)
-    if sorted(expected) != actual:
-        return f"{COMPLETE_NAME}의 파일 목록과 실제 파일이 다르다"
-    changed = [rel for rel in actual if sha256_bytes((gen_dir / rel).read_bytes()) != expected[rel]]
-    if changed:
-        return f"{COMPLETE_NAME} 체크섬과 다른 파일: {', '.join(changed)}"
-    return None
-
-
-def _pid_alive(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
-
-
-def _owner(lock: Path) -> dict | None:
-    try:
-        data = json.loads((lock / "owner.json").read_text())
-    except (OSError, ValueError):
-        return None
-    return data if isinstance(data, dict) else None
-
-
-def _stale(lock: Path, owner: dict | None) -> bool:
-    if owner is None:
-        # 주인 정보를 쓰기 전의 순간이거나 깨진 예약이다. 오래된 것만 회수한다.
-        try:
-            return time.time() - lock.stat().st_mtime > 120
-        except OSError:
-            return False
-    return owner.get("host") == socket.gethostname() and not _pid_alive(int(owner.get("pid") or 0))
-
-
-def try_reserve(arm_dir: Path, gen_id: str) -> Path | None:
-    """`.reserve/<genId>`를 원자적 mkdir로 잡는다. 이미 있으면 None(죽은 주인의 예약은 회수 후 다시 시도).
-    회수는 rename 하나로 한다(둘이 동시에 회수해도 한쪽만 성공). rename 뒤 옮겨 온 예약의 주인이 판정한 주인과 다르면
-    (판정과 rename 사이에 다른 프로세스가 새로 잡은 예약) 되돌리고 포기한다."""
-    reserve = arm_dir / RESERVE_DIR
-    reserve.mkdir(parents=True, exist_ok=True)
-    lock = reserve / gen_id
-    for _ in range(2):
-        try:
-            lock.mkdir()
-        except FileExistsError:
-            judged = _owner(lock)
-            if not _stale(lock, judged):
-                return None
-            graveyard = reserve / f"{gen_id}.stale-{uuid.uuid4().hex[:8]}"
-            try:
-                lock.rename(graveyard)
-            except OSError:
-                return None
-            if _owner(graveyard) != judged:
-                try:
-                    graveyard.rename(lock)
-                except OSError:
-                    pass
-                return None
-            shutil.rmtree(graveyard, ignore_errors=True)
-            continue
-        (lock / "owner.json").write_text(json.dumps({"pid": os.getpid(), "host": socket.gethostname()}))
-        return lock
-    return None
-
-
-def release(lock: Path | None) -> None:
-    if lock is not None:
-        shutil.rmtree(lock, ignore_errors=True)
+# --- 스냅샷: _COMPLETE와 예약(td.snapshot 공용 부품) -----------------------------------------------
+complete_problem = snapshot.complete_problem
+try_reserve = snapshot.try_reserve
+release = snapshot.release
 
 
 # --- generation 하나 --------------------------------------------------------------------------------
@@ -365,7 +249,7 @@ def _base_record(arm: str, rep: int, gen: int | None, gen_id: str, key: str, bun
 
 
 def _reuse(final: Path, key: str) -> Generation:
-    meta = json.loads((final / COMPLETE_NAME).read_text(encoding="utf-8"))["meta"]
+    meta = snapshot.read_complete_meta(final)
     record = {**meta, "reused": True, "dir": str(final)}
     return Generation(record["genId"], final, record["repairs"], record["tokens"], record["seconds"],
                       record["status"], record.get("reason"), True, record)
@@ -386,8 +270,7 @@ def _produce(arm: str, rep: int, gen: int | None, gen_id: str, key: str, bundle_
     work = ctx.work_dir / gen_id
     shutil.rmtree(work, ignore_errors=True)
     work.mkdir(parents=True)
-    tmp = arm_dir / f"{TMP_PREFIX}{gen_id}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
-    tmp.mkdir()
+    tmp = snapshot.make_tmp(arm_dir, gen_id)
     try:
         def ask(prompt_file: Path, label: str) -> list[dict]:
             reply = ctx.llm(bundle_dir, prompt_file, work / f"{label}.json")
@@ -437,11 +320,7 @@ def _produce(arm: str, rep: int, gen: int | None, gen_id: str, key: str, bundle_
         final = arm_dir / gen_id
         if final.exists():
             raise BddGenError(f"예약을 쥔 채로 최종 디렉터리가 이미 있다: {gen_id}")
-        complete = {"schema": 1, "genId": gen_id, "inputHash": key,
-                    "files": [{"path": rel, "sha256": sha256_bytes((tmp / rel).read_bytes())} for rel in tree_files(tmp)],
-                    "meta": {**record, "dir": None}}
-        (tmp / COMPLETE_NAME).write_text(json.dumps(complete, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-                                         encoding="utf-8")
+        snapshot.write_complete(tmp, key, {**record, "dir": None}, genId=gen_id)
         os.rename(tmp, final)
         record["dir"] = str(final)
         return Generation(gen_id, final, record["repairs"], record["tokens"], record["seconds"], status, reason, False, record)
@@ -494,43 +373,17 @@ def generate(arm: str, rep: int, bundle, out_root, regenerate: bool = False, *, 
 
 
 # --- S06 단계 --------------------------------------------------------------------------------------
-def _cli_version(run_dir: Path) -> str:
-    import yaml
-    try:
-        lock = yaml.safe_load((run_dir / "tools.lock").read_text()) or {}
-        return str((lock.get("claude") or {}).get("version") or "unknown")
-    except (OSError, yaml.YAMLError):
-        return "unknown"
-
-
-def _sanitize_info(run_dir: Path) -> dict:
-    try:
-        manifest = json.loads((run_dir / "S02" / "bbtg" / "manifest.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {"strippedFields": [], "forbiddenDeclared": []}
-    sanitize = manifest.get("sanitize") or {}
-    return {"strippedFields": list(sanitize.get("strippedFields") or []),
-            "forbiddenDeclared": list(sanitize.get("forbiddenDeclared") or [])}
+_cli_version = snapshot.cli_version
+_sanitize_info = snapshot.sanitize_info
 
 
 def build_bundle(arm: str, run_dir: Path, sut_src: Path, sut_file: Path):
     """`td.bundle build` CLI(조립 + 검사 + 서명)를 그대로 쓴다. 실패면 BddGenError(사유)."""
-    from td import bundle, proc
-    out = run_dir / "S06" / "bundles" / arm
-    log = run_dir / "S06" / f"bundle-{arm}.log"
-    stdout_path = run_dir / "S06" / f"bundle-{arm}.json"
-    argv = [sys.executable, "-m", "td.bundle", "build", "--arm", arm, "--run-dir", str(run_dir), "--out", str(out),
-            "--sut-src", str(sut_src)]
-    oracle = Path(sut_file).parent / "oracle.yaml"
-    if oracle.is_file():
-        argv += ["--oracle", str(oracle)]
-    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
-    with stdout_path.open("w") as out_handle, log.open("w") as err_handle:
-        status = proc.run_with_timeout(BUNDLE_TIMEOUT_SEC, argv, stdout=out_handle, stderr=err_handle, env=env, reraise=True)
-    if status != 0:
-        raise BddGenError(f"번들 검사 실패(exit {status}): {log.read_text(errors='replace')[-800:].strip()}")
-    info = json.loads(stdout_path.read_text())
-    return bundle.Bundle(path=out, input_hash=info["inputHash"], arm=arm)
+    try:
+        return snapshot.build_bundle(arm, run_dir, run_dir / "S06" / "bundles" / arm, sut_src, sut_file,
+                                     run_dir / "S06" / f"bundle-{arm}")
+    except snapshot.BundleBuildError as exc:
+        raise BddGenError(str(exc)) from exc
 
 
 def _unexpected_failure(arm: str, rep: int, built, ctx: GenContext, exc: Exception) -> Generation:
@@ -622,9 +475,7 @@ def _regenerate_requested(run_dir: Path) -> bool:
     return bool(state.read_run(run_dir).get("options", {}).get("regenerate"))
 
 
-def _on_term(signum, _frame):
-    # finally 블록(임시 디렉터리 삭제, 예약 해제)이 돌도록 예외로 바꾼다.
-    raise SystemExit(128 + signum)
+_on_term = snapshot.on_term
 
 
 def main(argv: list[str] | None = None) -> int:

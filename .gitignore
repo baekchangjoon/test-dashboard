@@ -12,3 +12,6 @@ build/
 # S06 스냅샷 예약 잠금과 생성 중 임시 디렉터리(완성본만 커밋한다)
 e2e/generated/**/.reserve/
 e2e/generated/**/.tmp-*/
+# S05 OWL 스냅샷 예약 잠금과 생성 중 임시 디렉터리
+ontology/generated/**/.reserve/
+ontology/generated/**/.tmp-*/

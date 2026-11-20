@@ -1,0 +1,27 @@
+# REQ-018 위반 fixture: shapes.ttl의 필수 속성이 빠진 개체들. 검증 결과는 conforms=false여야 한다.
+@prefix td: <http://test-dashboard.local/ontology#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# 정상 클래스(대조군)
+td:Basket a owl:Class ;
+    rdfs:label "Basket" ;
+    td:kind "Entity" ;
+    td:fromJqa "entity:example.Basket" .
+
+# provenance(td:fromJqa)가 없는 클래스
+td:Orphan a owl:Class ;
+    rdfs:label "Orphan" ;
+    td:kind "Entity" .
+
+# rdfs:label이 없는 클래스
+td:Nameless a owl:Class ;
+    td:kind "Entity" ;
+    td:fromJqa "entity:example.Nameless" .
+
+# rdfs:range가 없는 객체 속성
+td:Basket_items a owl:ObjectProperty ;
+    rdfs:label "items" ;
+    rdfs:domain td:Basket ;
+    td:fromJqa "entity:example.Basket" .

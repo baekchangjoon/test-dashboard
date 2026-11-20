@@ -4,6 +4,7 @@
 - `bbtg/<skill>.json`: S02 정제 산출물, `bbtg/manifest.json`: 원문 필드 없는 요약(summary, sanitize 목록과 개수만)
 - `harness/CONTRACT.md`: 하네스 API 계약(도메인 지식 없음). 번들에서 허용되는 유일한 `.md`다.
 - `ontology/ontology-jqa.json`(jqa arm), `ontology/ontology-owl.ttl`(owl arm)
+- S05 OWL 보강 번들(kind `owlgen`): `bbtg/**`와 `ontology/skeleton.ttl`(결정적 골격)만 둔다. 하네스 계약은 넣지 않는다.
 - `extra/<name>`: `TD_BUNDLE_EXTRA` 주입용(수용 테스트 전용). 출처가 금지 경로면 경로 검사가 실패시킨다.
 번들은 항상 `out_dir`에 보존한다(S06은 `S06/bundles/<arm>/`, S05는 `S05/bundle/`).
 입력 해시는 번들 파일의 (상대 경로, 바이트)를 정렬해 sha256으로 만든다. 체크아웃 경로와 무관하다.
@@ -25,6 +26,8 @@ from td import normalize
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_SRC = Path("e2e") / "harness" / "CONTRACT.md"
 ARMS = ("base", "jqa", "owl")
+OWLGEN = "owlgen"                     # S05 번들 종류(arm이 아니다)
+KINDS = ARMS + (OWLGEN,)
 WINDOW_LINES = 5
 BBTG_FILE_RE = re.compile(r"^bbtg/[a-z][a-z0-9-]*\.json$")
 STAMP_NAME = ".td-bundle-verified.json"   # build가 검사 통과 뒤 쓰는 서명. llm.sh가 호출 전에 대조한다
@@ -77,7 +80,7 @@ def _write_filtered_manifest(source: Path, target: Path) -> None:
 
 def assemble(arm: str, run_dir, out_dir, extra=None) -> Bundle:
     """arm의 입력 번들을 out_dir에 새로 만든다(기존 내용은 지운다). extra는 주입할 파일 경로 목록(수용 테스트용)."""
-    if arm not in ARMS:
+    if arm not in KINDS:
         raise BundleError(f"알 수 없는 arm: {arm!r}")
     run_dir, out_dir = Path(run_dir), Path(out_dir)
     clean_dir = run_dir / "S02" / "bbtg" / "clean"
@@ -94,9 +97,11 @@ def assemble(arm: str, run_dir, out_dir, extra=None) -> Bundle:
     manifest = run_dir / "S02" / "bbtg" / "manifest.json"
     if manifest.is_file():
         _write_filtered_manifest(manifest, out_dir / "bbtg" / "manifest.json")
-    (out_dir / "harness").mkdir()
-    shutil.copyfile(contract, out_dir / "harness" / "CONTRACT.md")
-    ontology_source = {"jqa": run_dir / "S03" / "ontology-jqa.json", "owl": run_dir / "S05" / "ontology-owl.ttl"}.get(arm)
+    if arm != OWLGEN:
+        (out_dir / "harness").mkdir()
+        shutil.copyfile(contract, out_dir / "harness" / "CONTRACT.md")
+    ontology_source = {"jqa": run_dir / "S03" / "ontology-jqa.json", "owl": run_dir / "S05" / "ontology-owl.ttl",
+                       OWLGEN: run_dir / "S05" / "skeleton.ttl"}.get(arm)
     if ontology_source is not None:
         if not ontology_source.is_file():
             raise BundleError(f"{arm} arm의 온톨로지가 없다: {ontology_source}")
@@ -116,6 +121,8 @@ def assemble(arm: str, run_dir, out_dir, extra=None) -> Bundle:
 
 # --- 경로 검사 ---------------------------------------------------------------------------
 def _allowed(arm: str) -> set[str]:
+    if arm == OWLGEN:
+        return {"bbtg/manifest.json", "ontology/skeleton.ttl"}
     allowed = {"bbtg/manifest.json", "harness/CONTRACT.md"}
     if arm == "jqa":
         allowed.add("ontology/ontology-jqa.json")
@@ -319,7 +326,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="td.bundle")
     sub = parser.add_subparsers(dest="command", required=True)
     build = sub.add_parser("build", help="번들 조립 + 경로·내용 검사(위반이면 1, 입력 오류면 2)")
-    build.add_argument("--arm", required=True, choices=ARMS)
+    build.add_argument("--arm", required=True, choices=KINDS, help="arm(base|jqa|owl) 또는 S05 번들 종류 owlgen")
     build.add_argument("--run-dir", required=True)
     build.add_argument("--out", required=True)
     build.add_argument("--sut-src", required=True)

@@ -1,0 +1,23 @@
+{
+  "files": [
+    {
+      "path": "ontology-owl.ttl",
+      "sha256": "df0cef9b38b547e62b0261cab1591fea50f5788edc9d70d77e3fd2569718c1f3"
+    }
+  ],
+  "inputHash": "adf593248886514a5275c5dadedd2b4b49b87b812d2e868dbb3a6b4b7a597bfb",
+  "meta": {
+    "bundleHash": "426ba6b26bb6cb26b45d5b7cc03c6475ecb5065e26c017b63471f28e616d69c1",
+    "model": "claude-opus-5-5",
+    "promptHash": "4b90f5b9236f54abdc150c27c71cb1a96c70bf66e12f9917a77d6f4736255d8f",
+    "repairPromptHash": "e794f10af9176cf83f2f9924d46e8c9b02ea35a35ab6fe19f82b7f381ecead6f",
+    "repairs": 0,
+    "seconds": 38.968,
+    "tokens": {
+      "in": 45406,
+      "out": 5084
+    }
+  },
+  "name": "adf59324",
+  "schema": 1
+}

@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "S05 OWL 생성 메타데이터(S05/owl-gen.json, REQ-061). 필드 이름은 bdd-gen.schema.json의 generation 항목과 같다.",
+  "type": "object",
+  "required": ["schema", "runId", "sut", "status", "reason", "reused", "inputHash", "bundleHash", "promptHash",
+               "repairPromptHash", "shapesHash", "model", "cliVersion", "flags", "maxRepairs", "repairs", "tokens",
+               "seconds", "strippedFields", "snapshot", "conforms", "stats"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": 1},
+    "runId": {"type": ["string", "null"]},
+    "sut": {"type": "string", "minLength": 1},
+    "status": {"enum": ["passed", "degraded", "failed"]},
+    "reason": {"type": ["string", "null"]},
+    "reused": {"type": "boolean"},
+    "inputHash": {"$ref": "#/$defs/sha256"},
+    "bundleHash": {"$ref": "#/$defs/sha256"},
+    "promptHash": {"$ref": "#/$defs/sha256"},
+    "repairPromptHash": {"$ref": "#/$defs/sha256"},
+    "shapesHash": {"$ref": "#/$defs/sha256"},
+    "model": {"type": "string", "minLength": 1},
+    "cliVersion": {"type": "string", "minLength": 1},
+    "flags": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+    "maxRepairs": {"type": "integer", "minimum": 0},
+    "repairs": {"type": "integer", "minimum": 0},
+    "tokens": {
+      "type": "object",
+      "required": ["in", "out"],
+      "additionalProperties": false,
+      "properties": {"in": {"type": "integer", "minimum": 0}, "out": {"type": "integer", "minimum": 0}}
+    },
+    "seconds": {"type": "number", "minimum": 0},
+    "strippedFields": {"type": "array", "items": {"type": "string"}},
+    "forbiddenDeclared": {"type": "array", "items": {"type": "string"}},
+    "snapshot": {"type": ["string", "null"]},
+    "conforms": {"type": ["boolean", "null"]},
+    "stats": {
+      "type": ["object", "null"],
+      "required": ["entities", "entityClasses", "entityCoverage", "classes", "objectProperties", "datatypeProperties",
+                   "endpoints", "triples"],
+      "additionalProperties": false,
+      "properties": {
+        "entities": {"type": "integer", "minimum": 0},
+        "entityClasses": {"type": "integer", "minimum": 0},
+        "entityCoverage": {"type": "number", "minimum": 0, "maximum": 1},
+        "classes": {"type": "integer", "minimum": 0},
+        "objectProperties": {"type": "integer", "minimum": 0},
+        "datatypeProperties": {"type": "integer", "minimum": 0},
+        "endpoints": {"type": "integer", "minimum": 0},
+        "triples": {"type": "integer", "minimum": 0}
+      }
+    }
+  },
+  "$defs": {"sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+}

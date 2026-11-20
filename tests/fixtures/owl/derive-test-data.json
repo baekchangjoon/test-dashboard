@@ -1,0 +1,332 @@
+{
+  "results": [
+    {
+      "data": [
+        {
+          "class_name": "Vet",
+          "columns": [],
+          "file_path": "src/main/java/org/springframework/samples/petclinic/vet/Vet.java",
+          "has_sql_delete": false,
+          "has_where_clause": false,
+          "relations": [
+            {
+              "cascade": [],
+              "join_column": "",
+              "mapped_by": "",
+              "orphan_removal": false,
+              "target": "Specialty",
+              "type": "ManyToMany"
+            }
+          ],
+          "table_name": "vets"
+        },
+        {
+          "class_name": "Specialty",
+          "columns": [],
+          "file_path": "src/main/java/org/springframework/samples/petclinic/vet/Specialty.java",
+          "has_sql_delete": false,
+          "has_where_clause": false,
+          "relations": [],
+          "table_name": "specialties"
+        },
+        {
+          "class_name": "Owner",
+          "columns": [
+            {
+              "db_column": "address",
+              "db_type": "VARCHAR(255)",
+              "enumerated": "",
+              "has_formula": false,
+              "is_generated": false,
+              "is_nullable": true,
+              "is_pk": false,
+              "is_unique": false,
+              "java_field": "address",
+              "java_type": "String"
+            },
+            {
+              "db_column": "city",
+              "db_type": "VARCHAR(255)",
+              "enumerated": "",
+              "has_formula": false,
+              "is_generated": false,
+              "is_nullable": true,
+              "is_pk": false,
+              "is_unique": false,
+              "java_field": "city",
+              "java_type": "String"
+            },
+            {
+              "db_column": "telephone",
+              "db_type": "VARCHAR(255)",
+              "enumerated": "",
+              "has_formula": false,
+              "is_generated": false,
+              "is_nullable": true,
+              "is_pk": false,
+              "is_unique": false,
+              "java_field": "telephone",
+              "java_type": "String"
+            }
+          ],
+          "file_path": "src/main/java/org/springframework/samples/petclinic/owner/Owner.java",
+          "has_sql_delete": false,
+          "has_where_clause": false,
+          "relations": [
+            {
+              "cascade": [
+                "ALL"
+              ],
+              "join_column": "owner_id",
+              "mapped_by": "",
+              "orphan_removal": false,
+              "target": "Pet",
+              "type": "OneToMany"
+            }
+          ],
+          "table_name": "owners"
+        },
+        {
+          "class_name": "Visit",
+          "columns": [
+            {
+              "db_column": "visit_date",
+              "db_type": "DATE",
+              "enumerated": "",
+              "has_formula": false,
+              "is_generated": false,
+              "is_nullable": true,
+              "is_pk": false,
+              "is_unique": false,
+              "java_field": "date",
+              "java_type": "LocalDate"
+            },
+            {
+              "db_column": "description",
+              "db_type": "VARCHAR(255)",
+              "enumerated": "",
+              "has_formula": false,
+              "is_generated": false,
+              "is_nullable": true,
+              "is_pk": false,
+              "is_unique": false,
+              "java_field": "description",
+              "java_type": "String"
+            }
+          ],
+          "file_path": "src/main/java/org/springframework/samples/petclinic/owner/Visit.java",
+          "has_sql_delete": false,
+          "has_where_clause": false,
+          "relations": [],
+          "table_name": "visits"
+        },
+        {
+          "class_name": "PetType",
+          "columns": [],
+          "file_path": "src/main/java/org/springframework/samples/petclinic/owner/PetType.java",
+          "has_sql_delete": false,
+          "has_where_clause": false,
+          "relations": [],
+          "table_name": "types"
+        },
+        {
+          "class_name": "Reservation",
+          "columns": [
+            {
+              "db_column": "pet_name",
+              "db_type": "VARCHAR(255)",
+              "enumerated": "",
+              "has_formula": false,
+              "is_generated": false,
+              "is_nullable": true,
+              "is_pk": false,
+              "is_unique": false,
+              "java_field": "petName",
+              "java_type": "String"
+            },
+            {
+              "db_column": "owner_email",
+              "db_type": "VARCHAR(255)",
+              "enumerated": "",
+              "has_formula": false,
+              "is_generated": false,
+              "is_nullable": true,
+              "is_pk": false,
+              "is_unique": false,
+              "java_field": "ownerEmail",
+              "java_type": "String"
+            },
+            {
+              "db_column": "promo_code",
+              "db_type": "VARCHAR(255)",
+              "enumerated": "",
+              "has_formula": false,
+              "is_generated": false,
+              "is_nullable": true,
+              "is_pk": false,
+              "is_unique": false,
+              "java_field": "promoCode",
+              "java_type": "String"
+            },
+            {
+              "db_column": "room_number",
+              "db_type": "INT",
+              "enumerated": "",
+              "has_formula": false,
+              "is_generated": false,
+              "is_nullable": true,
+              "is_pk": false,
+              "is_unique": false,
+              "java_field": "roomNumber",
+              "java_type": "int"
+            },
+            {
+              "db_column": "nights",
+              "db_type": "INT",
+              "enumerated": "",
+              "has_formula": false,
+              "is_generated": false,
+              "is_nullable": true,
+              "is_pk": false,
+              "is_unique": false,
+              "java_field": "nights",
+              "java_type": "int"
+            },
+            {
+              "db_column": "animal_count",
+              "db_type": "INT",
+              "enumerated": "",
+              "has_formula": false,
+              "is_generated": false,
+              "is_nullable": true,
+              "is_pk": false,
+              "is_unique": false,
+              "java_field": "animalCount",
+              "java_type": "int"
+            },
+            {
+              "db_column": "loyalty_points",
+              "db_type": "INT",
+              "enumerated": "",
+              "has_formula": false,
+              "is_generated": false,
+              "is_nullable": true,
+              "is_pk": false,
+              "is_unique": false,
+              "java_field": "loyaltyPoints",
+              "java_type": "int"
+            },
+            {
+              "db_column": "price_tier",
+              "db_type": "VARCHAR(255)",
+              "enumerated": "STRING",
+              "has_formula": false,
+              "is_generated": false,
+              "is_nullable": true,
+              "is_pk": false,
+              "is_unique": false,
+              "java_field": "priceTier",
+              "java_type": "PriceTier"
+            },
+            {
+              "db_column": "deposit_amount",
+              "db_type": "DOUBLE",
+              "enumerated": "",
+              "has_formula": false,
+              "is_generated": false,
+              "is_nullable": true,
+              "is_pk": false,
+              "is_unique": false,
+              "java_field": "depositAmount",
+              "java_type": "double"
+            },
+            {
+              "db_column": "check_in_date",
+              "db_type": "DATE",
+              "enumerated": "",
+              "has_formula": false,
+              "is_generated": false,
+              "is_nullable": true,
+              "is_pk": false,
+              "is_unique": false,
+              "java_field": "checkInDate",
+              "java_type": "LocalDate"
+            },
+            {
+              "db_column": "status",
+              "db_type": "VARCHAR(255)",
+              "enumerated": "STRING",
+              "has_formula": false,
+              "is_generated": false,
+              "is_nullable": true,
+              "is_pk": false,
+              "is_unique": false,
+              "java_field": "status",
+              "java_type": "ReservationStatus"
+            },
+            {
+              "db_column": "created_at",
+              "db_type": "DATETIME",
+              "enumerated": "",
+              "has_formula": false,
+              "is_generated": false,
+              "is_nullable": true,
+              "is_pk": false,
+              "is_unique": false,
+              "java_field": "createdAt",
+              "java_type": "LocalDateTime"
+            }
+          ],
+          "file_path": "src/main/java/org/springframework/samples/petclinic/boarding/Reservation.java",
+          "has_sql_delete": false,
+          "has_where_clause": false,
+          "relations": [],
+          "table_name": "reservations"
+        },
+        {
+          "class_name": "Pet",
+          "columns": [
+            {
+              "db_column": "birth_date",
+              "db_type": "DATE",
+              "enumerated": "",
+              "has_formula": false,
+              "is_generated": false,
+              "is_nullable": true,
+              "is_pk": false,
+              "is_unique": false,
+              "java_field": "birthDate",
+              "java_type": "LocalDate"
+            }
+          ],
+          "file_path": "src/main/java/org/springframework/samples/petclinic/owner/Pet.java",
+          "has_sql_delete": false,
+          "has_where_clause": false,
+          "relations": [
+            {
+              "cascade": [],
+              "join_column": "type_id",
+              "mapped_by": "",
+              "orphan_removal": false,
+              "target": "PetType",
+              "type": "ManyToOne"
+            },
+            {
+              "cascade": [
+                "ALL"
+              ],
+              "join_column": "pet_id",
+              "mapped_by": "",
+              "orphan_removal": false,
+              "target": "Visit",
+              "type": "OneToMany"
+            }
+          ],
+          "table_name": "pets"
+        }
+      ],
+      "source": "."
+    }
+  ],
+  "skill": "derive-test-data"
+}

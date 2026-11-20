@@ -1,0 +1,870 @@
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix td: <http://test-dashboard.local/ontology#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<http://test-dashboard.local/ontology> a owl:Ontology ;
+    rdfs:label "Ontology derived from a static code graph" ;
+    owl:versionInfo "b6f939355e8790202ddfc71e3f3507252745ed37" .
+
+td:Endpoint_DELETE__api_reservations_id a td:Resource_api_reservations,
+        owl:NamedIndividual ;
+    rdfs:label "DELETE /api/reservations/{id}" ;
+    td:fromJqa "endpoint:DELETE /api/reservations/{id}" ;
+    td:handler "org.springframework.samples.petclinic.boarding.ReservationRestController#delete" ;
+    td:httpMethod "DELETE" ;
+    td:kind "Endpoint" ;
+    td:path "/api/reservations/{id}" ;
+    td:relatedEntity td:Reservation .
+
+td:Endpoint_GET__api_owners a td:Resource_api_owners,
+        owl:NamedIndividual ;
+    rdfs:label "GET /api/owners" ;
+    td:fromJqa "endpoint:GET /api/owners" ;
+    td:handler "org.springframework.samples.petclinic.owner.OwnerRestController#getAllOwners" ;
+    td:httpMethod "GET" ;
+    td:kind "Endpoint" ;
+    td:path "/api/owners" ;
+    td:relatedEntity td:Owner .
+
+td:Endpoint_GET__api_owners_ownerId a td:Resource_api_owners,
+        owl:NamedIndividual ;
+    rdfs:label "GET /api/owners/{ownerId}" ;
+    td:fromJqa "endpoint:GET /api/owners/{ownerId}" ;
+    td:handler "org.springframework.samples.petclinic.owner.OwnerRestController#getOwner" ;
+    td:httpMethod "GET" ;
+    td:kind "Endpoint" ;
+    td:path "/api/owners/{ownerId}" ;
+    td:relatedEntity td:Owner .
+
+td:Endpoint_GET__api_pets_petId a td:Resource_api_pets,
+        owl:NamedIndividual ;
+    rdfs:label "GET /api/pets/{petId}" ;
+    td:fromJqa "endpoint:GET /api/pets/{petId}" ;
+    td:handler "org.springframework.samples.petclinic.owner.PetRestController#getPet" ;
+    td:httpMethod "GET" ;
+    td:kind "Endpoint" ;
+    td:path "/api/pets/{petId}" ;
+    td:relatedEntity td:Owner,
+        td:PetType .
+
+td:Endpoint_GET__api_pets_types a td:Resource_api_pets_types,
+        owl:NamedIndividual ;
+    rdfs:label "GET /api/pets/types" ;
+    td:fromJqa "endpoint:GET /api/pets/types" ;
+    td:handler "org.springframework.samples.petclinic.owner.PetRestController#getPetTypes" ;
+    td:httpMethod "GET" ;
+    td:kind "Endpoint" ;
+    td:path "/api/pets/types" ;
+    td:relatedEntity td:Owner,
+        td:PetType .
+
+td:Endpoint_GET__api_reservations a td:Resource_api_reservations,
+        owl:NamedIndividual ;
+    rdfs:label "GET /api/reservations" ;
+    td:fromJqa "endpoint:GET /api/reservations" ;
+    td:handler "org.springframework.samples.petclinic.boarding.ReservationRestController#list" ;
+    td:httpMethod "GET" ;
+    td:kind "Endpoint" ;
+    td:path "/api/reservations" ;
+    td:relatedEntity td:Reservation .
+
+td:Endpoint_GET__api_reservations_id a td:Resource_api_reservations,
+        owl:NamedIndividual ;
+    rdfs:label "GET /api/reservations/{id}" ;
+    td:fromJqa "endpoint:GET /api/reservations/{id}" ;
+    td:handler "org.springframework.samples.petclinic.boarding.ReservationRestController#get" ;
+    td:httpMethod "GET" ;
+    td:kind "Endpoint" ;
+    td:path "/api/reservations/{id}" ;
+    td:relatedEntity td:Reservation .
+
+td:Endpoint_GET__api_vets a td:Resource_api_vets,
+        owl:NamedIndividual ;
+    rdfs:label "GET /api/vets" ;
+    td:fromJqa "endpoint:GET /api/vets" ;
+    td:handler "org.springframework.samples.petclinic.vet.VetRestController#getAllVets" ;
+    td:httpMethod "GET" ;
+    td:kind "Endpoint" ;
+    td:path "/api/vets" ;
+    td:relatedEntity td:Vet .
+
+td:Endpoint_GET__api_vets_vetId a td:Resource_api_vets,
+        owl:NamedIndividual ;
+    rdfs:label "GET /api/vets/{vetId}" ;
+    td:fromJqa "endpoint:GET /api/vets/{vetId}" ;
+    td:handler "org.springframework.samples.petclinic.vet.VetRestController#getVet" ;
+    td:httpMethod "GET" ;
+    td:kind "Endpoint" ;
+    td:path "/api/vets/{vetId}" ;
+    td:relatedEntity td:Vet .
+
+td:Endpoint_POST__api_auth_login a td:Resource_api_auth_login,
+        owl:NamedIndividual ;
+    rdfs:label "POST /api/auth/login" ;
+    td:fromJqa "endpoint:POST /api/auth/login" ;
+    td:handler "org.springframework.samples.petclinic.security.AuthController#login" ;
+    td:httpMethod "POST" ;
+    td:kind "Endpoint" ;
+    td:path "/api/auth/login" ;
+    td:requestBody td:AuthController_LoginRequest .
+
+td:Endpoint_POST__api_auth_validate a td:Resource_api_auth_validate,
+        owl:NamedIndividual ;
+    rdfs:label "POST /api/auth/validate" ;
+    td:fromJqa "endpoint:POST /api/auth/validate" ;
+    td:handler "org.springframework.samples.petclinic.security.AuthController#validateToken" ;
+    td:httpMethod "POST" ;
+    td:kind "Endpoint" ;
+    td:path "/api/auth/validate" .
+
+td:Endpoint_POST__api_owners a td:Resource_api_owners,
+        owl:NamedIndividual ;
+    rdfs:label "POST /api/owners" ;
+    td:fromJqa "endpoint:POST /api/owners" ;
+    td:handler "org.springframework.samples.petclinic.owner.OwnerRestController#createOwner" ;
+    td:httpMethod "POST" ;
+    td:kind "Endpoint" ;
+    td:path "/api/owners" ;
+    td:relatedEntity td:Owner .
+
+td:Endpoint_POST__api_pets a td:Resource_api_pets,
+        owl:NamedIndividual ;
+    rdfs:label "POST /api/pets" ;
+    td:fromJqa "endpoint:POST /api/pets" ;
+    td:handler "org.springframework.samples.petclinic.owner.PetRestController#createPet" ;
+    td:httpMethod "POST" ;
+    td:kind "Endpoint" ;
+    td:path "/api/pets" ;
+    td:relatedEntity td:Owner,
+        td:PetType .
+
+td:Endpoint_POST__api_reservations a td:Resource_api_reservations,
+        owl:NamedIndividual ;
+    rdfs:label "POST /api/reservations" ;
+    td:fromJqa "endpoint:POST /api/reservations" ;
+    td:handler "org.springframework.samples.petclinic.boarding.ReservationRestController#create" ;
+    td:httpMethod "POST" ;
+    td:kind "Endpoint" ;
+    td:path "/api/reservations" ;
+    td:relatedEntity td:Reservation ;
+    td:requestBody td:ReservationDtos_CreateReservationRequest .
+
+td:Endpoint_PUT__api_owners_ownerId a td:Resource_api_owners,
+        owl:NamedIndividual ;
+    rdfs:label "PUT /api/owners/{ownerId}" ;
+    td:fromJqa "endpoint:PUT /api/owners/{ownerId}" ;
+    td:handler "org.springframework.samples.petclinic.owner.OwnerRestController#updateOwner" ;
+    td:httpMethod "PUT" ;
+    td:kind "Endpoint" ;
+    td:path "/api/owners/{ownerId}" ;
+    td:relatedEntity td:Owner .
+
+td:Endpoint_PUT__api_pets_petId a td:Resource_api_pets,
+        owl:NamedIndividual ;
+    rdfs:label "PUT /api/pets/{petId}" ;
+    td:fromJqa "endpoint:PUT /api/pets/{petId}" ;
+    td:handler "org.springframework.samples.petclinic.owner.PetRestController#updatePet" ;
+    td:httpMethod "PUT" ;
+    td:kind "Endpoint" ;
+    td:path "/api/pets/{petId}" ;
+    td:relatedEntity td:Owner,
+        td:PetType .
+
+td:Endpoint_PUT__api_reservations_id a td:Resource_api_reservations,
+        owl:NamedIndividual ;
+    rdfs:label "PUT /api/reservations/{id}" ;
+    td:fromJqa "endpoint:PUT /api/reservations/{id}" ;
+    td:handler "org.springframework.samples.petclinic.boarding.ReservationRestController#update" ;
+    td:httpMethod "PUT" ;
+    td:kind "Endpoint" ;
+    td:path "/api/reservations/{id}" ;
+    td:relatedEntity td:Reservation ;
+    td:requestBody td:ReservationDtos_UpdateReservationRequest .
+
+td:Owner_id a owl:DatatypeProperty,
+        owl:FunctionalProperty ;
+    rdfs:label "id",
+        "owner identifier"@en ;
+    td:annotation "GeneratedValue",
+        "Id" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.owner.Owner#id" ;
+    td:javaType "java.lang.Integer" ;
+    td:kind "Field" ;
+    rdfs:comment "Generated unique identifier of an owner."@en ;
+    rdfs:domain td:Owner ;
+    rdfs:range xsd:integer .
+
+td:Owner_to_Visit a owl:ObjectProperty ;
+    rdfs:label "to Visit",
+        "owner visit"@en ;
+    td:fromJqa "entity:org.springframework.samples.petclinic.owner.Owner",
+        "entity:org.springframework.samples.petclinic.owner.Visit" ;
+    td:kind "Association" ;
+    rdfs:comment "Links an owner to visits associated with them."@en ;
+    rdfs:domain td:Owner ;
+    rdfs:range td:Visit .
+
+td:PetType_id a owl:DatatypeProperty,
+        owl:FunctionalProperty ;
+    rdfs:label "id",
+        "pet type identifier"@en ;
+    td:annotation "GeneratedValue",
+        "Id" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.owner.PetType#id" ;
+    td:javaType "java.lang.Integer" ;
+    td:kind "Field" ;
+    rdfs:comment "Generated unique identifier of a pet type."@en ;
+    rdfs:domain td:PetType ;
+    rdfs:range xsd:integer .
+
+td:Pet_birthDate a owl:DatatypeProperty ;
+    rdfs:label "birthDate",
+        "pet birth date"@en ;
+    td:annotation "Column" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.owner.Pet#birthDate" ;
+    td:javaType "java.time.LocalDate" ;
+    td:kind "Field" ;
+    rdfs:comment "Date on which a pet was born."@en ;
+    rdfs:domain td:Pet ;
+    rdfs:range xsd:date .
+
+td:Pet_id a owl:DatatypeProperty,
+        owl:FunctionalProperty ;
+    rdfs:label "id",
+        "pet identifier"@en ;
+    td:annotation "GeneratedValue",
+        "Id" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.owner.Pet#id" ;
+    td:javaType "java.lang.Integer" ;
+    td:kind "Field" ;
+    rdfs:comment "Generated unique identifier of a pet."@en ;
+    rdfs:domain td:Pet ;
+    rdfs:range xsd:integer .
+
+td:ReservationDtos_ReservationResponse a owl:Class ;
+    rdfs:label "ReservationDtos$ReservationResponse",
+        "Reservation response"@en ;
+    td:fromJqa "dto:org.springframework.samples.petclinic.boarding.ReservationDtos$ReservationResponse" ;
+    td:javaType "org.springframework.samples.petclinic.boarding.ReservationDtos$ReservationResponse" ;
+    td:kind "DTO" ;
+    rdfs:comment "Data returned by the API to describe a boarding reservation."@en .
+
+td:Reservation_animalCount a owl:DatatypeProperty ;
+    rdfs:label "animalCount",
+        "reservation animal count"@en ;
+    td:annotation "Column" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.boarding.Reservation#animalCount" ;
+    td:javaType "int" ;
+    td:kind "Field" ;
+    rdfs:comment "Number of animals covered by the reservation."@en ;
+    rdfs:domain td:Reservation ;
+    rdfs:range xsd:integer .
+
+td:Reservation_checkInDate a owl:DatatypeProperty ;
+    rdfs:label "checkInDate",
+        "reservation check-in date"@en ;
+    td:annotation "Column" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.boarding.Reservation#checkInDate" ;
+    td:javaType "java.time.LocalDate" ;
+    td:kind "Field" ;
+    rdfs:comment "Date on which the pet checks in for boarding."@en ;
+    rdfs:domain td:Reservation ;
+    rdfs:range xsd:date .
+
+td:Reservation_createdAt a owl:DatatypeProperty ;
+    rdfs:label "createdAt",
+        "reservation creation time"@en ;
+    td:annotation "Column" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.boarding.Reservation#createdAt" ;
+    td:javaType "java.time.LocalDateTime" ;
+    td:kind "Field" ;
+    rdfs:comment "Date and time at which the reservation was created."@en ;
+    rdfs:domain td:Reservation ;
+    rdfs:range xsd:dateTime .
+
+td:Reservation_depositAmount a owl:DatatypeProperty ;
+    rdfs:label "depositAmount",
+        "reservation deposit amount"@en ;
+    td:annotation "Column" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.boarding.Reservation#depositAmount" ;
+    td:javaType "double" ;
+    td:kind "Field" ;
+    rdfs:comment "Monetary deposit amount for the reservation."@en ;
+    rdfs:domain td:Reservation ;
+    rdfs:range xsd:double .
+
+td:Reservation_id a owl:DatatypeProperty,
+        owl:FunctionalProperty ;
+    rdfs:label "id",
+        "reservation identifier"@en ;
+    td:annotation "GeneratedValue",
+        "Id" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.boarding.Reservation#id" ;
+    td:javaType "java.lang.Integer" ;
+    td:kind "Field" ;
+    rdfs:comment "Generated unique identifier of a boarding reservation."@en ;
+    rdfs:domain td:Reservation ;
+    rdfs:range xsd:integer .
+
+td:Reservation_loyaltyPoints a owl:DatatypeProperty ;
+    rdfs:label "loyaltyPoints",
+        "reservation loyalty points"@en ;
+    td:annotation "Column" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.boarding.Reservation#loyaltyPoints" ;
+    td:javaType "int" ;
+    td:kind "Field" ;
+    rdfs:comment "Loyalty points associated with the reservation."@en ;
+    rdfs:domain td:Reservation ;
+    rdfs:range xsd:integer .
+
+td:Reservation_nights a owl:DatatypeProperty ;
+    rdfs:label "nights",
+        "reservation nights"@en ;
+    td:annotation "Column" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.boarding.Reservation#nights" ;
+    td:javaType "int" ;
+    td:kind "Field" ;
+    rdfs:comment "Number of nights the pet is booked to stay."@en ;
+    rdfs:domain td:Reservation ;
+    rdfs:range xsd:integer .
+
+td:Reservation_ownerEmail a owl:DatatypeProperty ;
+    rdfs:label "ownerEmail",
+        "reservation owner email"@en ;
+    td:annotation "Column" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.boarding.Reservation#ownerEmail" ;
+    td:javaType "java.lang.String" ;
+    td:kind "Field" ;
+    rdfs:comment "Email address of the owner who made the reservation."@en ;
+    rdfs:domain td:Reservation ;
+    rdfs:range xsd:string .
+
+td:Reservation_petName a owl:DatatypeProperty ;
+    rdfs:label "petName",
+        "reserved pet name"@en ;
+    td:annotation "Column" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.boarding.Reservation#petName" ;
+    td:javaType "java.lang.String" ;
+    td:kind "Field" ;
+    rdfs:comment "Name of the pet that the boarding reservation is for."@en ;
+    rdfs:domain td:Reservation ;
+    rdfs:range xsd:string .
+
+td:Reservation_priceTier a owl:DatatypeProperty ;
+    rdfs:label "priceTier",
+        "reservation price tier"@en ;
+    td:annotation "Column",
+        "Enumerated" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.boarding.Reservation#priceTier" ;
+    td:javaType "org.springframework.samples.petclinic.boarding.PriceTier" ;
+    td:kind "Field" ;
+    rdfs:comment "Enumerated pricing tier of the reservation."@en ;
+    rdfs:domain td:Reservation ;
+    rdfs:range xsd:string .
+
+td:Reservation_promoCode a owl:DatatypeProperty ;
+    rdfs:label "promoCode",
+        "reservation promo code"@en ;
+    td:annotation "Column" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.boarding.Reservation#promoCode" ;
+    td:javaType "java.lang.String" ;
+    td:kind "Field" ;
+    rdfs:comment "Optional promotional code applied to the reservation."@en ;
+    rdfs:domain td:Reservation ;
+    rdfs:range xsd:string .
+
+td:Reservation_roomNumber a owl:DatatypeProperty ;
+    rdfs:label "roomNumber",
+        "reservation room number"@en ;
+    td:annotation "Column" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.boarding.Reservation#roomNumber" ;
+    td:javaType "int" ;
+    td:kind "Field" ;
+    rdfs:comment "Number of the boarding room assigned to the reservation."@en ;
+    rdfs:domain td:Reservation ;
+    rdfs:range xsd:integer .
+
+td:Reservation_status a owl:DatatypeProperty ;
+    rdfs:label "status",
+        "reservation status"@en ;
+    td:annotation "Column",
+        "Enumerated" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.boarding.Reservation#status" ;
+    td:javaType "org.springframework.samples.petclinic.boarding.ReservationStatus" ;
+    td:kind "Field" ;
+    rdfs:comment "Enumerated lifecycle status of the reservation."@en ;
+    rdfs:domain td:Reservation ;
+    rdfs:range xsd:string .
+
+td:Specialty_id a owl:DatatypeProperty,
+        owl:FunctionalProperty ;
+    rdfs:label "id",
+        "specialty identifier"@en ;
+    td:annotation "GeneratedValue",
+        "Id" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.vet.Specialty#id" ;
+    td:javaType "java.lang.Integer" ;
+    td:kind "Field" ;
+    rdfs:comment "Generated unique identifier of a specialty."@en ;
+    rdfs:domain td:Specialty ;
+    rdfs:range xsd:integer .
+
+td:Vet_id a owl:DatatypeProperty,
+        owl:FunctionalProperty ;
+    rdfs:label "id",
+        "veterinarian identifier"@en ;
+    td:annotation "GeneratedValue",
+        "Id" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.vet.Vet#id" ;
+    td:javaType "java.lang.Integer" ;
+    td:kind "Field" ;
+    rdfs:comment "Generated unique identifier of a veterinarian."@en ;
+    rdfs:domain td:Vet ;
+    rdfs:range xsd:integer .
+
+td:Visit_date a owl:DatatypeProperty ;
+    rdfs:label "date",
+        "visit date"@en ;
+    td:annotation "Column" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.owner.Visit#date" ;
+    td:javaType "java.time.LocalDate" ;
+    td:kind "Field" ;
+    rdfs:comment "Date on which a visit took place."@en ;
+    rdfs:domain td:Visit ;
+    rdfs:range xsd:date .
+
+td:Visit_id a owl:DatatypeProperty,
+        owl:FunctionalProperty ;
+    rdfs:label "id",
+        "visit identifier"@en ;
+    td:annotation "GeneratedValue",
+        "Id" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.owner.Visit#id" ;
+    td:javaType "java.lang.Integer" ;
+    td:kind "Field" ;
+    rdfs:comment "Generated unique identifier of a visit."@en ;
+    rdfs:domain td:Visit ;
+    rdfs:range xsd:integer .
+
+td:annotation a owl:AnnotationProperty .
+
+td:anyMethod a owl:AnnotationProperty .
+
+td:fromJqa a owl:AnnotationProperty .
+
+td:handler a owl:AnnotationProperty .
+
+td:httpMethod a owl:AnnotationProperty .
+
+td:javaType a owl:AnnotationProperty .
+
+td:jpaRelation a owl:AnnotationProperty .
+
+td:kind a owl:AnnotationProperty .
+
+td:path a owl:AnnotationProperty .
+
+td:relatedEntity a owl:AnnotationProperty .
+
+td:requestBody a owl:AnnotationProperty .
+
+td:AuthController_LoginRequest a owl:Class ;
+    rdfs:label "AuthController$LoginRequest",
+        "Login request"@en ;
+    td:fromJqa "dto:org.springframework.samples.petclinic.security.AuthController$LoginRequest" ;
+    td:javaType "org.springframework.samples.petclinic.security.AuthController$LoginRequest" ;
+    td:kind "DTO" ;
+    rdfs:comment "Request body with user credentials sent to log in and obtain an authentication token."@en .
+
+td:Owner_address a owl:DatatypeProperty ;
+    rdfs:label "address",
+        "owner address"@en ;
+    td:annotation "Column",
+        "NotBlank" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.owner.Owner#address" ;
+    td:javaType "java.lang.String" ;
+    td:kind "Field" ;
+    rdfs:comment "Street address of an owner; must not be blank."@en ;
+    rdfs:domain td:Owner ;
+    rdfs:range xsd:string .
+
+td:Owner_city a owl:DatatypeProperty ;
+    rdfs:label "city",
+        "owner city"@en ;
+    td:annotation "Column",
+        "NotBlank" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.owner.Owner#city" ;
+    td:javaType "java.lang.String" ;
+    td:kind "Field" ;
+    rdfs:comment "City where an owner lives; must not be blank."@en ;
+    rdfs:domain td:Owner ;
+    rdfs:range xsd:string .
+
+td:Owner_firstName a owl:DatatypeProperty ;
+    rdfs:label "firstName",
+        "owner first name"@en ;
+    td:annotation "Column",
+        "NotBlank" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.owner.Owner#firstName" ;
+    td:javaType "java.lang.String" ;
+    td:kind "Field" ;
+    rdfs:comment "First name of an owner; must not be blank."@en ;
+    rdfs:domain td:Owner ;
+    rdfs:range xsd:string .
+
+td:Owner_lastName a owl:DatatypeProperty ;
+    rdfs:label "lastName",
+        "owner last name"@en ;
+    td:annotation "Column",
+        "NotBlank" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.owner.Owner#lastName" ;
+    td:javaType "java.lang.String" ;
+    td:kind "Field" ;
+    rdfs:comment "Last name of an owner; must not be blank."@en ;
+    rdfs:domain td:Owner ;
+    rdfs:range xsd:string .
+
+td:Owner_pets a owl:InverseFunctionalProperty,
+        owl:ObjectProperty ;
+    rdfs:label "pets",
+        "owns pet"@en ;
+    td:fromJqa "entity:org.springframework.samples.petclinic.owner.Owner",
+        "entity:org.springframework.samples.petclinic.owner.Pet",
+        "field:org.springframework.samples.petclinic.owner.Owner#pets" ;
+    td:javaType "java.util.List" ;
+    td:jpaRelation "OneToMany" ;
+    td:kind "Association" ;
+    rdfs:comment "Links an owner to the pets that belong to them."@en ;
+    rdfs:domain td:Owner ;
+    rdfs:range td:Pet .
+
+td:Owner_telephone a owl:DatatypeProperty ;
+    rdfs:label "telephone",
+        "owner telephone"@en ;
+    td:annotation "Column",
+        "NotBlank",
+        "Pattern" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.owner.Owner#telephone" ;
+    td:javaType "java.lang.String" ;
+    td:kind "Field" ;
+    rdfs:comment "Telephone number of an owner; must not be blank and must match a pattern."@en ;
+    rdfs:domain td:Owner ;
+    rdfs:range xsd:string .
+
+td:PetType_name a owl:DatatypeProperty ;
+    rdfs:label "name",
+        "pet type name"@en ;
+    td:annotation "Column",
+        "NotBlank" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.owner.PetType#name" ;
+    td:javaType "java.lang.String" ;
+    td:kind "Field" ;
+    rdfs:comment "Name of a pet type; must not be blank."@en ;
+    rdfs:domain td:PetType ;
+    rdfs:range xsd:string .
+
+td:Pet_name a owl:DatatypeProperty ;
+    rdfs:label "name",
+        "pet name"@en ;
+    td:annotation "Column",
+        "NotBlank" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.owner.Pet#name" ;
+    td:javaType "java.lang.String" ;
+    td:kind "Field" ;
+    rdfs:comment "Name of a pet; must not be blank."@en ;
+    rdfs:domain td:Pet ;
+    rdfs:range xsd:string .
+
+td:Pet_type a owl:FunctionalProperty,
+        owl:ObjectProperty ;
+    rdfs:label "type",
+        "pet type of pet"@en ;
+    td:fromJqa "entity:org.springframework.samples.petclinic.owner.Pet",
+        "entity:org.springframework.samples.petclinic.owner.PetType",
+        "field:org.springframework.samples.petclinic.owner.Pet#type" ;
+    td:javaType "org.springframework.samples.petclinic.owner.PetType" ;
+    td:jpaRelation "ManyToOne" ;
+    td:kind "Association" ;
+    rdfs:comment "Links a pet to the single pet type that classifies it."@en ;
+    rdfs:domain td:Pet ;
+    rdfs:range td:PetType .
+
+td:Pet_visits a owl:InverseFunctionalProperty,
+        owl:ObjectProperty ;
+    rdfs:label "visits",
+        "pet visit"@en ;
+    td:fromJqa "entity:org.springframework.samples.petclinic.owner.Pet",
+        "entity:org.springframework.samples.petclinic.owner.Visit",
+        "field:org.springframework.samples.petclinic.owner.Pet#visits" ;
+    td:javaType "java.util.Set" ;
+    td:jpaRelation "OneToMany" ;
+    td:kind "Association" ;
+    rdfs:comment "Links a pet to the visits it has made to the clinic."@en ;
+    rdfs:domain td:Pet ;
+    rdfs:range td:Visit .
+
+td:ReservationDtos_CreateReservationRequest a owl:Class ;
+    rdfs:label "ReservationDtos$CreateReservationRequest",
+        "Reservation creation request"@en ;
+    td:fromJqa "dto:org.springframework.samples.petclinic.boarding.ReservationDtos$CreateReservationRequest" ;
+    td:javaType "org.springframework.samples.petclinic.boarding.ReservationDtos$CreateReservationRequest" ;
+    td:kind "DTO" ;
+    rdfs:comment "Request body sent to create a new boarding reservation."@en .
+
+td:ReservationDtos_UpdateReservationRequest a owl:Class ;
+    rdfs:label "ReservationDtos$UpdateReservationRequest",
+        "Reservation update request"@en ;
+    td:fromJqa "dto:org.springframework.samples.petclinic.boarding.ReservationDtos$UpdateReservationRequest" ;
+    td:javaType "org.springframework.samples.petclinic.boarding.ReservationDtos$UpdateReservationRequest" ;
+    td:kind "DTO" ;
+    rdfs:comment "Request body sent to update an existing boarding reservation."@en .
+
+td:Resource_api_auth_login a owl:Class ;
+    rdfs:label "/api/auth/login",
+        "Login resource"@en ;
+    td:fromJqa "endpoint:POST /api/auth/login" ;
+    td:kind "Resource" ;
+    td:path "/api/auth/login" ;
+    rdfs:comment "REST resource used to authenticate a user and obtain a token."@en .
+
+td:Resource_api_auth_validate a owl:Class ;
+    rdfs:label "/api/auth/validate",
+        "Token validation resource"@en ;
+    td:fromJqa "endpoint:POST /api/auth/validate" ;
+    td:kind "Resource" ;
+    td:path "/api/auth/validate" ;
+    rdfs:comment "REST resource used to check whether an authentication token is valid."@en .
+
+td:Resource_api_pets_types a owl:Class ;
+    rdfs:label "/api/pets/types",
+        "Pet types resource"@en ;
+    td:fromJqa "endpoint:GET /api/pets/types" ;
+    td:kind "Resource" ;
+    td:path "/api/pets/types" ;
+    rdfs:comment "REST resource for listing the available pet types."@en .
+
+td:Specialty_name a owl:DatatypeProperty ;
+    rdfs:label "name",
+        "specialty name"@en ;
+    td:annotation "Column",
+        "NotBlank" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.vet.Specialty#name" ;
+    td:javaType "java.lang.String" ;
+    td:kind "Field" ;
+    rdfs:comment "Name of a specialty; must not be blank."@en ;
+    rdfs:domain td:Specialty ;
+    rdfs:range xsd:string .
+
+td:Vet_firstName a owl:DatatypeProperty ;
+    rdfs:label "firstName",
+        "veterinarian first name"@en ;
+    td:annotation "Column",
+        "NotBlank" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.vet.Vet#firstName" ;
+    td:javaType "java.lang.String" ;
+    td:kind "Field" ;
+    rdfs:comment "First name of a veterinarian; must not be blank."@en ;
+    rdfs:domain td:Vet ;
+    rdfs:range xsd:string .
+
+td:Vet_lastName a owl:DatatypeProperty ;
+    rdfs:label "lastName",
+        "veterinarian last name"@en ;
+    td:annotation "Column",
+        "NotBlank" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.vet.Vet#lastName" ;
+    td:javaType "java.lang.String" ;
+    td:kind "Field" ;
+    rdfs:comment "Last name of a veterinarian; must not be blank."@en ;
+    rdfs:domain td:Vet ;
+    rdfs:range xsd:string .
+
+td:Vet_specialties a owl:ObjectProperty ;
+    rdfs:label "specialties",
+        "veterinarian specialty"@en ;
+    td:fromJqa "entity:org.springframework.samples.petclinic.vet.Specialty",
+        "entity:org.springframework.samples.petclinic.vet.Vet",
+        "field:org.springframework.samples.petclinic.vet.Vet#specialties" ;
+    td:javaType "java.util.Set" ;
+    td:jpaRelation "ManyToMany" ;
+    td:kind "Association" ;
+    rdfs:comment "Links a veterinarian to the specialties they have."@en ;
+    rdfs:domain td:Vet ;
+    rdfs:range td:Specialty .
+
+td:Visit_description a owl:DatatypeProperty ;
+    rdfs:label "description",
+        "visit description"@en ;
+    td:annotation "NotBlank" ;
+    td:fromJqa "field:org.springframework.samples.petclinic.owner.Visit#description" ;
+    td:javaType "java.lang.String" ;
+    td:kind "Field" ;
+    rdfs:comment "Description of a visit; must not be blank."@en ;
+    rdfs:domain td:Visit ;
+    rdfs:range xsd:string .
+
+td:Resource_api_vets a owl:Class ;
+    rdfs:label "/api/vets",
+        "Veterinarians resource"@en ;
+    td:fromJqa "endpoint:GET /api/vets",
+        "endpoint:GET /api/vets/{vetId}" ;
+    td:kind "Resource" ;
+    td:path "/api/vets" ;
+    rdfs:comment "REST resource for listing and reading veterinarians."@en .
+
+td:Resource_api_pets a owl:Class ;
+    rdfs:label "/api/pets",
+        "Pets resource"@en ;
+    td:fromJqa "endpoint:GET /api/pets/{petId}",
+        "endpoint:POST /api/pets",
+        "endpoint:PUT /api/pets/{petId}" ;
+    td:kind "Resource" ;
+    td:path "/api/pets" ;
+    rdfs:comment "REST resource for reading, creating and updating pets."@en .
+
+td:Resource_api_owners a owl:Class ;
+    rdfs:label "/api/owners",
+        "Owners resource"@en ;
+    td:fromJqa "endpoint:GET /api/owners",
+        "endpoint:GET /api/owners/{ownerId}",
+        "endpoint:POST /api/owners",
+        "endpoint:PUT /api/owners/{ownerId}" ;
+    td:kind "Resource" ;
+    td:path "/api/owners" ;
+    rdfs:comment "REST resource for listing, reading, creating and updating owners."@en .
+
+td:Resource_api_reservations a owl:Class ;
+    rdfs:label "/api/reservations",
+        "Reservations resource"@en ;
+    td:fromJqa "endpoint:DELETE /api/reservations/{id}",
+        "endpoint:GET /api/reservations",
+        "endpoint:GET /api/reservations/{id}",
+        "endpoint:POST /api/reservations",
+        "endpoint:PUT /api/reservations/{id}" ;
+    td:kind "Resource" ;
+    td:path "/api/reservations" ;
+    rdfs:comment "REST resource for creating, reading, listing, updating and deleting boarding reservations."@en .
+
+td:Pet a owl:Class ;
+    rdfs:label "Pet",
+        "Pet"@en ;
+    td:fromJqa "entity:org.springframework.samples.petclinic.owner.Pet" ;
+    td:javaType "org.springframework.samples.petclinic.owner.Pet" ;
+    td:kind "Entity" ;
+    rdfs:comment "An animal owned by an owner, classified by a pet type and having a history of visits."@en ;
+    rdfs:subClassOf [ a owl:Restriction ;
+            owl:minCardinality "1"^^xsd:nonNegativeInteger ;
+            owl:onProperty td:Pet_name ],
+        [ a owl:Restriction ;
+            owl:maxCardinality "1"^^xsd:nonNegativeInteger ;
+            owl:onProperty td:Pet_type ],
+        [ a owl:Restriction ;
+            owl:allValuesFrom td:Visit ;
+            owl:onProperty td:Pet_visits ] ;
+    owl:disjointWith td:PetType,
+        td:Reservation,
+        td:Specialty,
+        td:Vet,
+        td:Visit .
+
+td:Visit a owl:Class ;
+    rdfs:label "Visit",
+        "Visit"@en ;
+    td:fromJqa "entity:org.springframework.samples.petclinic.owner.Visit" ;
+    td:javaType "org.springframework.samples.petclinic.owner.Visit" ;
+    td:kind "Entity" ;
+    rdfs:comment "A dated visit of a pet to the clinic with a description."@en ;
+    rdfs:subClassOf [ a owl:Restriction ;
+            owl:minCardinality "1"^^xsd:nonNegativeInteger ;
+            owl:onProperty td:Visit_description ] ;
+    owl:disjointWith td:PetType,
+        td:Reservation,
+        td:Specialty,
+        td:Vet .
+
+td:Vet a owl:Class ;
+    rdfs:label "Vet",
+        "Veterinarian"@en ;
+    td:fromJqa "entity:org.springframework.samples.petclinic.vet.Vet" ;
+    td:javaType "org.springframework.samples.petclinic.vet.Vet" ;
+    td:kind "Entity" ;
+    rdfs:comment "A veterinarian working at the clinic who may have specialties."@en ;
+    rdfs:subClassOf [ a owl:Restriction ;
+            owl:minCardinality "1"^^xsd:nonNegativeInteger ;
+            owl:onProperty td:Vet_firstName ],
+        [ a owl:Restriction ;
+            owl:minCardinality "1"^^xsd:nonNegativeInteger ;
+            owl:onProperty td:Vet_lastName ],
+        [ a owl:Restriction ;
+            owl:allValuesFrom td:Specialty ;
+            owl:onProperty td:Vet_specialties ] ;
+    owl:disjointWith td:PetType,
+        td:Reservation,
+        td:Specialty .
+
+td:Specialty a owl:Class ;
+    rdfs:label "Specialty",
+        "Specialty"@en ;
+    td:fromJqa "entity:org.springframework.samples.petclinic.vet.Specialty" ;
+    td:javaType "org.springframework.samples.petclinic.vet.Specialty" ;
+    td:kind "Entity" ;
+    rdfs:comment "A named area of veterinary expertise that a veterinarian can have."@en ;
+    rdfs:subClassOf [ a owl:Restriction ;
+            owl:minCardinality "1"^^xsd:nonNegativeInteger ;
+            owl:onProperty td:Specialty_name ] .
+
+td:PetType a owl:Class ;
+    rdfs:label "PetType",
+        "Pet type"@en ;
+    td:fromJqa "entity:org.springframework.samples.petclinic.owner.PetType" ;
+    td:javaType "org.springframework.samples.petclinic.owner.PetType" ;
+    td:kind "Entity" ;
+    rdfs:comment "A named category of animal used to classify pets."@en ;
+    rdfs:subClassOf [ a owl:Restriction ;
+            owl:minCardinality "1"^^xsd:nonNegativeInteger ;
+            owl:onProperty td:PetType_name ] ;
+    owl:disjointWith td:Specialty .
+
+td:Owner a owl:Class ;
+    rdfs:label "Owner",
+        "Owner"@en ;
+    td:fromJqa "entity:org.springframework.samples.petclinic.owner.Owner" ;
+    td:javaType "org.springframework.samples.petclinic.owner.Owner" ;
+    td:kind "Entity" ;
+    rdfs:comment "A person registered with the clinic who owns one or more pets."@en ;
+    rdfs:subClassOf [ a owl:Restriction ;
+            owl:minCardinality "1"^^xsd:nonNegativeInteger ;
+            owl:onProperty td:Owner_firstName ],
+        [ a owl:Restriction ;
+            owl:minCardinality "1"^^xsd:nonNegativeInteger ;
+            owl:onProperty td:Owner_lastName ],
+        [ a owl:Restriction ;
+            owl:minCardinality "1"^^xsd:nonNegativeInteger ;
+            owl:onProperty td:Owner_address ],
+        [ a owl:Restriction ;
+            owl:minCardinality "1"^^xsd:nonNegativeInteger ;
+            owl:onProperty td:Owner_city ],
+        [ a owl:Restriction ;
+            owl:minCardinality "1"^^xsd:nonNegativeInteger ;
+            owl:onProperty td:Owner_telephone ],
+        [ a owl:Restriction ;
+            owl:allValuesFrom td:Pet ;
+            owl:onProperty td:Owner_pets ] ;
+    owl:disjointWith td:Pet,
+        td:PetType,
+        td:Reservation,
+        td:Specialty,
+        td:Vet,
+        td:Visit .
+
+td:Reservation a owl:Class ;
+    rdfs:label "Reservation",
+        "Boarding reservation"@en ;
+    td:fromJqa "entity:org.springframework.samples.petclinic.boarding.Reservation" ;
+    td:javaType "org.springframework.samples.petclinic.boarding.Reservation" ;
+    td:kind "Entity" ;
+    rdfs:comment "A boarding reservation for a pet, with room, nights, check-in date, pricing and status."@en ;
+    owl:disjointWith td:PetType,
+        td:Specialty .
+
