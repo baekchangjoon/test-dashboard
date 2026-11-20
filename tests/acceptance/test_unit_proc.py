@@ -55,3 +55,23 @@ def test_signal_before_child_start_still_kills_child(monkeypatch):
     rc = proc.run_with_timeout(60, ["sleep", "60"], kill_grace=2)
     assert rc != 0 and __import__("time").time() - started < 20
     assert spawned and spawned[0].poll() is not None
+
+
+def test_inherited_sig_ign_is_preserved_so_cleanup_survives_second_ctrl_c():
+    """정리 중(`trap '' INT TERM`)에 띄운 td_run은 상속받은 SIG_IGN을 유지해야 한다.
+    전달 핸들러로 덮어쓰면 두 번째 Ctrl-C가 `docker compose down -v` 같은 정리 명령을 죽인다(I-1)."""
+    import time
+    code = (
+        "import signal, sys\n"
+        "signal.signal(signal.SIGINT, signal.SIG_IGN)\n"
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+        "from td import proc\n"
+        "rc = proc.run_with_timeout(30, ['bash', '-c', 'sleep 3; echo child-done'])\n"
+        "print('rc=%d' % rc, flush=True)\n"
+    )
+    child = subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE, text=True)
+    time.sleep(1.5)
+    child.send_signal(signal.SIGINT)
+    child.send_signal(signal.SIGTERM)
+    out, _ = child.communicate(timeout=30)
+    assert "child-done" in out and "rc=0" in out

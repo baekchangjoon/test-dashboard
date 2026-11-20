@@ -36,8 +36,10 @@ def run_with_timeout(timeout_sec: float, argv: list[str], kill_grace: float | No
         if proc is not None:
             _kill_group(proc, signal.SIGTERM)
 
-    old_term = signal.signal(signal.SIGTERM, forward)
-    old_int = signal.signal(signal.SIGINT, forward)
+    # 호출자가 SIG_IGN으로 막아 둔 신호(예: env.sh 정리 구간의 `trap '' INT TERM`)는 그대로 둔다.
+    # 전달 핸들러로 덮으면 두 번째 Ctrl-C가 정리 명령(compose down -v, 토큰 폐기)을 죽인다.
+    old_term = _install_unless_ignored(signal.SIGTERM, forward)
+    old_int = _install_unless_ignored(signal.SIGINT, forward)
     try:
         try:
             proc = subprocess.Popen(argv, start_new_session=True, cwd=cwd, stdout=stdout, stderr=stderr, env=env)
@@ -64,6 +66,14 @@ def run_with_timeout(timeout_sec: float, argv: list[str], kill_grace: float | No
         signal.signal(signal.SIGINT, old_int)
         if reraise and received:
             os.kill(os.getpid(), received[0])
+
+
+def _install_unless_ignored(signum: int, handler):
+    previous = signal.getsignal(signum)
+    if previous is signal.SIG_IGN:
+        return previous
+    signal.signal(signum, handler)
+    return previous
 
 
 def _kill_group(proc: subprocess.Popen, sig: int) -> None:
