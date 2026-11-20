@@ -100,6 +100,8 @@ def test_hosting_reports_domain_serves_https(local_env):
 # --- 게시 후 검사(Task 10): 세션 접두(`_test/<sessionId>/`)에 실제로 게시한 두 run을 두 호스트에서 확인한다. ---
 # 운영 루트(reports.<domain>/ 자체) 크롤링은 Task 25의 기준 run 게시 뒤에 한다.
 def _scope(site_prefix: str) -> tuple[str, ...]:
+    if not site_prefix:  # 운영 루트: 홈, SUT, 공용 정적 파일과 호스팅 비교만 따라가고 `_test/` 보존 기록은 뺀다
+        return ("/index.html", "/suts/", "/static/", "/hosting.", "/suts.json")
     return (f"/{site_prefix}", "/_test/index.html", "/_test/static/")
 
 
