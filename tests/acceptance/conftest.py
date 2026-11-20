@@ -96,8 +96,22 @@ with open(os.path.join(base, "calls.jsonl"), "a") as fh:
     fh.write(json.dumps({{"argv": sys.argv[1:], "cwd": os.getcwd(),
                          "env": {{k: v for k, v in os.environ.items()
                                  if k.startswith("TD_") or k in ("PATH", "PWD")}}, "stdin": stdin_text}}) + "\\n")
-with open(os.path.join(base, "response.json")) as fh:
-    sys.stdout.write(fh.read())
+delay_file = os.path.join(base, "delay.txt")
+if os.path.exists(delay_file):
+    import time
+    time.sleep(float(open(delay_file).read().strip() or 0))
+sequence_file = os.path.join(base, "responses.json")
+if os.path.exists(sequence_file):
+    # 응답 순서표: n번째 호출(1부터)은 n번째 항목, 표보다 많으면 마지막 항목. 문자열 항목은 그대로(비JSON 출력 재현용).
+    with open(os.path.join(base, "calls.jsonl")) as fh:
+        index = sum(1 for line in fh if line.strip()) - 1
+    with open(sequence_file) as fh:
+        items = json.load(fh)
+    item = items[min(index, len(items) - 1)]
+    sys.stdout.write(item if isinstance(item, str) else json.dumps(item))
+else:
+    with open(os.path.join(base, "response.json")) as fh:
+        sys.stdout.write(fh.read())
 """
 
 
@@ -122,7 +136,16 @@ class FakeClaude:
 
     def respond(self, payload) -> None:
         """다음 호출부터 stdout으로 내보낼 JSON 응답을 정한다."""
+        (self.bin_dir / "responses.json").unlink(missing_ok=True)
         self._response_file.write_text(json.dumps(payload))
+
+    def respond_sequence(self, payloads: list) -> None:
+        """호출 순서별 응답(n번째 호출 = n번째 항목, 넘치면 마지막 항목). 호출 수는 지금까지의 전체 호출 기준이다."""
+        (self.bin_dir / "responses.json").write_text(json.dumps(payloads))
+
+    def delay(self, seconds: float) -> None:
+        """응답 전에 기다린다(동시 실행이 겹치게 하는 테스트용)."""
+        (self.bin_dir / "delay.txt").write_text(str(seconds))
 
     @property
     def calls(self) -> list[Call]:
@@ -247,12 +270,12 @@ def sut_env(tmp_path, session_id, request):
 # --- 실제 파이프라인 run(Task 5) ---------------------------------------------------------------
 @pytest.fixture(scope="session")
 def real_pipeline_run(tmp_path_factory, site_prefix):
-    """real_pipeline_run("S00,S01", **env) -> RunResult. 호출마다 run 디렉터리용 work를 새로 만들고
+    """real_pipeline_run("S00,S01", args=("--arms", "base"), **env) -> RunResult. 호출마다 run 디렉터리용 work를 새로 만들고
     tools·suts는 실제 work 캐시를 공유한다. TD_SITE_PREFIX를 항상 주므로 S13이 없어도 게시는 일어나지 않는다."""
     real_work = REPO_ROOT / "work"
     counter = {"n": 0}
 
-    def run(only: str, sut_file: str | None = None, **env: str) -> "RunResult":
+    def run(only: str, sut_file: str | None = None, args: tuple[str, ...] = (), **env: str) -> "RunResult":
         counter["n"] += 1
         work = tmp_path_factory.mktemp(f"real-run{counter['n']}")
         # infra(terraform 상태)와 site-mirror(게시 미러)도 공유한다: S13이 둘을 TD_WORK_DIR 아래에서 읽는다.
@@ -264,7 +287,7 @@ def real_pipeline_run(tmp_path_factory, site_prefix):
         # 새 세션(프로세스 그룹)으로 띄우고, 시간이 넘으면 그룹에 TERM을 보내 파이프라인 trap이 컨테이너를 정리하게 한다.
         sut_args = ["--sut-file", sut_file] if sut_file else []
         sut_name = yaml.safe_load(Path(sut_file).read_text())["name"] if sut_file else "petclinic"
-        proc = subprocess.Popen(["bash", str(RUN_ALL), sut_name, *sut_args, "--only", only], env=full_env, text=True,
+        proc = subprocess.Popen(["bash", str(RUN_ALL), sut_name, *sut_args, "--only", only, *args], env=full_env, text=True,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
         try:
             try:

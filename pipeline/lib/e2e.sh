@@ -45,7 +45,8 @@ td_e2e_generation() {
     td_sut_up "$TD_RUN_DIR" "$stage" "$gen_id" || { _e2e_fail "SUT 기동 실패: $TD_SUT_FAIL_REASON"; return 1; }
     # 이전 결과가 섞이지 않게 비운다(하네스는 scenario-results.json에 이어 쓴다).
     rm -f "$out/scenario-results.json" "$out/generation-meta.json"
-    (cd "$TD_ROOT/e2e" && td_run 1800 -- env JAVA_HOME="$java_home" ./gradlew --no-daemon --console=plain :runner:test \
+    # e2e 프로젝트의 build 디렉터리는 하나라서 파이썬 쪽(S06 dry-run)과 같은 파일 잠금으로 직렬화한다(시간 제한은 td_run과 같다).
+    (cd "$TD_ROOT/e2e" && td_py -m td.scenarios gradle-locked --timeout 1800 -- env JAVA_HOME="$java_home" ./gradlew --no-daemon --console=plain :runner:test \
       "-Pgen=$gen_dir" "-Pexcluded=$out/compile-excluded.json" "-Pout=$out" \
       "-Ptd.base-url=$TD_BASE_URL" "-Ptd.control-url=$TD_CONTROL_URL" "-Ptd.testids=$out/testids.json" \
       "-Ptd.results=$out/scenario-results.json" "-Ptd.auth.login=$login" "-Ptd.auth.user=$TD_AUTH_USER") \
