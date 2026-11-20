@@ -1,0 +1,133 @@
+{
+  "files": [
+    {
+      "path": "features/access_control.feature",
+      "sha256": "a3668bcd38bbce17d31157d5f1b96eb8ca4cc2409332d493b9052610b64ce97f"
+    },
+    {
+      "path": "features/authentication.feature",
+      "sha256": "b3f56e8402612fe50612cac68c1e6ffe5d2d82b110e675887ebd4dcfb93a7237"
+    },
+    {
+      "path": "features/owner_management.feature",
+      "sha256": "1166e3390c85e6552fb07a7af47374a1264b3066d6a059fd1d9e588e806fd836"
+    },
+    {
+      "path": "features/pet_api.feature",
+      "sha256": "672ee4c2133f375fcc79793f06f3d01a9e2f576f52ef0c3f2b4cb25166c8dfb4"
+    },
+    {
+      "path": "features/reservation_lifecycle.feature",
+      "sha256": "c24ce8030228503217f8b23e2aa43b9d7e37b27e75a639716bd44aa515962f05"
+    },
+    {
+      "path": "features/reservation_listing.feature",
+      "sha256": "de8cba0149a8a564cf36be053af50e74969e1dd26113e869b7fa0170308ae97d"
+    },
+    {
+      "path": "features/reservation_validation.feature",
+      "sha256": "93e565373f9935a3a2de80d7d150bb6f275eaa221c54abc84a702123da0b0125"
+    },
+    {
+      "path": "features/vet_directory.feature",
+      "sha256": "2bf3650d1ee884f57b87a5ffcb756184af919236b134d80e1bc47c09b11dcc36"
+    },
+    {
+      "path": "glue/AccessControlSteps.java",
+      "sha256": "cc8bf1dc873d718eba8c6a44526ff7f1591d040c7909e219a5685cf4ee7187d7"
+    },
+    {
+      "path": "glue/AuthenticationSteps.java",
+      "sha256": "f3bcaaafd94d7936f2c25fe6b0829bce726a9f4605b6207a4a4c10a576e41893"
+    },
+    {
+      "path": "glue/OwnerManagementSteps.java",
+      "sha256": "73841ab03a376db44e69600314b8e3a125a69024c2aa2097c385a24e3865b812"
+    },
+    {
+      "path": "glue/PetApiSteps.java",
+      "sha256": "6224a2e8350f0d7ada6b149d5fae4e17a16c8e433e1d0580fd1c038c12b7d77c"
+    },
+    {
+      "path": "glue/ReservationLifecycleSteps.java",
+      "sha256": "ca13920bbfd75bb926424fc8bc9046eba65bd22c3b88bcd0a8a51ae62fb95fa5"
+    },
+    {
+      "path": "glue/ReservationListingSteps.java",
+      "sha256": "4d402368a1d870b243e3cdf7d3c1a10a4419b7c2070b6fab24b2228b34f67f0e"
+    },
+    {
+      "path": "glue/ReservationValidationSteps.java",
+      "sha256": "3c46c55d6a1aa9ebfa3503fcf2f6a12b72e8e8e1ddf694590286b644def7e0a8"
+    },
+    {
+      "path": "glue/VetDirectorySteps.java",
+      "sha256": "710c4331b663786f09ee343f6671dfd97255be9368aaf3fb18a0f23f9e698350"
+    },
+    {
+      "path": "glue/support/ApiSupport.java",
+      "sha256": "0abef2ee2a0a25859b8141c220f3f4d1670bb86e2ba14658ae377edaf00724d8"
+    }
+  ],
+  "genId": "base-c5806ec8-r1",
+  "inputHash": "c5806ec8be24a90363e2e6f1b9e5ea3f1522a67ef3ef759b058cd2c8412f771c",
+  "meta": {
+    "arm": "base",
+    "bundleHash": "d87e2a449c5de620b5cf5b9b7484230e13a6338784e37205bd6bf1596ac4456e",
+    "cliVersion": "2.1.329",
+    "dir": null,
+    "files": 17,
+    "flags": [
+      "-p",
+      "--tools \"\"",
+      "--strict-mcp-config",
+      "--mcp-config <empty-mcp-config>",
+      "--setting-sources \"\"",
+      "--system-prompt <fixed>",
+      "--output-format json",
+      "--model <model>"
+    ],
+    "gen": null,
+    "genId": "base-c5806ec8-r1",
+    "inputHash": "c5806ec8be24a90363e2e6f1b9e5ea3f1522a67ef3ef759b058cd2c8412f771c",
+    "model": "claude-opus-5-5",
+    "promptHash": "78dca8a9af9f49b04393998aa3f90579510337f05d8140d7c070400f157ca9df",
+    "reason": null,
+    "remaining": {
+      "uncompilableClasses": [],
+      "undefinedSteps": 0
+    },
+    "rep": 1,
+    "repairPromptHash": "4b9d51d2718b0146c5cf9b41d7b020f9f7c53f3bd5ce25278b67b96d1ec501d5",
+    "repairs": 0,
+    "reused": false,
+    "scenarios": {
+      "final": 31,
+      "initial": 31
+    },
+    "seconds": 197.056,
+    "status": "passed",
+    "strippedFields": [
+      "inspect-auth:interceptor_sources[].source",
+      "inspect-auth:llm_delegation_guide",
+      "inspect-stack:analysis_meta.scan_duration_ms",
+      "inspect-stack:analysis_meta.timestamp",
+      "inspect-stack:test_env.database.password",
+      "inspect-stack:test_env.database.url",
+      "inspect-stack:test_env.database.username",
+      "plan-tests:artifact_path",
+      "plan-tests:key_params_path",
+      "plan-tests:test_cases[].condition",
+      "plan-tests:test_cases[].description",
+      "plan-tests:test_cases[].expected",
+      "scan-test-assets:_artifact",
+      "scan-test-assets:project_root",
+      "scan-test-assets:test_classes[].methods"
+    ],
+    "tokens": {
+      "in": 35166,
+      "out": 24301
+    }
+  },
+  "schema": 1
+}

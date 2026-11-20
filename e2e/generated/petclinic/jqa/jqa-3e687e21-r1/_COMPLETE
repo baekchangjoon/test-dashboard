@@ -1,0 +1,125 @@
+{
+  "files": [
+    {
+      "path": "features/authentication.feature",
+      "sha256": "9dcc8799c6f93439a962f77ab29cbde776746c031170cd46cab198d376cc14d7"
+    },
+    {
+      "path": "features/owner_management.feature",
+      "sha256": "f1d1636ba27868a81124e3508ee5ffe436d944e689773f9ceb486bf7703fde7e"
+    },
+    {
+      "path": "features/pet_catalog.feature",
+      "sha256": "ac146513386cb54ee32adc625e34dd3fc5596a5ba1db3ee4db48ef025b15e334"
+    },
+    {
+      "path": "features/reservation_lifecycle.feature",
+      "sha256": "917a13dacada0e22cda8c0c5ae0c4e2702fc14dce7917d55a36ad2b51684b64d"
+    },
+    {
+      "path": "features/reservation_listing.feature",
+      "sha256": "8f8d6a3ec711b13ff04b1dad7a0077102e4ac0464104a183881ce860b6b9b194"
+    },
+    {
+      "path": "features/reservation_validation.feature",
+      "sha256": "829f2e477b47b9f91fac8a306ff7153449bab9c83ef6c53b5b838d65409445a1"
+    },
+    {
+      "path": "features/vet_directory.feature",
+      "sha256": "543956eb6870da1a22fba8c061e1de02a640ce1d49589706d54dd73fa86503f6"
+    },
+    {
+      "path": "glue/AuthenticationSteps.java",
+      "sha256": "918891d10392ca5c331bff73c98455218ceda8c575eda56df7443e082861f076"
+    },
+    {
+      "path": "glue/OwnerManagementSteps.java",
+      "sha256": "dfd3b49df8e0cf3414605ad28dcac043bb65d51ea0677d06c0be491837f723b3"
+    },
+    {
+      "path": "glue/PetCatalogSteps.java",
+      "sha256": "6e510cb25272b591ed40b55b04cee0ad99cde26a0815392564338b5bd77a419b"
+    },
+    {
+      "path": "glue/ReservationLifecycleSteps.java",
+      "sha256": "ef22279675c222b2096908ed387cc9adf58fa40b407ccdc8305f3f417b9efa6a"
+    },
+    {
+      "path": "glue/ReservationListingSteps.java",
+      "sha256": "f0183e7a2bb56fad0344ba7735be881c111bf7d654b47bf93d93d60e6eb3f63d"
+    },
+    {
+      "path": "glue/ReservationValidationSteps.java",
+      "sha256": "57b82441e8260d0fd444ae40b72d1939644b9240f08406cb82e234511ff41b48"
+    },
+    {
+      "path": "glue/VetDirectorySteps.java",
+      "sha256": "fa94a6b4c5a431b838846cf0becec5b145e95173721157b29dc52517e4fa7cf0"
+    },
+    {
+      "path": "glue/support/ApiData.java",
+      "sha256": "c2d9b0cca4f9f16fdb9b58a9c5b070d8df07cdce2148ee7618348b5bf308ac9c"
+    }
+  ],
+  "genId": "jqa-3e687e21-r1",
+  "inputHash": "3e687e211c5f8a10d065adf5d0762745d72fc873513879572c85669c288431e3",
+  "meta": {
+    "arm": "jqa",
+    "bundleHash": "9f5cd1a33dc365dd3498df1a2f65740f5b402ccbc853b292e9286cd2bdc63767",
+    "cliVersion": "2.1.329",
+    "dir": null,
+    "files": 15,
+    "flags": [
+      "-p",
+      "--tools \"\"",
+      "--strict-mcp-config",
+      "--mcp-config <empty-mcp-config>",
+      "--setting-sources \"\"",
+      "--system-prompt <fixed>",
+      "--output-format json",
+      "--model <model>"
+    ],
+    "gen": null,
+    "genId": "jqa-3e687e21-r1",
+    "inputHash": "3e687e211c5f8a10d065adf5d0762745d72fc873513879572c85669c288431e3",
+    "model": "claude-opus-5-5",
+    "promptHash": "78dca8a9af9f49b04393998aa3f90579510337f05d8140d7c070400f157ca9df",
+    "reason": null,
+    "remaining": {
+      "uncompilableClasses": [],
+      "undefinedSteps": 0
+    },
+    "rep": 1,
+    "repairPromptHash": "4b9d51d2718b0146c5cf9b41d7b020f9f7c53f3bd5ce25278b67b96d1ec501d5",
+    "repairs": 0,
+    "reused": false,
+    "scenarios": {
+      "final": 38,
+      "initial": 38
+    },
+    "seconds": 152.585,
+    "status": "passed",
+    "strippedFields": [
+      "inspect-auth:interceptor_sources[].source",
+      "inspect-auth:llm_delegation_guide",
+      "inspect-stack:analysis_meta.scan_duration_ms",
+      "inspect-stack:analysis_meta.timestamp",
+      "inspect-stack:test_env.database.password",
+      "inspect-stack:test_env.database.url",
+      "inspect-stack:test_env.database.username",
+      "plan-tests:artifact_path",
+      "plan-tests:key_params_path",
+      "plan-tests:test_cases[].condition",
+      "plan-tests:test_cases[].description",
+      "plan-tests:test_cases[].expected",
+      "scan-test-assets:_artifact",
+      "scan-test-assets:project_root",
+      "scan-test-assets:test_classes[].methods"
+    ],
+    "tokens": {
+      "in": 56255,
+      "out": 18474
+    }
+  },
+  "schema": 1
+}
