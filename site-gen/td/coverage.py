@@ -438,7 +438,18 @@ def build(run_dir, *, classes, sources, cli_jar, commit: str, probes: list[Probe
     (out / "coverage.json").write_text(json.dumps(coverage, indent=2, ensure_ascii=False))
     render_page(out, coverage)
     return {"suites": {s.name: s.kpis for s in suites}, "violations": [v.as_dict() for v in violations],
-            "classIdWarnings": warnings_total, "merged": str(merged)}
+            "classIdWarnings": warnings_total, "merged": str(merged), "tests": test_kpi(suite_json)}
+
+
+def test_kpi(suite_json: dict, suite: str = "blackbox") -> dict | None:
+    """홈 KPI '테스트 통과율'(REQ-049): 기존 블랙박스 IT의 TC 결과(skipped 제외) 중 passed 비율. 생성 E2E 스위트는 실험
+    데이터라서 넣지 않는다(arm별 통과율은 compare.json). 스위트가 없거나 결과가 하나도 없으면 None."""
+    tcs = (suite_json.get(suite) or {}).get("tcs") or []
+    counted = [tc["result"] for tc in tcs if tc.get("result") in ("passed", "failed")]
+    if not counted:
+        return None
+    passed = sum(1 for result in counted if result == "passed")
+    return {"suite": suite, "passed": passed, "total": len(counted), "passRate": passed / len(counted)}
 
 
 # --- 화면 ---------------------------------------------------------------------------------
@@ -480,6 +491,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     for name, kpis in result["suites"].items():
         state.set_run_field(args.run_dir, f"kpis.{name}", kpis)
+    if result["tests"] is not None:
+        state.set_run_field(args.run_dir, "kpis.tests", result["tests"])
     status, reason = "passed", None
     if result["violations"]:
         status = "failed"

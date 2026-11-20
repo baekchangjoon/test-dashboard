@@ -82,6 +82,15 @@ def test_req031_suite_coverage(s08_run):
     assert suite["tcCount"] == TC_TOTAL and suite["attributedCount"] == TC_ATTRIBUTED
     assert sum(1 for tc in suite["tcs"] if tc["attributed"]) == TC_ATTRIBUTED
     assert (root / "coverage.html").is_file() and list((root / "src").rglob("*.java"))
+    # 홈 KPI "테스트 통과율"(REQ-049)의 원천: 기존 블랙박스 IT의 JUnit 결과(skipped 제외)로 테스트가 다시 계산한다
+    from td.blackbox import junit_results
+    sources = REPO_ROOT / "work" / "suts" / "petclinic" / "src" / SUT_YAML["blackbox"].get("test_sources", "src/test/java")
+    results = junit_results(s08_run.run_dir / "S01" / "blackbox" / "junit", sources)
+    counted = [r for r in results.values() if r != "skipped"]
+    tests = s08_run.run_json["kpis"]["tests"]
+    assert tests["suite"] == "blackbox" and tests["total"] == len(counted) == TC_TOTAL
+    assert tests["passed"] == sum(1 for r in counted if r == "passed")
+    assert tests["passRate"] == pytest.approx(tests["passed"] / tests["total"])
 
 
 def test_req063_merged_aggregate(s08_run):
