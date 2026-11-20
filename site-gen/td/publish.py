@@ -442,14 +442,17 @@ def sync_mirror(s3, bucket: str, mirror_dir) -> MirrorStats:
     return stats
 
 
-def upload_files(s3, bucket: str, mirror_dir, paths) -> list[str]:
-    """인덱스 파일(재생성되는 파일)을 덮어쓴다. `Cache-Control: no-cache`. 올린 키 목록을 돌려준다."""
+def upload_files(s3, bucket: str, mirror_dir, paths, env: dict | None = None) -> list[str]:
+    """인덱스 파일(재생성되는 파일)을 덮어쓴다. `Cache-Control: no-cache`. 올린 키 목록을 돌려준다.
+    텍스트 파일은 올리기 전에 누출 게이트를 지난다(하나라도 걸리면 아무것도 올리지 않는다)."""
+    from td.site.pages import TEXT_SUFFIXES
     mirror = Path(mirror_dir)
+    files = [Path(path) for path in paths if Path(path).is_file()]
+    for path in files:
+        if path.suffix.lower() in TEXT_SUFFIXES:
+            check_no_home_in_file(path, path.relative_to(mirror).as_posix(), env)
     keys = []
-    for path in paths:
-        path = Path(path)
-        if not path.is_file():
-            continue
+    for path in files:
         key = path.relative_to(mirror).as_posix()
         with path.open("rb") as handle:
             s3.put_object(Bucket=bucket, Key=key, Body=handle, CacheControl=CACHE_NO_CACHE, ContentType=content_type(path))
@@ -555,29 +558,27 @@ def log_key(prefix: str, sut: str, run_id: str) -> str:
     return f"{prefix}suts/{sut}/publish-log/{run_id}.json"
 
 
-def home_path_variants() -> list[str]:
-    """홈 경로의 원본·resolve 표기(긴 것 먼저). 게시물에 남으면 안 되는 문자열이다."""
-    from td.site.pages import path_variants
-    return path_variants(Path.home())
+def redact_home(text: str, env: dict | None = None) -> str:
+    """게시 전 공통 가림(td.redact): 로컬 경로(홈·작업·임시·저장소), 인프라 식별자, ARN."""
+    from td import redact
+    return redact.redact_text(text, env=env)
 
 
-def redact_home(text: str) -> str:
-    for variant in home_path_variants():
-        text = text.replace(variant, "~")
-    return text
+def check_no_home_in_file(path, label: str, env: dict | None = None) -> None:
+    """업로드 전 게이트: 올릴 파일에 홈 경로·로컬 절대 경로·인프라 식별자·ARN이 있으면 PublishError
+    (사유에는 값을 쓰지 않고 종류 이름만 쓴다)."""
+    from td import redact
+    kinds = redact.find_leaks(Path(path).read_text(errors="replace"), env=env)
+    if kinds:
+        raise PublishError(f"{label}에 로컬 홈 경로·절대 경로·식별자({', '.join(kinds)})가 들어 있어 게시하지 않는다(업로드 전 게이트)")
 
 
-def check_no_home_in_file(path, label: str) -> None:
-    """업로드 전 게이트: 올릴 파일에 홈 경로가 있으면 PublishError(사유에는 경로 값을 쓰지 않는다)."""
-    text = Path(path).read_text(errors="replace")
-    if any(variant in text for variant in home_path_variants()):
-        raise PublishError(f"{label}에 로컬 홈 경로가 들어 있어 게시하지 않는다(업로드 전 게이트)")
-
-
-def write_log(s3, bucket: str, mirror_dir, prefix: str, sut: str, run_id: str, result: dict, to_mirror: bool = True) -> str:
-    """`suts/<sut>/publish-log/<runId>.json`(갱신 가능한 인덱스 파일)을 S3에, 그리고 미러에 쓴다. 홈 경로는 `~`로 가린다."""
+def write_log(s3, bucket: str, mirror_dir, prefix: str, sut: str, run_id: str, result: dict, to_mirror: bool = True,
+              env: dict | None = None) -> str:
+    """`suts/<sut>/publish-log/<runId>.json`(갱신 가능한 인덱스 파일)을 S3에, 그리고 미러에 쓴다.
+    사유 등 예외 문구에서 온 값은 공통 가림기로 가린 뒤 쓴다."""
     key = log_key(prefix, sut, run_id)
-    text = redact_home(json.dumps({"runId": run_id, "sut": sut, **result}, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+    text = redact_home(json.dumps({"runId": run_id, "sut": sut, **result}, ensure_ascii=False, indent=2, sort_keys=True) + "\n", env)
     if to_mirror:
         path = Path(mirror_dir) / key
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -700,7 +701,7 @@ class Publication:
         site_dir = self.run_dir / pages.PUBLISH_SUBDIR
         shutil.rmtree(site_dir, ignore_errors=True)  # 이전 시도의 낡은 파일이 manifest에 섞이지 않게
         pages.render_run(self.run_dir, self.run_dir)
-        check_no_home_in_file(self.run_dir / "run.json", "run.json")  # run.json은 로컬 원본이 그대로 올라간다
+        check_no_home_in_file(self.run_dir / "run.json", "run.json", self.env)  # run.json은 로컬 원본이 그대로 올라간다
         manifest = build_manifest(site_dir, self.key_prefix, self.run_dir / "run.json")
         self.size_bytes = manifest.total_bytes
         return manifest
@@ -733,7 +734,7 @@ class Publication:
         started = time.monotonic()
         sync_mirror(self.s3, self.bucket, self.mirror)
         written = index.rebuild(self.mirror, self.prefix)
-        upload_files(self.s3, self.bucket, self.mirror, written)
+        upload_files(self.s3, self.bucket, self.mirror, written, self.env)
         self.upload_seconds += time.monotonic() - started
         self.hosts["s3"] = {**self.hosts["s3"], "status": "passed"}
         self.hosts["s3"].pop("reason", None)
@@ -773,11 +774,12 @@ class Publication:
         target = self.mirror / self.prefix
         target.mkdir(parents=True, exist_ok=True)
         files = [target / "hosting.html"]
-        (target / "hosting.html").write_text(hosting_mod.render_html(doc, reason=reason))
+        (target / "hosting.html").write_text(redact_home(hosting_mod.render_html(doc, reason=reason), self.env))
         if doc is not None:
-            (target / "hosting.json").write_text(json.dumps(doc, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+            text = json.dumps(doc, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+            (target / "hosting.json").write_text(redact_home(text, self.env))
             files.append(target / "hosting.json")
-        upload_files(self.s3, self.bucket, self.mirror, files)
+        upload_files(self.s3, self.bucket, self.mirror, files, self.env)
         paths = [f"/{self.prefix}{path.name}" for path in files]
         try:
             invalidation = invalidate(self.cf, self.distribution_id, paths, self.run_id)
@@ -831,14 +833,14 @@ class Publication:
 
     def log_phase(self) -> dict:
         status, reason = overall_status(self.hosts)
-        write_log(self.s3, self.bucket, self.mirror, self.prefix, self.sut, self.run_id, self.result(status, reason))
+        write_log(self.s3, self.bucket, self.mirror, self.prefix, self.sut, self.run_id, self.result(status, reason), env=self.env)
         if self.hosts["lightsail"]["status"] == "passed":
             try:  # 방금 쓴 publish-log를 Lightsail에도 싣는다(run 페이지가 같은 호스트에서 읽는다)
                 rsync_lightsail(self.mirror, self.ssh_target, self.ssh_key, RSYNC_TIMEOUT, runs=False)
             except PublishError as exc:
                 self.hosts["lightsail"] = {"status": "failed", "reason": f"publish-log 동기화: {exc}"[:300]}
                 status, reason = overall_status(self.hosts)
-                write_log(self.s3, self.bucket, self.mirror, self.prefix, self.sut, self.run_id, self.result(status, reason))
+                write_log(self.s3, self.bucket, self.mirror, self.prefix, self.sut, self.run_id, self.result(status, reason), env=self.env)
         self.invalidate_log()
         status, reason = overall_status(self.hosts)
         return self.result(status, reason)
@@ -856,7 +858,7 @@ class Publication:
 
     def rewrite_log(self, result: dict, reinvalidate: bool = True, locked: bool = False) -> None:
         """이미 게시한 publish-log를 고쳐 쓴 뒤 Lightsail에도 다시 싣고, 그 경로 하나를 다시 무효화한다(각 단계 최선 노력)."""
-        write_log(self.s3, self.bucket, self.mirror, self.prefix, self.sut, self.run_id, result)
+        write_log(self.s3, self.bucket, self.mirror, self.prefix, self.sut, self.run_id, result, env=self.env)
         if self.hosts["lightsail"]["status"] == "passed" and self.ssh_target and self.ssh_key:
             try:
                 with contextlib.nullcontext() if locked else mirror_lock(self.work_dir):  # flock은 재진입 불가
@@ -875,7 +877,7 @@ class Publication:
             return
         status, reason = overall_status(self.hosts)
         try:
-            write_log(self.s3, self.bucket, self.mirror, self.prefix, self.sut, self.run_id, self.result(status, reason), to_mirror=False)
+            write_log(self.s3, self.bucket, self.mirror, self.prefix, self.sut, self.run_id, self.result(status, reason), to_mirror=False, env=self.env)
         except Exception:  # noqa: BLE001 - 실패 기록은 최선 노력
             pass
 
@@ -950,6 +952,7 @@ def run_publish(sut: str, run_id: str, run_dir, env: dict | None = None, s3=None
     signal.signal(signal.SIGTERM, _raise_interrupted)
     publication = Publication(sut, run_id, run_dir, env, s3, cf)
     result = publication.execute()
+    result = json.loads(redact_home(json.dumps(result, ensure_ascii=False), env))  # S13.json·run.json도 다음 게시에 실린다
     extra = {k: result[k] for k in ("hosts", "timings", "sizeBytes")}
     state.end(run_dir, "S13", result["status"], result["reason"], extra=extra)
     print(f"[td] S13 {result['status']}" + (f": {result['reason']}" if result["reason"] else ""), file=sys.stderr)

@@ -65,26 +65,23 @@ class SanitizeError(RuntimeError):
 
 def path_variants(path) -> list[str]:
     """경로의 원본·resolve 표기(중복 제거, 긴 것 먼저). 공개 보조: 게시 치환과 S13 홈 경로 게이트가 함께 쓴다."""
-    path = Path(path)
-    variants = {str(path), str(path.resolve())}
-    return sorted((v for v in variants if len(v) > 1), key=len, reverse=True)
+    from td import redact
+    return redact.path_variants(path)
 
 
 def sanitize_site(out_dir, run_dir, repo_root=None) -> list[Path]:
-    """게시 전 텍스트 파일의 로컬 절대 경로를 치환한다: run 디렉터리 -> <run>, 저장소 루트 -> <repo>, 홈 -> ~.
-    치환 뒤에도 홈 경로가 남으면 SanitizeError(게이트). 바이너리는 건드리지 않는다. 바뀐 파일 목록을 돌려준다."""
+    """게시 전 텍스트 파일을 공통 가림기(td.redact)로 치환한다: run 디렉터리 -> <run>, TD_WORK_DIR -> <work>,
+    저장소 루트 -> <repo>, 임시 디렉터리 -> <tmp>, 홈 -> ~, 인프라 식별자 -> <redacted>, ARN -> <arn>.
+    치환 뒤에도 홈·로컬 절대 경로·식별자가 남으면 SanitizeError(게이트). 바이너리는 건드리지 않는다. 바뀐 파일 목록을 돌려준다."""
+    from td import redact
     repo_root = Path(repo_root or os.environ.get("TD_ROOT") or SITE_DIR.parents[2])
-    rules = ([(v, "<run>") for v in path_variants(run_dir)] + [(v, "<repo>") for v in path_variants(repo_root)]
-             + [(v, "~") for v in path_variants(Path.home())])
     changed = []
     for path in _text_files(out_dir):
         try:
             text = path.read_text()
         except UnicodeDecodeError:
             continue
-        new = text
-        for old, replacement in rules:
-            new = new.replace(old, replacement)
+        new = redact.redact_text(text, run_dir=run_dir, repo_root=repo_root)
         if new != text:
             path.write_text(new)
             changed.append(path)
@@ -97,18 +94,20 @@ def _text_files(out_dir) -> list[Path]:
 
 
 def check_no_home(out_dir) -> None:
-    """게이트: 텍스트 파일에 홈 경로가 남아 있으면 SanitizeError."""
-    home_variants = path_variants(Path.home())
+    """게이트: 텍스트 파일에 홈 경로, 로컬 절대 경로 접두(/Users/, /home/, /private/var/, /var/folders/),
+    인프라 식별자, ARN이 남아 있으면 SanitizeError. 사유에는 파일 경로(사이트 상대)와 종류만 쓴다."""
+    from td import redact
     leaked = []
     for path in _text_files(out_dir):
         try:
             text = path.read_text()
         except UnicodeDecodeError:
             continue
-        if any(v in text for v in home_variants):
-            leaked.append(path)
+        kinds = redact.find_leaks(text)
+        if kinds:
+            leaked.append(f"{path.relative_to(out_dir).as_posix()}({','.join(kinds)})")
     if leaked:
-        raise SanitizeError(f"게시 사본에 홈 경로가 남았다: {', '.join(str(p) for p in leaked[:5])}")
+        raise SanitizeError(f"게시 사본에 홈 경로·로컬 절대 경로·식별자가 남았다: {', '.join(leaked[:5])}")
 
 
 def render_run(run_dir, out_dir) -> Path:
