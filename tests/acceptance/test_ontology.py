@@ -874,6 +874,58 @@ def test_unit_owl_additions_contract():
     assert set(skeleton.triples((None, from_jqa, None))) == set(merged.triples((None, from_jqa, None)))
 
 
+def test_unit_owl_additions_type_placement():
+    """owl:Restriction 타입은 빈 노드에만, 속성 특성 타입(FunctionalProperty 등)은 골격의 속성에만 붙일 수 있다."""
+    from td import ontology_owl
+    jqa = json.loads((OWL_FIXTURES / "ontology-jqa.json").read_text())
+    skeleton = ontology_owl.skeleton(jqa, {})
+    for text, needle in (('td:Owner a owl:Restriction .\n', "owl:Restriction"),
+                         ('td:Owner a owl:FunctionalProperty .\n', "FunctionalProperty"),
+                         ('td:Owner rdfs:subClassOf [ a owl:Restriction , owl:TransitiveProperty ; '
+                          'owl:onProperty td:Owner_lastName ; owl:minCardinality 1 ] .\n', "TransitiveProperty")):
+        merged, problems = ontology_owl.merge_additions(skeleton, text)
+        assert merged is None and any(needle in p for p in problems), (text, problems)
+    merged, problems = ontology_owl.merge_additions(skeleton, VALID_ADDITIONS)
+    assert problems == [] and merged is not None
+
+
+def test_owl_unexpected_error_fails_stage_and_writes_meta(s05, fake_claude, monkeypatch):
+    """OwlGenError가 아닌 예외(예: JSON 변환 오류)도 failed로 마감하고 owl-gen.json을 쓴다. 산출물은 남기지 않는다."""
+    from td import ontology_owl
+    fake_claude.respond(owl_reply(VALID_ADDITIONS))
+    assert s05.run(s05.new_run()).returncode == 0   # 스냅샷을 만든다(이후 재사용 경로에서는 claude를 부르지 않는다)
+    run_dir = s05.new_run()
+    for key, value in s05.env(run_dir).items():
+        monkeypatch.setenv(key, value)
+
+    def boom(graph, meta=None):
+        raise RuntimeError("boom-json")
+
+    monkeypatch.setattr(ontology_owl, "to_json", boom)
+    result = ontology_owl.run_stage(run_dir, os.environ["TD_SUT_FILE"], os.environ["TD_SUT_SRC"])
+    assert result["status"] == "failed" and "boom-json" in result["reason"]
+    meta = s05.meta(run_dir)
+    assert meta["status"] == "failed" and "boom-json" in meta["reason"] and meta["reused"] is True
+    assert not (run_dir / "S05" / "ontology-owl.json").exists() and not (run_dir / "S05" / ontology_owl.TTL_NAME).exists()
+    assert len(fake_claude.calls) == 1
+
+
+def test_owl_require_snapshot_fails_before_claude(s05, fake_claude):
+    """TD_OWLGEN_REQUIRE_SNAPSHOT=1이면 입력 키의 스냅샷이 없을 때 claude를 부르지 않고 failed다(E2E 테스트의 비용 보호)."""
+    fake_claude.respond(owl_reply(VALID_ADDITIONS))
+    run_dir = s05.new_run()
+    done = s05.run(run_dir, TD_OWLGEN_REQUIRE_SNAPSHOT="1")
+    assert done.returncode != 0 and s05.stage(run_dir)["status"] == "failed"
+    assert "TD_OWLGEN_REQUIRE_SNAPSHOT" in s05.stage(run_dir)["reason"]
+    assert fake_claude.calls == [] and s05.snapshots() == []
+    assert s05.meta(run_dir)["status"] == "failed"
+    # 스냅샷이 있으면 같은 설정으로 재사용한다
+    assert s05.run(s05.new_run()).returncode == 0 and len(fake_claude.calls) == 1
+    again = s05.new_run()
+    assert s05.run(again, TD_OWLGEN_REQUIRE_SNAPSHOT="1").returncode == 0 and len(fake_claude.calls) == 1
+    assert s05.meta(again)["reused"] is True
+
+
 def test_req022_s05_stage_level_capture(s05, fake_claude, claude_call_log):
     """S05 단계 수준: 생성과 수리 호출이 모두 llm.sh를 거친다(cwd = 번들 임시 디렉터리, 격리 플래그, stdin에 SUT 소스 없음).
     수리 입력은 오류 문구와 직전 출력뿐이다(번들은 llm.sh가 뒤에 붙인다)."""

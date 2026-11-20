@@ -373,6 +373,10 @@ def merge_additions(base: rdflib.Graph, text: str) -> tuple[rdflib.Graph | None,
             problems.append(f"predicate {_short(p)} is not allowed ({where})")
         elif p == RDF.type and o not in ALLOWED_TYPES:
             problems.append(f"rdf:type {_short(o)} is not allowed ({where})")
+        elif p == RDF.type and o == OWL.Restriction and not isinstance(s, BNode):
+            problems.append(f"owl:Restriction may only type a blank node inside rdfs:subClassOf ({where})")
+        elif p == RDF.type and o != OWL.Restriction and s not in properties:
+            problems.append(f"{_short(o)} may only type a skeleton property ({where})")
         elif p == OWL.onProperty and o not in properties:
             problems.append(f"owl:onProperty {_short(o)} is not a skeleton property ({where})")
         elif p == OWL.inverseOf and not (s in object_properties and o in object_properties):
@@ -584,6 +588,8 @@ def obtain(graph, built, key: str, parent: Path, ctx: OwlContext, record: dict, 
             if problem is not None:
                 raise OwlGenError(f"스냅샷이 있지만 재사용할 수 없다(덮어쓰지 않는다): {final.name}: {problem}")
             return final, True
+        if os.environ.get("TD_OWLGEN_REQUIRE_SNAPSHOT") == "1":
+            raise OwlGenError(f"TD_OWLGEN_REQUIRE_SNAPSHOT=1인데 입력 키의 스냅샷이 없다(입력이 바뀌었다): {final.name}")
         lock = snapshot.try_reserve(parent, final.name)
         if lock is not None:
             try:
@@ -665,8 +671,9 @@ def run_stage(run_dir, sut_file, sut_src, *, llm=snapshot.call_llm) -> dict:
             weak.append(f"객체 속성 {record['stats']['objectProperties']}개 < 3")
         if weak:
             status, reason = "degraded", "; ".join(weak)
-    except OwlGenError as exc:
-        status, reason = "failed", str(exc)[:1500]
+    except Exception as exc:  # noqa: BLE001 - 어떤 오류든 failed로 마감하고 owl-gen.json을 쓴다
+        message = str(exc) if isinstance(exc, OwlGenError) else f"S05 실행 오류: {type(exc).__name__}: {exc}"
+        status, reason = "failed", message[:1500]
         if record["seconds"] == 0.0:
             record["seconds"] = round(time.monotonic() - started, 3)
         for name in (TTL_NAME, "ontology-owl.json"):
