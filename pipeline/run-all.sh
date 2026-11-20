@@ -9,7 +9,7 @@ die() { echo "run-all: $*" >&2; exit 1; }
 
 [[ $# -ge 1 ]] || usage
 SUT="$1"; shift
-SUT_FILE="" ONLY="" ARMS="base,jqa,owl" REPS=1 STYLE="cucumber" REGENERATE=false
+SUT_FILE="" ONLY="" ARMS="base,jqa,owl" REPS=3 STYLE="cucumber" REGENERATE=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --sut-file) SUT_FILE="${2:?}"; shift 2 ;;

@@ -216,7 +216,7 @@
 
 #### REQ-061 — 생성 메타데이터 기록
 - 유형: Functional / 우선순위: Must
-- 수용기준: Given 기준 run의 `bdd-gen.json`과 `owl-gen.json`, Then `bdd-gen.schema.json` 검증을 통과한다. 필드는 입력 해시, 프롬프트 해시, 모델 id, CLI 버전, 플래그, 수리 횟수, 입력·출력 토큰, 소요 시간, strippedFields다.
+- 수용기준: Given 기준 run의 `bdd-gen.json`과 `owl-gen.json`, Then 각각 `bdd-gen.schema.json`과 `owl-gen.schema.json`(같은 필드 이름) 검증을 통과한다. 필드는 입력 해시, 프롬프트 해시, 모델 id, CLI 버전, 플래그, 수리 횟수, 입력·출력 토큰, 소요 시간, strippedFields다.
 - 검증 레벨: E2E
 
 #### REQ-075 — 생성 입력 해시 안정성

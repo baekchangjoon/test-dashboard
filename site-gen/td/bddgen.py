@@ -336,6 +336,10 @@ def generate(arm: str, rep: int, bundle, out_root, regenerate: bool = False, *, 
     arm_dir = Path(out_root) / arm
     arm_dir.mkdir(parents=True, exist_ok=True)
     base_id = gen_id_for(arm, key, rep)
+    require_snapshot = os.environ.get("TD_BDDGEN_REQUIRE_SNAPSHOT") == "1"
+    if regenerate and require_snapshot:
+        record = _base_record(arm, rep, None, base_id, key, bundle.input_hash, ctx)
+        return _failed(record, "TD_BDDGEN_REQUIRE_SNAPSHOT=1에서는 --regenerate(새 generation)를 할 수 없다", time.monotonic())
     if regenerate:
         gen = 1
         while True:
@@ -358,6 +362,10 @@ def generate(arm: str, rep: int, bundle, out_root, regenerate: bool = False, *, 
                 return _reuse(final, key)
             record = _base_record(arm, rep, None, base_id, key, bundle.input_hash, ctx)
             return _failed(record, f"스냅샷이 있지만 재사용할 수 없다(덮어쓰지 않는다): {problem}", time.monotonic())
+        if require_snapshot:
+            record = _base_record(arm, rep, None, base_id, key, bundle.input_hash, ctx)
+            return _failed(record, f"TD_BDDGEN_REQUIRE_SNAPSHOT=1인데 입력 키의 스냅샷이 없다(입력이 바뀌었다): {base_id}",
+                           time.monotonic())
         lock = try_reserve(arm_dir, base_id)
         if lock is not None:
             try:

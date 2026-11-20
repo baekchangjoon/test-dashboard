@@ -251,6 +251,28 @@ def test_req024_snapshot_reuse_preserve(s06, fake_claude):
     assert len(fake_claude.calls) == 3 and tampered.read_text().endswith("// tampered\n")
 
 
+def test_bddgen_require_snapshot_fails_before_claude(s06, fake_claude):
+    """TD_BDDGEN_REQUIRE_SNAPSHOT=1이면 입력 키의 스냅샷이 없는 generation은 claude를 부르지 않고 failed다
+    (E2E 테스트가 입력 변경으로 실제 생성 비용을 쓰지 않게 막는다). 스냅샷이 있으면 그대로 재사용한다."""
+    fake_claude.respond(VALID)
+    run_dir = s06.new_run()
+    done = s06.run(run_dir, TD_BDDGEN_REQUIRE_SNAPSHOT="1")
+    assert fake_claude.calls == []
+    stage = s06.stage(run_dir)
+    assert stage["status"] == "failed", stage
+    [(gen_id, gen)] = stage["generations"].items()
+    assert gen["status"] == "failed" and "TD_BDDGEN_REQUIRE_SNAPSHOT" in gen["reason"]
+    assert not (s06.generated / "petclinic" / "base" / gen_id).exists()
+    assert s06.run(s06.new_run()).returncode == 0 and len(fake_claude.calls) == 1
+    again = s06.new_run()
+    assert s06.run(again, TD_BDDGEN_REQUIRE_SNAPSHOT="1").returncode == 0
+    assert len(fake_claude.calls) == 1 and s06.stage(again)["generations"][gen_id]["reused"] is True
+    # --regenerate는 새 generation을 만드는 요청이므로 같은 설정에서 거부한다
+    regen = s06.new_run(regenerate=True)
+    s06.run(regen, TD_BDDGEN_REQUIRE_SNAPSHOT="1")
+    assert len(fake_claude.calls) == 1 and s06.stage(regen)["status"] == "failed"
+
+
 def test_req024_concurrent_same_input_writes_once(tmp_path, fake_claude):
     """같은 입력으로 동시에 생성하면 하나만 쓰고(claude 1회) 다른 하나는 기다렸다가 재사용한다. 부분 디렉터리는 재사용하지 않는다."""
     env = S06Env(tmp_path)

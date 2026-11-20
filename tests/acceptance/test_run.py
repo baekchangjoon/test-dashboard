@@ -296,6 +296,15 @@ def test_valid_option_values_accepted(stub_stages):
     assert len(result.stage("S06")["generations"]) == 4
 
 
+def test_default_options_are_three_arms_three_reps(stub_stages):
+    """설계 §6.6: 기본은 arm 3개 × 반복 3회(총 9개 generation)다."""
+    result = stub_stages.run()
+    assert result.returncode == 0, result.stderr
+    options = result.run_json["options"]
+    assert options["arms"] == ["base", "jqa", "owl"] and options["reps"] == 3
+    assert len(result.stage("S06")["generations"]) == 9
+
+
 def test_malformed_sut_yaml_exits_1_with_message(stub_stages):
     stub_stages.sut_file.write_text("name: [unclosed\n")
     result = stub_stages.run()
