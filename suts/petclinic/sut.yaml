@@ -25,3 +25,5 @@ blackbox:
   junit_xml: build/test-results/blackboxTest
 tia: { range: "HEAD~10..HEAD", first_parent: true }
 sonar: { projectKey: spring-petclinic-td, cmd_build: "./gradlew --no-daemon build -x test", cmd_scan: "./gradlew --no-daemon sonar" }
+# 비교(S12)의 "Reservation 범위" 지표: 이 패키지 글로브에 드는 클래스만 다시 집계한다(fork 고유 기능, 모델 사전 지식 오염 완화).
+compare: { focus: "org.springframework.samples.petclinic.boarding.*" }

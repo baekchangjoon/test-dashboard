@@ -177,6 +177,18 @@ def sut_window_index(sut_src) -> dict[bytes, str]:
     return index
 
 
+def load_oracle_descriptions(path) -> list[str]:
+    """`oracle.yaml`(`rules[].description`) 또는 문자열 목록 JSON에서 대조할 설명 문장 목록을 읽는다.
+    오라클은 평가 전용이라 이 문장이 번들에 들어가면 안 된다(REQ-041)."""
+    path = Path(path)
+    text = path.read_text(encoding="utf-8")
+    if path.suffix.lower() in (".yaml", ".yml"):
+        import yaml
+        data = yaml.safe_load(text) or {}
+        return [str(rule["description"]) for rule in data.get("rules", []) if rule.get("description")]
+    return json.loads(text)
+
+
 def check_content(bundle: Bundle, sut_src, oracle=None) -> list[Violation]:
     """번들 파일마다 정규화한 줄 시퀀스의 5줄 연속 창이 SUT src와 같으면 위반이다.
     oracle(문자열 목록, 사람이 쓴 기대 설명)이 있으면 번들 정규화 텍스트에 그 문장이 들어 있는지도 본다(부분 문자열)."""
@@ -254,9 +266,7 @@ def _cmd_build(args) -> int:
     except BundleError as exc:
         print(str(exc), file=sys.stderr)
         return 2
-    oracle = None
-    if args.oracle:
-        oracle = json.loads(Path(args.oracle).read_text(encoding="utf-8"))
+    oracle = load_oracle_descriptions(args.oracle) if args.oracle else None
     violations = check_paths(built, args.sut_src) + check_content(built, args.sut_src, oracle)
     if violations:
         for violation in violations:
@@ -305,7 +315,7 @@ def main(argv: list[str] | None = None) -> int:
     build.add_argument("--run-dir", required=True)
     build.add_argument("--out", required=True)
     build.add_argument("--sut-src", required=True)
-    build.add_argument("--oracle", help="oracle 설명 문자열 목록(JSON)")
+    build.add_argument("--oracle", help="oracle.yaml 또는 설명 문자열 목록(JSON)")
     build.set_defaults(func=_cmd_build)
     inline_cmd = sub.add_parser("inline", help="번들을 프롬프트용 텍스트로 출력")
     inline_cmd.add_argument("bundle")

@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "S12 비교 결과(compare.json)",
+  "type": "object",
+  "required": ["schema", "runId", "sut", "label", "endpoints", "oracle", "arms", "verdict", "clock", "limitations"],
+  "additionalProperties": false,
+  "$defs": {
+    "ratio": {"type": ["number", "null"]},
+    "stat": {
+      "type": "object", "required": ["mean", "min", "max", "n", "values"], "additionalProperties": false,
+      "properties": {
+        "mean": {"type": ["number", "null"]}, "min": {"type": ["number", "null"]}, "max": {"type": ["number", "null"]},
+        "n": {"type": "integer", "minimum": 0}, "values": {"type": "array", "items": {"type": ["number", "null"]}}
+      }
+    }
+  },
+  "properties": {
+    "schema": {"const": 1},
+    "runId": {"type": ["string", "null"]},
+    "sut": {"type": ["string", "null"]},
+    "commit": {"type": ["string", "null"]},
+    "label": {"const": "탐색적 관찰"},
+    "reps": {"type": ["integer", "null"]},
+    "endpoints": {
+      "type": "object", "required": ["denominator", "ids"], "additionalProperties": false,
+      "properties": {
+        "denominator": {"type": "integer", "minimum": 1}, "expected": {"type": ["integer", "null"]},
+        "ids": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "oracle": {
+      "type": "object", "required": ["rules", "ids"], "additionalProperties": false,
+      "properties": {"rules": {"type": "integer", "minimum": 0}, "ids": {"type": "array", "items": {"type": "string"}}}
+    },
+    "focus": {"type": ["string", "null"]},
+    "blackbox": {
+      "type": ["object", "null"], "additionalProperties": false,
+      "properties": {"line": {"type": "number"}, "branch": {"type": "number"}}
+    },
+    "arms": {
+      "type": "object", "minProperties": 1,
+      "propertyNames": {"enum": ["base", "jqa", "owl"]},
+      "additionalProperties": {
+        "type": "object", "required": ["arm", "status", "reason", "measured", "metrics", "generations"], "additionalProperties": false,
+        "properties": {
+          "arm": {"enum": ["base", "jqa", "owl"]},
+          "status": {"enum": ["ok", "skipped"]},
+          "reason": {"type": ["string", "null"]},
+          "reps": {"type": ["integer", "null"]},
+          "measured": {"type": "integer", "minimum": 0},
+          "failedGenerations": {"type": "array", "items": {"type": "object", "required": ["genId", "reason"],
+                                "properties": {"genId": {"type": "string"}, "reason": {"type": ["string", "null"]}}}},
+          "metrics": {
+            "type": "object",
+            "required": ["scenarios", "compile", "undefined", "passed", "endpoint", "line", "branch", "lineDelta", "branchDelta",
+                         "uniqueLines", "oracle", "oracleCovered", "focusLine", "focusBranch", "focusEndpoint", "focusOracle",
+                         "tokens", "seconds"],
+            "additionalProperties": {"$ref": "#/$defs/stat"}
+          },
+          "generations": {
+            "type": "array",
+            "items": {
+              "type": "object", "required": ["genId", "arm", "status"],
+              "properties": {"genId": {"type": "string"}, "arm": {"type": "string"}, "status": {"enum": ["measured", "failed"]},
+                             "reason": {"type": ["string", "null"]}}
+            }
+          }
+        },
+        "if": {"properties": {"status": {"const": "skipped"}}},
+        "then": {"properties": {"reason": {"type": "string", "minLength": 1}}}
+      }
+    },
+    "verdict": {
+      "type": "object", "required": ["generation", "effect", "label", "detail"], "additionalProperties": false,
+      "properties": {
+        "generation": {"enum": ["성립", "불성립", "판정 불가"]},
+        "effect": {"enum": ["효과 있음", "차이 불명확", "판정 불가"]},
+        "label": {"const": "탐색적 관찰"},
+        "detail": {"type": "object"}
+      }
+    },
+    "clock": {
+      "type": "object", "required": ["clockShift", "tz"], "additionalProperties": false,
+      "properties": {"clockShift": {"type": "boolean"}, "tz": {"type": "string"}, "startedAt": {"type": ["string", "null"]},
+                     "finishedAt": {"type": ["string", "null"]}}
+    },
+    "limitations": {"type": "array", "minItems": 1, "items": {"type": "string"}}
+  }
+}
