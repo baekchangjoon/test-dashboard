@@ -246,3 +246,18 @@ def test_req034_responsive(s08_run, coverage_url, browser):
         assert scroll_width <= inner_width, f"상세 열람 후 가로 스크롤: {scroll_width} > {inner_width}"
     finally:
         page.close()
+
+
+def test_req049_home_pass_rate_from_real_s08_output(s08_run, tmp_path):
+    """생산자(S08이 쓴 run.json.kpis) → 소비자(홈 렌더) 연결: fixture가 kpis를 직접 만들지 않는다.
+    기대값은 JUnit XML에서 테스트가 다시 계산한다."""
+    from helpers import make_site_run
+    from td.blackbox import junit_results
+    from td.site import index
+    sources = REPO_ROOT / "work" / "suts" / "petclinic" / "src" / SUT_YAML["blackbox"].get("test_sources", "src/test/java")
+    counted = [r for r in junit_results(s08_run.run_dir / "S01" / "blackbox" / "junit", sources).values() if r != "skipped"]
+    expected = f"{100 * sum(1 for r in counted if r == 'passed') / len(counted):.1f}%"
+    make_site_run(tmp_path, "petclinic", s08_run.run_id, kpis=s08_run.run_json["kpis"])
+    index.rebuild(tmp_path)
+    home = (tmp_path / "index.html").read_text()
+    assert f'<div class="kpi-item"><span class="muted">테스트 통과율</span><b>{expected}</b></div>' in home, expected
