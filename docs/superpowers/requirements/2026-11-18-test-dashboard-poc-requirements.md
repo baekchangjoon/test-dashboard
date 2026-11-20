@@ -569,7 +569,7 @@
 | REQ-048 | Lightsail 호스트 | test_baseline.py::test_req048_baseline_lightsail_crawl<br>test_hosting.py::test_req048_lightsail_crawl | E2E | 🟢 passed |
 | REQ-070 | Lightsail 따라잡기 | test_publish.py::test_req070_lightsail_catch_up | E2E-inj | 🟢 passed |
 | REQ-071 | 게시 상태 기준 파일 | test_baseline.py::test_req071_baseline_publish_status_files<br>test_publish.py::test_req071_publish_status_files | E2E | 🟢 passed |
-| REQ-049 | 홈·SUT 페이지 | test_baseline.py::test_req049_baseline_home_sut_run_pages<br>test_coverage.py::test_req049_home_pass_rate_from_real_s08_output<br>test_site.py::test_req049_home_sut_run_pages | E2E | 🔴 failing |
+| REQ-049 | 홈·SUT 페이지 | test_baseline.py::test_req049_baseline_home_sut_run_pages<br>test_coverage.py::test_req049_home_pass_rate_from_real_s08_output<br>test_site.py::test_req049_home_sut_run_pages | E2E | 🟢 passed |
 | REQ-050 | 멀티 SUT | test_site.py::test_req050_multi_sut<br>test_site.py::test_req050_no_sut_hardcode_in_pipeline_code | E2E-inj | 🟢 passed |
 | REQ-072 | 설명 파일 값 사용 | test_unit_config.py::test_req072_descriptor_driven | Unit | 🟢 passed |
 | REQ-051 | 호스팅 정량 비교 | test_baseline.py::test_req051_baseline_quantitative<br>test_hosting.py::test_req051_quantitative | E2E | 🟢 passed |
@@ -582,11 +582,11 @@
 | REQ-056 | CI 자동 실행 | – | – | 🔵 out-of-scope (Won't) |
 | REQ-057 | 접근 제어 | – | – | 🔵 out-of-scope (Won't) |
 
-Coverage: 71/72 green (99%) — target 100% (대상: Must 65 + Should 7). 제외: Could 1 deferred(🔵 REQ-030), Won't 2(🔵 REQ-056, REQ-057). 판정 근거: 같은 REQ 번호의 test_req<NNN>_* 테스트가 전체 수용 스위트 JUnit XML에서 모두 passed.
+Coverage: 72/72 green (100%) — target 100% (대상: Must 65 + Should 7). 제외: Could 1 deferred(🔵 REQ-030), Won't 2(🔵 REQ-056, REQ-057). 판정 근거: 같은 REQ 번호의 test_req<NNN>_* 테스트가 전체 수용 스위트 JUnit XML에서 모두 passed(2026-11-20 최종 수정 후 전체 실행: 697 passed, 0 failed, 0 skipped).
 
 REQ-022, REQ-061 증거 범위(컨트롤러 결정, 2026-11-20): 기준 run은 커밋된 스냅샷을 재사용해 claude를 부르지 않는다. 실제 생성 호출은 같은 입력 키로 접두 게시 디버그 run(`_test/t25-dbg1/`, runId 20261120-093616Z-b6f9393-manual-6948ba10, 7건)에서 했고, 이 호출 기록(shim `llm-calls.jsonl`)과 스냅샷의 생성 메타를 REQ-022/REQ-061 증거로 인정한다.
 
-미달 1건(2026-11-20, Task 25): **REQ-049**. 운영 홈의 '테스트 통과율' KPI가 "—"다. 원인은 어느 단계도 `run.json.kpis.tests`를 쓰지 않았던 것이다(기존 Unit 테스트는 fixture에 값을 직접 넣어 통과했다). S08이 `kpis.tests`(블랙박스 IT passed 비율)를 쓰도록 고쳤고, 주입 환경 게시(`_test/t25kpi01/`)에서 두 SUT 모두 값이 보인다. 운영의 기준 run과 두 번째 run은 수정 전에 게시돼 불변이므로, 운영 홈에서 green이 되려면 운영 게시가 1회 더 필요하다(승인 범위 밖이라 보류).
+해소(2026-11-20, 최종 수정): **REQ-049**. 아래는 Task 25 시점의 미달 기록이다. 운영 홈의 '테스트 통과율' KPI가 "—"다. 원인은 어느 단계도 `run.json.kpis.tests`를 쓰지 않았던 것이다(기존 Unit 테스트는 fixture에 값을 직접 넣어 통과했다). S08이 `kpis.tests`(블랙박스 IT passed 비율)를 쓰도록 고쳤고, 주입 환경 게시(`_test/t25kpi01/`)에서 두 SUT 모두 값이 보인다. 운영의 기준 run과 두 번째 run은 수정 전에 게시돼 불변이므로, 운영 홈에서 green이 되려면 운영 게시가 1회 더 필요하다(승인 범위 밖이라 보류). 최종 수정 후 운영 게시를 다시 했고(기준 run 20261120-125628Z-b6f9393-manual-c5748158, 두 번째 run 20261120-131022Z-b6f9393-manual-036c288d, 두 run 모두 claude 호출 0건), 운영 홈의 petclinic 테스트 통과율이 100.0%로 보여 green이 됐다. 이전 운영 run은 불변 이력으로 남긴다.
 
 ## 자기검토 결과
 
