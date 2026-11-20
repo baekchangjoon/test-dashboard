@@ -24,7 +24,8 @@ from helpers import docker_ids as _docker_ids
 from helpers import find_leaked_resources
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SESSION_FILE = REPO_ROOT / "work" / "acceptance-session.json"
+# 기준 run 증거(run_baseline.py가 쓴다). 디버깅 세션 파일은 TD_ACCEPTANCE_SESSION_FILE로 바꿔 끼울 수 있다.
+SESSION_FILE = Path(os.environ.get("TD_ACCEPTANCE_SESSION_FILE") or REPO_ROOT / "work" / "acceptance-session.json")
 LOCAL_ENV_PATH = REPO_ROOT / "infra" / "local.env"
 
 _SESSION_ID = os.environ.get("TD_TEST_SESSION_ID") or uuid.uuid4().hex[:8]
@@ -283,6 +284,8 @@ def real_pipeline_run(tmp_path_factory, site_prefix):
             (real_work / shared).mkdir(parents=True, exist_ok=True)
             (work / shared).symlink_to(real_work / shared)
         full_env = {k: v for k, v in os.environ.items() if not k.startswith("TD_")}
+        # 커밋된 스냅샷이 없는(입력이 바뀐) generation은 claude를 부르지 않고 실패시킨다: 테스트가 실제 생성 비용을 쓰지 않는다.
+        full_env.update(TD_BDDGEN_REQUIRE_SNAPSHOT="1", TD_OWLGEN_REQUIRE_SNAPSHOT="1")
         full_env.update(TD_WORK_DIR=str(work), TD_ROOT=str(REPO_ROOT), TD_SITE_PREFIX=site_prefix, **env)
         # 새 세션(프로세스 그룹)으로 띄우고, 시간이 넘으면 그룹에 TERM을 보내 파이프라인 trap이 컨테이너를 정리하게 한다.
         sut_args = ["--sut-file", sut_file] if sut_file else []
@@ -349,6 +352,7 @@ def real_pipeline_run_async(tmp_path_factory, site_prefix):
         for shared in ("tools", "suts"):
             (work / shared).symlink_to(real_work / shared)
         full_env = {k: v for k, v in os.environ.items() if not k.startswith("TD_")}
+        full_env.update(TD_BDDGEN_REQUIRE_SNAPSHOT="1", TD_OWLGEN_REQUIRE_SNAPSHOT="1")
         full_env.update(TD_WORK_DIR=str(work), TD_ROOT=str(REPO_ROOT), TD_SITE_PREFIX=site_prefix, **env)
         proc = subprocess.Popen(["bash", str(RUN_ALL), "petclinic", "--only", only], env=full_env, text=True,
                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
@@ -474,8 +478,11 @@ def mini_sut_run(real_pipeline_run, injected_petclinic_run, mini_sut_sut_file):
 
 
 @pytest.fixture(scope="session")
-def run_under_test():
-    pytest.fail("requires Task 25 (세션 파일이 있으면 기준 run, 없으면 m1_run)", pytrace=False)
+def run_under_test(request):
+    """세션 파일이 있으면 기준 run, 없으면 m1_run(`--only S00,S01`)."""
+    if SESSION_FILE.exists():
+        return request.getfixturevalue("baseline_run")
+    return request.getfixturevalue("m1_run")
 
 
 STUB_STAGE_DIR = REPO_ROOT / "tests" / "fixtures" / "stub-stages"
@@ -556,14 +563,62 @@ def stub_stages(tmp_path, mini_sut_repo, site_prefix) -> StubRunner:
     return StubRunner(tmp_path, mini_sut_repo, site_prefix)
 
 
-@pytest.fixture(scope="session")
-def baseline_run():
-    pytest.fail("requires Task 25 (기준 run)", pytrace=False)
+@dataclass
+class SessionRun:
+    """run_baseline.py가 기록한 run 하나(기준 또는 두 번째). RunResult와 같은 조회 메서드를 가진다."""
+    record: dict
+    session: dict
+
+    @property
+    def run_id(self) -> str:
+        return self.record["runId"]
+
+    @property
+    def run_dir(self) -> Path:
+        return REPO_ROOT / self.record["runDir"]
+
+    @property
+    def returncode(self) -> int:
+        return self.record["exitCode"]
+
+    @property
+    def prefix(self) -> str:
+        return self.session.get("prefix", "")
+
+    @property
+    def run_json(self) -> dict:
+        return json.loads((self.run_dir / "run.json").read_text())
+
+    def stage(self, stage_id: str) -> dict:
+        return json.loads((self.run_dir / "stages" / f"{stage_id}.json").read_text())
+
+    def stages(self) -> dict[str, dict]:
+        return {p.stem: json.loads(p.read_text()) for p in sorted((self.run_dir / "stages").glob("S*.json"))}
+
+
+def load_session_run(label: str) -> SessionRun:
+    """세션 파일에서 `baseline` 또는 `second` 기록을 읽는다. 없거나 그 run 디렉터리가 없으면 실패한다."""
+    if not SESSION_FILE.exists():
+        pytest.fail(f"{SESSION_FILE}가 없다: tests/acceptance/run_baseline.py로 기준 run과 두 번째 run을 먼저 실행한다",
+                    pytrace=False)
+    session = json.loads(SESSION_FILE.read_text())
+    record = session.get(label)
+    if not record:
+        pytest.fail(f"세션 파일에 '{label}' run 기록이 없다: {SESSION_FILE}", pytrace=False)
+    run = SessionRun(record, session)
+    if not (run.run_dir / "run.json").exists():
+        pytest.fail(f"세션 파일의 {label} run 디렉터리가 없다: {run.run_dir}", pytrace=False)
+    return run
 
 
 @pytest.fixture(scope="session")
-def second_run():
-    pytest.fail("requires Task 25 (두 번째 run)", pytrace=False)
+def baseline_run() -> SessionRun:
+    return load_session_run("baseline")
+
+
+@pytest.fixture(scope="session")
+def second_run() -> SessionRun:
+    return load_session_run("second")
 
 
 @pytest.fixture

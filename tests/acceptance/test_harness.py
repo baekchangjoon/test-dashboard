@@ -114,11 +114,29 @@ def test_baseline_marker_passes_with_session_file(monkeypatch, tmp_path):
     conftest.pytest_runtest_setup(_FakeItem(marked=True))
 
 
-@pytest.mark.parametrize("name", ["run_under_test",
-                                  "baseline_run", "second_run"])
-def test_pending_fixtures_fail_with_clear_message(name, request):
-    with pytest.raises(pytest.fail.Exception, match="requires Task"):
-        request.getfixturevalue(name)
+@pytest.mark.parametrize("label", ["baseline", "second"])
+def test_session_run_loader_fails_clearly_without_session(label, monkeypatch, tmp_path):
+    conftest = _conftest_module()
+    monkeypatch.setattr(conftest, "SESSION_FILE", tmp_path / "missing.json")
+    with pytest.raises(pytest.fail.Exception, match="run_baseline.py"):
+        conftest.load_session_run(label)
+    (tmp_path / "missing.json").write_text(json.dumps({"baseline": {"runId": "x", "runDir": "work/runs/none"}}))
+    with pytest.raises(pytest.fail.Exception):
+        conftest.load_session_run(label)
+
+
+def test_session_run_loader_reads_recorded_run(monkeypatch, tmp_path):
+    conftest = _conftest_module()
+    run_dir = tmp_path / "runs" / "R1"
+    (run_dir / "stages").mkdir(parents=True)
+    (run_dir / "run.json").write_text(json.dumps({"runId": "R1"}))
+    (run_dir / "stages" / "S00.json").write_text(json.dumps({"id": "S00", "status": "passed"}))
+    session_file = tmp_path / "session.json"
+    session_file.write_text(json.dumps({"prefix": "", "baseline": {"runId": "R1", "runDir": str(run_dir), "exitCode": 0}}))
+    monkeypatch.setattr(conftest, "SESSION_FILE", session_file)
+    run = conftest.load_session_run("baseline")
+    assert run.run_id == "R1" and run.run_dir == run_dir and run.returncode == 0 and run.prefix == ""
+    assert run.run_json == {"runId": "R1"} and run.stages()["S00"]["status"] == "passed"
 
 
 def test_gate_detects_labeled_container(session_id):
