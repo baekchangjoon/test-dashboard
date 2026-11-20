@@ -129,6 +129,12 @@ def parse_output(text: str) -> list[dict]:
     return [{"path": item["path"], "content": item["content"]} for item in files]
 
 
+def count_scenarios(files: list[dict]) -> int:
+    """파일 목록의 시나리오(pickle) 수. Scenario Outline은 Examples 행마다 하나다(S07 집계 단위와 같다)."""
+    from td import testid
+    return sum(len(testid.pickles(item["content"])) for item in files if item["path"].endswith(".feature"))
+
+
 def write_files(target: Path, files: list[dict]) -> None:
     """generation 파일을 target에 쓴다(features/, glue/만 비우고 다시 쓴다)."""
     for sub in ("features", "glue"):
@@ -167,7 +173,7 @@ def call_llm(bundle_dir: Path, prompt_file: Path, out_json: Path) -> LlmReply:
     with err_path.open("w", encoding="utf-8") as err:
         status = proc.run_with_timeout(LLM_TIMEOUT_SEC, ["bash", str(_root() / "pipeline" / "lib" / "llm.sh"),
                                                          str(bundle_dir), str(prompt_file), str(out_json)],
-                                       stdout=subprocess.DEVNULL, stderr=err)
+                                       stdout=subprocess.DEVNULL, stderr=err, reraise=True)
     seconds = time.monotonic() - started
     if status != 0:
         tail = err_path.read_text(encoding="utf-8", errors="replace")[-600:].strip()
@@ -268,21 +274,28 @@ def _pid_alive(pid: int) -> bool:
     return True
 
 
-def _stale(lock: Path) -> bool:
-    owner = lock / "owner.json"
+def _owner(lock: Path) -> dict | None:
     try:
-        data = json.loads(owner.read_text())
+        data = json.loads((lock / "owner.json").read_text())
     except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _stale(lock: Path, owner: dict | None) -> bool:
+    if owner is None:
         # 주인 정보를 쓰기 전의 순간이거나 깨진 예약이다. 오래된 것만 회수한다.
         try:
             return time.time() - lock.stat().st_mtime > 120
         except OSError:
             return False
-    return data.get("host") == socket.gethostname() and not _pid_alive(int(data.get("pid") or 0))
+    return owner.get("host") == socket.gethostname() and not _pid_alive(int(owner.get("pid") or 0))
 
 
 def try_reserve(arm_dir: Path, gen_id: str) -> Path | None:
-    """`.reserve/<genId>`를 원자적 mkdir로 잡는다. 이미 있으면 None(죽은 주인의 예약은 회수 후 다시 시도)."""
+    """`.reserve/<genId>`를 원자적 mkdir로 잡는다. 이미 있으면 None(죽은 주인의 예약은 회수 후 다시 시도).
+    회수는 rename 하나로 한다(둘이 동시에 회수해도 한쪽만 성공). rename 뒤 옮겨 온 예약의 주인이 판정한 주인과 다르면
+    (판정과 rename 사이에 다른 프로세스가 새로 잡은 예약) 되돌리고 포기한다."""
     reserve = arm_dir / RESERVE_DIR
     reserve.mkdir(parents=True, exist_ok=True)
     lock = reserve / gen_id
@@ -290,12 +303,19 @@ def try_reserve(arm_dir: Path, gen_id: str) -> Path | None:
         try:
             lock.mkdir()
         except FileExistsError:
-            if not _stale(lock):
+            judged = _owner(lock)
+            if not _stale(lock, judged):
                 return None
             graveyard = reserve / f"{gen_id}.stale-{uuid.uuid4().hex[:8]}"
             try:
-                lock.rename(graveyard)       # 회수도 rename 하나로: 둘이 동시에 회수해도 한쪽만 성공한다
+                lock.rename(graveyard)
             except OSError:
+                return None
+            if _owner(graveyard) != judged:
+                try:
+                    graveyard.rename(lock)
+                except OSError:
+                    pass
                 return None
             shutil.rmtree(graveyard, ignore_errors=True)
             continue
@@ -379,6 +399,8 @@ def _produce(arm: str, rep: int, gen: int | None, gen_id: str, key: str, bundle_
             files = ask(gen_prompt, "llm-gen")
         except BddGenError as exc:
             return _failed(record, str(exc), started)
+        initial_scenarios = count_scenarios(files)
+        record["scenarios"] = {"initial": initial_scenarios, "final": initial_scenarios}
         attempt = 0
         while True:
             write_files(tmp, files)
@@ -398,12 +420,17 @@ def _produce(arm: str, rep: int, gen: int | None, gen_id: str, key: str, bundle_
                 return _failed(record, f"수리 {attempt}회차: {exc}", started)
         if issues.layout:
             return _failed(record, f"수리 {record['repairs']}회 뒤에도 glue 배치 규약 위반이 남았다: {issues.layout[:600]}", started)
-        if issues.clean:
-            status, reason = "passed", None
-        else:
-            status = "degraded"
-            reason = (f"수리 {record['repairs']}회 뒤 남은 문제: 컴파일 제외 클래스 {len(issues.excluded)}개"
-                      f"({', '.join(issues.excluded)[:300]}), undefined step {len(issues.undefined)}개")
+        final_scenarios = count_scenarios(files)
+        record["scenarios"] = {"initial": initial_scenarios, "final": final_scenarios}
+        problems = []
+        if not issues.clean:
+            problems.append(f"수리 {record['repairs']}회 뒤 남은 문제: 컴파일 제외 클래스 {len(issues.excluded)}개"
+                            f"({', '.join(issues.excluded)[:300]}), undefined step {len(issues.undefined)}개")
+        if final_scenarios < initial_scenarios:
+            # A2: 수리가 시나리오를 지워 지표를 좋게 만드는 것을 막는다(지운 수만큼 분모가 줄어든다).
+            problems.append(f"repair dropped {initial_scenarios - final_scenarios} scenarios "
+                            f"({initial_scenarios} -> {final_scenarios})")
+        status, reason = ("degraded", "; ".join(problems)) if problems else ("passed", None)
         record.update(status=status, reason=reason, reused=False, seconds=round(time.monotonic() - started, 3),
                       remaining={"uncompilableClasses": issues.excluded, "undefinedSteps": len(issues.undefined)},
                       files=len(files))
@@ -499,11 +526,18 @@ def build_bundle(arm: str, run_dir: Path, sut_src: Path, sut_file: Path):
         argv += ["--oracle", str(oracle)]
     env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
     with stdout_path.open("w") as out_handle, log.open("w") as err_handle:
-        status = proc.run_with_timeout(BUNDLE_TIMEOUT_SEC, argv, stdout=out_handle, stderr=err_handle, env=env)
+        status = proc.run_with_timeout(BUNDLE_TIMEOUT_SEC, argv, stdout=out_handle, stderr=err_handle, env=env, reraise=True)
     if status != 0:
         raise BddGenError(f"번들 검사 실패(exit {status}): {log.read_text(errors='replace')[-800:].strip()}")
     info = json.loads(stdout_path.read_text())
     return bundle.Bundle(path=out, input_hash=info["inputHash"], arm=arm)
+
+
+def _unexpected_failure(arm: str, rep: int, built, ctx: GenContext, exc: Exception) -> Generation:
+    gen_prompt, repair_prompt = prompt_paths()
+    key = generation_key(built.input_hash, gen_prompt.read_bytes(), repair_prompt.read_bytes(), ctx.model)
+    record = _base_record(arm, rep, None, gen_id_for(arm, key, rep), key, built.input_hash, ctx)
+    return _failed(record, f"예상하지 못한 오류: {type(exc).__name__}: {str(exc)[:1000]}", time.monotonic())
 
 
 def run_stage(run_dir, sut_file, sut_src, regenerate: bool, *, llm=call_llm, validator=validate) -> dict:
@@ -536,7 +570,10 @@ def run_stage(run_dir, sut_file, sut_src, regenerate: bool, *, llm=call_llm, val
         ids: list[str] = []
         failures: list[str] = []
         for rep in range(1, reps + 1):
-            result = generate(arm, rep, built, out_root, regenerate, ctx=ctx)
+            try:
+                result = generate(arm, rep, built, out_root, regenerate, ctx=ctx)
+            except Exception as exc:  # noqa: BLE001 - 예상 밖 오류도 그 generation의 실패로 기록하고 다른 rep는 진행한다
+                result = _unexpected_failure(arm, rep, built, ctx, exc)
             records.append(result.record)
             inputs[arm]["inputHash"] = result.record["inputHash"]
             entry = {"arm": arm, "rep": rep, "status": result.status, "reused": result.reused, "repairs": result.repairs,
@@ -567,6 +604,7 @@ def run_stage(run_dir, sut_file, sut_src, regenerate: bool, *, llm=call_llm, val
 
     attempted = [a for a in arms.values() if a["status"] != "skipped"]
     problems = [f"{arm}: {a['reason']}" for arm, a in arms.items() if a["status"] in ("failed", "degraded")]
+    problems += [f"{gen_id} degraded: {g.get('reason')}" for gen_id, g in generations.items() if g["status"] == "degraded"]
     if not any(a.get("generations") for a in attempted):
         status, reason = "failed", "; ".join(problems)[:1500] or "생성된 generation이 없다"
     elif problems:

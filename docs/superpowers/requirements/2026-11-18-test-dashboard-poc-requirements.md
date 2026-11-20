@@ -211,7 +211,7 @@
 
 #### REQ-025 — 수리 루프 제한 (외부 캡처)
 - 유형: Functional / 우선순위: Must
-- 수용기준: Given 가짜 `claude` 캡처와 컴파일 오류를 내는 생성물 fixture, Then 한 generation의 수리 호출은 2회 이하이고, 수리 호출의 stdin에는 허용된 두 종류(컴파일러 출력, dry-run undefined 목록)만 있다. SUT 응답에 넣어 둔 표식 문자열이 없다.
+- 수용기준: Given 가짜 `claude` 캡처와 컴파일 오류를 내는 생성물 fixture, Then 한 generation의 수리 호출은 2회 이하이고, 수리 호출의 stdin은 수리 템플릿, 컴파일러 출력, dry-run undefined 목록, 직전 LLM 출력(이전 생성 파일), 생성 호출과 같은 검증된 번들(llm.sh가 붙인다)로만 이뤄진다. SUT 실행 결과(응답)는 넣지 않으며, SUT 응답에 넣어 둔 표식 문자열이 없다. 수리는 시나리오를 지우지 않는다: 최종 시나리오 수가 첫 출력보다 적으면 그 generation은 degraded("repair dropped N scenarios")이고 `bdd-gen.json`에 `scenarios{initial, final}`이 남는다.
 - 검증 레벨: Int
 
 #### REQ-061 — 생성 메타데이터 기록

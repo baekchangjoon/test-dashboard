@@ -2,60 +2,232 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "S06 생성 메타데이터(S06/bdd-gen.json, REQ-061)",
   "type": "object",
-  "required": ["schema", "runId", "sut", "reps", "regenerate", "maxRepairs", "strippedFields", "generations"],
+  "required": [
+    "schema",
+    "runId",
+    "sut",
+    "reps",
+    "regenerate",
+    "maxRepairs",
+    "strippedFields",
+    "generations"
+  ],
   "additionalProperties": false,
   "properties": {
-    "schema": {"const": 1},
-    "runId": {"type": ["string", "null"]},
-    "sut": {"type": "string", "minLength": 1},
-    "reps": {"type": "integer", "minimum": 1, "maximum": 9},
-    "regenerate": {"type": "boolean"},
-    "maxRepairs": {"type": "integer", "minimum": 0},
-    "strippedFields": {"$ref": "#/$defs/stringList"},
-    "forbiddenDeclared": {"$ref": "#/$defs/stringList"},
-    "generations": {"type": "array", "items": {"$ref": "#/$defs/generation"}}
+    "schema": {
+      "const": 1
+    },
+    "runId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sut": {
+      "type": "string",
+      "minLength": 1
+    },
+    "reps": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9
+    },
+    "regenerate": {
+      "type": "boolean"
+    },
+    "maxRepairs": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "strippedFields": {
+      "$ref": "#/$defs/stringList"
+    },
+    "forbiddenDeclared": {
+      "$ref": "#/$defs/stringList"
+    },
+    "generations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/generation"
+      }
+    }
   },
   "$defs": {
-    "stringList": {"type": "array", "items": {"type": "string"}},
-    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "stringList": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
     "generation": {
       "type": "object",
-      "required": ["genId", "arm", "rep", "gen", "status", "reason", "reused", "inputHash", "bundleHash", "promptHash",
-                   "repairPromptHash", "model", "cliVersion", "flags", "repairs", "tokens", "seconds", "strippedFields", "dir"],
+      "required": [
+        "genId",
+        "arm",
+        "rep",
+        "gen",
+        "status",
+        "reason",
+        "reused",
+        "inputHash",
+        "bundleHash",
+        "promptHash",
+        "repairPromptHash",
+        "model",
+        "cliVersion",
+        "flags",
+        "repairs",
+        "tokens",
+        "seconds",
+        "strippedFields",
+        "dir"
+      ],
       "additionalProperties": false,
       "properties": {
-        "genId": {"type": "string", "pattern": "^(base|jqa|owl)-[0-9a-f]{8}-r[1-9](-g[0-9]+)?$"},
-        "arm": {"enum": ["base", "jqa", "owl"]},
-        "rep": {"type": "integer", "minimum": 1, "maximum": 9},
-        "gen": {"type": ["integer", "null"], "minimum": 1},
-        "status": {"enum": ["passed", "degraded", "failed"]},
-        "reason": {"type": ["string", "null"]},
-        "reused": {"type": "boolean"},
-        "inputHash": {"$ref": "#/$defs/sha256"},
-        "bundleHash": {"$ref": "#/$defs/sha256"},
-        "promptHash": {"$ref": "#/$defs/sha256"},
-        "repairPromptHash": {"$ref": "#/$defs/sha256"},
-        "model": {"type": "string", "minLength": 1},
-        "cliVersion": {"type": "string", "minLength": 1},
-        "flags": {"type": "array", "minItems": 1, "items": {"type": "string"}},
-        "repairs": {"type": "integer", "minimum": 0, "maximum": 2},
+        "genId": {
+          "type": "string",
+          "pattern": "^(base|jqa|owl)-[0-9a-f]{8}-r[1-9](-g[0-9]+)?$"
+        },
+        "arm": {
+          "enum": [
+            "base",
+            "jqa",
+            "owl"
+          ]
+        },
+        "rep": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9
+        },
+        "gen": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "degraded",
+            "failed"
+          ]
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reused": {
+          "type": "boolean"
+        },
+        "inputHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "bundleHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "promptHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "repairPromptHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cliVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "flags": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "repairs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2
+        },
         "tokens": {
           "type": "object",
-          "required": ["in", "out"],
-          "additionalProperties": false,
-          "properties": {"in": {"type": "integer", "minimum": 0}, "out": {"type": "integer", "minimum": 0}}
-        },
-        "seconds": {"type": "number", "minimum": 0},
-        "strippedFields": {"$ref": "#/$defs/stringList"},
-        "dir": {"type": ["string", "null"]},
-        "files": {"type": "integer", "minimum": 1},
-        "remaining": {
-          "type": "object",
-          "required": ["uncompilableClasses", "undefinedSteps"],
+          "required": [
+            "in",
+            "out"
+          ],
           "additionalProperties": false,
           "properties": {
-            "uncompilableClasses": {"$ref": "#/$defs/stringList"},
-            "undefinedSteps": {"type": "integer", "minimum": 0}
+            "in": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "out": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "strippedFields": {
+          "$ref": "#/$defs/stringList"
+        },
+        "dir": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "files": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "remaining": {
+          "type": "object",
+          "required": [
+            "uncompilableClasses",
+            "undefinedSteps"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "uncompilableClasses": {
+              "$ref": "#/$defs/stringList"
+            },
+            "undefinedSteps": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "scenarios": {
+          "description": "시나리오(pickle) 수: 첫 LLM 출력(initial)과 수리 뒤 최종 파일(final). final < initial이면 degraded(A2). 새로 만든 generation에는 항상 있다.",
+          "type": "object",
+          "required": [
+            "initial",
+            "final"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "initial": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "final": {
+              "type": "integer",
+              "minimum": 0
+            }
           }
         }
       }

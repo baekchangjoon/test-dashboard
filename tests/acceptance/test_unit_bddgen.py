@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from td import bddgen
+from td import bddgen, state
 from td.bundle import Bundle
 
 FEATURE = "Feature: X\n  Scenario: s\n    When a\n"
@@ -211,3 +211,75 @@ def test_tampered_snapshot_is_neither_reused_nor_overwritten(tmp_path, bundle):
     assert "파일 목록" in bddgen.complete_problem(first.dir, first.record["inputHash"])
     assert "입력 해시" in bddgen.complete_problem(first.dir, "0" * 64)
     assert len(llm.calls) == 1
+
+
+# --- 리뷰 라운드 1 ------------------------------------------------------------------------------------------
+TWO_SCENARIOS = FEATURE + "  Scenario: t\n    When a\n"
+
+
+def test_repair_that_drops_scenarios_is_degraded(tmp_path, bundle):
+    first = json.dumps({"files": [{"path": "features/x.feature", "content": TWO_SCENARIOS},
+                                  {"path": "glue/XSteps.java", "content": STEPS}]})
+    states = iter([bddgen.Issues("e", ["glue/XSteps.java"], []), bddgen.Issues()])
+    result = bddgen.generate("base", 7, bundle, tmp_path / "g",
+                             ctx=make_ctx(tmp_path, FakeLlm([first, GOOD]), lambda g, o: next(states)))
+    assert result.record["scenarios"] == {"initial": 2, "final": 1}
+    assert result.status == "degraded" and "repair dropped 1 scenarios" in result.reason
+    clean = bddgen.generate("base", 8, bundle, tmp_path / "g", ctx=make_ctx(tmp_path, FakeLlm([first])))
+    assert clean.status == "passed" and clean.record["scenarios"] == {"initial": 2, "final": 2}
+
+
+def test_outline_rows_count_as_scenarios():
+    outline = "Feature: O\n  Scenario Outline: o <n>\n    When <n>\n    Examples:\n      | n |\n      | 1 |\n      | 2 |\n"
+    assert bddgen.count_scenarios([{"path": "features/o.feature", "content": outline},
+                                   {"path": "glue/OSteps.java", "content": "Scenario: not a feature"}]) == 2
+
+
+def test_stale_reclaim_backs_off_when_owner_changed(tmp_path, monkeypatch):
+    """판정과 rename 사이에 다른 프로세스가 예약을 새로 잡았으면(옮겨 온 주인이 다르면) 되돌리고 포기한다."""
+    arm_dir = tmp_path / "base"
+    lock = arm_dir / ".reserve" / "base-00000000-r1"
+    lock.mkdir(parents=True)
+    owners = iter([{"pid": 999999, "host": "h"}, {"pid": 4242, "host": "h"}])
+    monkeypatch.setattr(bddgen, "_owner", lambda path: next(owners))
+    monkeypatch.setattr(bddgen, "_stale", lambda path, owner: True)
+    assert bddgen.try_reserve(arm_dir, "base-00000000-r1") is None
+    assert lock.is_dir() and not list((arm_dir / ".reserve").glob("*.stale-*"))
+
+
+def test_unexpected_error_fails_only_that_generation(tmp_path, monkeypatch, bundle):
+    """generate가 BddGenError가 아닌 예외를 내도 그 rep만 failed이고 bdd-gen.json은 쓰인다."""
+    run_dir = tmp_path / "run"
+    state.write_run_meta(run_dir, runId="r", sut="petclinic", commit="c", options={"arms": ["base"], "reps": 2})
+    (run_dir / "stages").mkdir()
+    (run_dir / "stages" / "S02.json").write_text(json.dumps({"id": "S02", "status": "passed"}))
+    monkeypatch.setenv("TD_E2E_GENERATED_DIR", str(tmp_path / "generated"))
+    monkeypatch.setattr(bddgen, "build_bundle", lambda *a: bundle)
+    original = bddgen.generate
+
+    def flaky(arm, rep, *args, **kwargs):
+        if rep == 1:
+            raise RuntimeError("boom")
+        return original(arm, rep, *args, **kwargs)
+
+    monkeypatch.setattr(bddgen, "generate", flaky)
+    sut_file = Path(bddgen.REPO_ROOT) / "suts" / "petclinic" / "sut.yaml"
+    result = bddgen.run_stage(run_dir, sut_file, tmp_path, False, llm=FakeLlm([GOOD]), validator=clean_validator)
+    meta = json.loads((run_dir / "S06" / "bdd-gen.json").read_text())
+    by_rep = {g["rep"]: g for g in meta["generations"]}
+    assert by_rep[1]["status"] == "failed" and "RuntimeError: boom" in by_rep[1]["reason"]
+    assert by_rep[2]["status"] == "passed"
+    assert result["status"] == "degraded"
+
+
+def test_stage_degraded_when_a_generation_is_degraded(tmp_path, monkeypatch, bundle):
+    run_dir = tmp_path / "run"
+    state.write_run_meta(run_dir, runId="r", sut="petclinic", commit="c", options={"arms": ["base"], "reps": 1})
+    (run_dir / "stages").mkdir()
+    (run_dir / "stages" / "S02.json").write_text(json.dumps({"id": "S02", "status": "passed"}))
+    monkeypatch.setenv("TD_E2E_GENERATED_DIR", str(tmp_path / "generated"))
+    monkeypatch.setattr(bddgen, "build_bundle", lambda *a: bundle)
+    broken = bddgen.Issues("e", ["glue/XSteps.java"], [])
+    sut_file = Path(bddgen.REPO_ROOT) / "suts" / "petclinic" / "sut.yaml"
+    result = bddgen.run_stage(run_dir, sut_file, tmp_path, False, llm=FakeLlm([GOOD]), validator=lambda g, o: broken)
+    assert result["status"] == "degraded" and "degraded" in result["reason"]
