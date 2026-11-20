@@ -561,6 +561,9 @@ def test_req049_baseline_home_sut_run_pages(baseline_run, second_run, local_env)
         home = home.decode()
         assert status == 200 and 'href="suts/petclinic/index.html"' in home, host
         assert home.count('class="kpi-item"') >= 4, host
+        # 네 KPI 모두 값이 있다(값이 없으면 템플릿이 "—"를 쓴다)
+        values = re.findall(r'<div class="kpi-item"><span class="muted">([^<]+)</span><b>([^<]*)</b>', home)
+        assert len(values) >= 4 and all(v.strip() not in ("", "—") for _, v in values), (host, values)
         status, sut_page = helpers.https_get(host, domain, f"/{prefix}suts/petclinic/index.html")
         sut_page = sut_page.decode()
         assert status == 200 and baseline_run.run_id in sut_page and second_run.run_id in sut_page, host
