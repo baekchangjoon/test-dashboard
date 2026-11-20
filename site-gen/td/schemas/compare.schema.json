@@ -20,6 +20,7 @@
     "sut": {"type": ["string", "null"]},
     "commit": {"type": ["string", "null"]},
     "label": {"const": "탐색적 관찰"},
+    "warnings": {"type": "array", "items": {"type": "string"}},
     "reps": {"type": ["integer", "null"]},
     "endpoints": {
       "type": "object", "required": ["denominator", "ids"], "additionalProperties": false,
@@ -35,7 +36,7 @@
     "focus": {"type": ["string", "null"]},
     "blackbox": {
       "type": ["object", "null"], "additionalProperties": false,
-      "properties": {"line": {"type": "number"}, "branch": {"type": "number"}}
+      "properties": {"line": {"type": ["number", "null"]}, "branch": {"type": ["number", "null"]}}
     },
     "arms": {
       "type": "object", "minProperties": 1,

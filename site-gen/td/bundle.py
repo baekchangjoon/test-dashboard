@@ -185,8 +185,12 @@ def load_oracle_descriptions(path) -> list[str]:
     if path.suffix.lower() in (".yaml", ".yml"):
         import yaml
         data = yaml.safe_load(text) or {}
-        return [str(rule["description"]) for rule in data.get("rules", []) if rule.get("description")]
-    return json.loads(text)
+        descriptions = [str(rule["description"]) for rule in data.get("rules", []) if rule.get("description")]
+    else:
+        descriptions = json.loads(text)
+    if not descriptions:  # 파일은 있는데 대조할 문장이 없으면 검사가 조용히 무력화된다(REQ-041)
+        raise BundleError(f"oracle 파일에 description이 없다: {path}")
+    return descriptions
 
 
 def check_content(bundle: Bundle, sut_src, oracle=None) -> list[Violation]:
@@ -266,7 +270,11 @@ def _cmd_build(args) -> int:
     except BundleError as exc:
         print(str(exc), file=sys.stderr)
         return 2
-    oracle = load_oracle_descriptions(args.oracle) if args.oracle else None
+    try:
+        oracle = load_oracle_descriptions(args.oracle) if args.oracle else None
+    except BundleError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     violations = check_paths(built, args.sut_src) + check_content(built, args.sut_src, oracle)
     if violations:
         for violation in violations:

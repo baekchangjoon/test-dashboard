@@ -4,6 +4,8 @@
   endpoint >= 0.80을 모두 만족한다(경계 포함). 온톨로지 arm이 모두 미달이면 **불성립**, 측정된 온톨로지 arm이 없으면 **판정 불가**.
 - 온톨로지 **효과 있음**: 한 온톨로지 arm이 endpoint, branch, oracle 중 하나 이상에서 `base` 범위 [min,max]와 겹치지 않으면서
   더 높다(arm.min > base.max). 겹치거나(경계 접촉 포함) 낮으면 **차이 불명확**, base나 온톨로지 arm이 없으면 **판정 불가**.
+- 지표 평균이 없는(None) arm은 그 지표를 판정할 수 없다: 다른 지표가 이미 미달이면 그 arm은 미달이고, 아니면 "판정 불가"다.
+  어느 arm도 충족하지 못하고 판정 불가 arm이 있으면 생성 가설은 불성립이 아니라 **판정 불가**다(효과도 같은 규칙).
 - 모든 결과에 "탐색적 관찰" 꼬리표를 붙인다(표본 3회).
 """
 from __future__ import annotations
@@ -74,12 +76,18 @@ def _meets(name: str, mean: float | None) -> bool:
 def _generation(ontology: dict[str, ArmStats]) -> tuple[str, dict]:
     checks = {}
     for name, stats in ontology.items():
-        per_metric = {metric: {"mean": stats.mean(metric), "ok": _meets(metric, stats.mean(metric))} for metric in THRESHOLDS}
-        checks[name] = {"passed": all(item["ok"] for item in per_metric.values()), "metrics": per_metric}
+        per_metric = {metric: {"mean": stats.mean(metric), "ok": None if stats.mean(metric) is None else _meets(metric, stats.mean(metric))}
+                      for metric in THRESHOLDS}
+        oks = [item["ok"] for item in per_metric.values()]
+        result = "fail" if False in oks else "undecidable" if None in oks else "pass"
+        checks[name] = {"passed": result == "pass", "result": result, "metrics": per_metric}
     passing = [name for name, check in checks.items() if check["passed"]]
-    if not ontology:
-        return UNDECIDABLE, {"armChecks": checks, "passingArms": passing, "thresholds": _threshold_doc()}
-    return (GENERATION_OK if passing else GENERATION_NO), {"armChecks": checks, "passingArms": passing, "thresholds": _threshold_doc()}
+    detail = {"armChecks": checks, "passingArms": passing, "thresholds": _threshold_doc()}
+    if passing:
+        return GENERATION_OK, detail
+    if not ontology or any(check["result"] == "undecidable" for check in checks.values()):
+        return UNDECIDABLE, detail
+    return GENERATION_NO, detail
 
 
 def _threshold_doc() -> dict:
@@ -103,7 +111,12 @@ def _effect(base: ArmStats | None, ontology: dict[str, ArmStats]) -> tuple[str, 
         return UNDECIDABLE, {"metrics": {}, "reason": "base 또는 온톨로지 arm이 없다"}
     relations = {name: {metric: _relation(stats, base, metric) for metric in EFFECT_METRICS} for name, stats in ontology.items()}
     effective = [name for name, per_metric in relations.items() if "higher" in per_metric.values()]
-    return (EFFECT_YES if effective else EFFECT_UNCLEAR), {"metrics": relations, "effectiveArms": effective}
+    detail = {"metrics": relations, "effectiveArms": effective}
+    if effective:
+        return EFFECT_YES, detail
+    if any("missing" in per_metric.values() for per_metric in relations.values()):
+        return UNDECIDABLE, detail
+    return EFFECT_UNCLEAR, detail
 
 
 def judge(arms: dict[str, ArmStats]) -> Verdict:
