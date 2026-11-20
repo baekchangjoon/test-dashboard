@@ -50,7 +50,7 @@ def gradle_daemons() -> list[dict]:
                          env={**os.environ, "LC_ALL": "C"}).stdout
     daemons = []
     for line in out.splitlines():
-        if "GradleDaemon" not in line or "org.gradle.launcher.daemon.bootstrap.GradleDaemon" not in line:
+        if "org.gradle.launcher.daemon.bootstrap.GradleDaemon" not in line:
             continue
         parts = line.split()
         daemons.append({"pid": int(parts[0]), "lstart": " ".join(parts[1:6])})
@@ -71,6 +71,22 @@ def published_etags(prefix: str, run_id: str) -> dict[str, str]:
     return etags
 
 
+def stop_group(proc: subprocess.Popen, first_signal: int, grace_sec: float = 10.0) -> None:
+    """td_run과 같은 정리: 프로세스 그룹에 first_signal(TERM/INT), grace_sec 뒤에도 살아 있으면 KILL."""
+    try:
+        os.killpg(proc.pid, first_signal)
+    except ProcessLookupError:
+        return
+    try:
+        proc.communicate(timeout=grace_sec)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        proc.communicate()
+
+
 def run_pipeline(label: str, prefix: str, extra_args: list[str]) -> dict:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     log_path = LOG_DIR / f"{label}-{dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.log"
@@ -86,11 +102,10 @@ def run_pipeline(label: str, prefix: str, extra_args: list[str]) -> dict:
         try:
             stdout, _ = proc.communicate(timeout=RUN_TIMEOUT_SEC)
         except subprocess.TimeoutExpired:
-            os.killpg(proc.pid, signal.SIGTERM)
-            stdout, _ = proc.communicate(timeout=300)
+            stop_group(proc, signal.SIGTERM)
+            raise SystemExit(f"{label}: {RUN_TIMEOUT_SEC}초 제한을 넘겨 중단했다. 로그: {log_path}")
         except KeyboardInterrupt:
-            os.killpg(proc.pid, signal.SIGINT)
-            proc.communicate(timeout=300)
+            stop_group(proc, signal.SIGINT)
             raise
     seconds = round(time.monotonic() - started, 1)
     finished_at = utc_now()
@@ -113,6 +128,47 @@ def run_pipeline(label: str, prefix: str, extra_args: list[str]) -> dict:
     return record
 
 
+def write_session(session_file: Path, session: dict) -> None:
+    """세션 파일을 원자적으로 쓴다(임시 파일 + rename)."""
+    session_file.parent.mkdir(parents=True, exist_ok=True)
+    tmp = session_file.with_name(session_file.name + ".tmp")
+    tmp.write_text(json.dumps(session, ensure_ascii=False, indent=2) + "\n")
+    os.replace(tmp, session_file)
+
+
+def check_target(prefix: str, session_file: Path) -> None:
+    """운영 게시(접두 없음)는 기본 세션 파일에만, 접두 게시는 기본이 아닌 세션 파일에만 기록한다."""
+    is_default = session_file.resolve() == DEFAULT_SESSION_FILE.resolve()
+    if not prefix and not is_default:
+        raise SystemExit("운영 게시(--prefix 없음)는 기본 세션 파일에만 기록한다")
+    if prefix and is_default:
+        raise SystemExit("--prefix 디버깅 실행은 기본 세션 파일(work/acceptance-session.json)에 쓸 수 없다: --session-file을 준다")
+
+
+def run_session(prefix: str, session_file: Path, run_all_args: list[str], skip_second: bool = False, *,
+                runner=None, etags=None) -> dict:
+    """기준 run 직후 세션 파일을 한 번 쓰고(두 번째 기록 없음), 두 번째 run 뒤 다시 쓴다. 두 번째 run이 실패하면
+    `secondError`를 남기고 그래도 쓴다. runner/etags는 테스트용 대체 지점이다."""
+    runner = runner or run_pipeline
+    etags = etags or published_etags
+    check_target(prefix, session_file)
+    session = {"schema": 1, "sut": SUT, "createdAt": utc_now(), "prefix": prefix}
+    session["baseline"] = runner("baseline", prefix, run_all_args)
+    write_session(session_file, session)
+    if skip_second:
+        return session
+    try:
+        session["baselineEtagsBeforeSecond"] = etags(prefix, session["baseline"]["runId"])
+        session["second"] = runner("second", prefix, run_all_args)
+        session["baselineEtagsAfterSecond"] = etags(prefix, session["baseline"]["runId"])
+    except BaseException as exc:  # noqa: BLE001 - SystemExit, boto3 오류, Ctrl-C도 증거로 남긴 뒤 다시 올린다
+        session["secondError"] = f"{type(exc).__name__}: {exc}"[:2000]
+        write_session(session_file, session)
+        raise
+    write_session(session_file, session)
+    return session
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--prefix", default="", help="게시 접두(디버깅 전용, 예: _test/dbg1/). 비우면 운영 게시")
@@ -121,19 +177,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("run_all_args", nargs="*", help="run-all.sh에 넘길 추가 인자(기본 없음 = 기본 옵션)")
     args = parser.parse_args(argv)
     session_file = Path(args.session_file)
-    if not args.prefix and session_file.resolve() != DEFAULT_SESSION_FILE.resolve():
-        raise SystemExit("운영 게시는 기본 세션 파일에만 기록한다")
-    session = {"schema": 1, "sut": SUT, "createdAt": utc_now(), "prefix": args.prefix}
-    session["baseline"] = run_pipeline("baseline", args.prefix, args.run_all_args)
-    if not args.skip_second:
-        before_second = published_etags(args.prefix, session["baseline"]["runId"])
-        session["second"] = run_pipeline("second", args.prefix, args.run_all_args)
-        session["baselineEtagsAfterSecond"] = published_etags(args.prefix, session["baseline"]["runId"])
-        session["baselineEtagsBeforeSecond"] = before_second
-    session_file.parent.mkdir(parents=True, exist_ok=True)
-    tmp = session_file.with_suffix(".tmp")
-    tmp.write_text(json.dumps(session, ensure_ascii=False, indent=2) + "\n")
-    os.replace(tmp, session_file)
+    run_session(args.prefix, session_file, args.run_all_args, args.skip_second)
     print(f"session written: {session_file}", file=sys.stderr)
     return 0
 

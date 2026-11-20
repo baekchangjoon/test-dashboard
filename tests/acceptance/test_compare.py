@@ -330,7 +330,10 @@ def _pilot_run() -> Path:
     """기준 run 세션이 있으면 그 run(세 arm 모두 측정), 없으면 가장 최근의 파일럿 run."""
     from conftest import SESSION_FILE
     if SESSION_FILE.exists():
-        return REPO_ROOT / json.loads(SESSION_FILE.read_text())["baseline"]["runDir"]
+        run_dir = REPO_ROOT / json.loads(SESSION_FILE.read_text())["baseline"]["runDir"]
+        if not (run_dir / "run.json").is_file():
+            pytest.fail(f"세션 파일의 기준 run 디렉터리가 없다: {run_dir}", pytrace=False)
+        return run_dir
     runs = _pilot_runs()
     if not runs:
         pytest.fail("파일럿 run(work/runs/*/ S03, S06, S08)이 없다: M2 실행 산출물이 필요하다", pytrace=False)
@@ -440,9 +443,12 @@ def test_req040_compare_json_on_pilot_run():
         metrics = entry["metrics"]
         assert 0.0 <= metrics["endpoint"]["mean"] <= 1.0 and 0.0 <= metrics["oracle"]["mean"] <= 1.0
         assert metrics["scenarios"]["mean"] > 0 and metrics["focusLine"]["mean"] is not None
-    # 파일럿(M2)은 owl arm이 없었다. 기준 run은 세 arm이 모두 측정된다. 어느 쪽이든 측정 안 된 arm은 사유가 있다.
+    from conftest import SESSION_FILE
     owl = document["arms"]["owl"]
-    assert owl["status"] == "ok" or (owl["status"] == "skipped" and owl["reason"])
+    if SESSION_FILE.exists():  # 기준 run: 세 arm이 모두 측정된다
+        assert owl["status"] == "ok", owl
+    else:  # 파일럿(M2): owl arm이 없었다
+        assert owl["status"] == "skipped" and owl["reason"]
     assert document["verdict"]["label"] == "탐색적 관찰"
 
 

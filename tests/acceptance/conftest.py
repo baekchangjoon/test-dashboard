@@ -602,9 +602,14 @@ def load_session_run(label: str) -> SessionRun:
         pytest.fail(f"{SESSION_FILE}가 없다: tests/acceptance/run_baseline.py로 기준 run과 두 번째 run을 먼저 실행한다",
                     pytrace=False)
     session = json.loads(SESSION_FILE.read_text())
+    # 기본 세션 파일은 운영 게시 증거만 담는다. 디버깅 세션(접두 게시)이 운영 기준 REQ(044, 047, 048, 049, 051, 068, 071,
+    # 073)를 green으로 만들지 못하게, 세션 파일을 바꿔 끼우지 않았다면 접두가 비어 있어야 한다.
+    if not os.environ.get("TD_ACCEPTANCE_SESSION_FILE") and session.get("prefix") != "":
+        pytest.fail(f"기본 세션 파일의 prefix가 운영('')이 아니다: {session.get('prefix')!r} ({SESSION_FILE})", pytrace=False)
     record = session.get(label)
     if not record:
-        pytest.fail(f"세션 파일에 '{label}' run 기록이 없다: {SESSION_FILE}", pytrace=False)
+        detail = f" (secondError: {session['secondError']})" if label == "second" and session.get("secondError") else ""
+        pytest.fail(f"세션 파일에 '{label}' run 기록이 없다: {SESSION_FILE}{detail}", pytrace=False)
     run = SessionRun(record, session)
     if not (run.run_dir / "run.json").exists():
         pytest.fail(f"세션 파일의 {label} run 디렉터리가 없다: {run.run_dir}", pytrace=False)

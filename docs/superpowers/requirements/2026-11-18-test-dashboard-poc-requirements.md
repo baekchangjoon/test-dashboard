@@ -584,6 +584,8 @@
 
 Coverage: 71/72 green (99%) — target 100% (대상: Must 65 + Should 7). 제외: Could 1 deferred(🔵 REQ-030), Won't 2(🔵 REQ-056, REQ-057). 판정 근거: 같은 REQ 번호의 test_req<NNN>_* 테스트가 전체 수용 스위트 JUnit XML에서 모두 passed.
 
+REQ-022, REQ-061 증거 범위(컨트롤러 결정, 2026-11-20): 기준 run은 커밋된 스냅샷을 재사용해 claude를 부르지 않는다. 실제 생성 호출은 같은 입력 키로 접두 게시 디버그 run(`_test/t25-dbg1/`, runId 20261120-093616Z-b6f9393-manual-6948ba10, 7건)에서 했고, 이 호출 기록(shim `llm-calls.jsonl`)과 스냅샷의 생성 메타를 REQ-022/REQ-061 증거로 인정한다.
+
 미달 1건(2026-11-20, Task 25): **REQ-049**. 운영 홈의 '테스트 통과율' KPI가 "—"다. 원인은 어느 단계도 `run.json.kpis.tests`를 쓰지 않았던 것이다(기존 Unit 테스트는 fixture에 값을 직접 넣어 통과했다). S08이 `kpis.tests`(블랙박스 IT passed 비율)를 쓰도록 고쳤고, 주입 환경 게시(`_test/t25kpi01/`)에서 두 SUT 모두 값이 보인다. 운영의 기준 run과 두 번째 run은 수정 전에 게시돼 불변이므로, 운영 홈에서 green이 되려면 운영 게시가 1회 더 필요하다(승인 범위 밖이라 보류).
 
 ## 자기검토 결과
