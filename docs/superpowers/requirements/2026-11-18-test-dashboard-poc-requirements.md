@@ -479,7 +479,7 @@
 
 #### REQ-054 — 인프라 식별자 비공개
 - 유형: Non-functional / 우선순위: Must
-- 수용기준: Given `infra/local.env`(없으면 테스트 실패), Then `git check-ignore -q --no-index infra/local.env`가 성공한다. 그 파일의 `TD_AWS_ACCOUNT_ID`, `TD_LIGHTSAIL_IP`, `TD_IAM_USER`, `TD_SSH_KEY_PATH` 값(SUT 자격 증명은 제외)이 `git ls-files`의 내용, `git log -p` 전체, `work/site-mirror/**`에서 0건이다.
+- 수용기준: Given `infra/local.env`(없으면 테스트 실패), Then `git check-ignore -q --no-index infra/local.env`가 성공한다. 그 파일의 `TD_AWS_ACCOUNT_ID`, `TD_LIGHTSAIL_IP`, `TD_IAM_USER`, `TD_SSH_KEY_PATH` 값(SUT 자격 증명은 제외)이 `git ls-files`의 내용, `git log -p` 전체, `work/site-mirror/**`에서 0건이다. 게시물(`work/site-mirror/**`의 텍스트 파일)에는 홈 경로, 작업 디렉터리(`TD_WORK_DIR`)·임시 디렉터리(`/private/var/folders/...` 포함) 경로, 로컬 절대 경로 접두(`/Users/`, `/home/`, `/private/var/`, `/var/folders/`), `arn:aws:` 문자열도 없다(게시 전 `<work>`, `<tmp>`, `~`, `<arn>` 등으로 가린다).
 - 검증 레벨: Int
 
 #### REQ-055 — aws-resource-controller 동기화

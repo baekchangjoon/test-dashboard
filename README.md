@@ -32,11 +32,24 @@ pipeline/run-all.sh petclinic
 - `https://reports.<domain>/` (S3 + CloudFront)
 - `https://dash.<domain>/` (Lightsail 서버의 Caddy)
 
-게시하지 않고 확인하려면 `TD_SITE_PREFIX`를 주거나 S13을 뺀다.
+운영 사이트에 올리지 않고 확인하려면 `TD_SITE_PREFIX`를 준다. 이때도 게시는 한다. 다만 S3 `_test/<prefix>`와 Lightsail `/srv/dashboard/_test/<prefix>` 아래에 올리고, 운영 홈의 SUT 목록과 KPI에는 넣지 않는다. 아예 게시하지 않으려면 `--only`로 S13을 뺀다.
 
 ```bash
 TD_SITE_PREFIX=_test/my-try/ pipeline/run-all.sh petclinic          # _test/my-try/ 아래에 게시(운영 집계에서 빠진다)
-pipeline/run-all.sh petclinic --only S00,S01,S08                      # 지정한 단계만 실행(나머지는 skipped)
+pipeline/run-all.sh petclinic --only S00,S01,S08                      # 지정한 단계만 실행(나머지는 skipped, 게시 없음)
+```
+
+`--style`은 생성 테스트의 형식이다. 지금은 `cucumber`(기본값)만 지원한다. `--style junit`은 REQ-030이 연기돼 바로 오류로 끝난다.
+
+### 실행 멈추기
+
+- 앞에서 실행 중이면 Ctrl-C를 한 번 누른다. 현재 단계의 자식 프로세스를 끝내고 컨테이너 정리(`docker compose down -v`)와 Sonar 토큰 폐기를 마친 뒤 종료한다. 정리 중에 다시 누른 Ctrl-C는 무시된다.
+- 백그라운드로 띄웠다면 프로세스 그룹 전체에 TERM을 보낸다: `kill -TERM -- -<pgid>`. `<pgid>`는 `ps -o pgid= -p <run-all의 pid>`로 찾는다. run-all의 pid 하나에만 TERM을 보내면 bash가 현재 단계 명령이 끝날 때까지 기다린 뒤에야 정리를 시작한다.
+
+한 번에 하나의 run만 실행한다고 가정한다(게시 잠금은 있지만 컨테이너 포트와 `work/` 아래 공유 파일은 동시 실행을 고려하지 않았다). 실행이 끝난 뒤 남은 컨테이너가 없는지 확인하려면 다음을 실행한다. 출력이 헤더 한 줄뿐이면 정상이다.
+
+```bash
+docker ps -a --filter label=test-run
 ```
 
 ## 사전 요구사항
