@@ -564,6 +564,16 @@ def redact_home(text: str, env: dict | None = None) -> str:
     return redact.redact_text(text, env=env)
 
 
+def redact_obj(obj, env: dict | None = None):
+    from td import redact
+    return redact.redact_obj(obj, env=env)
+
+
+def exc_text(exc: BaseException, limit: int, env: dict | None = None) -> str:
+    """예외 문구를 먼저 가린 뒤 자른다(자르기가 식별자를 반쯤 남겨 가림을 피하지 않게)."""
+    return redact_home(str(exc), env)[:limit]
+
+
 def check_no_home_in_file(path, label: str, env: dict | None = None) -> None:
     """업로드 전 게이트: 올릴 파일에 홈 경로·로컬 절대 경로·인프라 식별자·ARN이 있으면 PublishError
     (사유에는 값을 쓰지 않고 종류 이름만 쓴다)."""
@@ -578,7 +588,7 @@ def write_log(s3, bucket: str, mirror_dir, prefix: str, sut: str, run_id: str, r
     """`suts/<sut>/publish-log/<runId>.json`(갱신 가능한 인덱스 파일)을 S3에, 그리고 미러에 쓴다.
     사유 등 예외 문구에서 온 값은 공통 가림기로 가린 뒤 쓴다."""
     key = log_key(prefix, sut, run_id)
-    text = redact_home(json.dumps({"runId": run_id, "sut": sut, **result}, ensure_ascii=False, indent=2, sort_keys=True) + "\n", env)
+    text = json.dumps(redact_obj({"runId": run_id, "sut": sut, **result}, env), ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     if to_mirror:
         path = Path(mirror_dir) / key
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -746,7 +756,7 @@ class Publication:
             invalidation = invalidate(self.cf, self.distribution_id, paths, self.run_id)
             self.hosts["cloudfront"] = {"status": "passed", "invalidationId": invalidation, "paths": len(paths)}
         except Exception as exc:  # noqa: BLE001 - 무효화 실패는 degraded(인덱스는 no-cache라 곧 갱신된다)
-            self.hosts["cloudfront"] = {"status": "failed", "reason": f"invalidation: {type(exc).__name__}: {str(exc)[:200]}"}
+            self.hosts["cloudfront"] = {"status": "failed", "reason": f"invalidation: {type(exc).__name__}: {exc_text(exc, 200, self.env)}"}
 
     def lightsail_phase(self) -> None:
         try:
@@ -762,7 +772,7 @@ class Publication:
                 self.mem_after = None  # 메모리 측정 실패는 게시 실패가 아니다
             self.hosts["lightsail"] = {"status": "passed"}
         except (PublishError, OSError) as exc:
-            self.hosts["lightsail"] = {"status": "failed", "reason": str(exc)[:300]}
+            self.hosts["lightsail"] = {"status": "failed", "reason": exc_text(exc, 300, self.env)}
 
     def _qualitative_path(self) -> Path:
         candidate = Path(self.env.get("TD_ROOT", ".")) / "infra" / "hosting-qualitative.yaml"
@@ -776,8 +786,7 @@ class Publication:
         files = [target / "hosting.html"]
         (target / "hosting.html").write_text(redact_home(hosting_mod.render_html(doc, reason=reason), self.env))
         if doc is not None:
-            text = json.dumps(doc, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-            (target / "hosting.json").write_text(redact_home(text, self.env))
+            (target / "hosting.json").write_text(json.dumps(redact_obj(doc, self.env), ensure_ascii=False, indent=2, sort_keys=True) + "\n")
             files.append(target / "hosting.json")
         upload_files(self.s3, self.bucket, self.mirror, files, self.env)
         paths = [f"/{self.prefix}{path.name}" for path in files]
@@ -785,7 +794,7 @@ class Publication:
             invalidation = invalidate(self.cf, self.distribution_id, paths, self.run_id)
             self.hosts["cloudfront"] = {**self.hosts["cloudfront"], "hostingInvalidationId": invalidation}
         except Exception as exc:  # noqa: BLE001
-            problem = f"hosting invalidation: {type(exc).__name__}: {str(exc)[:200]}"
+            problem = f"hosting invalidation: {type(exc).__name__}: {exc_text(exc, 200, self.env)}"
             previous = self.hosts["cloudfront"].get("reason")
             self.hosts["cloudfront"] = {**self.hosts["cloudfront"], "status": "failed",
                                         "reason": f"{previous}; {problem}" if previous else problem}
@@ -811,7 +820,7 @@ class Publication:
                     ttfb, home = (self.hosting_measurer or _measure_both)(url, ip)
                     measures[name] = {"url": url, "ttfb": ttfb, "home": home, "pinned": True}
                 except Exception as exc:  # noqa: BLE001 - 이 호스트 표본은 모두 실패로 센다
-                    errors.append(f"{name}: {type(exc).__name__}: {str(exc)[:200]}")
+                    errors.append(f"{name}: {type(exc).__name__}: {exc_text(exc, 200, self.env)}")
                     measures[name] = {"url": url, "ttfb": hosting_mod.Ttfb(None, 0, hosting_mod.SAMPLES),
                                       "home": hosting_mod.HomeTransfer(None, None), "pinned": False}
             doc = hosting_mod.build_document(
@@ -824,7 +833,7 @@ class Publication:
                 status, reason = "failed", "; ".join(x for x in (reason, *errors) if x)
             self.hosts["hosting"] = {"status": status, **({"reason": reason} if reason else {})}
         except Exception as exc:  # noqa: BLE001 - 비교 측정이 게시 자체를 막지 않는다
-            reason = f"hosting 측정/게시 실패: {type(exc).__name__}: {str(exc)[:200]}"
+            reason = f"hosting 측정/게시 실패: {type(exc).__name__}: {exc_text(exc, 200, self.env)}"
             self.hosts["hosting"] = {"status": "failed", "reason": reason}
             try:
                 self._publish_hosting_files(hosting_mod, None, reason)
@@ -838,7 +847,7 @@ class Publication:
             try:  # 방금 쓴 publish-log를 Lightsail에도 싣는다(run 페이지가 같은 호스트에서 읽는다)
                 rsync_lightsail(self.mirror, self.ssh_target, self.ssh_key, RSYNC_TIMEOUT, runs=False)
             except PublishError as exc:
-                self.hosts["lightsail"] = {"status": "failed", "reason": f"publish-log 동기화: {exc}"[:300]}
+                self.hosts["lightsail"] = {"status": "failed", "reason": f"publish-log 동기화: {exc_text(exc, 300, self.env)}"[:300]}
                 status, reason = overall_status(self.hosts)
                 write_log(self.s3, self.bucket, self.mirror, self.prefix, self.sut, self.run_id, self.result(status, reason), env=self.env)
         self.invalidate_log()
@@ -852,7 +861,7 @@ class Publication:
             invalidate(self.cf, self.distribution_id, [path], self.run_id)
             return
         except Exception as exc:  # noqa: BLE001
-            self.hosts["cloudfront"] = {"status": "failed", "reason": f"publish-log invalidation: {type(exc).__name__}: {str(exc)[:200]}"}
+            self.hosts["cloudfront"] = {"status": "failed", "reason": f"publish-log invalidation: {type(exc).__name__}: {exc_text(exc, 200, self.env)}"}
         status, reason = overall_status(self.hosts)
         self.rewrite_log(self.result(status, reason), reinvalidate=False, locked=True)
 
@@ -910,11 +919,11 @@ class Publication:
             self.write_failure_log()
             result = self.result("failed", f"interrupted ({exc})")
         except (PublishError, self.hooks.HookRefused) as exc:
-            self.hosts["s3"] = {**self.hosts["s3"], "status": "failed", "reason": str(exc)[:600]}
+            self.hosts["s3"] = {**self.hosts["s3"], "status": "failed", "reason": exc_text(exc, 600, self.env)}
             self.write_failure_log()
-            result = self.result("failed", str(exc)[:600])
+            result = self.result("failed", exc_text(exc, 600, self.env))
         except Exception as exc:  # noqa: BLE001 - 예상 밖 오류도 단계를 failed로 기록한다
-            reason = f"internal error: {type(exc).__name__}: {str(exc)[:400]}"
+            reason = f"internal error: {type(exc).__name__}: {exc_text(exc, 400, self.env)}"
             self.hosts["s3"] = {**self.hosts["s3"], "status": "failed", "reason": reason}
             self.write_failure_log()
             result = self.result("failed", reason)
@@ -952,7 +961,7 @@ def run_publish(sut: str, run_id: str, run_dir, env: dict | None = None, s3=None
     signal.signal(signal.SIGTERM, _raise_interrupted)
     publication = Publication(sut, run_id, run_dir, env, s3, cf)
     result = publication.execute()
-    result = json.loads(redact_home(json.dumps(result, ensure_ascii=False), env))  # S13.json·run.json도 다음 게시에 실린다
+    result = redact_obj(result, env)  # S13.json·run.json도 다음 게시에 실린다
     extra = {k: result[k] for k in ("hosts", "timings", "sizeBytes")}
     state.end(run_dir, "S13", result["status"], result["reason"], extra=extra)
     print(f"[td] S13 {result['status']}" + (f": {result['reason']}" if result["reason"] else ""), file=sys.stderr)
