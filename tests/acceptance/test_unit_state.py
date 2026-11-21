@@ -88,7 +88,7 @@ def test_dependencies_table_matches_design():
     assert set(state.DEPENDENCIES["S04"].any_of) == {"S03", "S05"}
     assert set(state.DEPENDENCIES["S08"].any_of) == {"S01", "S07"}
     assert state.DEPENDENCIES["S06"].required == ("S02",)
-    assert state.ARM_DEPENDENCIES == {"base": (), "jqa": ("S03",), "owl": ("S05",)}
+    assert state.ARM_DEPENDENCIES == {"base": (), "jqa": ("S03",), "owl": ("S05",), "det": ("S03",)}
     order = state.EXECUTION_ORDER
     assert sorted(order) == state.STAGE_IDS
     for sid, dep in state.DEPENDENCIES.items():  # 실행 순서는 의존성의 위상 순서다
@@ -136,3 +136,21 @@ def test_s07_degraded_when_s06_arm_skipped_without_generations(run_dir, monkeypa
     s07 = state.read_stage(run_dir, "S07")
     assert s07["status"] == "degraded" and "owl" in s07["reason"] and "S05" in s07["reason"]
     assert s07["generations"]["base-12345678-r1"]["status"] == "passed"
+
+
+def test_det_arm_dependencies(run_dir):
+    """det는 S02(전 arm 공통)와 S03에만 의존한다. 기본 arms에는 포함되지 않는다."""
+    assert state.ARM_DEPENDENCIES["det"] == ("S03",)
+    assert "det" in state.ARMS_KNOWN and "det" not in state.ARMS_DEFAULT
+    assert state.requested_arms(run_dir) == ["base", "jqa", "owl"]
+    state.end(run_dir, "S02", "passed")
+    state.end(run_dir, "S03", "failed", "jqa died")
+    plan = state.arm_plan(run_dir, ["det"])
+    assert "S03" in plan["det"]
+
+
+def test_requested_reps_by_arm(run_dir):
+    state.set_run_field(run_dir, "options", {"arms": ["base", "det"], "reps": 3, "style": "cucumber"})
+    assert state.requested_reps_by_arm(run_dir) == {"base": 3, "det": 1}
+    state.set_run_field(run_dir, "requestedRepsByArm", {"base": 2, "det": 1})
+    assert state.requested_reps_by_arm(run_dir) == {"base": 2, "det": 1}

@@ -11,7 +11,7 @@ import re
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 
-ARMS = ("base", "jqa", "owl")
+ARMS = ("base", "jqa", "owl", "det")
 MAX_SLUG_LENGTH = 60
 
 

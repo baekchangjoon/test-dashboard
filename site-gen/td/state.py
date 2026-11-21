@@ -19,7 +19,8 @@ STAGE_IDS = [f"S{i:02d}" for i in range(14)]
 EXECUTION_ORDER = ["S00", "S01", "S02", "S03", "S05", "S04", "S06", "S07", "S08", "S09", "S10", "S11", "S12", "S13"]
 STATUSES = ("passed", "failed", "degraded", "skipped")
 TZ_NAME = "Asia/Seoul"
-ARMS_ALL = ("base", "jqa", "owl")
+ARMS_DEFAULT = ("base", "jqa", "owl")  # 기본 실행 arm(det는 명시 요청 때만)
+ARMS_KNOWN = (*ARMS_DEFAULT, "det")
 PUBLISH_STAGE = "S13"
 ABORT_STAGE = "S00"  # 실패하면 run 중단, 종료 코드 1
 STUB_INPUT_HASH = "00000000"
@@ -54,7 +55,7 @@ DEPENDENCIES: dict[str, Dep] = {
     "S13": Dep(),
 }
 # 모든 arm은 S02(bbtg)에 의존한다. 그 밖의 추가 의존.
-ARM_DEPENDENCIES: dict[str, tuple[str, ...]] = {"base": (), "jqa": ("S03",), "owl": ("S05",)}
+ARM_DEPENDENCIES: dict[str, tuple[str, ...]] = {"base": (), "jqa": ("S03",), "owl": ("S05",), "det": ("S03",)}
 
 
 # --- 시간 -----------------------------------------------------------------------
@@ -235,11 +236,20 @@ def _stub_mode() -> bool:
 
 def requested_arms(run_dir) -> list[str]:
     arms = read_run(run_dir).get("options", {}).get("arms")
-    return list(arms) if arms else list(ARMS_ALL)
+    return list(arms) if arms else list(ARMS_DEFAULT)
 
 
 def requested_reps(run_dir) -> int:
     return int(read_run(run_dir).get("options", {}).get("reps") or 1)
+
+
+def requested_reps_by_arm(run_dir) -> dict[str, int]:
+    """arm별 요청 반복 수. run.json의 requestedRepsByArm이 우선이고, 없으면 요청 arm 전체에 reps를 쓰되 det는 1로 고정한다."""
+    recorded = read_run(run_dir).get("requestedRepsByArm")
+    if isinstance(recorded, dict) and recorded:
+        return {arm: int(reps) for arm, reps in recorded.items()}
+    reps = requested_reps(run_dir)
+    return {arm: (1 if arm == "det" else reps) for arm in requested_arms(run_dir)}
 
 
 def arm_plan(run_dir, arms: list[str] | None = None) -> dict[str, str | None]:

@@ -100,13 +100,14 @@
       "properties": {
         "genId": {
           "type": "string",
-          "pattern": "^(base|jqa|owl)-[0-9a-f]{8}-r[1-9](-g[0-9]+)?$"
+          "pattern": "^(base|jqa|owl|det)-[0-9a-f]{8}-r[1-9](-g[0-9]+)?$"
         },
         "arm": {
           "enum": [
             "base",
             "jqa",
-            "owl"
+            "owl",
+            "det"
           ]
         },
         "rep": {

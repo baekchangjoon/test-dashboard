@@ -76,7 +76,7 @@ S06_SCRIPT = REPO_ROOT / "pipeline" / "S06-bdd-gen.sh"
 PETCLINIC_SUT_FILE = REPO_ROOT / "suts" / "petclinic" / "sut.yaml"
 SCHEMAS = REPO_ROOT / "site-gen" / "td" / "schemas"
 PROMPTS = REPO_ROOT / "prompts"
-GEN_ID_RE = re.compile(r"^(base|jqa|owl)-[0-9a-f]{8}-r[1-9](-g[0-9]+)?$")
+GEN_ID_RE = re.compile(r"^(base|jqa|owl|det)-[0-9a-f]{8}-r[1-9](-g[0-9]+)?$")
 SUT_RESPONSE_MARKER = "SUT-RESPONSE-MARKER-7f3a9c"
 
 VALID_FEATURE = """\

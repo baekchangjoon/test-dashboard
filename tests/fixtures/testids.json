@@ -176,6 +176,27 @@
    "expected": [
     "E2E_owl_deadbeefr5_Y#L1"
    ]
+  },
+  {
+   "name": "det-arm",
+   "arm": "det",
+   "inputHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "rep": 1,
+   "gen": null,
+   "features": [
+    {
+     "path": "features/owner.feature",
+     "name": "Owner search",
+     "pickles": [
+      5,
+      16
+     ]
+    }
+   ],
+   "expected": [
+    "E2E_det_01234567r1_Owner_search#L5",
+    "E2E_det_01234567r1_Owner_search#L16"
+   ]
   }
  ],
  "errors": [
