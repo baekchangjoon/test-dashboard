@@ -400,3 +400,33 @@ def test_leak_after_escape_sequence_is_fatal(tmp_path, condition):
     plan.write_text(json.dumps(data), encoding="utf-8")
     projection = inputs.project(run, SUT_FILE, tmp_path / "out")
     assert projection.fatal and "redaction" in projection.fatal
+
+
+@pytest.mark.parametrize("condition, expected", [
+    ("req.count() < 1 || req.count() > 10",
+     ((Atom("<", Operand("request", "count"), Operand("literal", "1", "number")),),
+      (Atom(">", Operand("request", "count"), Operand("literal", "10", "number")),))),
+    ("req.countryCode() >= 5", ((Atom(">=", Operand("request", "countryCode"), Operand("literal", "5", "number")),),)),
+    ("req.counter() >= MAX", ((Atom(">=", Operand("request", "counter"), Operand("constant", "MAX")),),)),
+])
+def test_req113_count_prefixed_request_field_is_not_count_query(condition, expected):
+    assert _single(detparse.parse(condition, "req")) == expected
+
+
+def test_req113_count_prefixed_stored_field_is_not_count_query():
+    ((atom,),) = _single(detparse.parse("existing.getCountLimit() >= 3", None))
+    assert atom == Atom(">=", Operand("stored", "countLimit"), Operand("literal", "3", "number"))
+
+
+def test_req113_clock_chain_only_shift_methods_stay_clock():
+    ((atom,),) = _single(detparse.parse("req.year() < LocalDate.now().getYear()", "req"))
+    assert atom.right == Operand("unresolved", "LocalDate.now().getYear()")
+    ((shifted,),) = _single(detparse.parse("req.d().isBefore(LocalDate.now().minusDays(1).atStartOfDay())", "req"))
+    assert shifted.right == Operand("clock", "LocalDate.now()", ".minusDays(1).atStartOfDay()")
+
+
+def test_req113_internal_error_is_swallowed(monkeypatch):
+    def boom(self, pred):
+        raise ZeroDivisionError("내부 버그 모사")
+    monkeypatch.setattr(detparse._Classifier, "atom", boom)
+    assert detparse.parse("req.nights() < 1", "req") == detparse.Parsed(None, "unparsed")

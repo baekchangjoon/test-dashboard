@@ -63,6 +63,8 @@ _UPPER_CAMEL = re.compile(r"[A-Z][A-Za-z0-9_$]*")
 _COMPARE_OPS = ("<", "<=", ">", ">=", "==", "!=")
 _FLIP = {"<": ">", "<=": ">=", ">": "<", ">=": "<=", "==": "==", "!=": "!="}
 _NEGATE = {"<": ">=", "<=": ">", ">": "<=", ">=": "<", "==": "!=", "!=": "=="}
+# 시계 값을 시계로 유지하는 java.time 이동 메서드. 그 밖의 이어진 호출(getYear 등)은 미해결
+_CLOCK_SHIFT = re.compile(r"(?:plus|minus)[A-Za-z]*|atStartOfDay")
 _VALUE_KINDS = frozenset({"literal", "constant", "enum", "clock"})
 
 
@@ -406,10 +408,10 @@ class _Classifier:
                 return Operand("stored", _decapitalize(expr.method[3:]))
             if target.ident in CLOCK_TYPES and expr.method == "now":
                 return Operand("clock", self.text(expr))
-        # 시계에 이어진 산술 메서드(plusHours 등)는 시계로 두고 이어진 부분을 detail에 남긴다
+        # 시계에 이어진 이동 메서드(plus*/minus*/atStartOfDay)만 시계로 두고 이어진 부분을 detail에 남긴다
         if target is not None:
             base = self._call_operand(target) if isinstance(target, _Call) else None
-            if base is not None and base.kind == "clock":
+            if base is not None and base.kind == "clock" and _CLOCK_SHIFT.fullmatch(expr.method):
                 suffix = self.source[target.end:expr.end]
                 return Operand("clock", base.name, base.detail + re.sub(r"\s+", "", suffix))
         return Operand("unresolved", self.text(expr))
@@ -455,12 +457,19 @@ class _Classifier:
         if right_length is not None:
             # 길이는 왼쪽 피연산자에만 붙는다. 양쪽 길이 비교 등은 원문 그대로 미해결로 둔다
             right = Operand("unresolved", self.text(right_expr))
-        if (operator == ">=" and isinstance(left_expr, _Call) and left_expr.method.startswith("count")
-                and left_length is None):
-            return Atom("countGe", self._count_operand(left_expr), right)
-        if isinstance(left_expr, _Call) and left_expr.method.startswith("count") and left_length is None:
+        if left_length is None and self._is_count_query(left_expr):
+            if operator == ">=":
+                return Atom("countGe", self._count_operand(left_expr), right)
             left = Operand("unresolved", self.text(left_expr))
         return Atom(operator, left, right, length=left_length is not None)
+
+    def _is_count_query(self, expr: _Expr) -> bool:
+        """`count*` 이름의 호출이면서 수신자가 요청·저장 상태가 아닐 때만 count 질의로 본다(`req.countryCode()`는 요청 필드)."""
+        if not (isinstance(expr, _Call) and expr.method.startswith("count")):
+            return False
+        if expr.target is None:
+            return True
+        return self.operand(expr.target).kind not in ("request", "stored")
 
     def _count_operand(self, call: _Call) -> Operand:
         """count 질의의 인자 중 요청 필드가 정확히 하나면 그 요청 피연산자, 아니면 호출 전체를 미해결로 둔다."""
@@ -521,6 +530,6 @@ def parse(condition: str, request_var: str | None) -> Parsed:
         tree = _Parser(condition).parse_condition()
         classifier = _Classifier(condition, request_var)
         disjuncts = tuple(tuple(classifier.atom(pred) for pred in conjunct) for conjunct in _to_dnf(tree))
-    except (_ParseError, RecursionError, KeyError, IndexError, ValueError, TypeError):
+    except Exception:  # 어떤 내부 실패도 밖으로 내지 않는다(never-raise 계약)
         return UNPARSED
     return Parsed(disjuncts, None)
