@@ -60,6 +60,7 @@ def test_req115_tabs_hash_keyboard(proj, page_of):
     assert page.locator('button[role=tab][aria-selected="true"]').count() == 1
     assert [t.get_attribute("tabindex") for t in page.locator("button[role=tab]").all()].count("0") == 1
     assert page.locator("#tab-coverage").get_attribute("tabindex") == "0"
+    assert all(t.get_attribute("tabindex") == "-1" for t in page.locator('button[role=tab][aria-selected="false"]').all())
     for tab_id in ALL_TABS:
         tab = page.locator(f"#tab-{tab_id}")
         panel = page.locator(f"#panel-{tab_id}")
@@ -343,6 +344,15 @@ def test_req108_sut_landing(proj, proj_dir, tmp_path, page_of):
     page = page_of(proj + "suts/pet/index.html")
     page.wait_for_url("**/projects/pet/index.html")
     assert page.inner_text("#headline").startswith("기존 테스트는 모두 통과")
+    # 과제 이름과 SUT 이름이 다른 설정 과제: 안내 페이지는 SUT 이름이 아니라 그 SUT를 가진 과제로 보낸다
+    named = make_site(tmp_path / "named", runs={"pet2": [RUN_A]},
+                      config={"schema": 1, "projects": [{"name": "petshop", "sut": "pet2"}]})
+    rebuild_site(named)
+    refresh, link = _landing(named, "pet2")
+    assert refresh == link == "../../projects/petshop/index.html"
+    assert not (named / "projects/pet2").exists()
+    with serve(named) as url:
+        assert http_status(url + "suts/pet2/" + link) == 200
     site = make_site(tmp_path, runs={"solo": [RUN_A]})          # 설정에 없는 SUT -> 암묵 과제
     rebuild_site(site, dashboard_config.empty())
     refresh, link = _landing(site, "solo")
