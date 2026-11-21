@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>test-dashboard 과제 페이지 시안 · spring-petclinic</title>
+<style>
+:root{--bg:#f4f6f9;--surface:#fff;--sunk:#eaeef3;--ink:#131a24;--ink2:#465263;--muted:#6b7686;--line:#d9dfe7;
+  --accent:#2a78d6;--warn:#b97a00;--crit:#cf3d3d;--good:#16855a;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+@media (prefers-color-scheme:dark){:root{--bg:#0b1017;--surface:#131a24;--sunk:#0f151d;--ink:#e8edf3;--ink2:#b4bdc9;--muted:#8490a0;--line:#263141;
+  --accent:#4a94ee;--warn:#e0a030;--crit:#ee6b6b;--good:#2bb583;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 "Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif}
+.wrap{max-width:1240px;margin:0 auto;padding:0 16px}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.banner{background:color-mix(in srgb,var(--warn) 14%,var(--surface));border-bottom:1px solid var(--warn);font-size:12.5px;padding:6px 0}
+.top{background:var(--surface);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding-block:12px}
+.top .crumb{font-size:13px;color:var(--muted)}.top .crumb b{color:var(--ink)}
+.top .meta{margin-left:auto;font-size:12.5px;color:var(--muted)}
+.hero{background:var(--surface);border-bottom:1px solid var(--line)}
+.hero .wrap{padding-block:20px 0;display:grid;gap:14px}
+.eyebrow{font:600 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
+h1{margin:2px 0 0;font-size:clamp(21px,2.8vw,28px);line-height:1.3;letter-spacing:-.02em;text-wrap:balance}
+h1 em{font-style:normal;color:var(--warn)}
+.lede{margin:6px 0 0;color:var(--ink2);max-width:86ch}
+.st{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;border:1px solid var(--c);white-space:nowrap;vertical-align:middle}
+.st::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--c)}
+.tabs{display:flex;gap:2px;overflow-x:auto;margin-top:4px}
+.tabs button{font:inherit;font-size:13.5px;font-weight:600;color:var(--muted);background:none;border:0;border-bottom:3px solid transparent;padding:10px 14px;cursor:pointer;white-space:nowrap}
+.tabs button:hover{color:var(--ink)}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+main.wrap{padding-block:20px 60px;display:grid;gap:16px}
+.q{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline}
+.q h2{margin:0;font-size:19px;letter-spacing:-.01em}
+.guide{font-size:12.5px;color:var(--ink2);border:1px dashed var(--line);border-radius:10px;padding:8px 12px}
+.guide b{color:var(--ink)}
+.grid{display:grid;gap:12px}
+.g5{grid-template-columns:repeat(5,minmax(0,1fr))}.g2{grid-template-columns:1.25fr 1fr}.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;min-width:0;display:grid;gap:10px;align-content:start}
+.card h3{margin:0;font-size:14px;display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.card h3 a{font-size:12.5px;font-weight:500;white-space:nowrap}
+.kpi span{display:block;font-size:12px;color:var(--muted)}
+.kpi b{font-size:24px;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.2}
+.kpi small{display:block;font-size:12px;color:var(--ink2)}
+.kpi{border-top:3px solid var(--c,var(--line))}
+svg.sp{width:100%;height:26px;display:block}
+svg.sp polyline{fill:none;stroke:var(--accent);stroke-width:1.8;stroke-linejoin:round}svg.sp circle{fill:var(--accent)}
+.bars{list-style:none;margin:0;padding:0;display:grid;gap:7px}
+.bars li{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:8px;align-items:center;font-size:13px}
+.bars .n{font:600 12px var(--mono);color:var(--muted)}
+.bars .nm{font:12.5px var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bars .v{font:600 12px var(--mono);font-variant-numeric:tabular-nums}
+.bars .tr{grid-column:2/4;height:5px;background:var(--sunk);border-radius:3px;overflow:hidden}
+.bars .tr i{display:block;height:100%;border-radius:3px;background:var(--c,var(--crit))}
+.ringrow{display:grid;grid-template-columns:110px minmax(0,1fr);gap:16px;align-items:center}
+.ring{width:110px;height:110px;position:relative}
+.ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.ring circle{fill:none;stroke-width:10}.ring .bg{stroke:var(--sunk)}.ring .fg{stroke:var(--warn);stroke-linecap:round}
+.ring div{position:absolute;inset:0;display:grid;place-content:center;text-align:center}
+.ring b{font-size:22px;letter-spacing:-.02em}.ring span{font-size:11px;color:var(--muted)}
+p{margin:0}.sub{color:var(--ink2);font-size:13px}.dim{color:var(--muted)}
+.stages{display:flex;gap:3px;align-items:stretch;min-width:0}
+.stages button{flex:var(--w) 1 0;min-width:26px;font:600 11px var(--mono);color:var(--ink);background:color-mix(in srgb,var(--good) 22%,var(--surface));border:1px solid color-mix(in srgb,var(--good) 55%,var(--surface));border-radius:6px;padding:8px 2px;cursor:pointer;overflow:hidden}
+.stages button[aria-pressed="true"]{background:var(--good);color:#fff}
+.stagebox{font-size:13px;color:var(--ink2);background:var(--bg);border-radius:8px;padding:8px 12px}
+.links{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
+.links a{display:block;text-decoration:none;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:13px;font-weight:600}
+.links a small{display:block;font-weight:400;color:var(--muted);font-size:12px}
+.links a:hover{border-color:var(--accent)}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{font-size:11px;letter-spacing:.05em;color:var(--muted);font-weight:600;text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap;font-size:13px}
+tr:last-child td{border-bottom:0}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+.mono{font-family:var(--mono);font-size:12px}
+.stack{display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--sunk);min-width:140px}
+.stack i{display:block;height:100%}.stack .p{background:var(--good)}.stack .f{background:var(--crit)}
+.pair{display:grid;gap:3px;min-width:180px}
+.pair div{height:7px;border-radius:4px;background:var(--sunk);overflow:hidden}
+.pair i{display:block;height:100%;border-radius:4px}
+.pair .a i{background:var(--accent)}.pair .g i{background:color-mix(in srgb,var(--accent) 40%,var(--sunk))}
+.arm{font:600 11px var(--mono);padding:1px 7px;border-radius:5px;border:1px solid var(--c);color:var(--c)}
+.a-base{--c:var(--muted)}.a-jqa{--c:var(--accent)}.a-owl{--c:var(--warn)}
+.ok{color:var(--good);font-weight:600}.bad{color:var(--crit);font-weight:600}
+.heat td.h{text-align:center;font-variant-numeric:tabular-nums;background:color-mix(in srgb,var(--c) calc(var(--v) * 70%),transparent)}
+.ministages{display:flex;gap:2px}.ministages i{width:9px;height:14px;border-radius:2px;background:var(--good)}.ministages i.x{background:var(--sunk);border:1px dashed var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+[hidden]{display:none!important}
+@media (max-width:980px){.g5{grid-template-columns:repeat(2,minmax(0,1fr))}.g2,.g3{grid-template-columns:minmax(0,1fr)}.top .meta{margin-left:0}}
+</style></head>
+<body>
+<div class="banner"><div class="wrap">디자인 시안입니다. 수치는 reports.dev-temp-mail.com에 게시된 petclinic 실행(2026-11-20 13:10 UTC)의 실제 값이고, "리포트 열기" 링크는 지금 게시돼 있는 현재 디자인의 리포트로 갑니다.</div></div>
+<div class="top"><div class="wrap">
+  <span class="crumb"><a href="/_design/home-repos/">과제</a> › <b>spring-petclinic</b></span>
+  <span class="st" style="--c:var(--warn)">주의</span>
+  <span class="meta" id="meta"></span>
+</div></div>
+<div class="hero"><div class="wrap">
+  <div><div class="eyebrow">과제 품질 현황</div><h1 id="headline"></h1><p class="lede" id="lede"></p></div>
+  <div class="tabs" role="tablist" id="tabs"></div>
+</div></div>
+<main class="wrap" id="page"></main>
+<script type="application/json" id="data">{"commit": "b6f939355e8790202ddfc71e3f3507252745ed37", "startedAt": "2026-11-20T13:10:22Z", "totalSec": 515, "reportBase": "/suts/petclinic/runs/20261120-131022Z-b6f9393-manual-036c288d/", "kpis": {"pass": 1.0}, "stages": [{"id": "S00", "label": "준비", "sec": 20, "note": ""}, {"id": "S01", "label": "기존 블랙박스 테스트", "sec": 18, "note": "테스트 35개"}, {"id": "S02", "label": "bbtg 정적 분석", "sec": 4, "note": ""}, {"id": "S03", "label": "jQA 온톨로지", "sec": 20, "note": ""}, {"id": "S04", "label": "온톨로지 시각화", "sec": 1, "note": ""}, {"id": "S05", "label": "OWL 온톨로지", "sec": 0, "note": ""}, {"id": "S06", "label": "BDD 시나리오 생성", "sec": 1, "note": ""}, {"id": "S07", "label": "생성 E2E 실행", "sec": 259, "note": "9묶음 실행"}, {"id": "S08", "label": "커버리지 집계", "sec": 30, "note": ""}, {"id": "S09", "label": "hotspot 분석", "sec": 2, "note": "상위 10개 산출"}, {"id": "S10", "label": "변경 영향 분석(TIA)", "sec": 132, "note": "테스트 134개 색인"}, {"id": "S11", "label": "SonarQube", "sec": 25, "note": ""}, {"id": "S12", "label": "방식 비교", "sec": 1, "note": ""}, {"id": "S13", "label": "게시", "sec": 0, "note": "게시 결과는 별도 기록"}], "gens": [{"id": "base-c5806ec8-r1", "arm": "base", "scenarios": 31, "passed": 21, "failed": 10}, {"id": "base-c5806ec8-r2", "arm": "base", "scenarios": 30, "passed": 18, "failed": 12}, {"id": "base-c5806ec8-r3", "arm": "base", "scenarios": 28, "passed": 16, "failed": 12}, {"id": "jqa-3e687e21-r1", "arm": "jqa", "scenarios": 38, "passed": 21, "failed": 17}, {"id": "jqa-3e687e21-r2", "arm": "jqa", "scenarios": 40, "passed": 30, "failed": 10}, {"id": "jqa-3e687e21-r3", "arm": "jqa", "scenarios": 39, "passed": 22, "failed": 17}, {"id": "owl-9223890a-r1", "arm": "owl", "scenarios": 43, "passed": 23, "failed": 20}, {"id": "owl-9223890a-r2", "arm": "owl", "scenarios": 39, "passed": 23, "failed": 16}, {"id": "owl-9223890a-r3", "arm": "owl", "scenarios": 41, "passed": 24, "failed": 17}], "coverage": [{"name": "blackbox", "tc": 35, "attributed": 27, "line": 0.41515151515151516, "branch": 0.308300395256917, "aggLine": 0.6090909090909091}, {"name": "e2e-base-c5806ec8-r1", "tc": 31, "attributed": 31, "line": 0.1984848484848485, "branch": 0.1225296442687747, "aggLine": 0.43333333333333335}, {"name": "e2e-base-c5806ec8-r2", "tc": 30, "attributed": 30, "line": 0.12424242424242424, "branch": 0.05928853754940711, "aggLine": 0.3560606060606061}, {"name": "e2e-base-c5806ec8-r3", "tc": 28, "attributed": 28, "line": 0.11969696969696969, "branch": 0.05138339920948617, "aggLine": 0.3575757575757576}, {"name": "e2e-jqa-3e687e21-r1", "tc": 38, "attributed": 38, "line": 0.1606060606060606, "branch": 0.08695652173913043, "aggLine": 0.3924242424242424}, {"name": "e2e-jqa-3e687e21-r2", "tc": 40, "attributed": 40, "line": 0.19393939393939394, "branch": 0.1225296442687747, "aggLine": 0.4303030303030303}, {"name": "e2e-jqa-3e687e21-r3", "tc": 39, "attributed": 39, "line": 0.1787878787878788, "branch": 0.09090909090909091, "aggLine": 0.41515151515151516}, {"name": "e2e-owl-9223890a-r1", "tc": 43, "attributed": 43, "line": 0.16666666666666666, "branch": 0.08695652173913043, "aggLine": 0.3984848484848485}, {"name": "e2e-owl-9223890a-r2", "tc": 39, "attributed": 39, "line": 0.18181818181818182, "branch": 0.09486166007905138, "aggLine": 0.41515151515151516}, {"name": "e2e-owl-9223890a-r3", "tc": 41, "attributed": 41, "line": 0.19242424242424241, "branch": 0.10276679841897234, "aggLine": 0.4166666666666667}], "hotspots": [{"name": "Owner.getPet", "file": "src/main/java/org/springframework/samples/petclinic/owner/Owner.java", "method": "getPet", "score": 27.345}, {"name": "PetController.processUpdateForm", "file": "src/main/java/org/springframework/samples/petclinic/owner/PetController.java", "method": "processUpdateForm", "score": 24.7132}, {"name": "ReservationService.create", "file": "src/main/java/org/springframework/samples/petclinic/boarding/ReservationService.java", "method": "create", "score": 16.2977}, {"name": "ReservationService.update", "file": "src/main/java/org/springframework/samples/petclinic/boarding/ReservationService.java", "method": "update", "score": 12.482}, {"name": "OwnerController.processFindForm", "file": "src/main/java/org/springframework/samples/petclinic/owner/OwnerController.java", "method": "processFindForm", "score": 10.5914}, {"name": "PetTypeFormatter.parse", "file": "src/main/java/org/springframework/samples/petclinic/owner/PetTypeFormatter.java", "method": "parse", "score": 10.5914}, {"name": "OwnerController.processUpdateOwnerForm", "file": "src/main/java/org/springframework/samples/petclinic/owner/OwnerController.java", "method": "processUpdateOwnerForm", "score": 7.0609}, {"name": "ReservationRestController.update", "file": "src/main/java/org/springframework/samples/petclinic/boarding/ReservationRestController.java", "method": "update", "score": 4.2697}, {"name": "NamedEntity.toString", "file": "src/main/java/org/springframework/samples/petclinic/model/NamedEntity.java", "method": "toString", "score": 3.5305}, {"name": "PetController.updatePetDetails", "file": "src/main/java/org/springframework/samples/petclinic/owner/PetController.java", "method": "updatePetDetails", "score": 3.5305}], "tia": {"selected": 68, "indexedTests": 134, "deterministic": 0, "conservative": 68, "allSelectedConservative": true}, "sonar": {"vuln": 18, "bugs": 2, "smells": 69, "cov": "57.1", "ncloc": 1778, "total": 89, "url": "https://sonar.dev-temp-mail.com/dashboard?id=spring-petclinic-td", "matrix": {"CODE_SMELL/CRITICAL": 12, "CODE_SMELL/MINOR": 27, "CODE_SMELL/MAJOR": 23, "BUG/MINOR": 1, "VULNERABILITY/CRITICAL": 14, "VULNERABILITY/MAJOR": 2, "BUG/MAJOR": 1, "VULNERABILITY/BLOCKER": 2, "CODE_SMELL/INFO": 4, "CODE_SMELL/BLOCKER": 3}, "vulnBlocker": 2, "vulnCritical": 14, "vulnMajor": 2}, "compare": {"generation": "불성립", "effect": "차이 불명확", "thresholds": {"compile": "\u003e= 0.90", "undefined": "\u003c= 0.10", "passed": "\u003e= 0.70", "endpoint": "\u003e= 0.80"}, "arms": [{"arm": "base", "scenarios": 29.666666666666668, "compile": 1.0, "passed": 0.6162826420890937, "endpoint": 0.4901960784313726, "line": 0.14747474747474745, "tokens": 59347.666666666664, "seconds": 199.08833333333334}, {"arm": "jqa", "scenarios": 39.0, "compile": 1.0, "passed": 0.6222447143499775, "endpoint": 0.6862745098039217, "line": 0.17777777777777778, "tokens": 81911.33333333333, "seconds": 204.601}, {"arm": "owl", "scenarios": 41.0, "compile": 1.0, "passed": 0.5699977214441195, "endpoint": 0.6862745098039217, "line": 0.1803030303030303, "tokens": 83122.0, "seconds": 256.2606666666667}]}, "runs": [{"id": "20261120-131022Z-b6f9393-manual-036c288d", "at": "2026-11-20T13:10:22Z", "pass": 1.0, "line": 0.41515151515151516, "gate": "OK", "stages": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]}, {"id": "20261120-125628Z-b6f9393-manual-c5748158", "at": "2026-11-20T12:56:28Z", "pass": 1.0, "line": 0.41515151515151516, "gate": "OK", "stages": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]}, {"id": "20261120-103242Z-b6f9393-manual-799115cf", "at": "2026-11-20T10:32:42Z", "pass": null, "line": 0.41515151515151516, "gate": "OK", "stages": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]}, {"id": "20261120-101905Z-b6f9393-manual-ebeb4107", "at": "2026-11-20T10:19:06Z", "pass": null, "line": 0.41515151515151516, "gate": "OK", "stages": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]}, {"id": "20261118-211430Z-b6f9393-manual-90d073dd", "at": "2026-11-18T21:14:30Z", "pass": null, "line": 0.41515151515151516, "gate": "OK", "stages": [1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1]}], "reports": [["커버리지", "coverage/coverage.html", "테스트별로 지키는 코드"], ["hotspot", "hotspot/hotspots.html", "먼저 손볼 코드"], ["변경 영향(TIA)", "tia/tia.html", "변경에 영향받는 테스트"], ["Sonar 품질 결과", "sonar/sonar.html", "정적 분석 이슈"], ["방식 비교", "compare/compare.html", "생성 방식 판정"], ["jQA 온톨로지", "ontology/jqa.html", "코드 구조 그래프"], ["OWL 온톨로지", "ontology/owl.html", "도메인 지식 그래프"]]}</script>
+<script>
+(function(){
+  "use strict";
+  var D = JSON.parse(document.getElementById("data").textContent);
+  function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+  function pct(v, d){ return v == null ? "—" : (v * 100).toFixed(d == null ? 1 : d) + "%"; }
+  function dur(s){ return s >= 60 ? Math.floor(s / 60) + "분 " + (s % 60) + "초" : s + "초"; }
+  function spark(vals){
+    var pts = vals.map(function(v, i){ return v == null ? null : [4 + i * (92 / Math.max(1, vals.length - 1)), 22 - v * 18]; }).filter(Boolean);
+    if (!pts.length) return "";
+    var last = pts[pts.length - 1];
+    return '<svg class="sp" viewBox="0 0 100 26" preserveAspectRatio="none" aria-hidden="true"><polyline points="' + pts.map(function(p){ return p.join(","); }).join(" ") + '"/><circle cx="' + last[0] + '" cy="' + last[1] + '" r="2.4"/></svg>';
+  }
+  var TABS = [["overview","한눈에"],["tests","테스트"],["coverage","커버리지"],["hotspot","위험 지점"],["quality","코드 품질"],["gen","생성 실험"],["runs","실행 이력"]];
+  var tab = (location.hash || "").slice(1), stageSel = "S07";
+  if (!TABS.some(function(t){ return t[0] === tab; })) tab = "overview";
+  var R = D.reportBase, sq = D.sonar, bb = D.coverage[0];
+
+  document.getElementById("meta").textContent = "커밋 " + D.commit.slice(0, 7) + " · 최근 실행 " + D.startedAt.replace("T", " ").replace("Z", " UTC") + " · 실행 " + D.runs.length + "회";
+  document.getElementById("headline").innerHTML = "기존 테스트는 모두 통과하지만, 테스트가 지키는 코드는 <em>" + pct(bb.line) + "</em>입니다";
+  document.getElementById("lede").textContent = "Sonar 게이트는 통과했고 취약점 " + sq.vuln + "건(차단 " + sq.vulnBlocker + ", 심각 " + sq.vulnCritical + ")이 열려 있습니다. 위험 점수 1위는 " + D.hotspots[0].name + "입니다. 이번 변경 범위에서는 테스트 " + D.tia.indexedTests + "개 중 " + D.tia.selected + "개를 다시 돌려야 합니다.";
+
+  function head(q, guide){ return '<div class="q"><h2>' + q + '</h2></div><div class="guide"><b>이 탭 읽는 법</b> · ' + guide + "</div>"; }
+  function hotList(n){
+    var max = D.hotspots[0].score;
+    return '<ol class="bars">' + D.hotspots.slice(0, n).map(function(h, i){
+      return '<li><span class="n">' + (i + 1) + '</span><span class="nm" title="' + esc(h.file) + '">' + esc(h.name) + '</span><span class="v">' + h.score.toFixed(1) + '</span><span class="tr"><i style="width:' + (h.score / max * 100).toFixed(1) + '%"></i></span></li>';
+    }).join("") + "</ol>";
+  }
+  function stageStrip(){
+    var s = D.stages.filter(function(x){ return x.id === stageSel; })[0];
+    return '<div class="stages">' + D.stages.map(function(x){
+      return '<button type="button" data-stage="' + x.id + '" aria-pressed="' + (x.id === stageSel) + '" style="--w:' + Math.max(1, Math.sqrt(x.sec + 1)).toFixed(2) + '" title="' + esc(x.label) + " · " + dur(x.sec) + '">' + x.id.slice(1) + "</button>";
+    }).join("") + '</div><div class="stagebox"><b>' + s.id + " " + esc(s.label) + "</b> · 통과 · " + dur(s.sec) + (s.note ? " · " + esc(s.note) : "") + "</div>";
+  }
+  var PAGES = {
+    overview: function(){
+      var runsLine = D.runs.map(function(r){ return r.line; }).reverse(), runsPass = D.runs.map(function(r){ return r.pass; }).reverse();
+      var c = 2 * Math.PI * 45, share = D.tia.selected / D.tia.indexedTests;
+      return head("이 과제는 지금 어떤 상태인가", "위 문장이 결론이고, 아래 다섯 칸이 근거입니다. 칸 아래 작은 선은 최근 " + D.runs.length + "회 실행의 흐름입니다. 더 알고 싶은 항목은 위 탭에서 들어갑니다.") +
+      '<div class="grid g5">' +
+        '<div class="card kpi" style="--c:var(--good)"><div><span>기존 테스트 통과율</span><b>' + pct(D.kpis.pass, 0) + "</b><small>블랙박스 " + bb.tc + "개</small></div>" + spark(runsPass) + "</div>" +
+        '<div class="card kpi" style="--c:var(--warn)"><div><span>테스트가 지키는 코드(라인)</span><b>' + pct(bb.line) + "</b><small>실행만 된 코드까지 " + pct(bb.aggLine) + "</small></div>" + spark(runsLine) + "</div>" +
+        '<div class="card kpi" style="--c:var(--good)"><div><span>Sonar 품질 게이트</span><b>통과</b><small>새 위반 0건</small></div></div>' +
+        '<div class="card kpi" style="--c:var(--crit)"><div><span>열린 취약점</span><b>' + sq.vuln + "</b><small>차단 " + sq.vulnBlocker + " · 심각 " + sq.vulnCritical + " · 주요 " + sq.vulnMajor + "</small></div></div>" +
+        '<div class="card kpi" style="--c:var(--warn)"><div><span>변경 시 다시 돌릴 테스트</span><b>' + D.tia.selected + " / " + D.tia.indexedTests + "</b><small>정밀 선별 0개</small></div></div>" +
+      "</div>" +
+      '<div class="grid g2">' +
+        '<div class="card"><h3>먼저 손볼 곳 <a href="#hotspot" data-tab="hotspot">위험 지점 전체 →</a></h3>' + hotList(5) + '<p class="sub dim">위험 점수 = 복잡도 × 최근 변경 압력 × 커버리지 배수</p></div>' +
+        '<div class="card"><h3>이번 변경의 영향 <a href="' + R + 'tia/tia.html">TIA 리포트 열기 →</a></h3><div class="ringrow"><div class="ring"><svg viewBox="0 0 110 110"><circle class="bg" cx="55" cy="55" r="45"/><circle class="fg" cx="55" cy="55" r="45" stroke-dasharray="' + c.toFixed(1) + '" stroke-dashoffset="' + (c * (1 - share)).toFixed(1) + '"/></svg><div><b>' + pct(share, 0) + "</b><span>다시 실행</span></div></div>" +
+          '<p class="sub">최근 10개 커밋 범위에서 테스트 ' + D.tia.indexedTests + "개 중 <b>" + D.tia.selected + "개</b>가 선택됐습니다. 전부 " + '"안전하게 넓게 고른" 선택이고, 변경된 코드와 정확히 이어진 선별은 0개입니다.</p></div></div>' +
+      "</div>" +
+      '<div class="card"><h3>파이프라인 14단계 <span class="dim" style="font-weight:400;font-size:12.5px">전체 ' + dur(D.totalSec) + " · 칸 너비는 걸린 시간</span></h3>" + stageStrip() + "</div>" +
+      '<div class="card"><h3>리포트 바로가기</h3><div class="links">' + D.reports.map(function(l){ return '<a href="' + R + l[1] + '">' + esc(l[0]) + "<small>" + esc(l[2]) + "</small></a>"; }).join("") + "</div></div>";
+    },
+    tests: function(){
+      return head("어떤 테스트가 돌았고 얼마나 통과했나", "위는 사람이 관리하는 기존 테스트, 아래는 AI가 생성한 E2E 시나리오입니다. 생성 시나리오의 실패는 제품 결함이 아니라 생성된 테스트의 품질 문제일 수 있습니다.") +
+      '<div class="grid g3">' +
+        '<div class="card kpi" style="--c:var(--good)"><div><span>기존 블랙박스 테스트</span><b>' + bb.tc + "개</b><small>통과율 " + pct(D.kpis.pass, 0) + " · 커버리지가 귀속된 테스트 " + bb.attributed + "개</small></div></div>" +
+        '<div class="card kpi"><div><span>생성된 E2E 시나리오</span><b>' + D.gens.reduce(function(a, g){ return a + g.scenarios; }, 0) + "개</b><small>3가지 방식 × 3회 반복 = " + D.gens.length + "묶음</small></div></div>" +
+        '<div class="card kpi" style="--c:var(--warn)"><div><span>생성 시나리오 통과율</span><b>' + pct(D.gens.reduce(function(a, g){ return a + g.passed; }, 0) / D.gens.reduce(function(a, g){ return a + g.scenarios; }, 0)) + "</b><small>컴파일 실패 0 · 정의 안 된 스텝 0</small></div></div>" +
+      "</div>" +
+      '<div class="card"><h3>생성 묶음별 결과</h3><div class="legend"><span><i style="background:var(--good)"></i>통과</span><span><i style="background:var(--crit)"></i>실패</span></div><div class="scroll"><table><thead><tr><th>방식</th><th>묶음</th><th class="n">시나리오</th><th>통과 / 실패</th><th class="n">통과율</th><th></th></tr></thead><tbody>' +
+        D.gens.map(function(g){
+          return '<tr><td><span class="arm a-' + g.arm + '">' + g.arm + '</span></td><td class="mono">' + esc(g.id) + '</td><td class="n">' + g.scenarios + '</td><td><div class="stack" title="통과 ' + g.passed + " · 실패 " + g.failed + '"><i class="p" style="width:' + (g.passed / g.scenarios * 100) + '%"></i><i class="f" style="width:' + (g.failed / g.scenarios * 100) + '%"></i></div></td><td class="n">' + pct(g.passed / g.scenarios) + '</td><td><a href="' + R + "cucumber/" + esc(g.id) + '/index.html">Cucumber 리포트</a></td></tr>';
+        }).join("") + "</tbody></table></div></div>";
+    },
+    coverage: function(){
+      return head("테스트가 코드의 얼마를 지키는가", "진한 막대는 그 테스트가 직접 실행한 것으로 확인된 코드(귀속), 연한 막대는 준비 과정까지 포함해 실행된 코드(집계)입니다. 둘의 차이가 크면 검증 없이 지나가기만 한 코드가 많다는 뜻입니다.") +
+      '<div class="card"><h3>테스트 묶음별 라인 커버리지 <a href="' + R + 'coverage/coverage.html">테스트별 상세 열기 →</a></h3><div class="legend"><span><i style="background:var(--accent)"></i>귀속</span><span><i style="background:color-mix(in srgb,var(--accent) 40%,var(--sunk))"></i>집계</span></div><div class="scroll"><table><thead><tr><th>묶음</th><th class="n">테스트</th><th>라인</th><th class="n">귀속</th><th class="n">집계</th><th class="n">분기(귀속)</th></tr></thead><tbody>' +
+        D.coverage.map(function(s){
+          return '<tr><td class="mono">' + esc(s.name) + '</td><td class="n">' + s.tc + '</td><td><div class="pair"><div class="a"><i style="width:' + s.line * 100 + '%"></i></div><div class="g"><i style="width:' + s.aggLine * 100 + '%"></i></div></div></td><td class="n"><b>' + pct(s.line) + '</b></td><td class="n">' + pct(s.aggLine) + '</td><td class="n">' + pct(s.branch) + "</td></tr>";
+        }).join("") + "</tbody></table></div></div>";
+    },
+    hotspot: function(){
+      return head("어디부터 손봐야 하나", "점수가 높을수록 복잡하고, 최근에 자주 바뀌었고, 테스트가 덜 지키는 코드입니다. 위에서부터 테스트를 보강하면 됩니다.") +
+      '<div class="grid g2"><div class="card"><h3>위험 점수 상위 10개 메서드 <a href="' + R + 'hotspot/hotspots.html">hotspot 리포트 열기 →</a></h3>' + hotList(10) + "</div>" +
+      '<div class="card"><h3>hotspot 지도</h3><p class="sub">hotspot-analysis의 새 리포트(패키지 › 파일 › 클래스 › 메서드를 원으로 그리고 눌러 들어가는 지도)가 이 자리에 들어옵니다. 지금 게시된 리포트는 도구 버전이 0.1.6이라 표만 있습니다.</p><p class="sub dim">도구 버전을 올리면 지도와 점수 계산 과정, 소스 링크가 함께 실립니다.</p></div></div>';
+    },
+    quality: function(){
+      var sev = ["BLOCKER","CRITICAL","MAJOR","MINOR","INFO"], sevKo = {BLOCKER:"차단", CRITICAL:"심각", MAJOR:"주요", MINOR:"경미", INFO:"참고"};
+      var types = [["VULNERABILITY","취약점","var(--crit)"],["BUG","버그","var(--warn)"],["CODE_SMELL","코드 스멜","var(--accent)"]];
+      var max = Math.max.apply(null, Object.keys(sq.matrix).map(function(k){ return sq.matrix[k]; }));
+      return head("정적 분석은 무엇을 말하나", "게이트는 새로 추가된 위반만 봅니다. 그래서 게이트가 통과여도 이미 쌓여 있는 취약점은 아래 표에 남아 있습니다.") +
+      '<div class="grid g5">' +
+        '<div class="card kpi" style="--c:var(--good)"><div><span>품질 게이트</span><b>통과</b><small>새 위반 0건</small></div></div>' +
+        '<div class="card kpi" style="--c:var(--crit)"><div><span>취약점</span><b>' + sq.vuln + "</b><small>보안 등급 E</small></div></div>" +
+        '<div class="card kpi" style="--c:var(--warn)"><div><span>버그</span><b>' + sq.bugs + "</b><small>신뢰성 등급 C</small></div></div>" +
+        '<div class="card kpi"><div><span>코드 스멜</span><b>' + sq.smells + "</b><small>유지보수 등급 A</small></div></div>" +
+        '<div class="card kpi"><div><span>Sonar 커버리지</span><b>' + sq.cov + "%</b><small>코드 " + sq.ncloc.toLocaleString() + "줄</small></div></div>" +
+      "</div>" +
+      '<div class="card"><h3>열린 이슈 ' + sq.total + '건 <a href="' + esc(sq.url) + '">SonarQube에서 열기 →</a></h3><div class="scroll"><table class="heat"><thead><tr><th>종류</th>' + sev.map(function(s){ return '<th class="n" style="text-align:center">' + sevKo[s] + "</th>"; }).join("") + "</tr></thead><tbody>" +
+        types.map(function(t){ return "<tr><td>" + t[1] + "</td>" + sev.map(function(s){ var v = sq.matrix[t[0] + "/" + s] || 0; return '<td class="h" style="--c:' + t[2] + ";--v:" + (v ? 0.25 + 0.75 * v / max : 0).toFixed(2) + '">' + (v || '<span class="dim">·</span>') + "</td>"; }).join("") + "</tr>"; }).join("") +
+        '</tbody></table></div><p class="sub dim">보안 검토가 필요한 지점 1곳: CSRF 보호를 끈 설정(SecurityConfig).</p></div>';
+    },
+    gen: function(){
+      var th = D.compare.thresholds;
+      function cell(v, ok){ return '<td class="n ' + (ok == null ? "" : ok ? "ok" : "bad") + '">' + v + "</td>"; }
+      return head("AI가 만든 테스트는 쓸 만한가", "코드 구조 정보를 주지 않은 방식(base)과 준 방식 둘(jqa, owl)을 3회씩 돌린 평균입니다. 기준을 넘은 칸은 초록, 못 넘은 칸은 빨강입니다.") +
+      '<div class="card" style="border-left:4px solid var(--warn)"><h3>판정: ' + esc(D.compare.generation) + " · " + esc(D.compare.effect) + ' <a href="' + R + 'compare/compare.html">비교 리포트 열기 →</a></h3><p class="sub">어느 방식도 통과율 70%와 엔드포인트 도달 80% 기준을 넘지 못했고, 방식 사이의 차이도 반복 간 편차 안에 있습니다. 3회 반복이라 탐색적 관찰입니다.</p></div>' +
+      '<div class="card"><div class="scroll"><table><thead><tr><th>방식</th><th class="n">시나리오</th><th class="n">컴파일<br><span class="dim">' + esc(th.compile) + '</span></th><th class="n">통과율<br><span class="dim">' + esc(th.passed) + '</span></th><th class="n">엔드포인트 도달<br><span class="dim">' + esc(th.endpoint) + '</span></th><th class="n">라인 커버리지</th><th class="n">토큰</th><th class="n">생성 시간</th></tr></thead><tbody>' +
+        D.compare.arms.map(function(a){
+          return '<tr><td><span class="arm a-' + a.arm + '">' + a.arm + "</span></td>" + cell(a.scenarios.toFixed(1)) + cell(pct(a.compile, 0), a.compile >= 0.9) + cell(pct(a.passed), a.passed >= 0.7) + cell(pct(a.endpoint), a.endpoint >= 0.8) + cell(pct(a.line)) + cell(Math.round(a.tokens).toLocaleString()) + cell(dur(Math.round(a.seconds))) + "</tr>";
+        }).join("") + "</tbody></table></div></div>";
+    },
+    runs: function(){
+      return head("언제 무엇이 돌았나", "한 줄이 한 번의 실행입니다. 작은 칸 14개는 파이프라인 단계이고 비어 있는 칸은 그 실행에서 건너뛴 단계입니다.") +
+      '<div class="card"><div class="scroll"><table><thead><tr><th>실행</th><th>시작(UTC)</th><th>단계</th><th class="n">통과율</th><th class="n">귀속 라인</th><th>Sonar</th></tr></thead><tbody>' +
+        D.runs.map(function(r){
+          return '<tr><td class="mono"><a href="/suts/petclinic/runs/' + esc(r.id) + '/index.html">' + esc(r.id.slice(0, 16)) + '…</a></td><td>' + esc(r.at.replace("T", " ").replace("Z", "")) + '</td><td><div class="ministages">' + r.stages.map(function(s){ return s ? "<i></i>" : '<i class="x"></i>'; }).join("") + '</div></td><td class="n">' + pct(r.pass, 0) + '</td><td class="n">' + pct(r.line) + "</td><td>" + (r.gate === "OK" ? "통과" : esc(r.gate || "—")) + "</td></tr>";
+        }).join("") + "</tbody></table></div></div>";
+    }
+  };
+  function render(){
+    document.getElementById("tabs").innerHTML = TABS.map(function(t){ return '<button type="button" role="tab" data-tab="' + t[0] + '" aria-selected="' + (t[0] === tab) + '">' + t[1] + "</button>"; }).join("");
+    document.getElementById("page").innerHTML = PAGES[tab]();
+  }
+  document.addEventListener("click", function(e){
+    var t = e.target.closest("[data-tab],[data-stage]");
+    if (!t) return;
+    if (t.dataset.stage) stageSel = t.dataset.stage;
+    else { e.preventDefault(); tab = t.dataset.tab; history.replaceState(null, "", "#" + tab); window.scrollTo(0, 0); }
+    render();
+  });
+  render();
+})();
+</script>
+</body></html>
