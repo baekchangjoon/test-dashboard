@@ -12,6 +12,10 @@ S08/<suite>/attributed/jacoco.xml(귀속 커버리지), S03/ontology-jqa.json(�
 - focus: sut.yaml compare.focus(패키지 글로브)에 드는 클래스만 다시 집계한 line/branch/endpoint/oracle(통과율은 시나리오-클래스 대응이 없어 제외).
 - tokens(입력+출력), seconds: S06 생성 호출 비용.
 S06/S07에서 실패해 측정되지 못한 generation은 평균에서 빼고 `failed`로 표시한다(요청 reps 대비 n을 함께 적는다).
+
+det arm(결정적 생성, LLM 없음, 조건식 포함)은 입력 체제가 달라 **참고 열**이다(설계 §2 G4). 같은 지표를 내지만 사전 등록 판정
+(`verdict.judge`)에는 base·jqa·owl만 명시적으로 넘긴다. det 고유 결과(strict/class 통과, baseline, 검증된 위반)는
+`deterministic` 블록(`td.detgen.results.summarize`)으로 따로 보고한다. det를 요청하지 않은 run에서는 det 열과 블록이 없다(null).
 """
 from __future__ import annotations
 
@@ -29,7 +33,16 @@ from td import state, verdict
 from td.verdict import ArmStats
 
 SCHEMA_PATH = Path(__file__).parent / "schemas" / "compare.schema.json"
-ARMS_ORDER = ("base", "jqa", "owl")
+ARMS_ORDER = ("base", "jqa", "owl", "det")
+VERDICT_ARMS = ("base", "jqa", "owl")   # 사전 등록 판정 대상. det는 참고 열이라 넣지 않는다
+REFERENCE_ARMS = ("det",)
+# arm별 입력 체제: LLM 사용 여부, 조건식(분기 조건 원문) 입력 여부, 그래프 입력
+INPUT_REGIMES = {
+    "base": {"llm": True, "conditions": False, "graph": "none"},
+    "jqa": {"llm": True, "conditions": False, "graph": "jqa"},
+    "owl": {"llm": True, "conditions": False, "graph": "owl"},
+    "det": {"llm": False, "conditions": True, "graph": "jqa+ext"},
+}
 METRIC_KEYS = ("scenarios", "compile", "undefined", "passed", "endpoint", "line", "branch", "lineDelta", "branchDelta",
                "uniqueLines", "oracle", "oracleCovered", "focusLine", "focusBranch", "focusEndpoint", "focusOracle",
                "tokens", "seconds")
@@ -224,10 +237,12 @@ def _stat(values: list[float]) -> dict:
     return {"mean": math.fsum(values) / len(values), "min": min(values), "max": max(values), "n": len(values)}
 
 
-def _arm_entry(arm: str, status: str, reason: str | None, generations: list[dict], reps) -> dict:
+def _arm_entry(arm: str, status: str, reason: str | None, generations: list[dict], reps, requested_reps=None) -> dict:
     measured = [g for g in generations if g["status"] == "measured"]
     metrics = {key: {**_stat([g.get(key) for g in measured]), "values": [g.get(key) for g in measured]} for key in METRIC_KEYS}
-    entry = {"arm": arm, "status": status, "reason": reason, "reps": reps, "measured": len(measured),
+    entry = {"arm": arm, "status": status, "reason": reason, "reps": reps,
+             "requestedReps": requested_reps if requested_reps is not None else reps,
+             "inputRegime": dict(INPUT_REGIMES[arm]), "measured": len(measured),
              "failedGenerations": [{"genId": g["genId"], "reason": g["reason"]} for g in generations if g["status"] == "failed"],
              "metrics": metrics, "generations": generations}
     if status == "ok" and not measured:
@@ -282,25 +297,29 @@ def collect(run_dir, *, sut_file=None, oracle_path=None) -> dict:
     options = run.get("options") or {}
     requested = options.get("arms") or list(s06_arms) or ["base"]
     reps = options.get("reps") or (_read_json(run_dir / "S06" / "bdd-gen.json", {}) or {}).get("reps")
+    reps_by_arm = state.requested_reps_by_arm(run_dir)
     arms: dict[str, dict] = {}
     for arm in ARMS_ORDER:
         stage_arm = s06_arms.get(arm)
         if arm not in requested and stage_arm is None:
-            arms[arm] = _arm_entry(arm, "skipped", state.NOT_REQUESTED, [], reps)
+            if arm in REFERENCE_ARMS:
+                continue  # 참고 열은 요청했을 때만 보인다
+            arms[arm] = _arm_entry(arm, "skipped", state.NOT_REQUESTED, [], reps, reps_by_arm.get(arm))
             continue
+        arm_reps = reps_by_arm.get(arm, state.reps_by_arm([arm], reps or 1)[arm])
         if stage_arm and stage_arm.get("status") == "skipped":
-            arms[arm] = _arm_entry(arm, "skipped", stage_arm.get("reason") or "S06에서 건너뜀", [], reps)
+            arms[arm] = _arm_entry(arm, "skipped", stage_arm.get("reason") or "S06에서 건너뜀", [], reps, arm_reps)
             continue
         gen_ids = [gid for gid, g in bddgen.items() if g.get("arm") == arm] or list((stage_arm or {}).get("generations") or [])
         if not gen_ids:
-            arms[arm] = _arm_entry(arm, "skipped", (stage_arm or {}).get("reason") or "generation이 없다", [], reps)
+            arms[arm] = _arm_entry(arm, "skipped", (stage_arm or {}).get("reason") or "generation이 없다", [], reps, arm_reps)
             continue
         generations = [_generation_entry(gid, arm, ctx) for gid in sorted(gen_ids)]
-        arms[arm] = _arm_entry(arm, "ok", None, generations, reps)
+        arms[arm] = _arm_entry(arm, "ok", None, generations, reps, arm_reps)
     warnings = sorted(ctx["warnings"])
     if expected is not None and expected != len(endpoints):
         warnings.insert(0, f"엔드포인트 분모({len(endpoints)})가 기대 목록 수({expected})와 다르다")
-    result = verdict.judge({name: arm_stats(entry) for name, entry in arms.items()})
+    result = verdict.judge({name: arm_stats(arms[name]) for name in VERDICT_ARMS if name in arms})
 
     # clockShift는 run.json 기록(clockShift, 없으면 startedAt/finishedAt)만 쓴다. 현재 시각과 비교하지 않으므로
     # 다른 날 다시 렌더링해도 값이 바뀌지 않는다.
@@ -316,11 +335,32 @@ def collect(run_dir, *, sut_file=None, oracle_path=None) -> dict:
         "endpoints": {"denominator": len(endpoints), "expected": expected, "ids": [item["id"] for item in endpoints]},
         "oracle": {"rules": len(rules), "ids": [rule["id"] for rule in rules]},
         "focus": focus, "blackbox": ({"line": blackbox["kpis"].get("line"), "branch": blackbox["kpis"].get("branch")} if blackbox else None),
-        "arms": arms, "verdict": result.as_dict(), "warnings": warnings,
+        "requestedRepsByArm": {arm: reps_by_arm[arm] for arm in ARMS_ORDER if arm in reps_by_arm},
+        "arms": arms, "verdict": result.as_dict(), "deterministic": _deterministic(run_dir, run, arms.get("det")),
+        "warnings": warnings,
         "clock": {"clockShift": shift, "tz": tz, "startedAt": started, "finishedAt": finished},
         "limitations": LIMITATIONS,
     }
     return document
+
+
+def _deterministic(run_dir: Path, run: dict, det_entry: dict | None) -> dict | None:
+    """det generation의 결과 블록. det를 돌리지 않았으면 None, 집계할 수 없으면 status=failed와 사유."""
+    if det_entry is None or det_entry["status"] != "ok" or not det_entry["generations"]:
+        return None
+    from td import scenarios
+    from td.detgen import results
+    generation = det_entry["generations"][0]
+    gen_id = generation["genId"]
+    block = {"genId": gen_id, "status": "failed", "reason": None, "summary": None}
+    if generation["status"] != "measured":
+        return {**block, "reason": generation.get("reason") or "측정되지 않은 generation"}
+    try:
+        gen_dir = scenarios.generation_dir(run.get("sut") or "", gen_id)
+        summary = results.summarize(gen_dir, run_dir / "S07" / gen_id)
+    except (OSError, ValueError, scenarios.ScenariosError) as exc:
+        return {**block, "reason": f"det 결과 집계 실패: {str(exc).splitlines()[0][:300] if str(exc) else type(exc).__name__}"}
+    return {**block, "status": "measured", "summary": summary}
 
 
 def validate(document: dict) -> None:
@@ -337,7 +377,9 @@ def render_page(out_dir, document: dict, css_href: str = "app.css", copy_css: bo
         copy_app_css(out_dir)
     template = jinja_env().get_template("compare.html.j2")
     html = template.render(doc=document, css_href=css_href, static_href=static_href_of(css_href), nav_html=nav_html,
-                           rows=display_rows(document), dots=dot_plots(document))
+                           rows=display_rows(document), dots=dot_plots(document),
+                           regime_labels={arm: regime_label(entry.get("inputRegime")) for arm, entry in document["arms"].items()},
+                           reference_arms=REFERENCE_ARMS)
     target = out_dir / "compare.html"
     target.write_text(html, encoding="utf-8")
     return target
@@ -353,6 +395,13 @@ DISPLAY = [
     ("focusEndpoint", "Focus 범위 엔드포인트", "pct"), ("focusOracle", "Focus 범위 오라클", "pct"),
     ("tokens", "토큰(입력+출력)", "int"), ("seconds", "생성 시간(초)", "sec"),
 ]
+
+
+def regime_label(regime: dict | None) -> str:
+    """입력 체제 표기(예: det → `LLM 없음, 조건식 포함`)."""
+    if not regime:
+        return ""
+    return f"{'LLM 사용' if regime.get('llm') else 'LLM 없음'}, {'조건식 포함' if regime.get('conditions') else '조건식 없음'}"
 
 
 def format_value(value, kind: str) -> str:
@@ -385,7 +434,7 @@ def display_rows(document: dict) -> list[dict]:
 
 
 DOT_METRICS = [("endpoint", "엔드포인트 커버"), ("branch", "귀속 브랜치"), ("oracle", "오라클 커버"), ("passed", "통과율")]
-DOT_COLORS = {"base": "var(--arm-base)", "jqa": "var(--arm-jqa)", "owl": "var(--arm-owl)"}  # static/v2/app.css 토큰(라이트/다크)  # 색만으로 구분하지 않도록 arm 이름도 라벨로 적는다.
+DOT_COLORS = {"base": "var(--arm-base)", "jqa": "var(--arm-jqa)", "owl": "var(--arm-owl)", "det": "var(--arm-det)"}  # static/v2/app.css 토큰(라이트/다크)  # 색만으로 구분하지 않도록 arm 이름도 라벨로 적는다.
 
 
 def dot_plots(document: dict) -> list[dict]:

@@ -31,7 +31,7 @@
 <h2>arm × 지표</h2>
 <p class="muted">각 칸은 평균(최소–최대). 엔드포인트 분모는 {{ doc.endpoints.denominator }}개(view=false), 오라클 규칙은 {{ doc.oracle.rules }}개{% if doc.focus %}, Focus 범위는 <code>{{ doc.focus }}</code>{% endif %}이다.{% if doc.blackbox %} blackbox 기준 라인 {{ ("%.1f%%"|format(doc.blackbox.line * 100)) if doc.blackbox.line is not none else "—" }}, 브랜치 {{ ("%.1f%%"|format(doc.blackbox.branch * 100)) if doc.blackbox.branch is not none else "—" }}.{% else %} blackbox 스위트가 이번 run에 없어 blackbox 대비 값은 비어 있다.{% endif %}</p>
 <div class="scroll"><table id="compare-table">
-<thead><tr><th>지표</th>{% for arm, entry in doc.arms.items() %}<th class="num" data-arm="{{ arm }}">{{ arm }}{% if entry.status != "ok" %} (skipped){% else %} (n={{ entry.measured }}/{{ entry.reps if entry.reps is not none else "?" }}){% endif %}</th>{% endfor %}</tr></thead>
+<thead><tr><th>지표</th>{% for arm, entry in doc.arms.items() %}{% set denom = entry.requestedReps if entry.requestedReps is defined and entry.requestedReps is not none else entry.reps %}<th class="num" data-arm="{{ arm }}">{{ arm }}{% if entry.status != "ok" %} (skipped){% else %} (n={{ entry.measured }}/{{ denom if denom is not none else "?" }}){% endif %}{% if arm in reference_arms %}<br><span class="muted" data-regime="{{ arm }}">참고 열 · {{ regime_labels[arm] }}</span>{% endif %}</th>{% endfor %}</tr></thead>
 <tbody>
 {% for row in rows %}
   <tr data-metric="{{ row.key }}"><td>{{ row.label }}</td>
@@ -45,6 +45,35 @@
   {% if entry.status != "ok" %}<p class="note" data-skipped-arm="{{ arm }}"><b>{{ arm }}</b> arm을 비교에서 뺐다(skipped): {{ entry.reason }}</p>{% endif %}
   {% for failed in entry.failedGenerations or [] %}<p class="note" data-failed-generation="{{ failed.genId }}"><b>{{ failed.genId }}</b>는 측정하지 못해 평균에서 뺐다: {{ failed.reason }}</p>{% endfor %}
 {% endfor %}
+
+{% if "det" in doc.arms %}
+<p class="note" id="reference-arms"><b>det</b>는 참고 열이다. 입력 체제가 다르다({{ regime_labels["det"] }}, 그래프 jQA+보강 질의). 위 판정에는 base·jqa·owl만 쓰고 det는 넣지 않았다. det의 반복 횟수는 요청과 무관하게 1회다.</p>
+{% endif %}
+{% if doc.deterministic %}
+<h2>det 결정적 생성 결과</h2>
+<section class="card" id="deterministic" data-gen="{{ doc.deterministic.genId }}">
+{% if doc.deterministic.status != "measured" %}
+  <p class="note"><b>{{ doc.deterministic.genId }}</b> 결과를 집계하지 못했다: {{ doc.deterministic.reason }}</p>
+{% else %}{% set d = doc.deterministic.summary %}
+  <p class="muted">generation {{ doc.deterministic.genId }} · 케이스 {{ d.cases }}개, 생성 불가 {{ d.unresolved }}건{% if d.universe.theoretical %}, 이론 모수(상한) {{ d.universe.theoretical.value }}{% endif %}</p>
+  <div class="scroll"><table id="det-summary">
+  <tbody>
+    <tr data-det="passStrict"><td>strict 통과</td><td class="num">{{ d.passStrict.passed }}/{{ d.passStrict.total }}</td></tr>
+    <tr data-det="passClass"><td>상태 계열(class) 통과</td><td class="num">{{ d.passClass.passed }}/{{ d.passClass.total }}</td></tr>
+    <tr data-det="verifiedViolations"><td>검증된 위반(위반·짝·baseline 모두 통과)</td><td class="num">{{ d.verifiedViolations }}</td></tr>
+    <tr data-det="blockedByBaseline"><td>baseline 실패로 막힌 위반</td><td class="num">{{ d.blockedByBaseline }}</td></tr>
+    <tr data-det="unpaired"><td>짝 없는 위반(검증 불가)</td><td class="num">{{ d.unpaired }}</td></tr>
+    <tr data-det="classUnknown"><td>관측 코드 없음(실패) / 실행 안 됨</td><td class="num">{{ d.classUnknown }} / {{ d.notRun }}</td></tr>
+    <tr data-det="statusMismatch"><td>bbtg·그래프 기대 상태 불일치</td><td class="num">{{ d.statusMismatch | length }}</td></tr>
+  </tbody></table></div>
+  <div class="scroll"><table id="det-by-rule">
+  <thead><tr><th>규칙</th><th class="num">생성</th><th class="num">strict 통과</th></tr></thead>
+  <tbody>{% for rule, slot in d.byRule.items() %}<tr><td>{{ rule }}</td><td class="num">{{ slot.generated }}</td><td class="num">{{ slot.passedStrict }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% if d.baselineValid %}<p class="muted">baseline-valid: {% for ep, st in d.baselineValid.items() %}<code>{{ ep }}</code> {{ st }}{% if not loop.last %} · {% endif %}{% endfor %}</p>{% endif %}
+{% endif %}
+</section>
+{% endif %}
 
 <h2>generation별 값</h2>
 <p class="muted">점 하나가 generation 하나다. 가로 막대는 [최소, 최대] 범위다.</p>

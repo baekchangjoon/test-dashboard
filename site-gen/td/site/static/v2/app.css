@@ -77,14 +77,14 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 
 /* --- 직접 만드는 리포트(커버리지, Sonar, 방식 비교, 온톨로지, 호스팅 비교) -------------------------------------
    기존 화면의 선택자 이름을 그대로 두고 v2 토큰으로 옮겼다. arm 색·소스 하이라이트·그래프 kind 색은 이 화면들만 쓴다. */
-:root{--arm-base:#8c959f;--arm-jqa:#2a78d6;--arm-owl:#b97a00;--hit:#d3f0df;--hit-fg:#0e3d27;--fg:#131a24;
+:root{--arm-base:#8c959f;--arm-jqa:#2a78d6;--arm-owl:#b97a00;--arm-det:#1a7f37;--hit:#d3f0df;--hit-fg:#0e3d27;--fg:#131a24;
   --k-Endpoint:#2a78d6;--k-Controller:#8250df;--k-Service:#16855a;--k-Repository:#bc4c00;--k-Entity:#9a6700;--k-Field:#6b7686;
   --k-Exception:#cf3d3d;--k-DTO:#0a8aa6;--edge:#8c959f;--match:#fb8500}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--arm-base:#8490a0;--arm-jqa:#4a94ee;--arm-owl:#e0a030;
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--arm-base:#8490a0;--arm-jqa:#4a94ee;--arm-owl:#e0a030;--arm-det:#3fb950;
   --hit:#123824;--hit-fg:#c8f2d8;--fg:#e8edf3;--k-Endpoint:#4a94ee;--k-Controller:#bc8cff;--k-Service:#2bb583;
   --k-Repository:#ffa657;--k-Entity:#e3b341;--k-Field:#8490a0;--k-Exception:#ee6b6b;--k-DTO:#39c5cf;--edge:#6e7681;--match:#ff9f1c}}
 :root[data-theme="dark"]{--bg:#0b1017;--surface:#131a24;--sunk:#0f151d;--ink:#e8edf3;--ink2:#b4bdc9;--muted:#8490a0;--line:#263141;
-  --accent:#4a94ee;--warn:#e0a030;--crit:#ee6b6b;--good:#2bb583;color-scheme:dark;--arm-base:#8490a0;--arm-jqa:#4a94ee;--arm-owl:#e0a030;
+  --accent:#4a94ee;--warn:#e0a030;--crit:#ee6b6b;--good:#2bb583;color-scheme:dark;--arm-base:#8490a0;--arm-jqa:#4a94ee;--arm-owl:#e0a030;--arm-det:#3fb950;
   --hit:#123824;--hit-fg:#c8f2d8;--fg:#e8edf3;--k-Endpoint:#4a94ee;--k-Controller:#bc8cff;--k-Service:#2bb583;
   --k-Repository:#ffa657;--k-Entity:#e3b341;--k-Field:#8490a0;--k-Exception:#ee6b6b;--k-DTO:#39c5cf;--edge:#6e7681;--match:#ff9f1c}
 .tdnav+.top{display:none}
