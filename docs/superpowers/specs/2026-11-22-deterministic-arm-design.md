@@ -40,11 +40,11 @@
    - `S02/bbtg/raw/artifacts/inspect-auth/result.json`: `required_headers`만
    - 읽지 않음: `derive-test-data.json`(columns의 `is_nullable`이 전부 true라 정보 없음, 절대경로 포함), `interceptor_sources`(소스 원문)
 2. `S03/ontology-jqa.json`(기존) + `S03/ontology-jqa-ext.json`(신규, §5.1)
-3. SUT 서술자 `suts/<sut>/sut.yaml`의 `auth` 블록(로그인 엔드포인트, `unauthenticated_status`)과 SUT 타임존. 이는 모든 arm의 하네스가 실행 시점에 이미 쓰는 테스트 인프라 설정이며, `cases.json`에 `harness-config` 출처로 표기한다.
+3. SUT 서술자 `suts/<sut>/sut.yaml`의 `api.include`·`auth` 블록(로그인 엔드포인트, `unauthenticated_status`)과 SUT 타임존(`env/docker-compose.sut.yml`의 `TZ`, 없으면 `td.state.TZ_NAME`). 이는 모든 arm의 하네스가 실행 시점에 이미 쓰는 테스트 인프라 설정이며, `cases.json`에 `harness-config` 출처로 표기한다.
 
 금지: SUT 소스 원문, 기존 IT 원문, 설계 문서, OWL의 LLM 보강분, `oracle.yaml`.
 
-**det 번들(투영)**: S06은 위 목록에서 허용된 필드만 뽑아 `S06/bundles/det/`에 정규화 JSON으로 복사하고 서명한다(기존 `td.bundle`의 서명·검사 방식 재사용, 절대경로 제거 후 redaction 검사). `td.detgen`은 이 번들만 읽는다. 원본 raw 경로를 직접 열지 않는다.
+**det 번들(투영)**: S06 det 경로에서 `td.detgen.inputs.project`가 위 목록에서 허용된 필드만 뽑아 `S06/bundles/det/`에 정규화 JSON으로 복사하고 STAMP(파일별 sha256)를 쓴다. 절대경로를 제거한 뒤 redaction 검사를 한다. 기존 `td.bundle`(LLM arm 번들 조립)은 det를 다루지 않는다. `td.detgen`은 이 번들만 읽는다. 원본 raw 경로를 직접 열지 않는다.
 
 **필수/선택과 누락 처리**:
 - 필수: `ontology-jqa.json`, `ontology-jqa-ext.json`, plan-tests 1개 이상. 없거나 스키마가 깨지면 det는 failed다.
@@ -56,7 +56,7 @@ A1과의 관계: 상위 설계의 A1은 "LLM 호출의 생성 입력"에 대한 
 ### 3.2 결정성
 
 - 해시: 생성기가 실제로 읽는 필드만 뽑아 키 정렬 JSON으로 정규화한 뒤 sha256. 절대경로 필드는 읽지도 해시하지도 않는다. hash8 = 정규화 입력 + 생성기 버전 + glue 체크섬.
-- 실행 시점에 풀리는 값은 기호로 내보낸다. 닫힌 기호 목록: `today±N`(SUT 타임존), `ref:<step>.<jsonField>`(선행 응답 필드), `uniq:<caseId>`(케이스 id에서 파생한 고유 문자열·정수).
+- 실행 시점에 풀리는 값은 기호로 내보낸다. 닫힌 기호 목록: `today±N`(SUT 타임존), `ref:<step>.<jsonField>`(선행 응답 필드), `uniq:<caseId>`(케이스 id에서 파생한 고유 문자열, 도메인 제약이 없는 자유 문자열 필드 전용). 범위 제약이 있는 수치 고유값(방 번호 등)은 생성기가 생성 시점에 구체 리터럴로 확정한다(§5.3).
 - 정렬은 입력 주소 기준.
 
 ## 4. 접근 방식(검토한 안)
@@ -71,7 +71,7 @@ A1과의 관계: 상위 설계의 A1은 "LLM 호출의 생성 입력"에 대한 
 
 ### 5.1 jQA 보강 질의 → `ontology-jqa-ext.json` (G5)
 
-기존 `ontology-jqa.json`, 질의, 스키마, S04, S05 skeleton, td.bundle은 **바꾸지 않는다**(기존 arm 입력과 해시 불변). 새 질의는 `ontology/jqa/queries/ext/` 아래에 두고 S03이 추가로 실행해 별도 파일을 쓴다. 스키마 `ontology-ext.schema.json` 신설.
+기존 `ontology-jqa.json`, 질의, 스키마, S04, S05 skeleton, td.bundle은 **바꾸지 않는다**(기존 arm 입력과 해시 불변). 새 질의는 `ontology/jqa/queries/ext/` 아래에 두고 S03이 추가로 실행해 별도 파일을 쓴다. 스키마 `site-gen/td/schemas/ontology-ext.schema.json` 신설.
 
 | 항목 | 질의 근거(jQA) | 산출 |
 |---|---|---|
@@ -145,7 +145,7 @@ A1과의 관계: 상위 설계의 A1은 "LLM 호출의 생성 입력"에 대한 
 
 **파라미터**: 이름이 null인 파라미터는 bbtg key-params `http_name`으로 이름을 얻는다(타입·순서 대응). 못 얻은 필수 파라미터, 또는 기본값으로는 대상 분기에 못 가는 파라미터는 `param-name-unknown`. 예를 들어 delete의 `confirm`은 기본값 false이고 이름이 입력에 없어서 생성 불가로 기록된다.
 
-**선행 응답 id**: 경로 변수명과 같은 이름의 응답 DTO 최상위 필드를 `ref:`로 쓴다. 없으면 `no-id-ref`.
+**선행 응답 id**: 경로 변수명과 같은 이름의 응답 DTO 최상위 필드를 `ref:`로 쓴다. 없으면 관례 규칙으로 `{<x>Id}` 형태의 경로 변수를 응답의 최상위 `id`에 대응한다(허용 리터럴 §5.6). 둘 다 없으면 `no-id-ref`.
 
 ### 5.3 유효 기준 요청(baseline)
 
@@ -154,13 +154,13 @@ A1과의 관계: 상위 설계의 A1은 "LLM 호출의 생성 입력"에 대한 
 - 형식 제약 필드는 §5.6의 형식 휴리스틱으로 채우고 `assumes: format-heuristic`을 기록한다.
 - 고유값(방 번호 등 충돌 가능 필드)은 유효 범위 안에서 caseId 해시로 분산하되, 경계값(유효 경계 케이스가 쓰는 값)은 분산 대상에서 뺀다.
 - update 계열 boxed/nullable 필드는 최소 요청이다. 대상 필드만 채우고 나머지는 생략한다.
-- **baseline 점검 케이스**: 본문 엔드포인트마다 `baseline-valid` 1건(기대 2xx). 이 케이스가 실패하면 같은 엔드포인트의 위반 케이스 통과는 `blocked-by-baseline`으로 따로 집계한다. "검증된 위반" = 위반 케이스 통과 + 짝 유효 경계 케이스 통과 + baseline 통과.
+- **baseline 점검 케이스**: 위반 케이스가 하나라도 있는 엔드포인트마다(본문 유무와 무관, GET의 파라미터 위반 포함) 기본 유효 값으로 `baseline-valid` 1건(기대 2xx). 이 케이스가 실패하면 같은 엔드포인트의 위반 케이스 통과는 `blocked-by-baseline`으로 따로 집계한다. "검증된 위반" = 위반 케이스 통과 + 짝 유효 경계 케이스 통과 + baseline 통과.
 
 ### 5.4 산출물과 실행 규약
 
 - 위치: `e2e/generated/<sut>/det/det-<hash8>-r1/{features/, glue/support/, cases.json, _COMPLETE}`.
 - `features/`: 엔드포인트별 feature 파일. 시나리오 태그 `@case:<id>`.
-- `glue/support/`: 저장소 고정 소스 `e2e/det-glue/`를 복사하고 체크섬을 기록한다. feature별 Steps 클래스는 만들지 않는다(중복 step 방지, `e2e/harness/CONTRACT.md` 배치 규약 준수). 하네스 API(`baseUrl/authed/anonymous`)와 허용 의존성(Cucumber 8.1.0, REST Assured 5.5.1, AssertJ)만 쓴다. `@Before`/`@After`는 쓰지 않는다. 기호 해석(`today±N`은 SUT 타임존, `ref:`, `uniq:`)은 glue가 맡는다.
+- `glue/support/`: 저장소 고정 소스 `e2e/det-glue/`를 복사하고 체크섬을 기록한다. feature별 Steps 클래스는 만들지 않는다(중복 step 방지). 이는 `e2e/harness/CONTRACT.md`의 "feature마다 Steps 클래스" 규약에 대한 det 전용 예외이며, `glue/support/` 아래 배치만 허용하는 `td.scenarios.layout_violations`는 그대로 통과한다. CONTRACT.md에 이 예외를 한 줄로 적는다. 하네스 API(`baseUrl/authed/anonymous`)와 허용 의존성(Cucumber 8.1.0, REST Assured 5.5.1, AssertJ)만 쓴다. `@Before`/`@After`는 쓰지 않는다. 기호 해석(`today±N`은 SUT 타임존, `ref:`, `uniq:`)은 glue가 맡는다.
 - S06 det 경로: `td.detgen`이 생성한 뒤 기존 `td.scenarios` 컴파일 확인과 dry-run을 돌린다. undefined step 0과 컴파일 성공일 때만 `_COMPLETE`를 기록한다. 입력 누락, 스키마 불일치, 파서 예외가 나면 det arm은 failed이고 사유를 기록한다. 다른 arm에는 영향이 없다.
 - `cases.json`: `{cases:[{id, endpoint, rule, sources:[addr], values:{field:{value, provenance: input|derived|generic-sentinel, from?, transform?}}, expect:{strict,class,bbtgCode?,graphStatus?,source}, oracle, assumes[], baselineProof, pair?}], unresolved:[{source, reason}], universe:{bySlot, byRule, theoretical:{value, formula, factors}}}`.
   - `provenance`: `input`은 입력값 그대로, `derived`는 입력값에 경계 연산(±step)을 한 값, `generic-sentinel`은 §5.6 허용 리터럴과 `uniq:` 값이다.
@@ -171,7 +171,7 @@ A1과의 관계: 상위 설계의 A1은 "LLM 호출의 생성 입력"에 대한 
 
 ### 5.5 통합 변경 목록
 
-- arm 목록·패턴: `site-gen/td/bundle.py`(ARMS — det 번들 없음, det는 번들 조립 대상에서 제외), `testid.py`, `compare.py`(ARMS_ORDER, DOT_COLORS, 입력 체제 표기; `verdict.judge`에는 base·jqa·owl만 명시적으로 넘기고, det는 별도 `deterministic` 결과 블록으로 보고), `state.py`(ARMS_ALL, `ARM_DEPENDENCIES["det"]=("S02","S03")`), `scenarios.py`·`tia.py`(genId 정규식), `pipeline/run-all.sh`(arms 검증), `schemas/bdd-gen.schema.json`(genId 패턴, arm enum, det 분기: LLM 필드 대신 `generator{name,version,glueChecksum}`), `schemas/compare.schema.json`, `e2e/harness/.../TestIds.java`와 `TestIdsTest`, `site.css`(`--arm-det` 토큰).
+- arm 목록·패턴: `site-gen/td/bundle.py`(ARMS — det 번들 없음, det는 번들 조립 대상에서 제외), `testid.py`, `compare.py`(ARMS_ORDER, DOT_COLORS, 입력 체제 표기; `verdict.judge`에는 base·jqa·owl만 명시적으로 넘기고, det는 별도 `deterministic` 결과 블록으로 보고), `state.py`(ARMS_ALL, `ARM_DEPENDENCIES["det"]=("S03",)` — S02는 모든 arm 공통으로 앞에 붙는다), `scenarios.py`·`tia.py`(genId 정규식), `pipeline/run-all.sh`(arms 검증), `site-gen/td/schemas/bdd-gen.schema.json`(genId 패턴, arm enum, det 분기: LLM 필드 대신 `generator{name,version,glueChecksum}`), `site-gen/td/schemas/compare.schema.json`, `e2e/harness/.../TestIds.java`와 `TestIdsTest`, `site.css`(`--arm-det` 토큰).
 - 기본 arms는 `base,jqa,owl` 그대로 두고, det는 `--arms`로 명시할 때만 돈다.
 - S03: ext 질의 실행과 ext 파일 기록. S04, S05는 변경 없음.
 - 문서: 상위 설계(§5, §6.6, §6.12, §13.5의 arm 목록·reps 서술), 요구사항명세(det REQ 추가), README(`--arms det`), 백서 §5.3(DTO 필드 정정)과 det 결과 절.
@@ -181,6 +181,7 @@ A1과의 관계: 상위 설계의 A1은 "LLM 호출의 생성 입력"에 대한 
 
 - Spring 문법: `ResponseEntity`/`HttpStatus` 빌더→코드 표, 매핑 애노테이션 이름.
 - Java 문법: 비교 연산자, `length()`, `equals`, `isAfter`/`isBefore`, `now()`, `matcher().matches()`, `== null`.
+- 경로 변수 관례: 접미사 `Id`(`{<x>Id}` → 응답 `id`).
 - 형식 휴리스틱: 패턴 상수 이름에 `EMAIL` 토큰이 있으면 유효 `uniq@example.com`, 위반 `not-an-email`. 그 외 패턴은 `format-unknown`(생성 불가).
 - 수치: `LARGE_NUMBER = 1000000`, step(정수 1, 실수 0.01).
 
@@ -213,9 +214,9 @@ A1과의 관계: 상위 설계의 A1은 "LLM 호출의 생성 입력"에 대한 
 - AT-7 생성 불가 보고: `unresolved`의 모든 항목에 reason 코드가 있고, 슬롯 기준으로 규칙 모수 = 생성 + 생성 불가.
 - AT-8 파이프라인 통합: `run-all --arms base,jqa,owl,det`가 S07~S12를 통과한다. 비교 결과와 대시보드에 det가 입력 체제 표기와 함께 참고 열로 나온다. 기존 arm은 스냅샷 재사용으로 LLM 0회다.
 - AT-9 통제 fixture: 모든 값이 입력에서 해결되는 합성 입력(생성기 단위)에서 unresolved 0건이고, 기대 케이스 목록과 정확히 일치한다.
+- AT-10 S06 det 실패 처리: 입력 파일 누락이나 파서 예외가 나면 det arm만 failed이고 사유가 기록되며, 다른 arm은 계속 진행한다.
 - AT-11 엔드포인트 대응: bbtg 계획 메서드 6개가 각각 정확히 한 엔드포인트에 대응한다. 대응이 0개이거나 여러 개면 `no-endpoint-mapping`이 된다.
 - AT-12 입력 투영: det 번들에 금지 필드(`interceptor_sources`, 절대경로)가 없다. detgen이 번들 밖 파일을 열면 실패한다(주입 테스트).
-- AT-10 S06 det 실패 처리: 입력 파일 누락이나 파서 예외가 나면 det arm만 failed이고 사유가 기록되며, 다른 arm은 계속 진행한다.
 - 각 규칙과 연산자 정규화는 fixture 기반 단위 테스트를 둔다.
 
 완료 정의: 위 AT 전부 green, 요구사항명세 매트릭스 100%, 스위트 종료 후 테스트가 띄운 컨테이너·프로세스 잔존 0, 백서 갱신.
