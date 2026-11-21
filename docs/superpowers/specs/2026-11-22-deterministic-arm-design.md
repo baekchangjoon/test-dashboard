@@ -180,7 +180,8 @@ A1과의 관계: 상위 설계의 A1은 "LLM 호출의 생성 입력"에 대한 
 ### 5.6 생성기 허용 리터럴(닫힌 목록)
 
 - Spring 문법: `ResponseEntity`/`HttpStatus` 빌더→코드 표, 매핑 애노테이션 이름.
-- Java 문법: 비교 연산자, `length()`, `equals`, `isAfter`/`isBefore`, `now()`, `matcher().matches()`, `== null`.
+- Java 문법: 비교 연산자, `length()`, `equals`, `isAfter`/`isBefore`, `LocalDate`/`LocalDateTime`의 `now()`와 `plus*`/`minus*`/`atStartOfDay` 연쇄, `matcher().matches()`, `== null`, Spring Data 파생 질의 접두사 `count`.
+- bbtg 관례: 저장 상태 수신자 이름 `existing`(bbtg 조건식이 쓰는 이름, §5.2 피연산자 분류).
 - 경로 변수 관례: 접미사 `Id`(`{<x>Id}` → 응답 `id`).
 - 형식 휴리스틱: 패턴 상수 이름에 `EMAIL` 토큰이 있으면 유효 `uniq@example.com`, 위반 `not-an-email`. 그 외 패턴은 `format-unknown`(생성 불가).
 - 수치: `LARGE_NUMBER = 1000000`, step(정수 1, 실수 0.01).
