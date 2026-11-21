@@ -6,6 +6,39 @@
   "additionalProperties": false,
   "$defs": {
     "ratio": {"type": ["number", "null"]},
+    "count": {"type": "integer", "minimum": 0},
+    "passCount": {
+      "type": "object", "required": ["passed", "total"], "additionalProperties": false,
+      "properties": {"passed": {"$ref": "#/$defs/count"}, "total": {"$ref": "#/$defs/count"}}
+    },
+    "inputRegime": {
+      "type": "object", "required": ["llm", "conditions", "graph"], "additionalProperties": false,
+      "properties": {"llm": {"type": "boolean"}, "conditions": {"type": "boolean"},
+                     "graph": {"enum": ["none", "jqa", "owl", "jqa+ext"]}}
+    },
+    "detSummary": {
+      "type": "object",
+      "required": ["cases", "unresolved", "universe", "passStrict", "passClass", "classUnknown", "notRun", "classUnknownCases",
+                   "baselineValid", "blockedByBaseline", "verifiedViolations", "unpaired", "byRule", "statusMismatch"],
+      "additionalProperties": false,
+      "properties": {
+        "cases": {"$ref": "#/$defs/count"}, "unresolved": {"$ref": "#/$defs/count"}, "universe": {"type": "object"},
+        "passStrict": {"$ref": "#/$defs/passCount"}, "passClass": {"$ref": "#/$defs/passCount"},
+        "classUnknown": {"$ref": "#/$defs/count"}, "notRun": {"$ref": "#/$defs/count"},
+        "classUnknownCases": {"type": "array", "items": {"type": "object", "required": ["case", "reason"], "additionalProperties": false,
+                              "properties": {"case": {"type": "string"}, "reason": {"type": "string"}}}},
+        "baselineValid": {"type": "object", "additionalProperties": {"enum": ["passed", "failed", "notRun"]}},
+        "blockedByBaseline": {"$ref": "#/$defs/count"}, "verifiedViolations": {"$ref": "#/$defs/count"},
+        "unpaired": {"$ref": "#/$defs/count"},
+        "byRule": {"type": "object", "additionalProperties": {
+          "type": "object", "required": ["generated", "passedStrict"], "additionalProperties": false,
+          "properties": {"generated": {"$ref": "#/$defs/count"}, "passedStrict": {"$ref": "#/$defs/count"}}}},
+        "statusMismatch": {"type": "array", "items": {
+          "type": "object", "required": ["case", "bbtgCode", "graphStatus", "observed"], "additionalProperties": false,
+          "properties": {"case": {"type": "string"}, "bbtgCode": {"type": "integer"}, "graphStatus": {"type": "integer"},
+                         "observed": {"type": ["integer", "null"]}}}}
+      }
+    },
     "stat": {
       "type": "object", "required": ["mean", "min", "max", "n", "values"], "additionalProperties": false,
       "properties": {
@@ -22,6 +55,21 @@
     "label": {"const": "탐색적 관찰"},
     "warnings": {"type": "array", "items": {"type": "string"}},
     "reps": {"type": ["integer", "null"]},
+    "requestedRepsByArm": {
+      "type": "object", "propertyNames": {"enum": ["base", "jqa", "owl", "det"]},
+      "additionalProperties": {"type": "integer", "minimum": 1}
+    },
+    "deterministic": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "object", "required": ["genId", "status", "reason", "summary"], "additionalProperties": false,
+         "properties": {"genId": {"type": "string", "pattern": "^det-[0-9a-f]{8}-r1$"}, "status": {"const": "measured"},
+                        "reason": {"type": "null"}, "summary": {"$ref": "#/$defs/detSummary"}}},
+        {"type": "object", "required": ["genId", "status", "reason", "summary"], "additionalProperties": false,
+         "properties": {"genId": {"type": "string"}, "status": {"const": "failed"},
+                        "reason": {"type": "string", "minLength": 1}, "summary": {"type": "null"}}}
+      ]
+    },
     "endpoints": {
       "type": "object", "required": ["denominator", "ids"], "additionalProperties": false,
       "properties": {
@@ -40,14 +88,16 @@
     },
     "arms": {
       "type": "object", "minProperties": 1,
-      "propertyNames": {"enum": ["base", "jqa", "owl"]},
+      "propertyNames": {"enum": ["base", "jqa", "owl", "det"]},
       "additionalProperties": {
         "type": "object", "required": ["arm", "status", "reason", "measured", "metrics", "generations"], "additionalProperties": false,
         "properties": {
-          "arm": {"enum": ["base", "jqa", "owl"]},
+          "arm": {"enum": ["base", "jqa", "owl", "det"]},
           "status": {"enum": ["ok", "skipped"]},
           "reason": {"type": ["string", "null"]},
           "reps": {"type": ["integer", "null"]},
+          "requestedReps": {"type": ["integer", "null"], "minimum": 1},
+          "inputRegime": {"$ref": "#/$defs/inputRegime"},
           "measured": {"type": "integer", "minimum": 0},
           "failedGenerations": {"type": "array", "items": {"type": "object", "required": ["genId", "reason"],
                                 "properties": {"genId": {"type": "string"}, "reason": {"type": ["string", "null"]}}}},

@@ -1179,3 +1179,119 @@ def test_det_validation_issue_is_failed_without_repair(tmp_path):
     assert result.status == "failed" and "undefined" in result.reason and len(calls) == 1
     assert not (out_root / "det" / result.gen_id).exists()
     assert not list((out_root / "det").glob(".tmp-*")) and not list((out_root / "det" / ".reserve").iterdir())
+
+
+# --- Task 8: 결과 집계(td.detgen.results) ----------------------------------------------------------
+_SUMMARY_GEN_ID = "det-0123abcd-r1"
+
+
+def _case(case_id, endpoint, rule, strict, klass, pair=None, bbtg=None, graph=None):
+    expect = {"strict": strict, "class": klass, "source": "rule"}
+    if bbtg is not None:
+        expect["bbtgCode"] = bbtg
+    if graph is not None:
+        expect["graphStatus"] = graph
+    entry = {"id": case_id, "endpoint": endpoint, "rule": rule, "sources": [f"src:{case_id}"], "values": {}, "expect": expect,
+             "oracle": "status", "assumes": [], "baselineProof": [], "auth": "authed", "setup": []}
+    if pair is not None:
+        entry["pair"] = pair
+    return entry
+
+
+# (case, endpoint, rule, strict, class, pair, bbtgCode, graphStatus, 실행 결과, 관측 코드)
+_SUMMARY_CASES = [
+    ("a-base", "POST /a", "baseline-valid", "2xx", "2xx", None, None, None, "passed", None),
+    ("a-vb", "POST /a", "valid-boundary", "2xx", "2xx", None, None, None, "passed", None),
+    ("a-v1", "POST /a", "violation", 400, "4xx", "a-vb", 400, 422, "failed", 422),     # strict 실패, class 통과, 상태 불일치
+    ("a-v2", "POST /a", "violation", "4xx", "4xx", "a-vb", 400, 400, "passed", None),  # 검증된 위반
+    ("a-v3", "POST /a", "violation", "4xx", "4xx", None, None, None, "passed", None),  # 짝 없음
+    ("b-base", "PUT /b", "baseline-valid", "2xx", "2xx", None, None, None, "failed", 500),
+    ("b-v1", "PUT /b", "violation", 400, "4xx", "b-vb", 400, 422, "passed", None),     # baseline 실패로 막힘
+    ("b-vb", "PUT /b", "valid-boundary", "2xx", "2xx", None, None, None, "passed", None),
+    ("b-v2", "PUT /b", "violation", "4xx", "4xx", "b-vb", None, None, "failed", None),  # 관측 코드 없음
+    ("c-h", "GET /c", "happy", "2xx", "2xx", None, None, None, "undefined", None),      # 실행 안 됨
+]
+
+
+def make_det_results(root: Path, gen_id: str = _SUMMARY_GEN_ID, rows=None) -> tuple[Path, Path]:
+    """합성 det generation 디렉터리와 S07 generation 디렉터리(cucumber.json, scenario-results.json)."""
+    from td import scenarios
+    rows = rows if rows is not None else _SUMMARY_CASES
+    gen_dir = root / "generated" / gen_id
+    s07_dir = root / "S07" / gen_id
+    (gen_dir / "features").mkdir(parents=True)
+    s07_dir.mkdir(parents=True)
+    by_endpoint: dict[str, list] = {}
+    for row in rows:
+        by_endpoint.setdefault(row[1], []).append(row)
+    features = []
+    for index, (endpoint, items) in enumerate(sorted(by_endpoint.items())):
+        lines = [f"Feature: {endpoint}", ""]
+        elements = []
+        for row in items:
+            case_id, status, code = row[0], row[8], row[9]
+            lines += [f"  @case:{case_id}", f"  Scenario: {case_id}", f'    Given the case "{case_id}"',
+                      "    When the request is sent", "    Then the response status is in class \"2xx\"", ""]
+            message = None
+            if status == "failed":
+                message = (f"java.lang.AssertionError: [DET-STATUS {case_id} {code}] expected" if code is not None
+                           else "java.net.ConnectException: Connection refused")
+            last = {"status": status if status != "undefined" else "undefined"}
+            if message:
+                last["error_message"] = message
+            elements.append({"type": "scenario", "tags": [{"name": f"@case:{case_id}"}],
+                             "steps": [{"name": f'the case "{case_id}"', "result": {"status": "passed"}},
+                                       {"name": "the response status", "result": last}]})
+        (gen_dir / "features" / f"f{index}.feature").write_text("\n".join(lines), encoding="utf-8")
+        features.append({"uri": f"features/f{index}.feature", "elements": elements})
+    (s07_dir / "cucumber.json").write_text(json.dumps(features), encoding="utf-8")
+    statuses = {row[0]: row[8] for row in rows}
+    ident = scenarios.GenIdent.from_gen_id(gen_id)
+    refs = scenarios.pickle_refs(gen_dir, ident)
+    with (s07_dir / "scenario-results.json").open("w", encoding="utf-8") as handle:
+        for ref in refs:
+            handle.write(json.dumps({"testId": ref.test_id, "status": statuses[ref.name], "requests": 1, "exec": None}) + "\n")
+    cases = [_case(r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7]) for r in rows]
+    universe = {"bySlot": {"total": len(rows) + 1, "generated": len(rows), "unresolved": 1, "deduplicated": 0, "byReason": {}},
+                "byRule": {}, "theoretical": {"value": 42, "formula": "f", "factors": [
+                    {"endpoint": "POST /a", "fields": {"body.x": 3}, "product": 3},
+                    {"endpoint": "PUT /b", "item": "src:b", "atom": "count", "kind": "concurrency-race", "outOfScope": True}]}}
+    (gen_dir / "cases.json").write_text(json.dumps({"cases": cases, "unresolved": [{"source": "src:u", "reason": "unparsed"}],
+                                                    "universe": universe}), encoding="utf-8")
+    return gen_dir, s07_dir
+
+
+def test_results_summarize(tmp_path):
+    from td.detgen import results
+    gen_dir, s07_dir = make_det_results(tmp_path)
+    summary = results.summarize(gen_dir, s07_dir)
+    assert summary["cases"] == 10 and summary["unresolved"] == 1
+    assert summary["universe"]["theoretical"]["value"] == 42
+    assert summary["passStrict"] == {"passed": 6, "total": 10}
+    assert summary["passClass"] == {"passed": 7, "total": 10}  # a-v1은 관측 422가 4xx라 class 통과
+    assert summary["baselineValid"] == {"POST /a": "passed", "PUT /b": "failed"}
+    assert summary["blockedByBaseline"] == 2      # PUT /b의 위반 b-v1, b-v2
+    assert summary["verifiedViolations"] == 1     # a-v2만(a-v1 실패, a-v3 짝 없음, b-v1 baseline 실패)
+    assert summary["unpaired"] == 1
+    assert summary["classUnknown"] == 1           # b-v2: 실패했지만 관측 코드가 없다
+    assert summary["notRun"] == 1                 # c-h: undefined
+    assert summary["byRule"] == {"baseline-valid": {"generated": 2, "passedStrict": 1},
+                                 "happy": {"generated": 1, "passedStrict": 0},
+                                 "valid-boundary": {"generated": 2, "passedStrict": 2},
+                                 "violation": {"generated": 5, "passedStrict": 3}}
+    assert summary["statusMismatch"] == [{"case": "a-v1", "bbtgCode": 400, "graphStatus": 422, "observed": 422},
+                                         {"case": "b-v1", "bbtgCode": 400, "graphStatus": 422, "observed": 400}]
+    reasons = {item["case"]: item["reason"] for item in summary["classUnknownCases"]}
+    assert set(reasons) == {"b-v2", "c-h"} and "undefined" in reasons["c-h"]
+
+
+def test_results_summarize_without_s07_outputs(tmp_path):
+    """S07 결과가 없으면 모든 케이스가 실행 안 됨으로 집계되고 예외가 나지 않는다."""
+    from td.detgen import results
+    gen_dir, s07_dir = make_det_results(tmp_path)
+    (s07_dir / "cucumber.json").unlink()
+    (s07_dir / "scenario-results.json").unlink()
+    summary = results.summarize(gen_dir, s07_dir)
+    assert summary["passStrict"] == {"passed": 0, "total": 10} and summary["notRun"] == 10
+    assert summary["verifiedViolations"] == 0 and summary["blockedByBaseline"] == 0
+    assert summary["baselineValid"] == {"POST /a": "notRun", "PUT /b": "notRun"}

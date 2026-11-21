@@ -4,6 +4,7 @@
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -435,3 +436,87 @@ def test_req067_focus_labels_and_theme_tokens(tmp_path):
     assert "var(--arm-jqa)" in html and "#0969da" not in html
     css = (REPO_ROOT / "site-gen" / "td" / "site" / "static" / "v2" / "app.css").read_text()
     assert css.count("--arm-jqa") >= 3  # 라이트, 어두운 모드(OS), data-theme=dark
+
+
+# --- det 참고 열(Task 8, REQ-108/114/115) ---------------------------------------------------------
+DET_GEN = "det-cccccccc-r1"
+ALL_COVERED = {handler for _, _, handler in _handlers()}
+
+
+def add_det_arm(run_dir: Path, tmp_path: Path, monkeypatch, *, covered=ALL_COVERED, passed=10) -> None:
+    """합성 run에 det generation 하나를 붙인다(요청 arm, S06, S07, S08, 생성 디렉터리)."""
+    from test_unit_detgen import make_det_results
+    run = state.read_run(run_dir)
+    state.set_run_field(run_dir, "options", {**run["options"], "arms": ["base", "jqa", "owl", "det"]})
+    state.set_run_field(run_dir, "requestedRepsByArm", {"base": 2, "jqa": 2, "owl": 2, "det": 1})
+    bdd = json.loads((run_dir / "S06" / "bdd-gen.json").read_text())
+    bdd["generations"].append({"genId": DET_GEN, "arm": "det", "rep": 1, "tokens": None, "seconds": 3.0, "status": "passed",
+                               "reason": None})
+    (run_dir / "S06" / "bdd-gen.json").write_text(json.dumps(bdd))
+    stage = json.loads((run_dir / "stages" / "S06.json").read_text())
+    stage["arms"]["det"] = {"status": "passed", "generations": [DET_GEN]}
+    stage["generations"][DET_GEN] = {"arm": "det", "rep": 1, "status": "passed"}
+    (run_dir / "stages" / "S06.json").write_text(json.dumps(stage))
+    generated = tmp_path / "e2e-generated"
+    gen_dir, s07_dir = make_det_results(tmp_path / "detsrc", DET_GEN)
+    target = generated / "petclinic" / "det" / DET_GEN
+    target.parent.mkdir(parents=True)
+    shutil.move(str(gen_dir), target)
+    shutil.copytree(s07_dir, run_dir / "S07" / DET_GEN)
+    (run_dir / "S07" / DET_GEN / "summary.json").write_text(json.dumps({
+        "scenarios": 10, "statusCounts": {"passed": passed, "failed": 10 - passed, "undefined": 0, "uncompilable": 0},
+        "undefinedRatio": 0.0}))
+    _write_xml(run_dir / "S08" / f"e2e-{DET_GEN}" / "attributed" / "jacoco.xml", covered_methods=covered,
+               oracle_lines={49, 52, 55, 64, 70, 73, 76, 124, 128, 159}, service_line=(20, 0), service_branch=(24, 0), rrc_line=(8, 0))
+    coverage = json.loads((run_dir / "S08" / "coverage.json").read_text())
+    coverage["suites"][f"e2e-{DET_GEN}"] = {"kpis": {"line": 0.9, "branch": 0.9}, "tcCount": 10, "attributedCount": 10,
+                                            "paths": {"attributed": {"xml": f"e2e-{DET_GEN}/attributed/jacoco.xml"}}}
+    (run_dir / "S08" / "coverage.json").write_text(json.dumps(coverage))
+    monkeypatch.setenv("TD_E2E_GENERATED_DIR", str(generated))
+
+
+def test_det_excluded_from_verdict(tmp_path, monkeypatch):
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    without = collect(make_compare_run(tmp_path / "a"))
+    run_dir = make_compare_run(tmp_path / "b")
+    add_det_arm(run_dir, tmp_path / "b", monkeypatch)  # det는 모든 판정 기준을 크게 넘는다
+    document = collect(run_dir)
+    jsonschema.validate(document, json.loads(SCHEMA.read_text()))
+    assert document["arms"]["det"]["status"] == "ok"
+    assert document["arms"]["det"]["metrics"]["endpoint"]["mean"] == 1.0
+    assert document["verdict"] == without["verdict"]
+    assert "det" not in json.dumps(document["verdict"]["detail"])
+    # arm별 요청 반복 수와 입력 체제
+    assert document["requestedRepsByArm"] == {"base": 2, "jqa": 2, "owl": 2, "det": 1}
+    assert {arm: entry["requestedReps"] for arm, entry in document["arms"].items()} == {"base": 2, "jqa": 2, "owl": 2, "det": 1}
+    assert document["arms"]["det"]["inputRegime"] == {"llm": False, "conditions": True, "graph": "jqa+ext"}
+    assert document["arms"]["base"]["inputRegime"] == {"llm": True, "conditions": False, "graph": "none"}
+    assert document["arms"]["jqa"]["inputRegime"] == {"llm": True, "conditions": False, "graph": "jqa"}
+    assert document["arms"]["owl"]["inputRegime"] == {"llm": True, "conditions": False, "graph": "owl"}
+    det = document["deterministic"]
+    assert det["genId"] == DET_GEN and det["status"] == "measured"
+    assert det["summary"]["passStrict"] == {"passed": 6, "total": 10} and det["summary"]["verifiedViolations"] == 1
+
+
+def test_det_absent_keeps_document_shape(tmp_path):
+    document = collect(make_compare_run(tmp_path))
+    jsonschema.validate(document, json.loads(SCHEMA.read_text()))
+    assert "det" not in document["arms"] and document["deterministic"] is None
+    assert document["requestedRepsByArm"] == {"base": 2, "jqa": 2, "owl": 2}
+
+
+def test_det_reference_column(tmp_path, monkeypatch):
+    run_dir = make_compare_run(tmp_path)
+    add_det_arm(run_dir, tmp_path, monkeypatch, covered=BASE_COVERED, passed=6)
+    out = tmp_path / "out"
+    out.mkdir()
+    html = compare.render_page(out, collect(run_dir)).read_text()
+    header = re.search(r'<table id="compare-table">.*?</thead>', html, re.S).group(0)
+    assert 'data-arm="det"' in header and "det (n=1/1)" in header
+    assert "base (n=1/2)" in header and "jqa (n=1/2)" in header and "owl (skipped)" in header
+    assert "LLM 없음, 조건식 포함" in html
+    assert "var(--arm-det)" in html
+    assert 'id="deterministic"' in html
+    css = (REPO_ROOT / "site-gen" / "td" / "site" / "static" / "site.css").read_text()
+    assert css.count("--arm-det:") == 3
