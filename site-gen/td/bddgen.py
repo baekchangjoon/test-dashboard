@@ -451,7 +451,7 @@ def run_stage(run_dir, sut_file, sut_src, regenerate: bool, *, llm=call_llm, val
     inputs: dict[str, dict] = {}
     plan = state.arm_plan(run_dir)
     # det는 요청 reps와 무관하게 항상 1회다(설계 §5.4). 화면·비교는 arm별 분모를 쓴다.
-    state.set_run_field(run_dir, "requestedRepsByArm", {arm: (1 if arm == "det" else reps) for arm in plan})
+    state.set_run_field(run_dir, "requestedRepsByArm", state.reps_by_arm(plan, reps))
     for arm, skip_reason in plan.items():
         if skip_reason:
             arms[arm] = {"status": "skipped", "reason": skip_reason}

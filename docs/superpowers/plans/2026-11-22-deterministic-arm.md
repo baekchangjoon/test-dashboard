@@ -292,7 +292,7 @@
 
 **Files:**
 - Modify:
-  - `site-gen/td/state.py` — `ARMS_ALL`에 `"det"`, `ARM_DEPENDENCIES["det"] = ("S03",)`, `requested_reps_by_arm(run_dir) -> dict[str,int]`
+  - `site-gen/td/state.py` — `ARMS_DEFAULT`(base,jqa,owl 유지)와 `ARMS_KNOWN`(+det), `ARM_DEPENDENCIES["det"] = ("S03",)`, `requested_reps_by_arm(run_dir) -> dict[str,int]`
   - `site-gen/td/testid.py` — `ARMS`
   - `site-gen/td/scenarios.py:37`, `site-gen/td/tia.py:107` — genId 정규식 `(base|jqa|owl|det)`
   - `site-gen/td/bundle.py` — `ARMS`는 그대로 둔다. det는 bundle 조립을 쓰지 않으므로 `build_bundle`은 det에서 호출되지 않아야 한다. 단정만 추가한다.
