@@ -827,3 +827,193 @@ def test_race_factor_per_count_atom(tmp_path):
     universe = derive_module.derive(_controlled(tmp_path, two_counts)).universe
     races = [f for f in universe["theoretical"]["factors"] if f.get("kind") == "concurrency-race"]
     assert sorted(f["atom"] for f in races) == ["0.0", "1.0"]
+
+
+# --- Task 5: 렌더러와 고정 glue(REQ-104, REQ-105, REQ-116 일부) ----------------------------------------
+
+import re  # noqa: E402
+
+from td.detgen import render as render_module  # noqa: E402
+
+_PLAN_ADDR = re.compile(r"^(?P<file>[^#]+)#(?P<index>[0-9.]+)@(?P<sha>[0-9a-f]{12})$")
+_CASE_TAG = re.compile(r"^\s*@case:(\S+)\s*$", re.MULTILINE)
+
+
+def _tree_digest(root: Path) -> dict:
+    return {path.relative_to(root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in sorted(root.rglob("*")) if path.is_file()}
+
+
+def _render_controlled(tmp_path, name="out"):
+    derivation = derive_module.derive(_controlled(tmp_path / f"{name}-bundle"))
+    out = tmp_path / name
+    return derivation, out, render_module.render(derivation, out)
+
+
+def _bundle_addresses(bundle: inputs.Bundle) -> dict:
+    """번들 항목 주소 → sha 앞 12자리. 계획 항목은 conditionSha, keyparams 분기 사유는 sha256(detail)이다."""
+    known = {}
+    for plan in bundle.read("plans.json"):
+        for item in plan["items"]:
+            known[f"{plan['file']}#{item['index']}"] = item["conditionSha"][:12]
+    for keyparams in bundle.read("keyparams.json"):
+        for p_index, param in enumerate(keyparams.get("parameters", [])):
+            for r_index, reason in enumerate(param["reasons"]):
+                known[f"{keyparams['file']}#{p_index}.{r_index}"] = hashlib.sha256(reason["detail"].encode("utf-8")).hexdigest()[:12]
+    return known
+
+
+def _check_provenance(bundle: inputs.Bundle, derivation, out: Path) -> None:
+    cases_doc = json.loads((out / "cases.json").read_text(encoding="utf-8"))
+    ids = [case["id"] for case in cases_doc["cases"]]
+    assert len(ids) == len(set(ids)) == len(derivation.cases)
+    tags = []
+    for feature in sorted((out / "features").glob("*.feature")):
+        tags += _CASE_TAG.findall(feature.read_text(encoding="utf-8"))
+    assert sorted(tags) == sorted(ids)
+    known = _bundle_addresses(bundle)
+    plan_sources = 0
+    for case in cases_doc["cases"]:
+        assert case["sources"], case["id"]
+        for source in case["sources"]:
+            match = _PLAN_ADDR.match(source)
+            if source.startswith(("graph:", "harness:")):
+                continue
+            assert match, source
+            assert known.get(f"{match['file']}#{match['index']}") == match["sha"], source
+            plan_sources += 1
+        entries = list(case["values"].values()) + [entry for prior in case["setup"] for entry in prior["values"].values()]
+        for entry in entries:
+            assert entry["provenance"] in ("input", "derived", "generic-sentinel"), (case["id"], entry)
+            assert "value" in entry
+    assert plan_sources > 0
+    assert cases_doc["unresolved"] == derivation.unresolved
+    assert cases_doc["universe"] == derivation.universe
+
+
+def test_req104_deterministic(tmp_path):
+    _, out_a, written_a = _render_controlled(tmp_path / "a")
+    _, out_b, written_b = _render_controlled(tmp_path / "b")
+    assert written_a == written_b == sorted(written_a)
+    digest_a = _tree_digest(out_a)
+    assert digest_a == _tree_digest(out_b)
+    assert sorted(digest_a) == written_a
+    assert "cases.json" in digest_a and any(name.startswith("features/") for name in digest_a)
+    text = "\n".join((out_a / name).read_text(encoding="utf-8") for name in written_a)
+    assert str(tmp_path) not in text and redact.find_leaks(text) == []
+
+
+def test_req105_provenance(tmp_path):
+    bundle = _controlled(tmp_path / "c")
+    derivation = derive_module.derive(bundle)
+    render_module.render(derivation, tmp_path / "c-out")
+    _check_provenance(bundle, derivation, tmp_path / "c-out")
+    real = _real_bundle(tmp_path / "r")
+    real_derivation = derive_module.derive(real)
+    render_module.render(real_derivation, tmp_path / "r-out")
+    _check_provenance(real, real_derivation, tmp_path / "r-out")
+
+
+def test_render_cases_json_shape(tmp_path):
+    derivation, out, _ = _render_controlled(tmp_path)
+    raw = (out / "cases.json").read_text(encoding="utf-8")
+    doc = json.loads(raw)
+    assert raw == json.dumps(doc, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+    assert set(doc) == {"cases", "unresolved", "universe"}
+    by_id = {case.id: case for case in derivation.cases}
+    for row in doc["cases"]:
+        case = by_id[row["id"]]
+        assert {"id", "endpoint", "rule", "sources", "values", "expect", "oracle", "assumes", "baselineProof",
+                "auth", "setup"} <= set(row) <= {"id", "endpoint", "rule", "sources", "values", "expect", "oracle",
+                                                 "assumes", "baselineProof", "auth", "setup", "pair"}
+        assert row.get("pair") == case.pair and row["baselineProof"] == case.baseline_proof
+        expected_keys = ({f"body.{k}" for k in case.values} | {f"query.{k}" for k in case.query}
+                         | {f"path.{k}" for k in case.path})
+        assert set(row["values"]) == expected_keys
+        for entry in row["values"].values():
+            assert set(entry) <= {"value", "provenance", "from", "transform"}
+    with_source = [entry for row in doc["cases"] for entry in row["values"].values() if "from" in entry]
+    assert with_source
+
+
+def _scenarios(text: str) -> dict:
+    """@case 태그 → 그 시나리오의 step 줄 목록."""
+    blocks, current = {}, None
+    for line in text.splitlines():
+        stripped = line.strip()
+        tag = re.match(r"^@case:(\S+)$", stripped)
+        if tag:
+            current = blocks.setdefault(tag.group(1), [])
+        elif current is not None and stripped and not stripped.startswith("Scenario:"):
+            current.append(stripped)
+    return blocks
+
+
+def test_render_gherkin_steps(tmp_path):
+    derivation, out, written = _render_controlled(tmp_path)
+    features = [name for name in written if name.startswith("features/")]
+    assert len(features) == len({case.endpoint for case in derivation.cases})
+    steps = {}
+    for name in features:
+        text = (out / name).read_text(encoding="utf-8")
+        assert text.startswith("Feature: ")
+        steps.update(_scenarios(text))
+    by_id = {case.id: case for case in derivation.cases}
+    for case_id, lines in steps.items():
+        case = by_id[case_id]
+        assert lines[0] == f'Given the case "{case_id}"'
+        method, path = case.endpoint.split(" ", 1)
+        assert f'And a request to "{method} {path}"' in lines
+        assert lines[-2] == "When the request is sent"
+        strict = case.expect["strict"]
+        expected_then = (f"Then the response status is {strict}" if isinstance(strict, int)
+                         else f'Then the response status is in class "{strict}"')
+        assert lines[-1] == expected_then
+        assert ("And the request is sent without authentication" in lines) == (case.auth == "anonymous")
+        assert ("And the request has no body" in lines) == (case.rule == "empty-body")
+        priors = [line for line in lines if line.startswith("And a prior request to ")]
+        assert len(priors) == len(case.setup)
+        for field_name, value in case.values.items():
+            assert f'And body field "{field_name}" is {json.dumps(value.value, ensure_ascii=False)}' in lines
+        for name, value in case.query.items():
+            assert f'And query parameter "{name}" is {json.dumps(value.value, ensure_ascii=False)}' in lines
+        for name, value in case.path.items():
+            assert f'And path variable "{name}" is {json.dumps(value.value, ensure_ascii=False)}' in lines
+    assert sorted(steps) == sorted(by_id)
+    captured = [case for case in derivation.cases if any(prior["capture"] for prior in case.setup)]
+    assert captured
+    lines = steps[captured[0].id]
+    prior = captured[0].setup[0]
+    var, json_field = sorted(prior["capture"].items())[0]
+    assert any(line.endswith(f'capturing "{json_field}" as "{var}"') for line in lines)
+
+
+def test_render_feature_slug_collision_and_errors(tmp_path):
+    derivation = derive_module.derive(_controlled(tmp_path / "b"))
+    base = derivation.cases[0]
+    twin = copy.deepcopy(base)
+    twin.id, twin.endpoint = base.id + "-twin", base.endpoint.replace("/", "-", 1).replace(" -", " /", 1) + "-"
+    collided = render_module._feature_names([base.endpoint, twin.endpoint])
+    assert len(set(collided.values())) == 2
+    bad = copy.deepcopy(base)
+    bad.expect = dict(bad.expect, strict="3xx")
+    with pytest.raises(render_module.RenderError):
+        render_module.render(derive_module.Derivation([bad], [], {}), tmp_path / "bad")
+    spaced = copy.deepcopy(base)
+    spaced.id = "has space"
+    with pytest.raises(render_module.RenderError):
+        render_module.render(derive_module.Derivation([spaced], [], {}), tmp_path / "bad2")
+
+
+def test_glue_checksum_and_copy(tmp_path):
+    _, out, written = _render_controlled(tmp_path)
+    glue = sorted(path.relative_to(render_module.GLUE_DIR).as_posix() for path in render_module.GLUE_DIR.rglob("*.java"))
+    assert glue and all(name.startswith("support/") for name in glue)
+    assert [name for name in written if name.startswith("glue/")] == [f"glue/{name}" for name in glue]
+    for name in glue:
+        assert (out / "glue" / name).read_bytes() == (render_module.GLUE_DIR / name).read_bytes()
+    checksum = render_module.glue_checksum()
+    assert re.fullmatch(r"[0-9a-f]{64}", checksum)
+    assert render_module.glue_checksum(out / "glue") == checksum
+    (out / "glue" / glue[0]).write_text("// 변조\n", encoding="utf-8")
+    assert render_module.glue_checksum(out / "glue") != checksum

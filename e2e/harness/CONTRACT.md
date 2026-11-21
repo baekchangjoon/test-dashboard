@@ -24,6 +24,7 @@ import td.harness.Harness;
 - step 클래스는 feature마다 하나이고 `glue/<feature 파일 이름을 PascalCase로>Steps.java`에 둔다(예: `sample_flow.feature` -> `glue/SampleFlowSteps.java`).
   파일 이름에 ASCII 영숫자가 없으면 `glue/F<feature 경로 sha1 앞 8자리>Steps.java`로 한다.
 - 여러 feature가 함께 쓰는 보조 클래스는 `glue/support/` 아래에만 둔다. 이 두 자리를 벗어난 클래스는 거부된다.
+- 예외(det arm 전용): 결정적 생성 arm은 feature별 Steps 클래스를 만들지 않고 모든 step을 저장소 고정 glue(`e2e/det-glue/`를 복사한 `glue/support/`)에 둔다.
 - 모든 glue 클래스에는 `package` 선언이 있어야 하고, 하네스 이외의 의존성을 추가하지 않는다. 사용 가능한 라이브러리는
   Cucumber 8.1.0, REST Assured 5.5.1, AssertJ다.
 - feature의 step 클래스가 컴파일되지 않으면 그 feature의 시나리오는 실행되지 않고, `glue/support/` 클래스가 컴파일되지 않으면 generation의 모든 시나리오가 실행되지 않는다.
