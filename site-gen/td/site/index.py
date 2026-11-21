@@ -224,8 +224,9 @@ def _home_rows(projects: list[dict], cfg: Config) -> list[dict]:
             text, title = dashboard_config.cell_text(column, project)
             cells[column] = {"text": text, "title": title, "sort": _sort_value(column, project, cfg)}
         values = project["values"]
-        if values.get("ci.runs") and "ci.successRate" in cells:
-            cells["ci.successRate"]["sub"] = f"{values.get('ci.successes') or 0} / {values['ci.runs']}회"
+        if values.get("ci.runs") and values.get("ci.successes") is not None and "ci.successRate" in cells:
+            # 성공 수가 없으면 "0 / N회"로 쓰지 않고 줄을 뺀다(없는 값을 0으로 채우지 않는다)
+            cells["ci.successRate"]["sub"] = f"{values['ci.successes']} / {values['ci.runs']}회"
         detail_names = ((DETAIL_METRICS_CI if project["repo"] else ()) + DETAIL_METRICS_SONAR
                         + (DETAIL_METRICS_PIPELINE if project["pipeline"] else ()))
         detail = [{"metric": name, "label": dashboard_config.CATALOG[name].label,

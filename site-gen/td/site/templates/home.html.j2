@@ -43,7 +43,7 @@
 {% elif column.id == "why" %}
       <td data-col="why" data-sort-value="" class="why">{% if project.verdict.reasons %}{{ project.verdict.reasons|join(" · ") }}{% else %}<span class="dim">—</span>{% endif %}</td>
 {% elif column.id == "ci.history" %}
-      <td data-col="ci.history" data-sort-value="">{% if project.ciHistory %}<div class="hist" title="왼쪽이 오래된 실행" aria-label="최근 CI {{ project.ciHistory|length }}회, 실패 {{ project.ciHistory|reject|list|length }}회">{% for outcome in project.ciHistory %}{% if outcome %}<i></i>{% else %}<i class="f"></i>{% endif %}{% endfor %}</div>{% else %}<span class="dim">—</span>{% endif %}</td>
+      <td data-col="ci.history" data-sort-value=""{% if not project.ciHistory and cell.title %} title="{{ cell.title }}"{% endif %}>{% if project.ciHistory %}<div class="hist" title="왼쪽이 오래된 실행" aria-label="최근 CI {{ project.ciHistory|length }}회, 실패 {{ project.ciHistory|reject|list|length }}회">{% for outcome in project.ciHistory %}{% if outcome %}<i></i>{% else %}<i class="f"></i>{% endif %}{% endfor %}</div>{% else %}<span class="dim">{{ cell.text }}</span>{% endif %}</td>
 {% else %}
       <td data-col="{{ column.id }}" data-sort-value="{{ cell.sort }}"{% if column.numeric %} class="n"{% endif %}{% if cell.title %} title="{{ cell.title }}"{% endif %}>{% if cell.text == "—" %}<span class="dim">—</span>{% elif cell.text in ("연결 없음", "측정 없음") %}<span class="dim">{{ cell.text }}</span>{% elif column.id == "sonar.gate" and project["values"]["sonar.gate"] == "ERROR" %}<b class="bad">{{ cell.text }}</b>{% else %}{{ cell.text }}{% endif %}{% if cell.sub %}<small>{{ cell.sub }}</small>{% endif %}</td>
 {% endif %}

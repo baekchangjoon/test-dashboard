@@ -11,7 +11,7 @@ import pytest
 from td import dashboard_config
 from td.dashboard_config import cell_text
 from td.site import index
-from dashboard_fixtures import (SONAR_FAILED_REASON, all_good_site, cfg_with, home_site, load_cfg, make_site,
+from dashboard_fixtures import (CI_FAILED_REASON, SONAR_FAILED_REASON, all_good_site, cfg_with, home_site, load_cfg, make_site,
                                 open_page, rebuild_site, serve, snap, sonar_failed_site)
 
 HOME_ORDER = ["a-crit", "b-crit", "zero-cov", "no-data", "no-sonar", "pet"]
@@ -201,6 +201,27 @@ def test_req090_failed_source_cell_title(tmp_path, page_of):
         page = page_of(url)
         title = page.get_attribute('tr.proj[data-name="flaky"] td[data-col="sonar.gate"]', "title")
         assert SONAR_FAILED_REASON in title
+
+
+def test_req113_failed_ci_source_cells(tmp_path, page_of):
+    with serve(sonar_failed_site(tmp_path)) as url:
+        page = page_of(url)
+        for col in ("ci.successRate", "ci.history"):
+            assert cell(page, "ci-broken", col) == "측정 없음", col
+            title = page.get_attribute(f'tr.proj[data-name="ci-broken"] td[data-col="{col}"]', "title")
+            assert title and CI_FAILED_REASON in title, col
+        assert cell(page, "no-ci", "ci.history") == "—"
+
+
+def test_ci_sub_line_omitted_without_successes(tmp_path):
+    ci = {"runs": 5, "successes": None, "failures": None, "successRate": None, "lastFailed": False,
+          "failedChecks": 0, "history": []}
+    site = make_site(tmp_path, snapshots={"x": [snap(ci=ci)]}, config=cfg_with(plain="x"))
+    rebuild_site(site)
+    html = (site / "index.html").read_text()
+    row = html.split('<tr class="proj" data-name="x"')[1].split("</tr>")[0]
+    ci_cell = row.split('data-col="ci.successRate"')[1].split("</td>")[0]
+    assert "회" not in ci_cell and "0 / " not in ci_cell, ci_cell
 
 
 def test_cell_text_rules():

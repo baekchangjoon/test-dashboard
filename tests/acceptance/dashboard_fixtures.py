@@ -284,15 +284,19 @@ def all_good_site(tmp_path: Path) -> Path:
 
 
 SONAR_FAILED_REASON = "Sonar API가 HTTP 500으로 답했다"
+CI_FAILED_REASON = "Actions 실행 목록을 읽지 못했다: HTTP 502"
 
 
 def sonar_failed_site(tmp_path: Path) -> Path:
-    """Sonar 수집이 실패한(`sources.sonar == "failed"`) 과제 `flaky`와 CI가 없는(`none`) Sonar만 있는 과제 `no-ci`."""
+    """Sonar 수집이 실패한(`sources.sonar == "failed"`) 과제 `flaky`, CI가 없는(`none`) Sonar만 있는 과제 `no-ci`,
+    CI 수집이 실패한(`sources.ci == "failed"`, `ci: null`) 과제 `ci-broken`."""
     site = make_site(tmp_path / "sonar-failed", snapshots={
         "flaky": [snap(ci_runs=10, sonar=None, sonar_state="failed",
                        problems=[{"source": "sonar", "reason": SONAR_FAILED_REASON}])],
         "no-ci": [snap(ci=None, sonar={"gate": "OK", "coverage": 64.0, "bugs": 0, "vulnerabilities": 0})],
-    }, config=cfg_with(plain=["flaky", "no-ci"]))
+        "ci-broken": [snap(ci=None, ci_state="failed", problems=[{"source": "ci", "reason": CI_FAILED_REASON}],
+                           sonar={"gate": "OK", "coverage": 64.0, "bugs": 0, "vulnerabilities": 0})],
+    }, config=cfg_with(plain=["flaky", "no-ci", "ci-broken"]))
     rebuild_site(site)
     return site
 
