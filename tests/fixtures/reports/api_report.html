@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hotspot Analysis Report</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --fg: #1f2328;
+      --muted: #57606a;
+      --border: #d0d7de;
+      --accent: #0969da;
+      --accent-bg: #ddf4ff;
+      --row-hover: #f6f8fa;
+      --code-bg: #f6f8fa;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+                   "Helvetica Neue", Arial, sans-serif;
+      color: var(--fg);
+      background: var(--bg);
+      margin: 0;
+      padding: 24px;
+      line-height: 1.55;
+    }
+    h1, h2 { margin-top: 0; }
+    h1 { font-size: 1.75rem; border-bottom: 1px solid var(--border);
+         padding-bottom: 8px; }
+    h2 { font-size: 1.25rem; margin-top: 32px; }
+    p.subtitle { color: var(--muted); margin-top: -4px; }
+    code { background: var(--code-bg); border-radius: 4px;
+           padding: 1px 6px; font-size: 0.9em;
+           font-family: ui-monospace, SFMono-Regular, Menlo,
+                        Consolas, monospace; }
+    .meta-table { border-collapse: collapse; margin-bottom: 8px; }
+    .meta-table th, .meta-table td { text-align: left; padding: 4px 12px;
+                                     border-bottom: 1px dashed var(--border); }
+    .meta-table th { color: var(--muted); font-weight: 600; }
+    .toolbar { display: flex; gap: 12px; align-items: center;
+               margin: 12px 0; }
+    .toolbar input[type="search"] {
+      flex: 1; max-width: 420px;
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.95rem;
+    }
+    .toolbar .count {
+      color: var(--muted); font-size: 0.9rem;
+    }
+    table.sortable {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 0.92rem;
+    }
+    table.sortable thead th {
+      background: var(--code-bg);
+      border-bottom: 2px solid var(--border);
+      cursor: pointer;
+      user-select: none;
+      padding: 8px 12px;
+      text-align: left;
+      position: sticky; top: 0;
+    }
+    table.sortable thead th:hover { background: var(--accent-bg); }
+    table.sortable thead th[aria-sort="ascending"]::after  { content: " \25B2"; }
+    table.sortable thead th[aria-sort="descending"]::after { content: " \25BC"; }
+    table.sortable tbody td {
+      padding: 6px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    table.sortable tbody tr:hover { background: var(--row-hover); }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .rank { color: var(--muted); width: 48px; }
+    .params { color: var(--muted); font-size: 0.85em; }
+    footer { margin-top: 48px; color: var(--muted); font-size: 0.85rem;
+             border-top: 1px solid var(--border); padding-top: 12px; }
+
+    /* Tab Navigation Styles */
+    .tab-container {
+      margin-top: 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+    }
+    .tab-button {
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 600;
+      padding: 8px 16px;
+      transition: all 0.2s ease;
+    }
+    .tab-button:hover {
+      color: var(--fg);
+      border-bottom-color: var(--border);
+    }
+    .tab-button.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+
+    /* HTTP Method Badge Styles */
+    .method-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      border-radius: 4px;
+      text-align: center;
+      color: #fff;
+    }
+    .method-badge.get { background-color: #2da44e; }
+    .method-badge.post { background-color: #0969da; }
+    .method-badge.put { background-color: #bf8700; }
+    .method-badge.delete { background-color: #cf222e; }
+    .method-badge.patch { background-color: #8250df; }
+
+    /* Details and Collapsible styles */
+    details {
+      cursor: pointer;
+    }
+    details summary {
+      font-weight: 600;
+      color: var(--accent);
+      outline: none;
+    }
+    details ul {
+      margin: 4px 0 0 0;
+      padding-left: 20px;
+      list-style-type: disc;
+    }
+    details li {
+      margin-bottom: 2px;
+    }
+    .no-calls {
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0d1117; --fg: #c9d1d9; --muted: #8b949e;
+        --border: #30363d; --accent: #58a6ff; --accent-bg: #1f6feb33;
+        --row-hover: #161b22; --code-bg: #161b22;
+      }
+    }
+
+    /* X-Ray Drilldown Styles */
+    .xray-toggle-icon {
+      font-size: 0.8em;
+      color: var(--muted);
+      margin-left: 4px;
+      transition: transform 0.2s ease;
+      display: inline-block;
+    }
+    .file-row.expanded .xray-toggle-icon {
+      transform: rotate(90deg);
+    }
+    .xray-row {
+      background: var(--code-bg);
+    }
+    .xray-container {
+      padding: 16px 24px !important;
+      border-left: 4px solid var(--accent);
+    }
+    .xray-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--fg);
+    }
+    .xray-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+    }
+    .xray-table th, .xray-table td {
+      padding: 6px 12px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+    }
+    .xray-table th {
+      color: var(--muted);
+      font-weight: 600;
+      border-bottom: 2px solid var(--border);
+    }
+    .no-methods {
+      color: var(--muted);
+      font-style: italic;
+      margin: 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Hotspot Analysis Report</h1>
+  <p class="subtitle">Generated 2026-11-21T17:32:16.437740Z &middot; 48 files &middot; 159 methods &middot; 54 commits</p>
+  <table class="meta-table">
+    <tr><th>Generated at</th><td><code>2026-11-21T17:32:16.437740Z</code></td></tr>
+    <tr><th>Target</th><td><code>LOCAL_GIT:<work>/suts/petclinic/src</code></td></tr>
+    <tr><th>Total commits</th><td><code>54</code></td></tr>
+    <tr><th>Total files</th><td><code>48</code></td></tr>
+    <tr><th>Total methods</th><td><code>159</code></td></tr>
+  </table>
+  <div class="tab-container">
+    <button class="tab-button active" onclick="switchTab(event, 'apis-tab')">REST API Hotspots</button>
+    <button class="tab-button" onclick="switchTab(event, 'shared-tab')">Shared Components</button>
+  </div>
+
+  <div id="apis-tab" class="tab-content active">
+  <section>
+    <h2>REST API Hotspots (34 rows)</h2>
+    <div class="toolbar">
+      <input type="search" data-filter-target="#api-hotspots" placeholder="Filter by method, route, or controller…" aria-label="Filter API hotspots">
+      <span class="count" data-count-target="#api-hotspots">34 / 34</span>
+    </div>
+    <table id="api-hotspots" class="sortable">
+      <thead><tr><th data-sort-type="number">Simple Rank</th><th data-sort-type="number" aria-sort="ascending">Composite Rank</th><th data-sort-type="string">HTTP Method</th><th data-sort-type="string">Route</th><th data-sort-type="string">FQCN</th><th data-sort-type="string">Method</th><th data-sort-type="string">Parameters</th><th data-sort-type="number" class="num">LOC</th><th data-sort-type="number" class="num">Revisions</th><th data-sort-type="number" class="num">Simple Score</th><th data-sort-type="number" class="num">Recency Decay</th><th data-sort-type="number" class="num">Cognitive Complexity</th><th data-sort-type="number" class="num">Coverage Multiplier</th><th data-sort-type="number" class="num">Composite Score</th><th>Call Graph</th></tr></thead>
+      <tbody>
+        <tr><td class="rank" data-sort-value="1">1</td><td class="rank" data-sort-value="1">1</td><td><span class="method-badge post">POST</span></td><td><code>/api/reservations</code></td><td><code>org.springframework.samples.petclinic.boarding.ReservationRestController</code></td><td><code>create</code></td><td class="params">CreateReservationRequest</td><td class="num" data-sort-value="143">143</td><td class="num" data-sort-value="30">30</td><td class="num" data-sort-value="4290.0">4290</td><td class="num" data-sort-value="18.018504708981652">18.0185</td><td class="num" data-sort-value="22.0">22</td><td class="num" data-sort-value="1.033623910336239">1.0336</td><td class="num" data-sort-value="409.73586050561016">409.7359</td><td><details><summary>27 calls</summary><ul><li><code>org.springframework.samples.petclinic.boarding.ReservationService#create(CreateReservationRequest)</code></li><li><code>org.springframework.samples.petclinic.boarding.ReservationRepository#countByRoomNumberAndStatus(int, ReservationStatus)</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#setPetName(String)</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#setOwnerEmail(String)</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#setPromoCode(String)</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#setRoomNumber(int)</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#setNights(int)</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#setAnimalCount(int)</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#setLoyaltyPoints(int)</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#setPriceTier(PriceTier)</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#setDepositAmount(double)</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#setCheckInDate(LocalDate)</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#setStatus(ReservationStatus)</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#setCreatedAt(LocalDateTime)</code></li><li><code>org.springframework.samples.petclinic.boarding.ReservationDtos.ReservationResponse#from(Reservation)</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getPromoCode()</code></li><li><code>org.springframework.samples.petclinic.model.BaseEntity#getId()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getPetName()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getOwnerEmail()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getRoomNumber()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getNights()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getAnimalCount()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getLoyaltyPoints()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getPriceTier()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getDepositAmount()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getCheckInDate()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getStatus()</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="3">3</td><td class="rank" data-sort-value="2">2</td><td><span class="method-badge put">PUT</span></td><td><code>/api/reservations/{id}</code></td><td><code>org.springframework.samples.petclinic.boarding.ReservationRestController</code></td><td><code>update</code></td><td class="params">Integer, UpdateReservationRequest</td><td class="num" data-sort-value="92">92</td><td class="num" data-sort-value="20">20</td><td class="num" data-sort-value="1840.0">1840</td><td class="num" data-sort-value="11.471581833106784">11.4716</td><td class="num" data-sort-value="17.0">17</td><td class="num" data-sort-value="1.1528150134048256">1.1528</td><td class="num" data-sort-value="224.8184000000284">224.8184</td><td><details><summary>17 calls</summary><ul><li><code>org.springframework.samples.petclinic.boarding.ReservationService#update(int, UpdateReservationRequest)</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getCheckInDate()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getStatus()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getNights()</code></li><li><code>org.springframework.samples.petclinic.boarding.ReservationRepository#countByRoomNumberAndStatus(int, ReservationStatus)</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getRoomNumber()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#setNights(int)</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#setStatus(ReservationStatus)</code></li><li><code>org.springframework.samples.petclinic.boarding.ReservationDtos.ReservationResponse#from(Reservation)</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getPromoCode()</code></li><li><code>org.springframework.samples.petclinic.model.BaseEntity#getId()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getPetName()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getOwnerEmail()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getAnimalCount()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getLoyaltyPoints()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getPriceTier()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getDepositAmount()</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="2">2</td><td class="rank" data-sort-value="3">3</td><td><span class="method-badge post">POST</span></td><td><code>/owners/{ownerId}/pets/{petId}/edit</code></td><td><code>org.springframework.samples.petclinic.owner.PetController</code></td><td><code>processUpdateForm</code></td><td class="params">Owner, Pet, BindingResult, RedirectAttributes</td><td class="num" data-sort-value="96">96</td><td class="num" data-sort-value="34">34</td><td class="num" data-sort-value="3264.0">3264</td><td class="num" data-sort-value="3.9339491482923026">3.9339</td><td class="num" data-sort-value="23.0">23</td><td class="num" data-sort-value="1.9117647058823528">1.9118</td><td class="num" data-sort-value="172.97805813814682">172.9781</td><td><details><summary>13 calls</summary><ul><li><code>org.springframework.samples.petclinic.model.NamedEntity#getName()</code></li><li><code>org.springframework.samples.petclinic.owner.Owner#getPet(String, boolean)</code></li><li><code>org.springframework.samples.petclinic.owner.Owner#getPets()</code></li><li><code>org.springframework.samples.petclinic.model.BaseEntity#isNew()</code></li><li><code>org.springframework.samples.petclinic.model.BaseEntity#getId()</code></li><li><code>org.springframework.samples.petclinic.owner.Pet#getBirthDate()</code></li><li><code>org.springframework.samples.petclinic.owner.PetController#updatePetDetails(Owner, Pet)</code></li><li><code>org.springframework.samples.petclinic.owner.Owner#getPet(Integer)</code></li><li><code>org.springframework.samples.petclinic.model.NamedEntity#setName(String)</code></li><li><code>org.springframework.samples.petclinic.owner.Pet#setBirthDate(LocalDate)</code></li><li><code>org.springframework.samples.petclinic.owner.Pet#setType(PetType)</code></li><li><code>org.springframework.samples.petclinic.owner.Pet#getType()</code></li><li><code>org.springframework.samples.petclinic.owner.Owner#addPet(Pet)</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="16">16</td><td class="rank" data-sort-value="4">4</td><td><span class="method-badge get">GET</span></td><td><code>/api/reservations</code></td><td><code>org.springframework.samples.petclinic.boarding.ReservationRestController</code></td><td><code>list</code></td><td class="params">Integer, PriceTier, boolean</td><td class="num" data-sort-value="24">24</td><td class="num" data-sort-value="5">5</td><td class="num" data-sort-value="120.0">120</td><td class="num" data-sort-value="3.273461437937434">3.2735</td><td class="num" data-sort-value="5.0">5</td><td class="num" data-sort-value="3.333333333333333">3.3333</td><td class="num" data-sort-value="54.557690632290566">54.5577</td><td><details><summary>4 calls</summary><ul><li><code>org.springframework.samples.petclinic.boarding.ReservationService#list(Integer, PriceTier, boolean)</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getNights()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getPriceTier()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getCreatedAt()</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="8">8</td><td class="rank" data-sort-value="5">5</td><td><span class="method-badge post">POST</span></td><td><code>/owners/{ownerId}/pets/new</code></td><td><code>org.springframework.samples.petclinic.owner.PetController</code></td><td><code>processCreationForm</code></td><td class="params">Owner, Pet, BindingResult, RedirectAttributes</td><td class="num" data-sort-value="49">49</td><td class="num" data-sort-value="9">9</td><td class="num" data-sort-value="441.0">441</td><td class="num" data-sort-value="1.025438832358518">1.0254</td><td class="num" data-sort-value="15.0">15</td><td class="num" data-sort-value="2.6315789473684212">2.6316</td><td class="num" data-sort-value="40.47784864573098">40.4778</td><td><details><summary>6 calls</summary><ul><li><code>org.springframework.samples.petclinic.model.NamedEntity#getName()</code></li><li><code>org.springframework.samples.petclinic.model.BaseEntity#isNew()</code></li><li><code>org.springframework.samples.petclinic.owner.Owner#getPet(String, boolean)</code></li><li><code>org.springframework.samples.petclinic.owner.Owner#getPets()</code></li><li><code>org.springframework.samples.petclinic.owner.Pet#getBirthDate()</code></li><li><code>org.springframework.samples.petclinic.owner.Owner#addPet(Pet)</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="4">4</td><td class="rank" data-sort-value="6">6</td><td><span class="method-badge put">PUT</span></td><td><code>/api/pets/{petId}</code></td><td><code>org.springframework.samples.petclinic.owner.PetRestController</code></td><td><code>updatePet</code></td><td class="params">Integer, Pet</td><td class="num" data-sort-value="55">55</td><td class="num" data-sort-value="27">27</td><td class="num" data-sort-value="1485.0">1485</td><td class="num" data-sort-value="3.044752056897251">3.0448</td><td class="num" data-sort-value="9.0">9</td><td class="num" data-sort-value="1.3242009132420092">1.3242</td><td class="num" data-sort-value="36.28677108904943">36.2868</td><td><details><summary>10 calls</summary><ul><li><code>org.springframework.samples.petclinic.owner.Owner#getPet(Integer)</code></li><li><code>org.springframework.samples.petclinic.owner.Owner#getPets()</code></li><li><code>org.springframework.samples.petclinic.model.BaseEntity#isNew()</code></li><li><code>org.springframework.samples.petclinic.model.BaseEntity#getId()</code></li><li><code>org.springframework.samples.petclinic.model.NamedEntity#setName(String)</code></li><li><code>org.springframework.samples.petclinic.model.NamedEntity#getName()</code></li><li><code>org.springframework.samples.petclinic.owner.Pet#setBirthDate(LocalDate)</code></li><li><code>org.springframework.samples.petclinic.owner.Pet#getBirthDate()</code></li><li><code>org.springframework.samples.petclinic.owner.Pet#setType(PetType)</code></li><li><code>org.springframework.samples.petclinic.owner.Pet#getType()</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="5">5</td><td class="rank" data-sort-value="7">7</td><td><span class="method-badge get">GET</span></td><td><code>/api/reservations/{id}</code></td><td><code>org.springframework.samples.petclinic.boarding.ReservationRestController</code></td><td><code>get</code></td><td class="params">Integer, boolean</td><td class="num" data-sort-value="60">60</td><td class="num" data-sort-value="17">17</td><td class="num" data-sort-value="1020.0">1020</td><td class="num" data-sort-value="9.507504970344323">9.5075</td><td class="num" data-sort-value="4.0">4</td><td class="num" data-sort-value="0.9433962264150942">0.9434</td><td class="num" data-sort-value="35.87737724658235">35.8774</td><td><details><summary>14 calls</summary><ul><li><code>org.springframework.samples.petclinic.boarding.ReservationService#getById(int, boolean)</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getCheckInDate()</code></li><li><code>org.springframework.samples.petclinic.boarding.ReservationDtos.ReservationResponse#from(Reservation)</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getPromoCode()</code></li><li><code>org.springframework.samples.petclinic.model.BaseEntity#getId()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getPetName()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getOwnerEmail()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getRoomNumber()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getNights()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getAnimalCount()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getLoyaltyPoints()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getPriceTier()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getDepositAmount()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getStatus()</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="6">6</td><td class="rank" data-sort-value="8">8</td><td><span class="method-badge get">GET</span></td><td><code>/owners</code></td><td><code>org.springframework.samples.petclinic.owner.OwnerController</code></td><td><code>processFindForm</code></td><td class="params">int, Owner, BindingResult, Model</td><td class="num" data-sort-value="46">46</td><td class="num" data-sort-value="11">11</td><td class="num" data-sort-value="506.0">506</td><td class="num" data-sort-value="1.2766557361065738">1.2767</td><td class="num" data-sort-value="3.0">3</td><td class="num" data-sort-value="5.238095238095238">5.2381</td><td class="num" data-sort-value="20.061732995960444">20.0617</td><td><details><summary>5 calls</summary><ul><li><code>org.springframework.samples.petclinic.model.Person#getLastName()</code></li><li><code>org.springframework.samples.petclinic.owner.OwnerController#findPaginatedForOwnersLastName(int, String)</code></li><li><code>org.springframework.samples.petclinic.owner.OwnerRepository#findByLastNameStartingWith(String, Pageable)</code></li><li><code>org.springframework.samples.petclinic.model.BaseEntity#getId()</code></li><li><code>org.springframework.samples.petclinic.owner.OwnerController#addPaginationModel(int, Model, Page&lt;Owner&gt;)</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="15">15</td><td class="rank" data-sort-value="9">9</td><td><span class="method-badge delete">DELETE</span></td><td><code>/api/reservations/{id}</code></td><td><code>org.springframework.samples.petclinic.boarding.ReservationRestController</code></td><td><code>delete</code></td><td class="params">Integer, boolean</td><td class="num" data-sort-value="32">32</td><td class="num" data-sort-value="4">4</td><td class="num" data-sort-value="128.0">128</td><td class="num" data-sort-value="2.618769150349947">2.6188</td><td class="num" data-sort-value="6.0">6</td><td class="num" data-sort-value="1.0828025477707006">1.0828</td><td class="num" data-sort-value="17.013659448133414">17.0137</td><td><details><summary>3 calls</summary><ul><li><code>org.springframework.samples.petclinic.boarding.ReservationService#delete(int)</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getStatus()</code></li><li><code>org.springframework.samples.petclinic.boarding.Reservation#getCheckInDate()</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="10">10</td><td class="rank" data-sort-value="10">10</td><td><span class="method-badge post">POST</span></td><td><code>/owners/{ownerId}/pets/{petId}/visits/new</code></td><td><code>org.springframework.samples.petclinic.owner.VisitController</code></td><td><code>processNewVisitForm</code></td><td class="params">Owner, int, Visit, BindingResult, RedirectAttributes</td><td class="num" data-sort-value="49">49</td><td class="num" data-sort-value="7">7</td><td class="num" data-sort-value="343.0">343</td><td class="num" data-sort-value="0.835166646590705">0.8352</td><td class="num" data-sort-value="7.0">7</td><td class="num" data-sort-value="1.8518518518518516">1.8519</td><td class="num" data-sort-value="10.826234307657286">10.8262</td><td><details><summary>7 calls</summary><ul><li><code>org.springframework.samples.petclinic.owner.Owner#addVisit(Integer, Visit)</code></li><li><code>org.springframework.samples.petclinic.owner.Owner#getPet(Integer)</code></li><li><code>org.springframework.samples.petclinic.owner.Owner#getPets()</code></li><li><code>org.springframework.samples.petclinic.model.BaseEntity#isNew()</code></li><li><code>org.springframework.samples.petclinic.model.BaseEntity#getId()</code></li><li><code>org.springframework.samples.petclinic.owner.Pet#addVisit(Visit)</code></li><li><code>org.springframework.samples.petclinic.owner.Pet#getVisits()</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="11">11</td><td class="rank" data-sort-value="11">11</td><td><span class="method-badge get">GET</span></td><td><code>/api/pets/{petId}</code></td><td><code>org.springframework.samples.petclinic.owner.PetRestController</code></td><td><code>getPet</code></td><td class="params">Integer</td><td class="num" data-sort-value="32">32</td><td class="num" data-sort-value="9">9</td><td class="num" data-sort-value="288.0">288</td><td class="num" data-sort-value="0.9938743921802141">0.9939</td><td class="num" data-sort-value="9.0">9</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="8.13169957238357">8.1317</td><td><details><summary>4 calls</summary><ul><li><code>org.springframework.samples.petclinic.owner.Owner#getPet(Integer)</code></li><li><code>org.springframework.samples.petclinic.owner.Owner#getPets()</code></li><li><code>org.springframework.samples.petclinic.model.BaseEntity#isNew()</code></li><li><code>org.springframework.samples.petclinic.model.BaseEntity#getId()</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="12">12</td><td class="rank" data-sort-value="12">12</td><td><span class="method-badge post">POST</span></td><td><code>/owners/{ownerId}/edit</code></td><td><code>org.springframework.samples.petclinic.owner.OwnerController</code></td><td><code>processUpdateOwnerForm</code></td><td class="params">Owner, BindingResult, int, RedirectAttributes</td><td class="num" data-sort-value="25">25</td><td class="num" data-sort-value="9">9</td><td class="num" data-sort-value="225.0">225</td><td class="num" data-sort-value="1.0366718346715396">1.0367</td><td class="num" data-sort-value="2.0">2</td><td class="num" data-sort-value="3.181818181818182">3.1818</td><td class="num" data-sort-value="6.597002584273434">6.5970</td><td><details><summary>2 calls</summary><ul><li><code>org.springframework.samples.petclinic.model.BaseEntity#getId()</code></li><li><code>org.springframework.samples.petclinic.model.BaseEntity#setId(Integer)</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="9">9</td><td class="rank" data-sort-value="13">13</td><td><span class="method-badge post">POST</span></td><td><code>/api/auth/validate</code></td><td><code>org.springframework.samples.petclinic.security.AuthController</code></td><td><code>validateToken</code></td><td class="params">String</td><td class="num" data-sort-value="53">53</td><td class="num" data-sort-value="8">8</td><td class="num" data-sort-value="424.0">424</td><td class="num" data-sort-value="0.6348309823580358">0.6348</td><td class="num" data-sort-value="6.0">6</td><td class="num" data-sort-value="1.0204081632653061">1.0204</td><td class="num" data-sort-value="3.88672030015124">3.8867</td><td><details><summary>7 calls</summary><ul><li><code>org.springframework.samples.petclinic.security.JwtUtil#extractUsername(String)</code></li><li><code>org.springframework.samples.petclinic.security.JwtUtil#extractClaim(String, Function&lt;Claims,T&gt;)</code></li><li><code>org.springframework.samples.petclinic.security.JwtUtil#extractAllClaims(String)</code></li><li><code>org.springframework.samples.petclinic.security.JwtUtil#getSigningKey()</code></li><li><code>org.springframework.samples.petclinic.security.JwtUtil#validateToken(String, String)</code></li><li><code>org.springframework.samples.petclinic.security.JwtUtil#isTokenExpired(String)</code></li><li><code>org.springframework.samples.petclinic.security.JwtUtil#extractExpiration(String)</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="7">7</td><td class="rank" data-sort-value="14">14</td><td><span class="method-badge post">POST</span></td><td><code>/api/auth/login</code></td><td><code>org.springframework.samples.petclinic.security.AuthController</code></td><td><code>login</code></td><td class="params">LoginRequest</td><td class="num" data-sort-value="67">67</td><td class="num" data-sort-value="7">7</td><td class="num" data-sort-value="469.0">469</td><td class="num" data-sort-value="0.5554771095632813">0.5555</td><td class="num" data-sort-value="4.0">4</td><td class="num" data-sort-value="1.021671826625387">1.0217</td><td class="num" data-sort-value="2.2700612527044317">2.2701</td><td><details><summary>6 calls</summary><ul><li><code>org.springframework.samples.petclinic.security.AuthController.LoginRequest#getUsername()</code></li><li><code>org.springframework.samples.petclinic.security.AuthController.LoginRequest#getPassword()</code></li><li><code>org.springframework.samples.petclinic.security.CustomUserDetailsService#loadUserByUsername(String)</code></li><li><code>org.springframework.samples.petclinic.security.JwtUtil#generateToken(String)</code></li><li><code>org.springframework.samples.petclinic.security.JwtUtil#createToken(Map&lt;String,Object&gt;, String)</code></li><li><code>org.springframework.samples.petclinic.security.JwtUtil#getSigningKey()</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="13">13</td><td class="rank" data-sort-value="15">15</td><td><span class="method-badge get">GET</span></td><td><code>/api/vets</code></td><td><code>org.springframework.samples.petclinic.vet.VetRestController</code></td><td><code>getAllVets</code></td><td class="params">String</td><td class="num" data-sort-value="32">32</td><td class="num" data-sort-value="5">5</td><td class="num" data-sort-value="160.0">160</td><td class="num" data-sort-value="0.500520689709015">0.5005</td><td class="num" data-sort-value="3.0">3</td><td class="num" data-sort-value="0.9677419354838709">0.9677</td><td class="num" data-sort-value="1.4531245830261723">1.4531</td><td><details><summary>4 calls</summary><ul><li><code>org.springframework.samples.petclinic.vet.VetRepository#findAll()</code></li><li><code>org.springframework.samples.petclinic.vet.Vet#getSpecialties()</code></li><li><code>org.springframework.samples.petclinic.vet.Vet#getSpecialtiesInternal()</code></li><li><code>org.springframework.samples.petclinic.model.NamedEntity#getName()</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="20">20</td><td class="rank" data-sort-value="16">16</td><td><span class="method-badge post">POST</span></td><td><code>/owners/new</code></td><td><code>org.springframework.samples.petclinic.owner.OwnerController</code></td><td><code>processCreationForm</code></td><td class="params">Owner, BindingResult, RedirectAttributes</td><td class="num" data-sort-value="14">14</td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="42.0">42</td><td class="num" data-sort-value="0.341812944119506">0.3418</td><td class="num" data-sort-value="1.0">1</td><td class="num" data-sort-value="4.11764705882353">4.1176</td><td class="num" data-sort-value="1.4074650640214956">1.4075</td><td><details><summary>1 calls</summary><ul><li><code>org.springframework.samples.petclinic.model.BaseEntity#getId()</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="14">14</td><td class="rank" data-sort-value="17">17</td><td><span class="method-badge post">POST</span></td><td><code>/api/pets</code></td><td><code>org.springframework.samples.petclinic.owner.PetRestController</code></td><td><code>createPet</code></td><td class="params">Pet, Integer</td><td class="num" data-sort-value="26">26</td><td class="num" data-sort-value="5">5</td><td class="num" data-sort-value="130.0">130</td><td class="num" data-sort-value="0.5502324053762363">0.5502</td><td class="num" data-sort-value="2.0">2</td><td class="num" data-sort-value="0.9836065573770493">0.9836</td><td class="num" data-sort-value="1.0824244040188256">1.0824</td><td><details><summary>4 calls</summary><ul><li><code>org.springframework.samples.petclinic.owner.OwnerRepository#findById(Integer)</code></li><li><code>org.springframework.samples.petclinic.owner.Owner#addPet(Pet)</code></li><li><code>org.springframework.samples.petclinic.model.BaseEntity#isNew()</code></li><li><code>org.springframework.samples.petclinic.owner.Owner#getPets()</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="17">17</td><td class="rank" data-sort-value="18">18</td><td><span class="method-badge get">GET</span></td><td><code>/api/owners</code></td><td><code>org.springframework.samples.petclinic.owner.OwnerRestController</code></td><td><code>getAllOwners</code></td><td class="params">String</td><td class="num" data-sort-value="14">14</td><td class="num" data-sort-value="5">5</td><td class="num" data-sort-value="70.0">70</td><td class="num" data-sort-value="0.500520689709015">0.5005</td><td class="num" data-sort-value="2.0">2</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.9100376176527545">0.9100</td><td><details><summary>1 calls</summary><ul><li><code>org.springframework.samples.petclinic.model.Person#getLastName()</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="18">18</td><td class="rank" data-sort-value="19">19</td><td><span class="method-badge put">PUT</span></td><td><code>/api/owners/{ownerId}</code></td><td><code>org.springframework.samples.petclinic.owner.OwnerRestController</code></td><td><code>updateOwner</code></td><td class="params">Integer, Owner</td><td class="num" data-sort-value="14">14</td><td class="num" data-sort-value="5">5</td><td class="num" data-sort-value="70.0">70</td><td class="num" data-sort-value="0.500520689709015">0.5005</td><td class="num" data-sort-value="1.0">1</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.45501880882637724">0.4550</td><td><details><summary>1 calls</summary><ul><li><code>org.springframework.samples.petclinic.model.BaseEntity#setId(Integer)</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="25">25</td><td class="rank" data-sort-value="20">20</td><td><span class="method-badge get">GET</span></td><td><code>/</code></td><td><code>org.springframework.samples.petclinic.system.WelcomeController</code></td><td><code>welcome</code></td><td class="params"></td><td class="num" data-sort-value="4">4</td><td class="num" data-sort-value="0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="10.0">10</td><td class="num" data-sort-value="0.0">0</td><td><span class="no-calls">None</span></td></tr>
+        <tr><td class="rank" data-sort-value="24">24</td><td class="rank" data-sort-value="21">21</td><td><span class="method-badge post">POST</span></td><td><code>/api/owners</code></td><td><code>org.springframework.samples.petclinic.owner.OwnerRestController</code></td><td><code>createOwner</code></td><td class="params">Owner</td><td class="num" data-sort-value="6">6</td><td class="num" data-sort-value="2">2</td><td class="num" data-sort-value="12.0">12</td><td class="num" data-sort-value="0.15870774558950895">0.1587</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><span class="no-calls">None</span></td></tr>
+        <tr><td class="rank" data-sort-value="21">21</td><td class="rank" data-sort-value="22">22</td><td><span class="method-badge get">GET</span></td><td><code>/api/owners/{ownerId}</code></td><td><code>org.springframework.samples.petclinic.owner.OwnerRestController</code></td><td><code>getOwner</code></td><td class="params">Integer</td><td class="num" data-sort-value="7">7</td><td class="num" data-sort-value="5">5</td><td class="num" data-sort-value="35.0">35</td><td class="num" data-sort-value="0.5502324053762363">0.5502</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>1 calls</summary><ul><li><code>org.springframework.samples.petclinic.owner.OwnerRepository#findById(Integer)</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="23">23</td><td class="rank" data-sort-value="23">23</td><td><span class="method-badge get">GET</span></td><td><code>/api/pets/types</code></td><td><code>org.springframework.samples.petclinic.owner.PetRestController</code></td><td><code>getPetTypes</code></td><td class="params"></td><td class="num" data-sort-value="7">7</td><td class="num" data-sort-value="4">4</td><td class="num" data-sort-value="28.0">28</td><td class="num" data-sort-value="0.4110010979816192">0.4110</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>1 calls</summary><ul><li><code>org.springframework.samples.petclinic.owner.PetTypeRepository#findPetTypes()</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="19">19</td><td class="rank" data-sort-value="24">24</td><td><span class="method-badge get">GET</span></td><td><code>/api/vets/{vetId}</code></td><td><code>org.springframework.samples.petclinic.vet.VetRestController</code></td><td><code>getVet</code></td><td class="params">Integer</td><td class="num" data-sort-value="11">11</td><td class="num" data-sort-value="5">5</td><td class="num" data-sort-value="55.0">55</td><td class="num" data-sort-value="0.500520689709015">0.5005</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>2 calls</summary><ul><li><code>org.springframework.samples.petclinic.vet.VetRepository#findAll()</code></li><li><code>org.springframework.samples.petclinic.model.BaseEntity#getId()</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="26">26</td><td class="rank" data-sort-value="25">25</td><td><span class="method-badge get">GET</span></td><td><code>/oups</code></td><td><code>org.springframework.samples.petclinic.system.CrashController</code></td><td><code>triggerException</code></td><td class="params"></td><td class="num" data-sort-value="5">5</td><td class="num" data-sort-value="0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="10.0">10</td><td class="num" data-sort-value="0.0">0</td><td><span class="no-calls">None</span></td></tr>
+        <tr><td class="rank" data-sort-value="27">27</td><td class="rank" data-sort-value="26">26</td><td><span class="method-badge get">GET</span></td><td><code>/owners/find</code></td><td><code>org.springframework.samples.petclinic.owner.OwnerController</code></td><td><code>initFindForm</code></td><td class="params"></td><td class="num" data-sort-value="4">4</td><td class="num" data-sort-value="0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="10.0">10</td><td class="num" data-sort-value="0.0">0</td><td><span class="no-calls">None</span></td></tr>
+        <tr><td class="rank" data-sort-value="28">28</td><td class="rank" data-sort-value="27">27</td><td><span class="method-badge get">GET</span></td><td><code>/owners/new</code></td><td><code>org.springframework.samples.petclinic.owner.OwnerController</code></td><td><code>initCreationForm</code></td><td class="params"></td><td class="num" data-sort-value="4">4</td><td class="num" data-sort-value="0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="10.0">10</td><td class="num" data-sort-value="0.0">0</td><td><span class="no-calls">None</span></td></tr>
+        <tr><td class="rank" data-sort-value="22">22</td><td class="rank" data-sort-value="28">28</td><td><span class="method-badge get">GET</span></td><td><code>/owners/{ownerId}</code></td><td><code>org.springframework.samples.petclinic.owner.OwnerController</code></td><td><code>showOwner</code></td><td class="params">int</td><td class="num" data-sort-value="10">10</td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="30.0">30</td><td class="num" data-sort-value="0.39152465978672735">0.3915</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="10.0">10</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>1 calls</summary><ul><li><code>org.springframework.samples.petclinic.owner.OwnerRepository#findById(Integer)</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="29">29</td><td class="rank" data-sort-value="29">29</td><td><span class="method-badge get">GET</span></td><td><code>/owners/{ownerId}/edit</code></td><td><code>org.springframework.samples.petclinic.owner.OwnerController</code></td><td><code>initUpdateOwnerForm</code></td><td class="params"></td><td class="num" data-sort-value="4">4</td><td class="num" data-sort-value="0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="10.0">10</td><td class="num" data-sort-value="0.0">0</td><td><span class="no-calls">None</span></td></tr>
+        <tr><td class="rank" data-sort-value="30">30</td><td class="rank" data-sort-value="30">30</td><td><span class="method-badge get">GET</span></td><td><code>/owners/{ownerId}/pets/new</code></td><td><code>org.springframework.samples.petclinic.owner.PetController</code></td><td><code>initCreationForm</code></td><td class="params">Owner, ModelMap</td><td class="num" data-sort-value="17">17</td><td class="num" data-sort-value="0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="1.0">1</td><td class="num" data-sort-value="1.3793103448275863">1.3793</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>3 calls</summary><ul><li><code>org.springframework.samples.petclinic.owner.Owner#addPet(Pet)</code></li><li><code>org.springframework.samples.petclinic.model.BaseEntity#isNew()</code></li><li><code>org.springframework.samples.petclinic.owner.Owner#getPets()</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="31">31</td><td class="rank" data-sort-value="31">31</td><td><span class="method-badge get">GET</span></td><td><code>/owners/{ownerId}/pets/{petId}/edit</code></td><td><code>org.springframework.samples.petclinic.owner.PetController</code></td><td><code>initUpdateForm</code></td><td class="params"></td><td class="num" data-sort-value="4">4</td><td class="num" data-sort-value="0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="10.0">10</td><td class="num" data-sort-value="0.0">0</td><td><span class="no-calls">None</span></td></tr>
+        <tr><td class="rank" data-sort-value="32">32</td><td class="rank" data-sort-value="32">32</td><td><span class="method-badge get">GET</span></td><td><code>/owners/{ownerId}/pets/{petId}/visits/new</code></td><td><code>org.springframework.samples.petclinic.owner.VisitController</code></td><td><code>initNewVisitForm</code></td><td class="params"></td><td class="num" data-sort-value="4">4</td><td class="num" data-sort-value="0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="10.0">10</td><td class="num" data-sort-value="0.0">0</td><td><span class="no-calls">None</span></td></tr>
+        <tr><td class="rank" data-sort-value="33">33</td><td class="rank" data-sort-value="33">33</td><td><span class="method-badge get">GET</span></td><td><code>/vets</code></td><td><code>org.springframework.samples.petclinic.vet.VetController</code></td><td><code>showResourcesVetList</code></td><td class="params"></td><td class="num" data-sort-value="18">18</td><td class="num" data-sort-value="0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="1.0">1</td><td class="num" data-sort-value="10.0">10</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>2 calls</summary><ul><li><code>org.springframework.samples.petclinic.vet.Vets#getVetList()</code></li><li><code>org.springframework.samples.petclinic.vet.VetRepository#findAll()</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="34">34</td><td class="rank" data-sort-value="34">34</td><td><span class="method-badge get">GET</span></td><td><code>/vets.html</code></td><td><code>org.springframework.samples.petclinic.vet.VetController</code></td><td><code>showVetList</code></td><td class="params">int, Model</td><td class="num" data-sort-value="32">32</td><td class="num" data-sort-value="0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="1.0">1</td><td class="num" data-sort-value="10.0">10</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>4 calls</summary><ul><li><code>org.springframework.samples.petclinic.vet.VetController#findPaginated(int)</code></li><li><code>org.springframework.samples.petclinic.vet.VetRepository#findAll(Pageable)</code></li><li><code>org.springframework.samples.petclinic.vet.Vets#getVetList()</code></li><li><code>org.springframework.samples.petclinic.vet.VetController#addPaginationModel(int, Page&lt;Vet&gt;, Model)</code></li></ul></details></td></tr>
+      </tbody>
+    </table>
+  </section>
+  </div>
+  <div id="shared-tab" class="tab-content">
+  <section>
+    <h2>Shared Components (33 rows)</h2>
+    <div class="toolbar">
+      <input type="search" data-filter-target="#shared-hotspots" placeholder="Filter by method or calling api…" aria-label="Filter shared components">
+      <span class="count" data-count-target="#shared-hotspots">33 / 33</span>
+    </div>
+    <table id="shared-hotspots" class="sortable">
+      <thead><tr><th data-sort-type="number">Simple Rank</th><th data-sort-type="number" aria-sort="ascending">Composite Rank</th><th data-sort-type="string">FQCN</th><th data-sort-type="string">Method</th><th data-sort-type="string">Parameters</th><th data-sort-type="number" class="num">LOC</th><th data-sort-type="number" class="num">Revisions</th><th data-sort-type="number" class="num">Simple Score</th><th data-sort-type="number" class="num">Recency Decay</th><th data-sort-type="number" class="num">Cognitive Complexity</th><th data-sort-type="number" class="num">Coverage Multiplier</th><th data-sort-type="number" class="num">Composite Score</th><th>Calling APIs</th></tr></thead>
+      <tbody>
+        <tr><td class="rank" data-sort-value="2">2</td><td class="rank" data-sort-value="1">1</td><td><code>org.springframework.samples.petclinic.owner.Owner</code></td><td><code>getPet</code></td><td class="params">String, boolean</td><td class="num" data-sort-value="11">11</td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="33.0">33</td><td class="num" data-sort-value="0.341812944119506">0.3418</td><td class="num" data-sort-value="8.0">8</td><td class="num" data-sort-value="10.0">10</td><td class="num" data-sort-value="27.345035529560484">27.3450</td><td><details><summary>2 APIs</summary><ul><li><code>POST /owners/{ownerId}/pets/new</code></li><li><code>POST /owners/{ownerId}/pets/{petId}/edit</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="1">1</td><td class="rank" data-sort-value="2">2</td><td><code>org.springframework.samples.petclinic.owner.Owner</code></td><td><code>getPet</code></td><td class="params">Integer</td><td class="num" data-sort-value="11">11</td><td class="num" data-sort-value="4">4</td><td class="num" data-sort-value="44.0">44</td><td class="num" data-sort-value="0.4933537024711991">0.4934</td><td class="num" data-sort-value="6.0">6</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="2.6910201952974493">2.6910</td><td><details><summary>4 APIs</summary><ul><li><code>POST /owners/{ownerId}/pets/{petId}/visits/new</code></li><li><code>PUT /api/pets/{petId}</code></li><li><code>GET /api/pets/{petId}</code></li><li><code>POST /owners/{ownerId}/pets/{petId}/edit</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="13">13</td><td class="rank" data-sort-value="3">3</td><td><code>org.springframework.samples.petclinic.boarding.Reservation</code></td><td><code>getAnimalCount</code></td><td class="params"></td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="1">1</td><td class="num" data-sort-value="3.0">3</td><td class="num" data-sort-value="0.6546922875874868">0.6547</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>3 APIs</summary><ul><li><code>GET /api/reservations/{id}</code></li><li><code>POST /api/reservations</code></li><li><code>PUT /api/reservations/{id}</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="14">14</td><td class="rank" data-sort-value="4">4</td><td><code>org.springframework.samples.petclinic.boarding.Reservation</code></td><td><code>getCheckInDate</code></td><td class="params"></td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="1">1</td><td class="num" data-sort-value="3.0">3</td><td class="num" data-sort-value="0.6546922875874868">0.6547</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>4 APIs</summary><ul><li><code>GET /api/reservations/{id}</code></li><li><code>DELETE /api/reservations/{id}</code></li><li><code>POST /api/reservations</code></li><li><code>PUT /api/reservations/{id}</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="15">15</td><td class="rank" data-sort-value="5">5</td><td><code>org.springframework.samples.petclinic.boarding.Reservation</code></td><td><code>getDepositAmount</code></td><td class="params"></td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="1">1</td><td class="num" data-sort-value="3.0">3</td><td class="num" data-sort-value="0.6546922875874868">0.6547</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>3 APIs</summary><ul><li><code>GET /api/reservations/{id}</code></li><li><code>POST /api/reservations</code></li><li><code>PUT /api/reservations/{id}</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="16">16</td><td class="rank" data-sort-value="6">6</td><td><code>org.springframework.samples.petclinic.boarding.Reservation</code></td><td><code>getLoyaltyPoints</code></td><td class="params"></td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="1">1</td><td class="num" data-sort-value="3.0">3</td><td class="num" data-sort-value="0.6546922875874868">0.6547</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>3 APIs</summary><ul><li><code>GET /api/reservations/{id}</code></li><li><code>POST /api/reservations</code></li><li><code>PUT /api/reservations/{id}</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="17">17</td><td class="rank" data-sort-value="7">7</td><td><code>org.springframework.samples.petclinic.boarding.Reservation</code></td><td><code>getNights</code></td><td class="params"></td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="1">1</td><td class="num" data-sort-value="3.0">3</td><td class="num" data-sort-value="0.6546922875874868">0.6547</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>4 APIs</summary><ul><li><code>GET /api/reservations/{id}</code></li><li><code>POST /api/reservations</code></li><li><code>PUT /api/reservations/{id}</code></li><li><code>GET /api/reservations</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="18">18</td><td class="rank" data-sort-value="8">8</td><td><code>org.springframework.samples.petclinic.boarding.Reservation</code></td><td><code>getOwnerEmail</code></td><td class="params"></td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="1">1</td><td class="num" data-sort-value="3.0">3</td><td class="num" data-sort-value="0.6546922875874868">0.6547</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>3 APIs</summary><ul><li><code>GET /api/reservations/{id}</code></li><li><code>POST /api/reservations</code></li><li><code>PUT /api/reservations/{id}</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="19">19</td><td class="rank" data-sort-value="9">9</td><td><code>org.springframework.samples.petclinic.boarding.Reservation</code></td><td><code>getPetName</code></td><td class="params"></td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="1">1</td><td class="num" data-sort-value="3.0">3</td><td class="num" data-sort-value="0.6546922875874868">0.6547</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>3 APIs</summary><ul><li><code>GET /api/reservations/{id}</code></li><li><code>POST /api/reservations</code></li><li><code>PUT /api/reservations/{id}</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="20">20</td><td class="rank" data-sort-value="10">10</td><td><code>org.springframework.samples.petclinic.boarding.Reservation</code></td><td><code>getPriceTier</code></td><td class="params"></td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="1">1</td><td class="num" data-sort-value="3.0">3</td><td class="num" data-sort-value="0.6546922875874868">0.6547</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>4 APIs</summary><ul><li><code>GET /api/reservations/{id}</code></li><li><code>POST /api/reservations</code></li><li><code>PUT /api/reservations/{id}</code></li><li><code>GET /api/reservations</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="21">21</td><td class="rank" data-sort-value="11">11</td><td><code>org.springframework.samples.petclinic.boarding.Reservation</code></td><td><code>getPromoCode</code></td><td class="params"></td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="1">1</td><td class="num" data-sort-value="3.0">3</td><td class="num" data-sort-value="0.6546922875874868">0.6547</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>3 APIs</summary><ul><li><code>GET /api/reservations/{id}</code></li><li><code>POST /api/reservations</code></li><li><code>PUT /api/reservations/{id}</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="22">22</td><td class="rank" data-sort-value="12">12</td><td><code>org.springframework.samples.petclinic.boarding.Reservation</code></td><td><code>getRoomNumber</code></td><td class="params"></td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="1">1</td><td class="num" data-sort-value="3.0">3</td><td class="num" data-sort-value="0.6546922875874868">0.6547</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>3 APIs</summary><ul><li><code>GET /api/reservations/{id}</code></li><li><code>POST /api/reservations</code></li><li><code>PUT /api/reservations/{id}</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="23">23</td><td class="rank" data-sort-value="13">13</td><td><code>org.springframework.samples.petclinic.boarding.Reservation</code></td><td><code>getStatus</code></td><td class="params"></td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="1">1</td><td class="num" data-sort-value="3.0">3</td><td class="num" data-sort-value="0.6546922875874868">0.6547</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>4 APIs</summary><ul><li><code>GET /api/reservations/{id}</code></li><li><code>DELETE /api/reservations/{id}</code></li><li><code>POST /api/reservations</code></li><li><code>PUT /api/reservations/{id}</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="24">24</td><td class="rank" data-sort-value="14">14</td><td><code>org.springframework.samples.petclinic.boarding.Reservation</code></td><td><code>setNights</code></td><td class="params">int</td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="1">1</td><td class="num" data-sort-value="3.0">3</td><td class="num" data-sort-value="0.6546922875874868">0.6547</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>2 APIs</summary><ul><li><code>POST /api/reservations</code></li><li><code>PUT /api/reservations/{id}</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="25">25</td><td class="rank" data-sort-value="15">15</td><td><code>org.springframework.samples.petclinic.boarding.Reservation</code></td><td><code>setStatus</code></td><td class="params">ReservationStatus</td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="1">1</td><td class="num" data-sort-value="3.0">3</td><td class="num" data-sort-value="0.6546922875874868">0.6547</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>2 APIs</summary><ul><li><code>POST /api/reservations</code></li><li><code>PUT /api/reservations/{id}</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="12">12</td><td class="rank" data-sort-value="16">16</td><td><code>org.springframework.samples.petclinic.boarding.ReservationDtos.ReservationResponse</code></td><td><code>from</code></td><td class="params">Reservation</td><td class="num" data-sort-value="6">6</td><td class="num" data-sort-value="1">1</td><td class="num" data-sort-value="6.0">6</td><td class="num" data-sort-value="0.6546922875874868">0.6547</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>3 APIs</summary><ul><li><code>GET /api/reservations/{id}</code></li><li><code>POST /api/reservations</code></li><li><code>PUT /api/reservations/{id}</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="28">28</td><td class="rank" data-sort-value="17">17</td><td><code>org.springframework.samples.petclinic.boarding.ReservationRepository</code></td><td><code>countByRoomNumberAndStatus</code></td><td class="params">int, ReservationStatus</td><td class="num" data-sort-value="1">1</td><td class="num" data-sort-value="1">1</td><td class="num" data-sort-value="1.0">1</td><td class="num" data-sort-value="0.6546922875874868">0.6547</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="1.0">1</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>2 APIs</summary><ul><li><code>POST /api/reservations</code></li><li><code>PUT /api/reservations/{id}</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="3">3</td><td class="rank" data-sort-value="18">18</td><td><code>org.springframework.samples.petclinic.model.BaseEntity</code></td><td><code>getId</code></td><td class="params"></td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="9.0">9</td><td class="num" data-sort-value="0.341812944119506">0.3418</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>11 APIs</summary><ul><li><code>POST /owners/{ownerId}/edit</code></li><li><code>GET /api/reservations/{id}</code></li><li><code>POST /owners/{ownerId}/pets/{petId}/visits/new</code></li><li><code>GET /owners</code></li><li><code>PUT /api/pets/{petId}</code></li><li><code>GET /api/pets/{petId}</code></li><li><code>POST /owners/new</code></li><li><code>POST /api/reservations</code></li><li><code>GET /api/vets/{vetId}</code></li><li><code>POST /owners/{ownerId}/pets/{petId}/edit</code></li><li><code>PUT /api/reservations/{id}</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="29">29</td><td class="rank" data-sort-value="19">19</td><td><code>org.springframework.samples.petclinic.model.BaseEntity</code></td><td><code>isNew</code></td><td class="params"></td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>7 APIs</summary><ul><li><code>POST /api/pets</code></li><li><code>POST /owners/{ownerId}/pets/{petId}/visits/new</code></li><li><code>PUT /api/pets/{petId}</code></li><li><code>GET /api/pets/{petId}</code></li><li><code>GET /owners/{ownerId}/pets/new</code></li><li><code>POST /owners/{ownerId}/pets/new</code></li><li><code>POST /owners/{ownerId}/pets/{petId}/edit</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="4">4</td><td class="rank" data-sort-value="20">20</td><td><code>org.springframework.samples.petclinic.model.BaseEntity</code></td><td><code>setId</code></td><td class="params">Integer</td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="9.0">9</td><td class="num" data-sort-value="0.341812944119506">0.3418</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>2 APIs</summary><ul><li><code>PUT /api/owners/{ownerId}</code></li><li><code>POST /owners/{ownerId}/edit</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="5">5</td><td class="rank" data-sort-value="21">21</td><td><code>org.springframework.samples.petclinic.model.NamedEntity</code></td><td><code>getName</code></td><td class="params"></td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="9.0">9</td><td class="num" data-sort-value="0.341812944119506">0.3418</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>4 APIs</summary><ul><li><code>PUT /api/pets/{petId}</code></li><li><code>GET /api/vets</code></li><li><code>POST /owners/{ownerId}/pets/new</code></li><li><code>POST /owners/{ownerId}/pets/{petId}/edit</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="6">6</td><td class="rank" data-sort-value="22">22</td><td><code>org.springframework.samples.petclinic.model.NamedEntity</code></td><td><code>setName</code></td><td class="params">String</td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="9.0">9</td><td class="num" data-sort-value="0.341812944119506">0.3418</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>2 APIs</summary><ul><li><code>PUT /api/pets/{petId}</code></li><li><code>POST /owners/{ownerId}/pets/{petId}/edit</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="7">7</td><td class="rank" data-sort-value="23">23</td><td><code>org.springframework.samples.petclinic.model.Person</code></td><td><code>getLastName</code></td><td class="params"></td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="9.0">9</td><td class="num" data-sort-value="0.341812944119506">0.3418</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>2 APIs</summary><ul><li><code>GET /owners</code></li><li><code>GET /api/owners</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="30">30</td><td class="rank" data-sort-value="24">24</td><td><code>org.springframework.samples.petclinic.owner.Owner</code></td><td><code>addPet</code></td><td class="params">Pet</td><td class="num" data-sort-value="5">5</td><td class="num" data-sort-value="0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="1.0">1</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>4 APIs</summary><ul><li><code>POST /api/pets</code></li><li><code>GET /owners/{ownerId}/pets/new</code></li><li><code>POST /owners/{ownerId}/pets/new</code></li><li><code>POST /owners/{ownerId}/pets/{petId}/edit</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="31">31</td><td class="rank" data-sort-value="25">25</td><td><code>org.springframework.samples.petclinic.owner.Owner</code></td><td><code>getPets</code></td><td class="params"></td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>7 APIs</summary><ul><li><code>POST /api/pets</code></li><li><code>POST /owners/{ownerId}/pets/{petId}/visits/new</code></li><li><code>PUT /api/pets/{petId}</code></li><li><code>GET /api/pets/{petId}</code></li><li><code>GET /owners/{ownerId}/pets/new</code></li><li><code>POST /owners/{ownerId}/pets/new</code></li><li><code>POST /owners/{ownerId}/pets/{petId}/edit</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="26">26</td><td class="rank" data-sort-value="26">26</td><td><code>org.springframework.samples.petclinic.owner.OwnerRepository</code></td><td><code>findById</code></td><td class="params">Integer</td><td class="num" data-sort-value="1">1</td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="3.0">3</td><td class="num" data-sort-value="0.39152465978672735">0.3915</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="1.0">1</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>3 APIs</summary><ul><li><code>GET /owners/{ownerId}</code></li><li><code>POST /api/pets</code></li><li><code>GET /api/owners/{ownerId}</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="8">8</td><td class="rank" data-sort-value="27">27</td><td><code>org.springframework.samples.petclinic.owner.Pet</code></td><td><code>getBirthDate</code></td><td class="params"></td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="9.0">9</td><td class="num" data-sort-value="0.341812944119506">0.3418</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>3 APIs</summary><ul><li><code>PUT /api/pets/{petId}</code></li><li><code>POST /owners/{ownerId}/pets/new</code></li><li><code>POST /owners/{ownerId}/pets/{petId}/edit</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="9">9</td><td class="rank" data-sort-value="28">28</td><td><code>org.springframework.samples.petclinic.owner.Pet</code></td><td><code>getType</code></td><td class="params"></td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="9.0">9</td><td class="num" data-sort-value="0.341812944119506">0.3418</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>2 APIs</summary><ul><li><code>PUT /api/pets/{petId}</code></li><li><code>POST /owners/{ownerId}/pets/{petId}/edit</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="10">10</td><td class="rank" data-sort-value="29">29</td><td><code>org.springframework.samples.petclinic.owner.Pet</code></td><td><code>setBirthDate</code></td><td class="params">LocalDate</td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="9.0">9</td><td class="num" data-sort-value="0.341812944119506">0.3418</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>2 APIs</summary><ul><li><code>PUT /api/pets/{petId}</code></li><li><code>POST /owners/{ownerId}/pets/{petId}/edit</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="11">11</td><td class="rank" data-sort-value="30">30</td><td><code>org.springframework.samples.petclinic.owner.Pet</code></td><td><code>setType</code></td><td class="params">PetType</td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="9.0">9</td><td class="num" data-sort-value="0.341812944119506">0.3418</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>2 APIs</summary><ul><li><code>PUT /api/pets/{petId}</code></li><li><code>POST /owners/{ownerId}/pets/{petId}/edit</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="27">27</td><td class="rank" data-sort-value="31">31</td><td><code>org.springframework.samples.petclinic.security.JwtUtil</code></td><td><code>getSigningKey</code></td><td class="params"></td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="1">1</td><td class="num" data-sort-value="3.0">3</td><td class="num" data-sort-value="0.07935387279475448">0.0794</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.9090909090909091">0.9091</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>2 APIs</summary><ul><li><code>POST /api/auth/login</code></li><li><code>POST /api/auth/validate</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="32">32</td><td class="rank" data-sort-value="32">32</td><td><code>org.springframework.samples.petclinic.vet.VetRepository</code></td><td><code>findAll</code></td><td class="params"></td><td class="num" data-sort-value="3">3</td><td class="num" data-sort-value="0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="1.0">1</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>3 APIs</summary><ul><li><code>GET /vets</code></li><li><code>GET /api/vets/{vetId}</code></li><li><code>GET /api/vets</code></li></ul></details></td></tr>
+        <tr><td class="rank" data-sort-value="33">33</td><td class="rank" data-sort-value="33">33</td><td><code>org.springframework.samples.petclinic.vet.Vets</code></td><td><code>getVetList</code></td><td class="params"></td><td class="num" data-sort-value="7">7</td><td class="num" data-sort-value="0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="0.0">0</td><td class="num" data-sort-value="1.0">1</td><td class="num" data-sort-value="10.0">10</td><td class="num" data-sort-value="0.0">0</td><td><details><summary>2 APIs</summary><ul><li><code>GET /vets.html</code></li><li><code>GET /vets</code></li></ul></details></td></tr>
+      </tbody>
+    </table>
+  </section>
+  </div>
+  <footer>Sort by clicking a column header. Filter rows by typing in the search box above each table.</footer>
+  <script>
+  (function () {
+    function toggleXray(rowId, el) {
+      var target = document.getElementById(rowId);
+      if (!target) return;
+      if (target.style.display === 'none') {
+        target.style.display = 'table-row';
+        el.classList.add('expanded');
+      } else {
+        target.style.display = 'none';
+        el.classList.remove('expanded');
+      }
+    }
+    window.toggleXray = toggleXray;
+
+    function switchTab(evt, tabId) {
+      var contents = document.querySelectorAll('.tab-content');
+      contents.forEach(function (content) {
+        content.classList.remove('active');
+      });
+      var buttons = document.querySelectorAll('.tab-button');
+      buttons.forEach(function (button) {
+        button.classList.remove('active');
+      });
+      document.getElementById(tabId).classList.add('active');
+      evt.currentTarget.classList.add('active');
+    }
+    window.switchTab = switchTab;
+
+    function applyFilter(input) {
+      var sel = input.getAttribute('data-filter-target');
+      var table = document.querySelector(sel);
+      if (!table) return;
+      var q = input.value.trim().toLowerCase();
+      var rows = table.tBodies[0].rows;
+      var shown = 0, total = 0;
+      for (var i = 0; i < rows.length; i++) {
+        var row = rows[i];
+        if (row.classList.contains('xray-row')) {
+          // Drill-down rows are not data rows: filtering always
+          // collapses them (and never counts them).
+          row.style.display = 'none';
+          continue;
+        }
+        total++;
+        var match = !q || row.textContent.toLowerCase().indexOf(q) !== -1;
+        row.style.display = match ? '' : 'none';
+        row.classList.remove('expanded');
+        if (match) shown++;
+      }
+      var countEl = document.querySelector('[data-count-target="' + sel + '"]');
+      if (countEl) countEl.textContent = shown + ' / ' + total;
+    }
+    document.querySelectorAll('input[type="search"][data-filter-target]')
+      .forEach(function (input) {
+        input.addEventListener('input', function () { applyFilter(input); });
+      });
+
+    function compare(a, b, type, asc) {
+      var av, bv;
+      if (type === 'number') {
+        av = parseFloat(a); bv = parseFloat(b);
+        if (isNaN(av)) av = -Infinity;
+        if (isNaN(bv)) bv = -Infinity;
+      } else {
+        av = a.toLowerCase(); bv = b.toLowerCase();
+      }
+      if (av < bv) return asc ? -1 : 1;
+      if (av > bv) return asc ? 1 : -1;
+      return 0;
+    }
+    document.querySelectorAll('table.sortable thead th').forEach(function (th) {
+      th.addEventListener('click', function () {
+        var table = th.closest('table');
+        // Per-table column index — the forEach index is
+        // document-global and breaks every table after the
+        // first (cells[idx] is undefined there).
+        var idx = th.cellIndex;
+        var type = th.getAttribute('data-sort-type') || 'string';
+        var asc = th.getAttribute('aria-sort') !== 'ascending';
+        table.querySelectorAll('thead th').forEach(function (h) {
+          h.removeAttribute('aria-sort');
+        });
+        th.setAttribute('aria-sort', asc ? 'ascending' : 'descending');
+        // Sort only data rows; x-ray drill-down rows (single
+        // colspan cell) are carried along behind their parent.
+        var tbody = table.tBodies[0];
+        var all = Array.prototype.slice.call(tbody.rows);
+        var dataRows = [];
+        for (var i = 0; i < all.length; i++) {
+          if (all[i].classList.contains('xray-row')) {
+            if (dataRows.length > 0) {
+              dataRows[dataRows.length - 1]._xrayRow = all[i];
+            }
+          } else {
+            dataRows.push(all[i]);
+          }
+        }
+        dataRows.sort(function (r1, r2) {
+          var c1 = r1.cells[idx];
+          var c2 = r2.cells[idx];
+          var v1 = c1 ? c1.getAttribute('data-sort-value') : null;
+          var v2 = c2 ? c2.getAttribute('data-sort-value') : null;
+          if (v1 === null) v1 = c1 ? c1.textContent : '';
+          if (v2 === null) v2 = c2 ? c2.textContent : '';
+          return compare(v1, v2, type, asc);
+        });
+        dataRows.forEach(function (r) {
+          tbody.appendChild(r);
+          if (r._xrayRow) tbody.appendChild(r._xrayRow);
+        });
+      });
+    });
+  })();
+  </script>
+</body>
+</html>

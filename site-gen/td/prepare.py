@@ -53,7 +53,9 @@ def _describe_flags() -> list[str]:
 
 
 CLAUDE_FLAGS = _describe_flags()
-ARTIFACT_TOOLS = ("pjacoco", "jacococli", "jqassistant", "jqassistantSpring", "hotspot")
+ARTIFACT_TOOLS = ("pjacoco", "jacococli", "jqassistant", "jqassistantSpring")
+# 고정 커밋을 소스에서 빌드하는 도구(S00-prepare.sh가 clone·빌드한다). pin의 commit은 40자 전체 sha여야 한다.
+SOURCE_TOOLS = ("hotspot", "tia", "bbtg")
 
 
 class PrepareError(RuntimeError):
@@ -114,10 +116,10 @@ def load_pin(path: Path | None = None) -> dict:
         data = yaml.safe_load(Path(path).read_text())
     except (OSError, yaml.YAMLError) as exc:
         raise PrepareError(f"tools.pin.yaml을 읽을 수 없다({path}): {exc}") from exc
-    missing = [tool for tool in (*ARTIFACT_TOOLS, "tia", "bbtg") if tool not in (data or {})]
+    missing = [tool for tool in (*ARTIFACT_TOOLS, *SOURCE_TOOLS) if tool not in (data or {})]
     if missing:
         raise PrepareError(f"tools.pin.yaml에 항목이 없다: {missing}")
-    for tool in ("tia", "bbtg"):
+    for tool in SOURCE_TOOLS:
         if not re.fullmatch(r"[0-9a-f]{40}", str(data[tool].get("commit", ""))):
             raise PrepareError(f"tools.pin.yaml: {tool}.commit은 40자 전체 sha여야 한다(짧은 sha 접두사 금지)")
     return data
@@ -244,7 +246,7 @@ def _extract_zip_preserving_modes(zip_path: Path, dest: Path) -> None:
 
 
 def fetch_artifacts(pin: dict, tools_dir: Path, pin_file: Path | None = None, record: bool = False) -> dict:
-    """Maven Central/GitHub release 산출물을 받아 work/tools 레이아웃으로 놓고 {tool: 정보}를 돌려준다."""
+    """Maven Central 산출물을 받아 work/tools 레이아웃으로 놓고 {tool: 정보}를 돌려준다."""
     tools_dir = Path(tools_dir)
     cache = tools_dir / ".cache"
     cache.mkdir(parents=True, exist_ok=True)
@@ -300,12 +302,6 @@ def fetch_artifacts(pin: dict, tools_dir: Path, pin_file: Path | None = None, re
     sha = get("jqassistantSpring", maven_url(spec["group"], spec["artifact"], spec["version"]), plugin)
     results["jqassistantSpring"] = {"version": spec["version"], "sha256": sha, "path": str(plugin),
                                     "coordinates": f"{spec['group']}:{spec['artifact']}:{spec['version']}"}
-
-    spec = pin["hotspot"]
-    hotspot = tools_dir / "hotspot.jar"
-    url = f"https://github.com/{spec['repo']}/releases/download/{spec['tag']}/{spec['asset']}"
-    sha = get("hotspot", url, hotspot)
-    results["hotspot"] = {"version": spec["version"], "sha256": sha, "path": str(hotspot), "source": url}
     return results
 
 
@@ -347,6 +343,19 @@ def check_resolved_plugin_jar(spec: dict, expected_sha: str, repo: Path) -> str:
 
 
 # --- tools.lock ---------------------------------------------------------------------------------------------
+def hotspot_lock_entry(pin: dict, commit: str, jar: Path) -> dict:
+    """S00이 고정 커밋에서 빌드한 hotspot jar의 tools.lock 항목 {commit, sha256, path}.
+
+    체크아웃 커밋이 pin과 40자 전체로 같아야 하고 jar가 있어야 한다. 아니면 PrepareError다.
+    """
+    if commit != pin["hotspot"]["commit"]:
+        raise PrepareError(f"hotspot: 체크아웃 커밋 {commit}이 pin {pin['hotspot']['commit']}과 다르다")
+    jar = Path(jar)
+    if not jar.is_file():
+        raise PrepareError(f"hotspot: 빌드한 jar가 없다: {jar}")
+    return {"commit": commit, "sha256": sha256_file(jar), "path": str(jar)}
+
+
 def build_lock(pin: dict, artifacts: dict, *, run_id: str, sut_name: str, sut_commit: str, tia_commit: str,
                bbtg_commit: str, bbtg_requirements_sha256: str, claude_version: str, model: str,
                jqa_plugins: list[str], jqa_resolved_jar: str, jqa_spring_verified: bool, claude_verified: bool,
@@ -465,6 +474,7 @@ def _cmd_jqa_plugins(args) -> int:
 def _cmd_write_lock(args) -> int:
     pin = load_pin()
     artifacts = json.loads(Path(args.artifacts).read_text())
+    artifacts["hotspot"] = hotspot_lock_entry(pin, args.hotspot_commit, Path(args.hotspot_jar))
     jqa = json.loads(Path(args.jqa_plugins).read_text())
     lock = build_lock(
         pin, artifacts, run_id=args.run_id, sut_name=args.sut, sut_commit=args.sut_commit,
@@ -502,8 +512,8 @@ def main(argv: list[str] | None = None) -> int:
     add("jqa-config", _cmd_jqa_config)
     add("jqa-plugins", _cmd_jqa_plugins, "file", repo=True)
     add("write-lock", _cmd_write_lock, run_dir=True, run_id=True, sut=True, sut_commit=True, artifacts=True,
-        tia_commit=True, bbtg_commit=True, bbtg_requirements_sha256=True, claude_version=True, model=True,
-        jqa_plugins=True, python_version=True, claude_verified=True)
+        tia_commit=True, hotspot_commit=True, hotspot_jar=True, bbtg_commit=True, bbtg_requirements_sha256=True,
+        claude_version=True, model=True, jqa_plugins=True, python_version=True, claude_verified=True)
     args = parser.parse_args(argv)
     try:
         return args.func(args)

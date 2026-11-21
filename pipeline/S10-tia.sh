@@ -152,7 +152,7 @@ SUMMARY="$(td_py -m td.tia scenarios --impact "$S10_DIR/impact.json" --diff "$S1
 # --- report ---------------------------------------------------------------------------------------------
 (cd "$BASE_DIR/$(sut_get sources)" && find . -name '*.java' | sed 's#^\./##' | sort) >"$S10_DIR/prod-files.txt"
 PACKAGE_PREFIX="$(sut_get packages)"; PACKAGE_PREFIX="${PACKAGE_PREFIX%.\*}"; PACKAGE_PREFIX="${PACKAGE_PREFIX//.//}/"
-tia report --testwise "$S10_DIR/testwise.json" --scenarios "$S10_DIR/scenarios.json" --prod-files "$S10_DIR/prod-files.txt" \
+tia report --testwise "$S10_DIR/testwise.json" --scenarios "$S10_DIR/scenarios.json" --impact "$S10_DIR/impact.json" --prod-files "$S10_DIR/prod-files.txt" \
   --commit "$BASE" --out "$TIA_OUT/tia.html" --sut-name "$(sut_get name)" --prefix-strip "$PACKAGE_PREFIX" >"$S10_DIR/report.log" 2>&1 \
   || s10_fail "tia report 실패: $(tail -c 500 "$S10_DIR/report.log" | tr '\n' ' ')"
 [[ -s "$TIA_OUT/tia.html" ]] || s10_fail "tia.html이 비었다"

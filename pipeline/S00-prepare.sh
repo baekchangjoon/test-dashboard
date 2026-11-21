@@ -78,6 +78,33 @@ if [[ "$(cat "$TOOLS_DIR/tia/.commit" 2>/dev/null)" != "$TIA_COMMIT" || ! -x "$T
   echo "$TIA_COMMIT" > "$TOOLS_DIR/tia/.commit"
 fi
 
+# hotspot-analysis: 고정 커밋을 clone해 JDK 21로 bootJar를 빌드하고 work/tools/hotspot.jar로 둔다(S09는 이 경로를 쓴다).
+# hotspot.commit 표식이 커밋과 다르거나 jar가 없을 때만 다시 빌드한다.
+s00_py pin-get hotspot.commit; HOTSPOT_PIN="$S00_OUT"
+s00_py pin-get hotspot.repo; HOTSPOT_REPO="$S00_OUT"
+s00_py pin-get hotspot.jdk; HOTSPOT_JDK="$S00_OUT"
+s00_py pin-get hotspot.gradleTask; HOTSPOT_TASK="$S00_OUT"
+s00_py pin-get hotspot.jarGlob; HOTSPOT_JAR_GLOB="$S00_OUT"
+HOTSPOT_JAVA="$(td_java_home "$HOTSPOT_JDK")" || s00_fail "JDK ${HOTSPOT_JDK}을 찾지 못했다(hotspot-analysis 빌드에 필요)"
+HOTSPOT_SRC="$TOOLS_DIR/hotspot-src"
+HOTSPOT_JAR="$TOOLS_DIR/hotspot.jar"
+HOTSPOT_COMMIT="$(fetch_git_tool "$HOTSPOT_SRC" https "$HOTSPOT_REPO" "$HOTSPOT_PIN")" \
+  || s00_fail "hotspot 소스 확보 실패($HOTSPOT_REPO@$HOTSPOT_PIN)"
+[[ "$HOTSPOT_COMMIT" == "$HOTSPOT_PIN" ]] || s00_fail "hotspot 체크아웃 커밋 ${HOTSPOT_COMMIT}이 pin ${HOTSPOT_PIN}과 다르다"
+if [[ "$(cat "$TOOLS_DIR/hotspot.commit" 2>/dev/null)" != "$HOTSPOT_COMMIT" || ! -f "$HOTSPOT_JAR" ]]; then
+  td_run 1800 -- env JAVA_HOME="$HOTSPOT_JAVA" "$HOTSPOT_SRC/gradlew" -p "$HOTSPOT_SRC" --no-daemon -q "$HOTSPOT_TASK" >&2 \
+    || s00_fail "hotspot 빌드 실패($HOTSPOT_TASK, JDK $HOTSPOT_JDK)"
+  hotspot_jars=()
+  shopt -s nullglob
+  for candidate in "$HOTSPOT_SRC"/$HOTSPOT_JAR_GLOB; do
+    [[ "$(basename "$candidate")" == *-plain* ]] || hotspot_jars+=("$candidate")
+  done
+  shopt -u nullglob
+  [[ ${#hotspot_jars[@]} -eq 1 ]] || s00_fail "hotspot jar가 정확히 1개여야 한다(glob $HOTSPOT_JAR_GLOB, -plain 제외): ${#hotspot_jars[@]}개"
+  cp "${hotspot_jars[0]}" "$HOTSPOT_JAR.part" && mv -f "$HOTSPOT_JAR.part" "$HOTSPOT_JAR" || s00_fail "hotspot jar 복사 실패"
+  echo "$HOTSPOT_COMMIT" > "$TOOLS_DIR/hotspot.commit"
+fi
+
 s00_py pin-get bbtg.commit; BBTG_PIN="$S00_OUT"
 s00_py pin-get bbtg.repo; BBTG_REPO="$S00_OUT"
 BBTG_DIR="$TOOLS_DIR/bbtg"
@@ -157,15 +184,17 @@ td_log "S00 비인증 실측: $PROBE_SPEC -> $measured_status (sut.yaml 기대 $
 
 # --- 6. tools.lock과 run.json -------------------------------------------------------------------------
 s00_py write-lock --run-dir "$TD_RUN_DIR" --run-id "$TD_RUN_ID" --sut "$TD_SUT_NAME" --sut-commit "$TD_SUT_COMMIT" \
-  --artifacts "$TD_RUN_DIR/S00/artifacts.json" --tia-commit "$TIA_COMMIT" --bbtg-commit "$BBTG_COMMIT" \
+  --artifacts "$TD_RUN_DIR/S00/artifacts.json" --tia-commit "$TIA_COMMIT" \
+  --hotspot-commit "$HOTSPOT_COMMIT" --hotspot-jar "$HOTSPOT_JAR" --bbtg-commit "$BBTG_COMMIT" \
   --bbtg-requirements-sha256 "$REQ_SHA" --claude-version "$CLAUDE_VERSION" --model "$MODEL" \
   --jqa-plugins "$TD_RUN_DIR/S00/jqa-plugins.json" --python-version "$PY_VERSION" --claude-verified true
 LOCK_FILE="$S00_OUT"
 TOOLS_SUMMARY="$(jq -c --arg model "$MODEL" --arg cv "$CLAUDE_VERSION" \
   '{pjacoco: .pjacoco.version, jacococli: .jacococli.version, jqassistant: .jqassistant.version,
-    jqassistantSpring: .jqassistantSpring.version, hotspot: .hotspot.version, claude: $cv, model: $model}' \
+    jqassistantSpring: .jqassistantSpring.version, claude: $cv, model: $model}' \
   "$TD_RUN_DIR/S00/artifacts.json")"
-TOOLS_SUMMARY="$(jq -c --arg tia "${TIA_COMMIT:0:7}" --arg bbtg "${BBTG_COMMIT:0:7}" '. + {tia: $tia, bbtg: $bbtg}' <<< "$TOOLS_SUMMARY")"
+TOOLS_SUMMARY="$(jq -c --arg hotspot "${HOTSPOT_COMMIT:0:7}" --arg tia "${TIA_COMMIT:0:7}" --arg bbtg "${BBTG_COMMIT:0:7}" \
+  '. + {hotspot: $hotspot, tia: $tia, bbtg: $bbtg}' <<< "$TOOLS_SUMMARY")"
 td_py -m td.state set "$TD_RUN_DIR" tools "$TOOLS_SUMMARY" || s00_fail "run.json tools 기록 실패"
 
 OUTPUTS="$(jq -cn --arg jar "${jars[0]}" --arg classes "$CLASSES_DIR" --arg lock "$LOCK_FILE" --arg tools "$TOOLS_DIR" \
