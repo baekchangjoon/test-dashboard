@@ -99,22 +99,22 @@
 
 | REQ-ID | 요약 | 검증 테스트 | 레벨 | 상태 |
 |---|---|---|---|---|
-| REQ-101 | jQA 보강 파일 | test_det.py::test_req101_ext_ontology | E2E | ⚪ |
-| REQ-102 | 기존 arm 입력 불변 | test_det.py::test_req102_existing_inputs_unchanged | E2E | ⚪ |
-| REQ-103 | LLM 0회 | test_det.py::test_req103_no_llm_calls | Int | ⚪ |
-| REQ-104 | 결정성 | test_unit_detgen.py::test_req104_deterministic | Unit | ⚪ |
-| REQ-105 | 근거 완전성 | test_unit_detgen.py::test_req105_provenance<br>test_det.py::test_req105_provenance_real | Unit/E2E | ⚪ |
-| REQ-106 | 반하드코딩 | test_unit_detgen.py::test_req106_mutated_fixture<br>test_unit_detgen.py::test_req106_no_sut_literals | Unit | ⚪ |
-| REQ-107 | 생성 불가 보고 | test_unit_detgen.py::test_req107_universe<br>test_det.py::test_req107_universe_real | Unit/E2E | ⚪ |
-| REQ-108 | 파이프라인 통합 | test_det.py::test_req108_pipeline_compare | E2E | ⚪ |
-| REQ-109 | 통제 fixture | test_unit_detgen.py::test_req109_controlled_fixture | Unit | ⚪ |
-| REQ-110 | 실패 격리 | test_det.py::test_req110_failure_isolated | Int | ⚪ |
-| REQ-111 | 엔드포인트 대응 | test_unit_detgen.py::test_req111_mapping<br>test_det.py::test_req111_mapping_real | Unit/E2E | ⚪ |
-| REQ-112 | 입력 투영 | test_unit_detgen.py::test_req112_projection | Unit | ⚪ |
-| REQ-113 | 규칙 단위 | test_unit_detgen.py::test_req113_* | Unit | ⚪ |
-| REQ-114 | 기대 상태 | test_unit_detgen.py::test_req114_expect | Unit | ⚪ |
-| REQ-115 | baseline 점검 | test_unit_detgen.py::test_req115_baseline<br>test_det.py::test_req115_baseline_real | Unit/E2E | ⚪ |
-| REQ-116 | glue 규약 | test_det_glue.py::test_req116_glue_layout | Int | ⚪ |
-| REQ-117 | 문서 갱신 | 검토 | – | ⚪ |
+| REQ-101 | jQA 보강 파일 | test_det.py::test_req101_ext_ontology | E2E | 🟢 passed |
+| REQ-102 | 기존 arm 입력 불변 | test_det.py::test_req102_existing_inputs_unchanged | E2E | 🟢 passed |
+| REQ-103 | LLM 0회 | test_det.py::test_req103_no_llm_calls | Int | 🟢 passed |
+| REQ-104 | 결정성 | test_unit_detgen.py::test_req104_deterministic | Unit | 🟢 passed |
+| REQ-105 | 근거 완전성 | test_unit_detgen.py::test_req105_provenance<br>test_det.py::test_req105_provenance_real | Unit/E2E | 🟢 passed |
+| REQ-106 | 반하드코딩 | test_unit_detgen.py::test_req106_mutated_fixture<br>test_unit_detgen.py::test_req106_no_sut_literals | Unit | 🟢 passed |
+| REQ-107 | 생성 불가 보고 | test_unit_detgen.py::test_req107_universe<br>test_det.py::test_req107_universe_real | Unit/E2E | 🟢 passed |
+| REQ-108 | 파이프라인 통합 | test_det.py::test_req108_pipeline_compare | E2E | 🟢 passed |
+| REQ-109 | 통제 fixture | test_unit_detgen.py::test_req109_controlled_fixture | Unit | 🟢 passed |
+| REQ-110 | 실패 격리 | test_det.py::test_req110_failure_isolated | Int | 🟢 passed |
+| REQ-111 | 엔드포인트 대응 | test_unit_detgen.py::test_req111_mapping<br>test_det.py::test_req111_mapping_real | Unit/E2E | 🟢 passed |
+| REQ-112 | 입력 투영 | test_unit_detgen.py::test_req112_projection | Unit | 🟢 passed |
+| REQ-113 | 규칙 단위 | test_unit_detgen.py::test_req113_* | Unit | 🟢 passed |
+| REQ-114 | 기대 상태 | test_unit_detgen.py::test_req114_expect | Unit | 🟢 passed |
+| REQ-115 | baseline 점검 | test_unit_detgen.py::test_req115_baseline<br>test_det.py::test_req115_baseline_real | Unit/E2E | 🟢 passed |
+| REQ-116 | glue 규약 | test_det_glue.py::test_req116_glue_layout | Int | 🟢 passed |
+| REQ-117 | 문서 갱신 | 검토(상위 설계 G4·§5, README `--arms`, 백서 §5.3 정정·9장) | – | 🟢 done |
 
-커버리지 대상: REQ-101~117(17건). 제외: 없음.
+커버리지 대상: REQ-101~117(17건). 제외: 없음. 상태 기준: run3 `20261121-201248Z-b6f9393-manual-9d5ee1f4`(det_e2e 7건), 단위·통합 테스트(2026-11-22 회귀 829 passed). 매트릭스 커버리지 17/17.

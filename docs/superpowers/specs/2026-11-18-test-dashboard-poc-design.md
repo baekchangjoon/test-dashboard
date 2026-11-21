@@ -29,6 +29,7 @@ E2E 테스트를 만들고 그 결과와 품질 지표를 한 화면에서 보�
 - G2. 실행할 때마다 결과를 **run 단위로 누적**한다. run 메타데이터에는 PR·머지 트리거용 자리(`trigger`, `pr`)를 미리 둔다.
 - G3. 정적 호스팅(S3+CloudFront, `reports.<domain>`)과 기존 Lightsail 서버(`dash.<domain>`)에 같은 번들을 배포하고, 장단점을 측정값으로 비교한다.
 - G4. 세 arm으로 만든 E2E 테스트의 결과를 사전에 정한 기준(§6.12)으로 비교한다.
+  - 후속(2026-11-22): LLM 없이 결정적으로 케이스를 펼치는 네 번째 arm `det`를 추가했다. det는 입력 체제가 달라(조건식 포함, LLM 없음) §6.12 판정에서 빠지고 참고 열로만 나온다. 기본 arm은 그대로 base,jqa,owl이다. 상세는 `2026-11-22-deterministic-arm-design.md`.
 - G5. 대시보드는 SUT 여러 개를 전제로 한다. SUT 추가는 `suts/<name>/sut.yaml`과 하네스 설정을 추가하는 것으로 끝나야 하고, 파이프라인 코드에 SUT 이름을 하드코딩하지 않는다.
 
 ### 비목표
@@ -98,7 +99,7 @@ E2E 테스트를 만들고 그 결과와 품질 지표를 한 화면에서 보�
 
 - 상태값은 `passed | failed | degraded | skipped`이고, 모두 `reason`과 산출물 경로를 함께 기록한다. 기록 위치는 `work/runs/<runId>/stages/<ID>.json`이다.
 - `run-all.sh`의 종료 코드는 S00이나 S13이 실패하면 1(우선), 그 밖의 단계가 실패하면 2(게시는 됨), 실패가 없으면 0이다(passed, degraded, skipped 허용).
-- 각 단계는 `pipeline/<ID>-<name>.sh <sut> <runId>`로 따로 실행할 수 있다. `run-all.sh <sut> [--arms base,jqa,owl] [--reps 3] [--only S01,S08]`를 지원한다. 요청하지 않은 단계는 `skipped`(사유 `not-requested`)로 기록한다.
+- 각 단계는 `pipeline/<ID>-<name>.sh <sut> <runId>`로 따로 실행할 수 있다. `run-all.sh <sut> [--arms base,jqa,owl[,det]] [--reps 3] [--only S01,S08]`를 지원한다. 요청하지 않은 단계는 `skipped`(사유 `not-requested`)로 기록한다.
 - runId는 `YYYYMMDD-HHMMSSZ-<sha7>-<trigger>-<8hex 난수>`(UTC)이고, `work/runs/<runId>`를 `O_EXCL`로 예약하며 충돌하면 다시 만든다. trigger는 이번에는 `manual`만 쓴다.
 
 ## 6. 단계별 설계
