@@ -319,18 +319,23 @@ def test_req090_partial_failure_null_not_carried(tmp_path, collect_env):
 def test_req143_visibility_unknown_keeps_last_public(tmp_path, collect_env):
     site = tmp_path / "site"
     write_snapshot(site, "a", "20261121")
-    gh = fake_gh(tmp_path, {"o/a": {"hang": 30}, "o/b": {"hang": 30}})
-    out = run_collect(tmp_path, cfg_with(plain=["a", "b"]), gh=gh,
+    gh = fake_gh(tmp_path, {"o/a": {"hang": 30}, "o/neverseen": {"hang": 30}})
+    out = run_collect(tmp_path, cfg_with(plain=["a", "neverseen"]), gh=gh,
                       env={**collect_env, "TD_COLLECT_BUDGET_SEC": "3", "TD_NOW": "2026-11-22T01:00:00Z"})
-    assert out["status"] == "degraded" and sorted(out["unverified"]) == ["a", "b"]
+    # 표준 출력(게시하지 않는다)에는 확인하지 못한 과제가 모두 있다.
+    assert out["status"] == "degraded" and sorted(out["unverified"]) == ["a", "neverseen"]
     # 조정자 결정: 사이트 수준 `projects/_collect.json`은 매번 쓰고 written에 넣는다. 스냅숏은 하나도 쓰지 않는다.
     assert out["written"] == ["projects/_collect.json"]
+    # 파일에는 앞서 공개로 수집된 과제만 적는다. 한 번도 확인하지 못한 과제의 이름은 어떤 파일에도 없다.
     assert json.loads((site / "projects/_collect.json").read_text()) == {
-        "schema": 1, "date": "20261122", "unverified": ["a", "b"]}
+        "schema": 1, "date": "20261122", "unverified": ["a"]}
     assert sorted(p.name for p in (site / "projects/a/snapshots").iterdir()) == ["20261121.json"]
-    assert not (site / "projects/b").exists()
+    assert not (site / "projects/neverseen").exists()
     views = {p["name"]: p for p in metrics.build_projects(site, load_cfg(site))}
     assert list(views) == ["a"] and views["a"]["stale"] == "20261121"
+    rebuild_site(site)
+    for path in (p for p in site.rglob("*") if p.is_file()):
+        assert "neverseen" not in path.read_text(errors="replace"), path
     assert gh.alive_pids() == []
 
 
@@ -564,6 +569,41 @@ def test_req144_collect_sh_signal_revokes_token(tmp_path, collect_env, signal_nu
         with pytest.raises(ProcessLookupError):
             os.killpg(process.pid, 0)       # collect.sh와 td.collect가 모두 끝났다
         assert gh.alive_pids() == []
+    finally:
+        if process.poll() is None:
+            os.killpg(process.pid, signal.SIGKILL)
+            process.wait()
+
+
+def test_req144_signal_during_revoke_still_removes_token(tmp_path, collect_env):
+    """정상 경로의 정리(DELETE) 도중 프로세스 그룹에 SIGTERM이 와서 그 DELETE가 끊겨도, trap의 정리가 다시 지운다."""
+    ssh = fake_ssh(tmp_path, delete_delay=3)
+    gh = fake_gh(tmp_path, {"o/a": {}})
+    make_site(tmp_path, config=cfg_with(plain="a"))
+    env = {**_base_env(), "TD_ROOT": str(REPO_ROOT), "TD_WORK_DIR": str(tmp_path / "work"),
+           **{key: value for key, value in collect_env.items() if key != "SONAR_TOKEN"},
+           **token_env(tmp_path, ssh, collect_env.sonar.url), "TD_DOMAIN": "example.invalid", "TD_GH_BIN": str(gh.path)}
+    process = subprocess.Popen(["bash", str(COLLECT_SH), "--config", str(tmp_path / "dashboard.yaml"), "--site",
+                                str(tmp_path / "site"), "--suts-dir", str(tmp_path / "suts")],
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env,
+                               start_new_session=True)
+    try:
+        deadline = time.monotonic() + 60
+        while "delete from user_tokens where name='td-collect" not in ssh.log() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert "delete from user_tokens where name='td-collect" in ssh.log(), "정리 DELETE에 닿지 않았다"
+        os.killpg(process.pid, signal.SIGTERM)
+        # trap의 정리(두 번째 DELETE)가 도는 중에 다시 신호를 보내도 끊기지 않는다.
+        delete_sql = "delete from user_tokens where name='td-collect"
+        while ssh.log().count(delete_sql) < 2 and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert ssh.log().count(delete_sql) == 2, "trap의 정리 DELETE에 닿지 않았다"
+        os.killpg(process.pid, signal.SIGTERM)
+        stdout, stderr = process.communicate(timeout=60)
+        assert ssh.rows() == [], stdout + stderr
+        assert process.returncode != 0
+        with pytest.raises(ProcessLookupError):
+            os.killpg(process.pid, 0)
     finally:
         if process.poll() is None:
             os.killpg(process.pid, signal.SIGKILL)

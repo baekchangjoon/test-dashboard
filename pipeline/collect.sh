@@ -47,19 +47,24 @@ COLLECT_OUT=""
 COLLECT_REVOKED=""
 COLLECT_REVOKE_FAILED=""
 
+# 정리 시도가 끝까지 돈 뒤에만 표시한다. 정상 경로의 정리 도중 신호가 오면 trap이 다시 부르고, 이미 지웠으면
+# sonar-token.sh의 _TD_SONAR_REVOKE_STATE(done)가 아무것도 하지 않게 한다(경고도 그쪽에서 한 번만 낸다).
 collect_revoke() {
   [[ -n "$COLLECT_REVOKED" ]] && return 0
-  COLLECT_REVOKED=1
   td_sonar_token_revoke_named || COLLECT_REVOKE_FAILED=1
+  COLLECT_REVOKED=1
 }
 
+# 정리가 시작되면 INT/TERM을 무시한다(정리 도중의 중복 신호로 DELETE가 끊기지 않게. 자식도 무시를 물려받는다).
 collect_cleanup() {
+  trap '' INT TERM
   collect_revoke
   [[ -z "$COLLECT_OUT" ]] || rm -f "$COLLECT_OUT"
 }
 
 collect_on_signal() { # <signal> <exit code>
   local signal_name="$1" exit_code="$2"
+  trap '' INT TERM
   if [[ -n "$COLLECT_CHILD" ]] && kill -0 "$COLLECT_CHILD" 2>/dev/null; then
     kill -"$signal_name" "$COLLECT_CHILD" 2>/dev/null
     wait "$COLLECT_CHILD" 2>/dev/null

@@ -40,7 +40,7 @@ import yaml
 from td import dashboard_config, redact, state
 from td import sonar as sonar_api
 from td.dashboard_config import Config, ConfigError, Project
-from td.site.metrics import COLLECT_STATE_FILE
+from td.site.metrics import COLLECT_STATE_FILE, load_snapshots
 
 CONNECT_TIMEOUT_SEC = 10
 READ_TIMEOUT_SEC = 30
@@ -513,8 +513,10 @@ def collect(cfg: Config, site: Path, suts_dir: Path, *, now: datetime, env: Mapp
         if "failed" in (item.ci_state, item.sonar_state):
             failed_names.append(item.project.name)
             _log(f"일부 출처를 읽지 못했다: {item.project.name}")
+    # 파일에는 앞서 공개로 수집된 과제만 적는다(한 번도 확인하지 못한 과제는 비공개일 수 있어 이름을 쓰지 않는다).
     _write_json_atomic(site / "projects" / COLLECT_STATE_FILE,
-                       {"schema": 1, "date": date, "unverified": sorted(unverified)})
+                       {"schema": 1, "date": date,
+                        "unverified": sorted(name for name in unverified if _was_public(site, name))})
     written.append(f"projects/{COLLECT_STATE_FILE}")
 
     reasons = []
@@ -526,6 +528,12 @@ def collect(cfg: Config, site: Path, suts_dir: Path, *, now: datetime, env: Mapp
         reasons.append(REASON_BUDGET)
     return {"status": "degraded" if reasons else "ok", "reasons": reasons, "written": written,
             "excluded": sorted(excluded), "unverified": sorted(unverified)}
+
+
+def _was_public(site: Path, name: str) -> bool:
+    """디스크에 유효한 스냅숏이 있고 그 최신 것이 공개인가(인덱스가 그리는 조건과 같다)."""
+    snapshots, _dropped = load_snapshots(site / "projects" / name)
+    return bool(snapshots) and snapshots[-1].get("visibility") == "public"
 
 
 def needs_sonar(cfg: Config, site: Path) -> int:

@@ -353,6 +353,9 @@ elif sql.startswith("insert into user_tokens"):
 elif (found := re.fullmatch(r"select count\(\*\) from user_tokens where name='([^']*)'", sql.strip())):
     print(sum(1 for row in rows if row["name"] == found.group(1)))
 elif (found := re.fullmatch(r"delete from user_tokens where name='([^']*)'", sql.strip())):
+    if CONFIG.get("delete_delay"):
+        import time
+        time.sleep(CONFIG["delete_delay"])   # 이 사이에 신호를 받으면 행을 지우지 않고 끝난다
     if CONFIG["fail_delete"]:
         print("Connection closed by remote host", file=sys.stderr)
         sys.exit(255)
@@ -392,13 +395,16 @@ class FakeSsh:
         (self.state_dir / "rows.json").write_text(json.dumps(current))
 
 
-def fake_ssh(tmp_path: Path, *, fail_delete: bool = False, lose_insert_reply: bool = False) -> FakeSsh:
-    """`fail_delete`: DELETE가 SSH 오류(255)로 실패한다. `lose_insert_reply`: INSERT는 적용되지만 응답이 유실된다(255)."""
+def fake_ssh(tmp_path: Path, *, fail_delete: bool = False, lose_insert_reply: bool = False,
+             delete_delay: float = 0) -> FakeSsh:
+    """`fail_delete`: DELETE가 SSH 오류(255)로 실패한다. `lose_insert_reply`: INSERT는 적용되지만 응답이 유실된다(255).
+    `delete_delay`: DELETE를 받은 뒤(sql.log에 남긴 뒤) 지우기 전에 기다리는 초."""
     state_dir = tmp_path / "fake-ssh"
     bin_dir = state_dir / "bin"
     bin_dir.mkdir(parents=True)
     (state_dir / "config.json").write_text(json.dumps(
-        {"fail_delete": fail_delete, "lose_insert_reply": lose_insert_reply, "schema": _USER_TOKENS_SCHEMA}))
+        {"fail_delete": fail_delete, "lose_insert_reply": lose_insert_reply, "delete_delay": delete_delay,
+         "schema": _USER_TOKENS_SCHEMA}))
     (state_dir / "rows.json").write_text("[]")
     script = bin_dir / "ssh"
     script.write_text(f"#!{sys.executable}\n{_FAKE_SSH_SCRIPT}")
