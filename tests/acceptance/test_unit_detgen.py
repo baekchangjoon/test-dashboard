@@ -49,7 +49,9 @@ def test_projection_keeps_only_allowed_fields(tmp_path):
     assert set(first["items"][0]) == {"index", "condition", "expected", "branch_value", "param", "prefix", "conditionSha"}
     assert bundle.read("auth.json") == {"required_headers": [{"name": "Authorization", "required": True}]}
     keyparams = bundle.read("keyparams.json")
-    assert keyparams[0]["parameters"][0]["reasons"][0]["detail"] == "req.nights() < 1 || req.nights() > 30"
+    assert keyparams[0]["parameters"][0]["reasons"][0] == {"type": "BRANCH_CONDITION", "detail": "req.nights() < 1 || req.nights() > 30"}
+    assert keyparams[0]["parameters"][0]["accessor"] == "req"
+    assert set(keyparams[0]["parameters"][0]) == {"name", "accessor", "http_name", "java_type", "reasons"}
     assert bundle.read("harness.json") == {"login": "POST /api/auth/login", "unauthenticatedStatus": 403,
                                            "apiInclude": "/api/**", "timezone": "Asia/Seoul"}
 
@@ -157,3 +159,40 @@ def test_committed_fixtures_have_no_real_leaks():
         if path.is_relative_to(RAW_MIN):
             text = text.replace("/Users/example/", "")  # 절대경로 제거 동작을 증명하기 위한 의도적 가짜 경로
         assert redact.find_leaks(text) == [], path
+
+
+def test_missing_or_malformed_sut_yaml_is_fatal(tmp_path):
+    missing = inputs.project(RAW_MIN, tmp_path / "nope" / "sut.yaml", tmp_path / "o1")
+    assert missing.fatal and "sut.yaml" in missing.fatal
+    bad = tmp_path / "sut.yaml"
+    bad.write_text("name: [", encoding="utf-8")
+    assert inputs.project(RAW_MIN, bad, tmp_path / "o2").fatal
+
+
+def test_null_fields_become_empty_string(tmp_path):
+    run = _copy(RAW_MIN, tmp_path / "run")
+    plan = run / "S02" / "bbtg" / "raw" / "stdout" / "plan-tests-Foo.baz.json"
+    data = json.loads(plan.read_text(encoding="utf-8"))
+    data["test_cases"][0]["param"] = None
+    plan.write_text(json.dumps(data), encoding="utf-8")
+    projection = inputs.project(run, SUT_FILE, tmp_path / "out")
+    item = inputs.Bundle.open(projection.dir).read("plans.json")[1]["items"][0]
+    assert item["param"] == ""
+
+
+def test_condition_not_rewritten_and_leak_is_fatal(tmp_path):
+    """조건식은 redaction으로 고쳐 쓰지 않는다(conditionSha는 원문 해시). 경로가 섞여 있으면 게이트가 fatal로 막는다."""
+    run = _copy(RAW_MIN, tmp_path / "run")
+    plan = run / "S02" / "bbtg" / "raw" / "stdout" / "plan-tests-Foo.baz.json"
+    data = json.loads(plan.read_text(encoding="utf-8"))
+    data["test_cases"][0]["condition"] = 'x.startsWith("/Users/example/a")'
+    plan.write_text(json.dumps(data), encoding="utf-8")
+    projection = inputs.project(run, SUT_FILE, tmp_path / "out")
+    assert projection.fatal and "redaction" in projection.fatal
+    data["test_cases"][0]["condition"] = "a < b && \"/api/x\".equals(p)"
+    plan.write_text(json.dumps(data), encoding="utf-8")
+    ok = inputs.project(run, SUT_FILE, tmp_path / "out2")
+    item = inputs.Bundle.open(ok.dir).read("plans.json")[1]["items"][0]
+    assert item["condition"] == data["test_cases"][0]["condition"]
+    import hashlib
+    assert item["conditionSha"] == hashlib.sha256(item["condition"].encode("utf-8")).hexdigest()
