@@ -1059,3 +1059,123 @@ def test_observed_codes_from_cucumber_json():
     ]}]
     assert observed.observed_codes(json.dumps(report)) == {
         "ok-1": None, "bad-1": 400, "notag-1": 500, "prior-1": None, "other-1": None}
+
+
+# =====================================================================================
+# Task 6: S06 det 경로와 스냅샷(REQ-103, REQ-110). 검증기는 깨끗한 Issues를 돌려주는 스텁이다(Gradle 없이).
+# 실제 컴파일·dry-run을 거치는 S06 실행은 test_det.py(Int)가 맡는다.
+# =====================================================================================
+from td import bddgen  # noqa: E402
+from td.detgen import render as render_mod  # noqa: E402
+from td.detgen import stage as det_stage  # noqa: E402
+
+
+def _clean_validator(gen_dir, out_dir):
+    return bddgen.Issues()
+
+
+def _det_run(tmp_path, name="run"):
+    return _copy(PETCLINIC_RUN, tmp_path / name)
+
+
+def _snapshot_files(directory: Path) -> dict:
+    return {p.relative_to(directory).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in sorted(directory.rglob("*")) if p.is_file()}
+
+
+def test_det_gen_id_and_record_shape(tmp_path):
+    out_root = tmp_path / "generated" / "petclinic"
+    result = det_stage.generate_det(_det_run(tmp_path), SUT_FILE, out_root, False, validator=_clean_validator)
+    assert result.status == "passed", result.reason
+    key = result.record["inputHash"]
+    assert len(key) == 64 and result.gen_id == f"det-{key[:8]}-r1"
+    assert result.dir == out_root / "det" / result.gen_id and (result.dir / "_COMPLETE").is_file()
+    assert result.record["generator"] == {"name": "td.detgen", "version": det_stage.GENERATOR_VERSION,
+                                          "glueChecksum": render_mod.glue_checksum()}
+    assert result.record["rep"] == 1 and result.record["arm"] == "det" and result.record["cases"] > 0
+    expected_key = hashlib.sha256((result.record["bundleHash"] + det_stage.GENERATOR_VERSION
+                                   + render_mod.glue_checksum()).encode("utf-8")).hexdigest()
+    assert key == expected_key
+    assert redact.find_leaks("".join(p.read_text(encoding="utf-8") for p in result.dir.rglob("*") if p.is_file())) == []
+    assert not list((out_root / "det").glob(".tmp-*"))
+
+
+def test_det_reuse_snapshot(tmp_path):
+    out_root = tmp_path / "generated" / "petclinic"
+    calls = []
+
+    def counting(gen_dir, out_dir):
+        calls.append(gen_dir)
+        return bddgen.Issues()
+
+    first = det_stage.generate_det(_det_run(tmp_path, "a"), SUT_FILE, out_root, False, validator=counting)
+    before = _snapshot_files(first.dir)
+    second = det_stage.generate_det(_det_run(tmp_path, "b"), SUT_FILE, out_root, False, validator=counting)
+    assert first.reused is False and second.reused is True
+    assert second.gen_id == first.gen_id and second.status == "passed"
+    assert len(calls) == 1
+    assert _snapshot_files(second.dir) == before
+
+
+def test_det_tampered_snapshot_is_failed_not_overwritten(tmp_path):
+    out_root = tmp_path / "generated" / "petclinic"
+    first = det_stage.generate_det(_det_run(tmp_path, "a"), SUT_FILE, out_root, False, validator=_clean_validator)
+    target = first.dir / "cases.json"
+    target.write_text(target.read_text(encoding="utf-8") + " ", encoding="utf-8")
+    second = det_stage.generate_det(_det_run(tmp_path, "b"), SUT_FILE, out_root, False, validator=_clean_validator)
+    assert second.status == "failed" and "_COMPLETE" in second.reason
+    assert target.read_text(encoding="utf-8").endswith(" ")
+
+
+def test_det_regenerate_checksum_warning(tmp_path, monkeypatch):
+    out_root = tmp_path / "generated" / "petclinic"
+    first = det_stage.generate_det(_det_run(tmp_path, "a"), SUT_FILE, out_root, False, validator=_clean_validator)
+    # 같은 입력 재생성: 체크섬이 같으면 경고가 없다
+    same = det_stage.generate_det(_det_run(tmp_path, "b"), SUT_FILE, out_root, True, validator=_clean_validator)
+    assert same.status == "passed" and same.reused is False and same.gen_id == first.gen_id
+    assert "warnings" not in same.record or same.record["warnings"] == []
+    # 키를 고정한 채(glue_checksum 고정) 렌더 결과를 바꾸면 checksum-changed 경고를 남기고 교체한다
+    fixed = render_mod.glue_checksum()
+    glue_copy = tmp_path / "glue-copy"
+    shutil.copytree(render_mod.GLUE_DIR, glue_copy)
+    java = sorted(glue_copy.rglob("*.java"))[0]
+    java.write_text(java.read_text(encoding="utf-8") + "\n// changed\n", encoding="utf-8")
+    monkeypatch.setattr(render_mod, "GLUE_DIR", glue_copy)
+    monkeypatch.setattr(render_mod, "glue_checksum", lambda root=None: fixed)
+    changed = det_stage.generate_det(_det_run(tmp_path, "c"), SUT_FILE, out_root, True, validator=_clean_validator)
+    assert changed.gen_id == first.gen_id and changed.status == "passed"
+    assert "checksum-changed" in changed.record["warnings"]
+    assert java.read_bytes() in {p.read_bytes() for p in changed.dir.rglob("*.java")}
+    assert bddgen.complete_problem(changed.dir, changed.record["inputHash"]) is None
+    assert not list((out_root / "det").glob(".tmp-*")) and not list((out_root / "det").glob("*.old-*"))
+
+
+def test_det_missing_optional_is_degraded(tmp_path):
+    run = _det_run(tmp_path)
+    shutil.rmtree(run / "S02" / "bbtg" / "raw" / "artifacts" / "inspect-auth")
+    result = det_stage.generate_det(run, SUT_FILE, tmp_path / "generated" / "petclinic", False,
+                                    validator=_clean_validator)
+    assert result.status == "degraded" and "auth" in result.reason and result.dir is not None
+
+
+def test_det_missing_required_is_failed(tmp_path):
+    run = _det_run(tmp_path)
+    (run / "S03" / "ontology-jqa-ext.json").unlink()
+    result = det_stage.generate_det(run, SUT_FILE, tmp_path / "generated" / "petclinic", False,
+                                    validator=_clean_validator)
+    assert result.status == "failed" and "ontology-jqa-ext.json" in result.reason
+    assert result.dir is None and result.gen_id is None
+
+
+def test_det_validation_issue_is_failed_without_repair(tmp_path):
+    calls = []
+
+    def dirty(gen_dir, out_dir):
+        calls.append(gen_dir)
+        return bddgen.Issues(undefined=[{"feature": "f", "line": 1, "step": "x"}])
+
+    out_root = tmp_path / "generated" / "petclinic"
+    result = det_stage.generate_det(_det_run(tmp_path), SUT_FILE, out_root, False, validator=dirty)
+    assert result.status == "failed" and "undefined" in result.reason and len(calls) == 1
+    assert not (out_root / "det" / result.gen_id).exists()
+    assert not list((out_root / "det").glob(".tmp-*")) and not list((out_root / "det" / ".reserve").iterdir())

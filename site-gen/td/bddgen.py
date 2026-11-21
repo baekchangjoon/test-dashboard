@@ -11,6 +11,9 @@
      직전 생성물(LLM 자신의 출력)뿐이다. SUT 실행 결과는 넣지 않는다(llm.sh가 번들을 뒤에 붙이는 것은 같다).
   6. 확정: `_COMPLETE`(전체 입력 해시 + 파일별 sha256 + 생성 메타)를 쓰고 `e2e/generated/<sut>/<arm>/<genId>/`로 원자적 rename.
 
+det arm(설계 §5.4): `td.detgen.stage.generate_det`로 위임한다. 번들 조립·llm.sh·수리 루프를 쓰지 않고 rep는 항상 1이다.
+run.json에 `requestedRepsByArm`({arm: det이면 1, 아니면 reps})을 기록한다.
+
 스냅샷 규칙:
 - 입력 해시(전체 64자) = sha256({번들 해시, 생성 프롬프트 해시, 수리 프롬프트 해시, 모델, 수리 상한}). genId는
   `<arm>-<inputHash8>-r<rep>[-g<n>]`이다. 프롬프트나 모델이 바뀌면 새 genId가 되어 옛 스냅샷을 잘못 재사용하지 않는다.
@@ -401,6 +404,34 @@ def _unexpected_failure(arm: str, rep: int, built, ctx: GenContext, exc: Excepti
     return _failed(record, f"예상하지 못한 오류: {type(exc).__name__}: {str(exc)[:1000]}", time.monotonic())
 
 
+def _run_det(run_dir: Path, sut_file: Path, out_root: Path, regenerate: bool, validator, records: list,
+             generations: dict, inputs: dict) -> dict:
+    """det arm(LLM 없음, rep 1). 번들 조립(td.bundle)도 llm.sh도 쓰지 않는다. 실패는 det arm 안에 가둔다(REQ-110)."""
+    from td.detgen import stage as det_stage
+    try:
+        result = det_stage.generate_det(run_dir, sut_file, out_root, regenerate, validator=validator)
+    except Exception as exc:  # noqa: BLE001 - 예상 밖 오류도 det arm의 실패로 기록하고 다른 arm은 진행한다
+        return {"status": "failed", "reason": f"예상하지 못한 오류: {type(exc).__name__}: {str(exc)[:1000]}",
+                "generations": []}
+    if not result.record:
+        return {"status": "failed", "reason": (result.reason or "det 실패")[:1500], "generations": []}
+    records.append(result.record)
+    inputs["det"] = {"bundleHash": result.record["bundleHash"], "bundle": det_stage.BUNDLE_REL.as_posix(),
+                     "inputHash": result.record["inputHash"]}
+    entry = {"arm": "det", "rep": det_stage.REP, "status": result.status, "reused": result.reused, "repairs": 0,
+             "dir": str(result.dir) if result.dir else None}
+    if result.reason:
+        entry["reason"] = result.reason
+    if result.record.get("warnings"):
+        entry["warnings"] = list(result.record["warnings"])
+    generations[result.gen_id] = entry
+    if result.status == "failed":
+        return {"status": "failed", "reason": f"{result.gen_id}: {result.reason}"[:1500], "generations": []}
+    if result.status == "degraded":
+        return {"status": "degraded", "reason": f"{result.gen_id}: {result.reason}"[:1500], "generations": [result.gen_id]}
+    return {"status": "passed", "generations": [result.gen_id]}
+
+
 def run_stage(run_dir, sut_file, sut_src, regenerate: bool, *, llm=call_llm, validator=validate) -> dict:
     """S06 전체: arm별 번들 -> rep별 generation. 반환 {status, reason, extra, outputs}. bdd-gen.json과 run.json도 쓴다."""
     from td import prepare, state, sut_config
@@ -418,9 +449,15 @@ def run_stage(run_dir, sut_file, sut_src, regenerate: bool, *, llm=call_llm, val
     generations: dict[str, dict] = {}
     records: list[dict] = []
     inputs: dict[str, dict] = {}
-    for arm, skip_reason in state.arm_plan(run_dir).items():
+    plan = state.arm_plan(run_dir)
+    # det는 요청 reps와 무관하게 항상 1회다(설계 §5.4). 화면·비교는 arm별 분모를 쓴다.
+    state.set_run_field(run_dir, "requestedRepsByArm", {arm: (1 if arm == "det" else reps) for arm in plan})
+    for arm, skip_reason in plan.items():
         if skip_reason:
             arms[arm] = {"status": "skipped", "reason": skip_reason}
+            continue
+        if arm == "det":
+            arms[arm] = _run_det(run_dir, Path(sut_file), out_root, regenerate, validator, records, generations, inputs)
             continue
         try:
             built = build_bundle(arm, run_dir, sut_src, Path(sut_file))
