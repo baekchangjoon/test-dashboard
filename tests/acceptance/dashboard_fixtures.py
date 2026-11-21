@@ -415,3 +415,150 @@ def token_env(tmp_path: Path, ssh: FakeSsh, sonar_url: str) -> dict:
         "TD_SSH_KEY_PATH": "/nonexistent",
         "PATH": f"{ssh.bin_dir}{os.pathsep}{os.environ['PATH']}",
     }
+
+
+# --- 가짜 gh(GitHub API) ---------------------------------------------------------------------------
+
+# 가짜 gh 본체. `gh api -i <path>`에 실제 gh처럼 답한다: 상태 줄, 헤더, 빈 줄, JSON 본문(끝 줄바꿈 없음).
+# HTTP 오류면 본문까지 표준 출력에 내고 `gh: <메시지> (HTTP <코드>)`를 표준 오류에 낸 뒤 종료 코드 1.
+_FAKE_GH_SCRIPT = r'''
+import json, os, sys, time
+from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
+
+HERE = Path(__file__).resolve().parent
+STATE = HERE.parent
+REASONS = {200: "OK", 403: "Forbidden", 404: "Not Found", 429: "Too Many Requests",
+           500: "Internal Server Error", 502: "Bad Gateway", 503: "Service Unavailable"}
+args = sys.argv[1:]
+with open(STATE / "calls.jsonl", "a") as log:
+    log.write(json.dumps({"args": args, "at": time.time(), "pid": os.getpid()}) + "\n")
+
+
+def respond(status, body, headers=()):
+    lines = [f"HTTP/2.0 {status} {REASONS.get(status, 'Error')}", "Content-Type: application/json; charset=utf-8",
+             "X-Github-Media-Type: github.v3; format=json"] + [f"{key}: {value}" for key, value in headers]
+    sys.stdout.write("\n".join(lines) + "\n\n" + json.dumps(body))
+    sys.stdout.flush()
+    if status >= 400:
+        print(f"gh: {body.get('message', 'error')} (HTTP {status})", file=sys.stderr)
+        sys.exit(1)
+    sys.exit(0)
+
+
+if len(args) != 3 or args[:2] != ["api", "-i"]:
+    print(f"fake gh: 모르는 인자 {args}", file=sys.stderr)
+    sys.exit(2)
+parts = urlsplit(args[2])
+query = parse_qs(parts.query)
+segments = parts.path.strip("/").split("/")
+not_found = {"message": "Not Found", "documentation_url": "https://docs.github.com/rest", "status": "404"}
+if segments[0] != "repos" or len(segments) < 3:
+    respond(404, not_found)
+repo, rest = "/".join(segments[1:3]), segments[3:]
+if not rest:
+    kind = "repo"
+elif rest[:2] == ["actions", "runs"]:
+    kind = "runs"
+elif len(rest) == 3 and rest[0] == "commits" and rest[2] == "check-runs":
+    kind = "checks"
+else:
+    kind = "other"
+spec = json.loads((STATE / "repos.json").read_text()).get(repo)
+if spec is None or spec.get("missing"):
+    respond(404, not_found)
+if spec.get("hang") and spec.get("hang_on") in (None, kind):
+    time.sleep(spec["hang"])
+fail = spec.get("fail")
+if fail and fail.get("on") in (None, kind):
+    counters_file = STATE / "counters.json"
+    counters = json.loads(counters_file.read_text())
+    counter_key = f"{repo}:{fail.get('on') or '*'}"
+    used = counters.get(counter_key, 0)
+    if used < fail.get("times", 1):
+        counters[counter_key] = used + 1
+        counters_file.write_text(json.dumps(counters))
+        headers = [("Retry-After", str(fail["retry_after"]))] if fail.get("retry_after") is not None else []
+        respond(fail["status"], {"message": "injected failure", "status": str(fail["status"])}, headers)
+if kind == "repo":
+    visibility = spec.get("visibility", "public")
+    respond(200, {"name": segments[2], "full_name": repo, "private": visibility != "public", "visibility": visibility,
+                  "description": spec.get("description", "fake repo"), "language": spec.get("language", "Java"),
+                  "default_branch": spec.get("default_branch", "main"),
+                  "pushed_at": spec.get("pushed_at", "2026-11-20T05:05:15Z")})
+if kind == "runs":
+    branch = query.get("branch", [""])[0]
+    runs = [{"id": 1000 + index, "name": "ci", "head_branch": branch, "event": "push", "status": "completed",
+             "conclusion": conclusion} for index, conclusion in enumerate(spec.get("runs", ["success"]))]
+    respond(200, {"total_count": len(runs), "workflow_runs": runs})
+if kind == "checks":
+    checks = [{"id": 2000 + index, "name": item["name"], "status": item.get("status", "completed"),
+               "conclusion": item.get("conclusion"), "started_at": item.get("started_at", "2026-11-20T00:00:00Z")}
+              for index, item in enumerate(spec.get("checks", []))]
+    respond(200, {"total_count": len(checks), "check_runs": checks})
+respond(404, not_found)
+'''
+
+
+class GhCall(list):
+    """가짜 gh가 받은 인자 목록(`["api", "-i", path]`). `.at`은 받은 시각(epoch 초), `.pid`는 그 프로세스."""
+
+    def __init__(self, args: list[str], at: float, pid: int):
+        super().__init__(args)
+        self.at = at
+        self.pid = pid
+
+
+class FakeGh:
+    """상태를 가진 가짜 gh. `.path`를 `TD_GH_BIN`으로 준다."""
+
+    def __init__(self, state_dir: Path):
+        self.state_dir = state_dir
+        self.path = state_dir / "bin" / "gh"
+
+    @property
+    def calls(self) -> list[GhCall]:
+        log_file = self.state_dir / "calls.jsonl"
+        if not log_file.exists():
+            return []
+        return [GhCall(item["args"], item["at"], item["pid"])
+                for item in (json.loads(line) for line in log_file.read_text().splitlines() if line.strip())]
+
+    def set(self, repo: str, **fields) -> None:
+        """저장소 하나의 응답 필드를 바꾼다(없으면 만든다)."""
+        repos_file = self.state_dir / "repos.json"
+        repos = json.loads(repos_file.read_text())
+        repos.setdefault(repo, {}).update(fields)
+        repos_file.write_text(json.dumps(repos))
+
+    def alive_pids(self) -> list[int]:
+        """받은 호출의 프로세스 가운데 아직 살아 있는 것."""
+        alive = []
+        for call in self.calls:
+            try:
+                os.kill(call.pid, 0)
+            except ProcessLookupError:
+                continue
+            except PermissionError:
+                pass
+            alive.append(call.pid)
+        return alive
+
+
+def fake_gh(tmp_path: Path, repos: dict[str, dict]) -> FakeGh:
+    """저장소(`owner/name`)마다 응답을 정한 가짜 gh.
+
+    필드: `visibility`("public"|"private"|"internal", 기본 public), `missing`(404), `runs`(최신순 결론값, 기본
+    ["success"]), `checks`(`[{name, conclusion, started_at, status}]`), `fail`(`{"status", "retry_after", "times", "on"}`:
+    처음 times번을 그 상태로 실패, `on`은 "repo"|"runs"|"checks"로 한정), `hang`(초, `hang_on`으로 한정),
+    `description`, `language`, `default_branch`, `pushed_at`. 설정에 없는 저장소는 404다.
+    """
+    state_dir = tmp_path / "fake-gh"
+    bin_dir = state_dir / "bin"
+    bin_dir.mkdir(parents=True)
+    (state_dir / "repos.json").write_text(json.dumps(repos))
+    (state_dir / "counters.json").write_text("{}")
+    script = bin_dir / "gh"
+    script.write_text(f"#!{sys.executable}\n{_FAKE_GH_SCRIPT}")
+    script.chmod(0o755)
+    return FakeGh(state_dir)

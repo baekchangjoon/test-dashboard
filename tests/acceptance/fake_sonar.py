@@ -2,6 +2,7 @@
 import json
 import socketserver
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -22,6 +23,34 @@ class FakeSonar:
         self.requests: list[tuple[str, str, dict, str | None]] = []  # (method, path, query, authorization)
         self.max_ps_seen = 0
         self.ce_errors: dict[str, int] = {}  # taskId -> HTTP 오류 코드
+        # 프로젝트 키별 응답(수집기 테스트). 설정하지 않은 키는 FIXTURES의 응답을 그대로 준다.
+        self.project_data: dict[str, dict] = {}   # key -> {"gate": 상태, "measures": {metric: 값 문자열}}
+        self.missing_keys: set[str] = set()       # 404
+        self.error_keys: dict[str, int] = {}      # key -> HTTP 오류 코드(500 등)
+        self.delays: dict[str, float] = {}        # key -> 응답 전 대기(초)
+        self.keyed_requests: list[tuple[str, str]] = []  # (경로, 프로젝트 키): 게이트·측정값 요청만
+        self.urls: list[str] = []                 # 받은 요청의 경로와 쿼리 문자열 그대로
+
+    def set_project(self, key: str, gate: str = "OK", **measures: str) -> None:
+        """키 하나의 게이트·측정값 응답을 정한다. 측정값은 Sonar처럼 문자열로 준다(`code_smells="5"`)."""
+        self.project_data[key] = {"gate": gate, "measures": dict(measures)}
+
+    def _keyed(self, path: str, key: str) -> tuple[int, dict] | None:
+        """프로젝트 키별 설정이 있으면 그 응답, 없으면 None(픽스처 응답으로 넘어간다)."""
+        self.keyed_requests.append((path, key))
+        if key in self.delays:
+            time.sleep(self.delays[key])
+        if key in self.error_keys:
+            return self.error_keys[key], {"errors": [{"msg": "injected"}]}
+        if key in self.missing_keys:
+            return 404, {"errors": [{"msg": f"Project '{key}' not found"}]}
+        data = self.project_data.get(key)
+        if data is None:
+            return None
+        if path == "/api/qualitygates/project_status":
+            return 200, {"projectStatus": {"status": data["gate"], "conditions": []}}
+        return 200, {"component": {"key": key, "measures": [
+            {"metric": metric, "value": value} for metric, value in data["measures"].items()]}}
 
     def handle(self, method: str, path: str, query: dict, auth: str | None, body: dict) -> tuple[int, dict]:
         self.requests.append((method, path, query, auth))
@@ -42,6 +71,10 @@ class FakeSonar:
             states = self.ce_sequence.get(task_id, ["SUCCESS"])
             status = states.pop(0) if len(states) > 1 else states[0]
             return 200, {"task": {"id": task_id, "status": status, "analysisId": "AN-1", "componentKey": KEY}}
+        if path in ("/api/qualitygates/project_status", "/api/measures/component"):
+            keyed = self._keyed(path, query.get("projectKey", query.get("component", [""]))[0])
+            if keyed is not None:
+                return keyed
         if path == "/api/qualitygates/project_status":
             return 200, json.loads((FIXTURES / "project_status.json").read_text())
         if path == "/api/measures/component":
@@ -81,6 +114,7 @@ def start_fake_sonar():
             parts = urlsplit(self.path)
             length = int(self.headers.get("Content-Length") or 0)
             body = parse_qs(self.rfile.read(length).decode()) if length else {}
+            state.urls.append(self.path)
             status, payload = state.handle(method, parts.path, parse_qs(parts.query), self.headers.get("Authorization"), body)
             data = json.dumps(payload).encode()
             self.send_response(status)
