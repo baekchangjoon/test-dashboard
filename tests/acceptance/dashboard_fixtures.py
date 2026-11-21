@@ -243,6 +243,60 @@ def status_of(site: Path, name: str) -> str:
     raise KeyError(name)
 
 
+# --- 첫 화면 고정 사이트(Task 9) ------------------------------------------------------------------------
+
+HOME_PET_RUNS = [  # pet 과제의 run 2개. 게이트 OK, 취약점 0(양호가 되도록), 최신 run의 통과율 1.0·귀속 0.4152
+    {"runId": RUN_B["runId"], "started": RUN_B["started"], "tests_pass": 0.95, "line": 0.4,
+     "sonar": {**DEFAULT_SONAR, "vulnerabilities": "0"}},
+    {"runId": RUN_C["runId"], "started": RUN_C["started"], "tests_pass": 1.0, "line": 0.4152,
+     "sonar": {**DEFAULT_SONAR, "vulnerabilities": "0"}},
+]
+
+
+def home_site(tmp_path: Path) -> Path:
+    """과제 6개(위험 2, 주의 1, 측정 없음 1, 양호 2)의 사이트를 만들고 재생성한다. 사이트 경로를 돌려준다.
+
+    a-crit: CI 9/9, 게이트 ERROR, 취약점 2 / b-crit: CI 4회 중 3회 성공, 마지막 실행 실패, 게이트 OK /
+    zero-cov: CI 17/17, 게이트 OK, 커버리지 0.0, 취약점 8 / no-data: CI 0회, Sonar 없음 /
+    no-sonar: CI 10/10, Sonar 없음(부분 측정) / pet: repo 없이 sut만, run 2개(파이프라인).
+    """
+    b_crit_ci = {"runs": 4, "successes": 3, "failures": 1, "successRate": 0.75, "lastFailed": True,
+                 "failedChecks": 0, "history": [1, 1, 1, 0]}
+    site = make_site(tmp_path, runs={"pet": HOME_PET_RUNS}, snapshots={
+        "a-crit": [snap(ci_runs=9, sonar={"gate": "ERROR", "coverage": 71.0, "bugs": 1, "vulnerabilities": 2})],
+        "b-crit": [snap(ci=b_crit_ci, sonar={"gate": "OK", "coverage": 80.0, "bugs": 0, "vulnerabilities": 0})],
+        "zero-cov": [snap(ci_runs=17, sonar={"gate": "OK", "coverage": 0.0, "bugs": 3, "vulnerabilities": 8})],
+        "no-data": [snap(ci_runs=0, sonar=None)],
+        "no-sonar": [snap(ci_runs=10, sonar=None)],
+    }, config=cfg_with(pipeline="pet", plain=["a-crit", "b-crit", "zero-cov", "no-data", "no-sonar"]))
+    rebuild_site(site)
+    return site
+
+
+def all_good_site(tmp_path: Path) -> Path:
+    """위험·주의가 없는 과제 2개(둘 다 양호, Sonar 커버리지 0 없음)의 사이트를 만들고 재생성한다."""
+    site = make_site(tmp_path / "all-good", snapshots={
+        "g1": [snap(ci_runs=10, sonar={"gate": "OK", "coverage": 80.0, "bugs": 0, "vulnerabilities": 0})],
+        "g2": [snap(ci_runs=6, sonar={"gate": "OK", "coverage": 55.5, "bugs": 1, "vulnerabilities": 0})],
+    }, config=cfg_with(plain=["g1", "g2"]))
+    rebuild_site(site)
+    return site
+
+
+SONAR_FAILED_REASON = "Sonar API가 HTTP 500으로 답했다"
+
+
+def sonar_failed_site(tmp_path: Path) -> Path:
+    """Sonar 수집이 실패한(`sources.sonar == "failed"`) 과제 `flaky`와 CI가 없는(`none`) Sonar만 있는 과제 `no-ci`."""
+    site = make_site(tmp_path / "sonar-failed", snapshots={
+        "flaky": [snap(ci_runs=10, sonar=None, sonar_state="failed",
+                       problems=[{"source": "sonar", "reason": SONAR_FAILED_REASON}])],
+        "no-ci": [snap(ci=None, sonar={"gate": "OK", "coverage": 64.0, "bugs": 0, "vulnerabilities": 0})],
+    }, config=cfg_with(plain=["flaky", "no-ci"]))
+    rebuild_site(site)
+    return site
+
+
 # --- 로컬 서버와 브라우저 ---------------------------------------------------------------------------
 
 class _LocalHTTPServer(http.server.ThreadingHTTPServer):

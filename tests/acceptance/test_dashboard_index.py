@@ -216,6 +216,34 @@ def test_broken_snapshot_is_dropped_with_reason(tmp_path):
     assert kn["snapshots"][-1]["date"] == "20261121" and any("20261122" in p for p in kn["problems"])
 
 
+def test_newer_non_public_snapshot_hides_project(tmp_path):
+    """가장 최근 스냅숏 파일이 공개가 아니라고 말하면 더 오래된 공개 스냅숏이 있어도 과제를 그리지 않는다."""
+    site = make_site(tmp_path, snapshots={"kn": [snap(date="20261121")], "ok": [snap(date="20261122")]},
+                     config=cfg_with(plain=["kn", "ok"]))
+    newest = site / "projects/kn/snapshots/20261122.json"
+    data = json.loads((site / "projects/kn/snapshots/20261121.json").read_text())
+    data.update(date="20261122", visibility="private")
+    newest.write_text(json.dumps(data))
+    assert [p["name"] for p in metrics.build_projects(site, load_cfg(site))] == ["ok"]
+    # 그 뒤에 깨진 파일이 더 와도(공개 여부를 읽을 수 없음) 앞선 비공개 기록이 그대로 막는다
+    (site / "projects/kn/snapshots/20261123.json").write_text("{not json")
+    assert [p["name"] for p in metrics.build_projects(site, load_cfg(site))] == ["ok"]
+
+
+def test_newest_snapshot_without_readable_visibility_falls_back(tmp_path):
+    """파싱은 되지만 visibility가 없는(스키마 위반) 최신 파일은 공개 여부를 말하지 않으므로 앞선 공개 스냅숏으로 그린다."""
+    site = make_site(tmp_path, snapshots={"kn": [snap(date="20261121")]}, config=cfg_with(plain="kn"))
+    (site / "projects/kn/snapshots/20261122.json").write_text(json.dumps({"schema": 1, "date": "20261122"}))
+    [kn] = metrics.build_projects(site, load_cfg(site))
+    assert kn["snapshots"][-1]["date"] == "20261121" and any("20261122" in p for p in kn["problems"])
+
+
+def test_snapshot_repo_must_match_config(tmp_path):
+    site = make_site(tmp_path, snapshots={"kn": [snap()], "ok": [snap()]},
+                     config={"schema": 1, "projects": [{"name": "kn", "repo": "other/kn"}, {"name": "ok", "repo": "o/ok"}]})
+    assert [p["name"] for p in metrics.build_projects(site, load_cfg(site))] == ["ok"]
+
+
 def test_schema_violating_snapshot_is_dropped_with_reason(tmp_path):
     site = make_site(tmp_path, snapshots={"kn": [snap(date="20261121"), snap(date="20261122")]}, config=cfg_with(plain="kn"))
     bad = site / "projects/kn/snapshots/20261122.json"

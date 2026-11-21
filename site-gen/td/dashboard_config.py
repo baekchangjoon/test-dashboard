@@ -332,6 +332,54 @@ def format_value(metric: str, value) -> str:
     return str(value)
 
 
+TEXT_UNMEASURED = "측정 없음"
+TEXT_NOT_CONNECTED = "연결 없음"
+
+
+def _source_of(column: str) -> str | None:
+    head = column.split(".", 1)[0]
+    return head if head in ("ci", "sonar") else None
+
+
+def _cell_value_text(column: str, values: Mapping[str, object]) -> str | None:
+    """칸의 값 글자. 값이 없으면 None."""
+    if column == "sonar.issues":
+        bugs, vulnerabilities = values.get("sonar.bugs"), values.get("sonar.vulnerabilities")
+        if bugs is None and vulnerabilities is None:
+            return None
+        return f"{format_value('sonar.bugs', bugs)} · {format_value('sonar.vulnerabilities', vulnerabilities)}"
+    if column == "repo.pushedAt":
+        value = values.get(column)
+        return str(value)[:10] if value else None
+    value = values.get(column)
+    if value is None or (isinstance(value, list) and not value):
+        return None
+    return format_value(column, value)
+
+
+def cell_text(column: str, project: Mapping) -> tuple[str, str]:
+    """표 칸(또는 상세의 지표)의 글자와 설명(title). 설계 §5.1 "값이 없는 칸의 글자".
+
+    column은 값 열 식별자(`ci.successRate`, `sonar.gate`, `sonar.coverage`, `sonar.issues`, `repo.pushedAt`) 또는
+    과제 지표 이름이다. project는 과제 뷰(`values`, `sources`, `problems`)다.
+    값이 있으면 표시 형식의 값. `sonar.gate`에서 Sonar 출처가 `absent`면 "연결 없음". 그 칸의 출처가 `failed`면
+    "측정 없음"이고 설명에 그 출처의 사유. 그 밖에 값이 없으면 "—".
+    """
+    values = project.get("values") or {}
+    text = _cell_value_text(column, values)
+    if text is not None:
+        return text, ""
+    source = _source_of(column)
+    sources = project.get("sources") or {}
+    state = sources.get(source) if source else None
+    if column == "sonar.gate" and state == "absent":
+        return TEXT_NOT_CONNECTED, ""
+    if state == "failed":
+        reasons = [problem for problem in project.get("problems") or [] if str(problem).startswith(f"{source}: ")]
+        return TEXT_UNMEASURED, " / ".join(reasons)
+    return "—", ""
+
+
 # --- 6. 상태 판정, 결론 문장, 규칙 각주 ---------------------------------------------------
 
 OPERATORS = {"eq": operator.eq, "ne": operator.ne, "lt": operator.lt,

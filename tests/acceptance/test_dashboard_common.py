@@ -39,6 +39,12 @@ def test_req137_v2_asset_paths(tmp_path):
     assert (site / "static/v2/app.css").is_file() and (site / "_test/static/v2/app.css").is_file()
     assert (site / "static/v2/app.js").is_file() and (site / "_test/static/v2/app.js").is_file()
     assert (site / "static/v2/app.css").read_bytes() == (pages.STATIC_DIR / "v2/app.css").read_bytes()
+    # 인덱스 페이지(홈, _test 목록)도 static/v2/에서만 불러온다
+    for index_page, expected_prefix in ((site / "index.html", "static/v2/"), (site / "_test/index.html", "static/v2/")):
+        index_html = index_page.read_text()
+        refs = re.findall(r'<(?:link|script)[^>]+(?:href|src)="([^"]+)"', index_html)
+        assert refs and all(ref.startswith(expected_prefix) for ref in refs), (index_page, refs)
+        assert "static/site.css" not in index_html and "site.js" not in index_html, index_page
 
 
 def test_req137_app_css_tokens_and_no_external_requests():

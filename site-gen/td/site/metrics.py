@@ -186,6 +186,23 @@ def load_snapshots(project_dir: Path) -> tuple[list[dict], list[str]]:
     return kept, reasons
 
 
+def newer_snapshot_hides(project_dir: Path, after_date: str | None) -> bool:
+    """`after_date`보다 뒤 날짜(파일 이름)의 스냅숏 파일 가운데 공개가 아니라고 말하는 것이 있는가.
+
+    JSON 객체로 읽히고 `visibility` 키가 있는데 값이 "public"이 아니면 공개가 아니라고 말하는 것으로 본다.
+    읽을 수 없거나 `visibility`가 없는 파일은 공개 여부를 말하지 않으므로 막지 않는다(앞선 유효 스냅숏으로 그린다).
+    """
+    snapshots_dir = Path(project_dir) / "snapshots"
+    files = sorted(snapshots_dir.glob("*.json")) if snapshots_dir.is_dir() else []
+    for path in files:
+        if after_date is not None and path.stem <= after_date:
+            continue
+        data = _read_json(path)
+        if isinstance(data, dict) and "visibility" in data and data["visibility"] != "public":
+            return True
+    return False
+
+
 def snapshot_metrics(snapshot: dict) -> dict[str, object]:
     """스냅숏에서 오는 과제 지표(ci.*, sonar.*, repo.*). `ci.runs`가 0이면 없음."""
     ci = snapshot.get("ci")
@@ -247,10 +264,16 @@ def build_projects(base: Path, cfg: Config, *, exclude: frozenset[str] = frozens
     for project in cfg.projects:
         if project.name in exclude:
             continue
-        snapshots, dropped = load_snapshots(base / "projects" / project.name) if project.repo else ([], [])
+        project_dir = base / "projects" / project.name
+        snapshots, dropped = load_snapshots(project_dir) if project.repo else ([], [])
         latest_snapshot = snapshots[-1] if snapshots else None
-        if project.repo is not None and (latest_snapshot is None or latest_snapshot.get("visibility") != "public"):
-            continue    # repo가 있는 과제는 최신 유효 스냅숏이 공개일 때만 그린다
+        if project.repo is not None and (
+                latest_snapshot is None or latest_snapshot.get("visibility") != "public"
+                or latest_snapshot.get("repo") != project.repo
+                or newer_snapshot_hides(project_dir, latest_snapshot["date"])):
+            # repo가 있는 과제는 최신 유효 스냅숏이 공개이고 그 repo가 설정과 같으며, 그보다 뒤 날짜의 파일 가운데
+            # 공개가 아니라고 말하는 것이 없을 때만 그린다(비공개로 바뀐 과제가 옛 공개 스냅숏으로 그려지지 않게).
+            continue
         runs = runs_by_sut.get(project.sut, []) if project.sut else []
         latest_run_dir = base / "suts" / project.sut / "runs" / runs[0]["runId"] if runs else None
 
