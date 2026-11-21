@@ -88,23 +88,29 @@ def TREND_SNAPSHOT(name: str) -> dict:
     return mutated(lambda data: data["project"]["trend"]["snapshot"].append(name))
 
 
+def failure_text(tmp_path: Path, body) -> str:
+    """load 실패 메시지에서 파일 경로 접두를 뗀 본문. 임시 경로 이름에 영향받지 않게 한다."""
+    path = write(tmp_path, body)
+    with pytest.raises(ConfigError) as exc:
+        dashboard_config.load(path, SUTS_DIR)
+    message = str(exc.value)
+    assert message.startswith(f"{path}: ")
+    return message.removeprefix(f"{path}: ")
+
+
 def test_req076_schema_violation_fails(tmp_path):
     for body, where in CASES_076:
-        with pytest.raises(ConfigError) as exc:
-            dashboard_config.load(write(tmp_path, body), SUTS_DIR)
-        assert where in str(exc.value)
+        assert where in failure_text(tmp_path, body)
     with pytest.raises(ConfigError):
         dashboard_config.load(tmp_path / "missing.yaml", SUTS_DIR)
 
 
 def test_req077_project_registration_rules(tmp_path):
     for name in ("a/b", "..", "bad name", "-p", ".p", "과제", ""):
-        with pytest.raises(ConfigError, match="projects"):
-            dashboard_config.load(write(tmp_path, one_project(name=name)), SUTS_DIR)
+        assert "projects" in failure_text(tmp_path, one_project(name=name))
     for body, word in CASES_077:
-        with pytest.raises(ConfigError, match=re.escape(word)) as exc:
-            dashboard_config.load(write(tmp_path, body), SUTS_DIR)
-        assert "projects[" in str(exc.value)
+        text = failure_text(tmp_path, body)
+        assert word in text and "projects[" in text
     cfg = dashboard_config.load(write(tmp_path, one_project(name="mini")), SUTS_DIR)
     with pytest.raises(ConfigError, match="mini"):
         dashboard_config.with_implicit(cfg, ["mini"])
@@ -125,8 +131,7 @@ def test_req078_unknown_metric_or_operator(tmp_path):
              (rule_condition({"all": [{"metric": "ci.runs", "op": "gt", "value": 0},
                                       {"metric": "ci.nope", "op": "gt", "value": 0}]}), "ci.nope")]
     for body, word in cases:
-        with pytest.raises(ConfigError, match=re.escape(word)):
-            dashboard_config.load(write(tmp_path, body), SUTS_DIR)
+        assert word in failure_text(tmp_path, body)
     loaded = dashboard_config.load(REPO_ROOT / "dashboard.yaml", REPO_ROOT / "suts")
     assert len(loaded.projects) == 20
     by_name = {project.name: project for project in loaded.projects}
