@@ -35,7 +35,7 @@ COMPLETE_NAME = "_COMPLETE"
 # S3 조건부 쓰기가 이미 객체가 있을 때 돌려주는 코드(412), 동시 쓰기 충돌(409)
 EXISTS_CODES = ("PreconditionFailed", "ConditionalRequestConflict")
 # 게시본에서 뺀다: 최종 S13 결과는 publish-log가 기준이고, 재시도마다 시각이 달라져 재게시 비교를 깨뜨린다.
-EXCLUDED_SITE_FILES = ("stages/S13.json",)
+EXCLUDED_SITE_FILES = ("stages/S13.json", "render.json")  # render.json: 렌더 기록(공통 띠 누락), 게시하지 않는다
 
 
 class PublishError(Exception):
@@ -541,10 +541,11 @@ def timings() -> dict:
 
 
 def overall_status(hosts: dict) -> tuple[str, str | None]:
-    """설계 §13.9: S3(인덱스 포함)가 실패하면 failed, S3는 성공이고 CloudFront나 Lightsail이 실패하면 degraded."""
+    """설계 §13.9: S3(인덱스 포함)가 실패하면 failed, S3는 성공이고 CloudFront나 Lightsail이 실패하면 degraded.
+    render(공통 띠를 넣지 못한 리포트, 설계 §5.5)와 hosting(비교 측정)의 실패도 degraded다."""
     if hosts["s3"]["status"] != "passed":
         return "failed", f"s3: {hosts['s3'].get('reason') or hosts['s3']['status']}"
-    problems = [f"{name}: {hosts[name].get('reason') or 'failed'}" for name in ("cloudfront", "lightsail", "hosting")
+    problems = [f"{name}: {hosts[name].get('reason') or 'failed'}" for name in ("render", "cloudfront", "lightsail", "hosting")
                 if hosts.get(name, {}).get("status") == "failed"]  # hosting: TTFB 성공 표본 부족 등 비교 측정 실패
     return ("degraded", "; ".join(problems)) if problems else ("passed", None)
 
@@ -678,6 +679,7 @@ class Publication:
         self.ssh_key = key
         self.min_free = int(float(env.get("TD_MIN_FREE_GB", "2")) * GIB)
         self.lightsail_preflight_error: str | None = None
+        self.render_warnings: list[dict] = []  # 렌더 기록(render.json)의 navMissing: 공통 띠를 넣지 못한 리포트
         # 테스트 전용: 객체마다 잠깐 멈춰 SIGINT/SIGKILL을 끼워 넣는다(운영 실행은 TD_SITE_PREFIX가 없어 무시된다).
         self.pause = float(env.get("TD_PUBLISH_PAUSE_SEC", "0") or 0) if env.get("TD_SITE_PREFIX") else 0.0
 
@@ -711,6 +713,11 @@ class Publication:
         site_dir = self.run_dir / pages.PUBLISH_SUBDIR
         shutil.rmtree(site_dir, ignore_errors=True)  # 이전 시도의 낡은 파일이 manifest에 섞이지 않게
         pages.render_run(self.run_dir, self.run_dir)
+        record = site_dir / pages.RENDER_RECORD
+        self.render_warnings = list(json.loads(record.read_text()).get("navMissing") or []) if record.exists() else []
+        if self.render_warnings:  # overall_status가 render 항목의 실패를 degraded로 센다(S3 실패만 failed)
+            self.hosts["render"] = {"status": "failed", "reason": "; ".join(
+                f"공통 띠 없음: {item.get('file')}" for item in self.render_warnings)}
         check_no_home_in_file(self.run_dir / "run.json", "run.json", self.env)  # run.json은 로컬 원본이 그대로 올라간다
         manifest = build_manifest(site_dir, self.key_prefix, self.run_dir / "run.json")
         self.size_bytes = manifest.total_bytes

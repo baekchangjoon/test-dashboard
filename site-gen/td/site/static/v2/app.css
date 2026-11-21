@@ -1,0 +1,76 @@
+/* test-dashboard 새 디자인(v2). 토큰은 시안 home.html의 :root 값 그대로다.
+   이 파일은 운영에 게시된 뒤로 run 페이지의 모양을 깨는 변경을 하지 않는다(그런 변경은 static/v3/). */
+:root{--bg:#f4f6f9;--surface:#fff;--sunk:#eaeef3;--ink:#131a24;--ink2:#465263;--muted:#6b7686;--line:#d9dfe7;
+  --accent:#2a78d6;--warn:#b97a00;--crit:#cf3d3d;--good:#16855a;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+@media (prefers-color-scheme:dark){:root{--bg:#0b1017;--surface:#131a24;--sunk:#0f151d;--ink:#e8edf3;--ink2:#b4bdc9;--muted:#8490a0;--line:#263141;
+  --accent:#4a94ee;--warn:#e0a030;--crit:#ee6b6b;--good:#2bb583;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 "Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
+p{margin:0}
+.wrap{max-width:1240px;margin:0 auto;padding:0 16px}
+
+/* 공통 틀: 맨 위 막대(경로) */
+.top{background:var(--surface);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding-block:12px}
+.top strong{font-size:15px}
+.top .crumb{font-size:13px;color:var(--muted);min-width:0;overflow-wrap:anywhere}.top .crumb b{color:var(--ink)}
+.top .meta{margin-left:auto;font-size:12.5px;color:var(--muted)}
+main.wrap{padding-block:20px 60px;display:grid;gap:16px;min-width:0}
+.eyebrow{font:600 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
+h1{margin:2px 0 0;font-size:clamp(21px,2.8vw,28px);line-height:1.3;letter-spacing:-.02em;text-wrap:balance;overflow-wrap:anywhere}
+.lede{margin:6px 0 0;color:var(--ink2);max-width:86ch;overflow-wrap:anywhere}
+.sub{color:var(--ink2);font-size:13px}.dim{color:var(--muted)}
+.mono{font-family:var(--mono);font-size:12px}
+
+/* 카드 */
+.grid{display:grid;gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;min-width:0;display:grid;gap:10px;align-content:start}
+.card h2,.card h3{margin:0;font-size:14px;display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 8px;align-items:baseline}
+.card h2 .dim,.card h3 .dim{font-weight:400;font-size:12.5px}
+
+/* 상태 표시: 색만으로 구분하지 않는다(위험=채운 원, 주의=네모, 측정 없음=빈 원, 글자 함께) */
+.st{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;border:1px solid var(--c);white-space:nowrap;vertical-align:middle}
+.st::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--c)}
+.s-crit{--c:var(--crit)}.s-warn{--c:var(--warn)}.s-good{--c:var(--good)}.s-none{--c:var(--muted)}
+.s-warn.st::before{border-radius:2px}.s-none.st::before{background:none;border:2px solid var(--c)}
+
+/* 단계 띠(칸 너비 = 걸린 시간) */
+.stages{display:flex;gap:3px;align-items:stretch;min-width:0;overflow-x:auto;padding-bottom:2px}
+.stages button{flex:var(--w,1) 1 0;min-width:26px;font:600 11px var(--mono);color:var(--ink);
+  background:color-mix(in srgb,var(--c,var(--good)) 22%,var(--surface));border:1px solid color-mix(in srgb,var(--c,var(--good)) 55%,var(--surface));
+  border-radius:6px;padding:8px 2px;cursor:pointer;overflow:hidden}
+.stages button.s-none{background:var(--surface);border-style:dashed}
+.stages button[aria-pressed="true"]{background:var(--c,var(--good));color:#fff}
+.stagebox{font-size:13px;color:var(--ink2);background:var(--bg);border-radius:8px;padding:8px 12px;display:grid;gap:6px}
+.stagebox .stage-item{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;overflow-wrap:anywhere}
+.stagebox .stage-item b{color:var(--ink)}
+.js .stagebox .stage-item:not(.on){display:none}
+
+/* 리포트 카드 */
+.links{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
+.report-card{background:var(--bg);border:1px solid var(--line);border-radius:10px;min-width:0}
+.report-card:hover{border-color:var(--accent)}
+.report-card a{display:block;text-decoration:none;color:var(--ink);padding:9px 12px;font-size:13px;font-weight:600;overflow-wrap:anywhere}
+.report-card a small{display:block;font-weight:400;color:var(--muted);font-size:12px}
+.report-card .nav-missing{display:block;margin:0 12px 9px;font-size:12px;color:var(--warn);overflow-wrap:anywhere}
+.report-card.has-missing{border-color:var(--warn)}
+.notice{border:1px solid var(--warn);border-left:4px solid var(--warn);border-radius:10px;padding:8px 12px;background:var(--surface);font-size:13px}
+
+/* 게시 결과 */
+#publish-result ul{margin:0;padding-left:18px;display:grid;gap:2px;font-size:13px}
+
+/* 표(넓은 표는 자기 스크롤 영역 안에) */
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{font-size:11px;letter-spacing:.05em;color:var(--muted);font-weight:600;text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap;font-size:13px}
+tr:last-child td{border-bottom:0}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+
+/* 펼침 화살표 */
+.caret{display:inline-block;width:14px;color:var(--muted);transition:transform .15s}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}.caret{transition:none}}
+@media (max-width:980px){.top .meta{margin-left:0}}

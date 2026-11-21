@@ -39,6 +39,32 @@ REPORTS_EXTRA: dict[str, list[tuple[str, str]]] = {
 # 주 진입 파일이 없으면 링크하지 않는 디렉터리(S04는 jqa/owl 중 한쪽만 있을 수 있다)
 LINK_ONLY_IF_PRESENT = {"ontology/"}
 
+# 리포트 카드의 한 줄 설명(시안 project.html "리포트 바로가기"): 사이트 경로 -> 설명
+# 키는 사이트 경로, 또는 같은 디렉터리의 추가 진입 파일이면 그 파일까지(`ontology/owl.html`)
+REPORT_NOTES: dict[str, str] = {
+    "ontology/": "코드 구조 그래프",
+    "ontology/owl.html": "도메인 지식 그래프",
+    "coverage/": "테스트별로 지키는 코드",
+    "hotspot/": "먼저 손볼 코드",
+    "tia/": "변경에 영향받는 테스트",
+    "sonar/": "정적 분석 이슈",
+    "compare/": "생성 방식 판정",
+    "cucumber/*/": "생성 E2E 시나리오 결과",
+}
+
+# 공통 띠를 끼워 넣을 외부 도구 HTML(설계 §5.5): 사이트 경로(`*`는 generation) -> 진입 파일들.
+# 직접 만드는 리포트(커버리지, Sonar, 방식 비교)는 템플릿이 띠를 그린다(Task 8).
+NAV_INJECT: dict[str, list[str]] = {
+    "hotspot/": ["hotspots.html", "api_report.html"],
+    "tia/": ["tia.html"],
+    "cucumber/*/": ["index.html"],
+    "ontology/": ["jqa.html", "owl.html"],
+}
+# 띠의 "지금 리포트" 이름: run 페이지 리포트 목록에 없는 진입 파일만 둔다(사이트 상대 경로 -> 표시 이름)
+NAV_EXTRA_LABELS: dict[str, str] = {
+    "hotspot/api_report.html": "hotspot API 리포트",
+}
+
 # 게시하지 않는 파일 패턴(.exec는 크고 사이트에서 쓰지 않는다)
 COPY_IGNORE = ("*.exec", "exec", "site.css")
 

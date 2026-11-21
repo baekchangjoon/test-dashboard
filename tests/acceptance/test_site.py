@@ -116,9 +116,10 @@ def test_site_js_shows_publish_log_or_graceful_absence(publish_log_server, brows
         text = page.locator("#publish-result").inner_text()
         assert "상태: degraded" in text and "사유: lightsail 실패" in text and "lightsail: failed" in text and "s3: ok" in text
         assert "게시 결과 없음" not in text
-        # S13 행: 로그를 읽기 전에는 run.json과 같은 publishing, 읽은 뒤에는 로그의 status/reason으로 바뀐다.
-        page.wait_for_function("document.querySelector('#stages tr[data-stage=S13] td:nth-child(2)').textContent === 'degraded'")
-        row = page.locator("#stages tr[data-stage=S13]").inner_text()
+        # S13 단계(단계 띠): 로그를 읽기 전에는 run.json과 같은 publishing, 읽은 뒤에는 로그의 status/reason으로 바뀐다.
+        page.wait_for_function("document.querySelector('#stage-strip button[data-stage=S13]').dataset.status === 'degraded'")
+        page.click("#stage-strip button[data-stage=S13]")
+        row = page.locator("#stage-detail").inner_text()
         assert "degraded" in row and "lightsail 실패" in row and "publishing" not in row
     finally:
         page.close()

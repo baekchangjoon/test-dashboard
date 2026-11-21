@@ -568,3 +568,189 @@ def fake_gh(tmp_path: Path, repos: dict[str, dict]) -> FakeGh:
     script.write_text(f"#!{sys.executable}\n{_FAKE_GH_SCRIPT}")
     script.chmod(0o755)
     return FakeGh(state_dir)
+
+
+# --- 표본 리포트를 가진 로컬 run과 렌더된 사이트(Task 7) ---------------------------------------------------
+
+FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
+REPORT_FIXTURES = FIXTURES / "reports"
+REPORTS_RUN_ID = "20261120-131022Z-b6f9393-manual-0000007a"
+REPORTS_SUT = "pet"
+RUN_PATH = f"suts/{REPORTS_SUT}/runs/{REPORTS_RUN_ID}/"     # render_site가 만든 run의 사이트 상대 경로
+# 단계별 걸린 시간(초). S07은 259초(4분 19초), 나머지는 작은 값.
+REPORT_STAGE_SECONDS = {"S00": 20, "S01": 18, "S02": 4, "S03": 20, "S04": 1, "S05": 0, "S06": 1, "S07": 259,
+                        "S08": 30, "S09": 2, "S10": 12, "S11": 40, "S12": 3, "S13": 25}
+MINIMAL_CUCUMBER_HTML = ('<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>Cucumber 리포트</title></head>'
+                         '<body><main><h1>Cucumber 리포트</h1><p>시나리오 31개</p></main></body></html>')
+
+
+def _report_dir(run_dir: Path, rel: str, files: dict[str, str | Path]) -> Path:
+    """run 디렉터리 아래 `rel`에 파일을 둔다. 값이 Path면 그 파일을 복사, 문자열이면 그 내용을 쓴다."""
+    target = run_dir / rel
+    target.mkdir(parents=True, exist_ok=True)
+    for name, source in files.items():
+        if isinstance(source, Path):
+            (target / name).write_bytes(source.read_bytes())
+        else:
+            (target / name).write_text(source)
+    return target
+
+
+def _own_sonar(run_dir: Path) -> Path:
+    """가짜 Sonar API로 sonar.export를 돌려 실제 sonar.render로 sonar.json·sonar.html을 만든다."""
+    from fake_sonar import KEY, start_fake_sonar
+    from td import sonar
+    fake, stop = start_fake_sonar()
+    try:
+        fake.issue_total, fake.hotspot_total = 3, 1
+        doc = sonar.export(KEY, client=sonar.SonarClient(fake.url, token="squ_fixture_token_value"), ce_task_id="AZ-task-7")
+    finally:
+        stop()
+    target = run_dir / "S11" / "sonar"
+    target.mkdir(parents=True, exist_ok=True)
+    (target / "sonar.json").write_text(json.dumps(doc, ensure_ascii=False))
+    sonar.render(doc, target, copy_css=False)
+    return target
+
+
+def _own_compare(run_dir: Path, scratch: Path) -> Path:
+    """test_compare의 합성 run으로 compare.collect를 돌려 실제 compare.render_page로 compare.json·compare.html을 만든다."""
+    from td import compare
+    from test_compare import collect, make_compare_run
+    scratch.mkdir(parents=True, exist_ok=True)
+    document = collect(make_compare_run(scratch))
+    target = run_dir / "S12" / "compare"
+    target.mkdir(parents=True, exist_ok=True)
+    (target / "compare.json").write_text(json.dumps(document, ensure_ascii=False))
+    compare.render_page(target, document, copy_css=False)
+    return target
+
+
+def _own_ontology(run_dir: Path) -> Path:
+    """표본 온톨로지 JSON으로 실제 ontology_html.render를 돌려 jqa.html·owl.html을 만든다."""
+    from td import ontology_html
+    target = run_dir / "S04" / "ontology"
+    source = FIXTURES / "owl" / "ontology-jqa.json"
+    ontology_html.render(source, target / "jqa.html", "jqa")
+    ontology_html.render(source, target / "owl.html", "owl")
+    return target
+
+
+def make_local_run_with_reports(tmp_path: Path, *, sut: str = REPORTS_SUT, tia_html: str | None = None,
+                                hotspot_html: str | None = None, with_own_reports: bool = True,
+                                gens: tuple[str, ...] = ("base-r1",)) -> Path:
+    """게시 전 로컬 run(`helpers.make_local_run`)에 표본 리포트를 더한다.
+
+    hotspot(`hotspots.html`·`api_report.html`)과 TIA(`tia.html`)는 tests/fixtures/reports/의 표본(tia_html·hotspot_html을
+    주면 그 내용), 생성 묶음마다 최소 Cucumber `index.html`, with_own_reports면 실제 렌더 함수로 만든 Sonar·방식 비교·온톨로지.
+    14단계 단계 JSON에 시작·종료 시각을 넣는다(REPORT_STAGE_SECONDS, S07은 259초). S13은 시작한 상태다.
+    """
+    from helpers import make_local_run
+    from td import state
+    tmp_path = Path(tmp_path)
+    run_dir = make_local_run(tmp_path / "runs", sut, REPORTS_RUN_ID)
+    hotspot_dir = _report_dir(run_dir, "S09/hotspot", {
+        "hotspots.html": hotspot_html if hotspot_html is not None else REPORT_FIXTURES / "hotspots.html",
+        "api_report.html": REPORT_FIXTURES / "api_report.html"})
+    tia_dir = _report_dir(run_dir, "S10/tia", {
+        "tia.html": tia_html if tia_html is not None else REPORT_FIXTURES / "tia.html"})
+    gen_outputs = {f"html:{gen}": str(_report_dir(run_dir, f"S07/{gen}/html", {"index.html": MINIMAL_CUCUMBER_HTML}))
+                   for gen in gens}
+    generations = {gen: {"arm": gen.split("-")[0], "status": "passed", "scenarios": 31,
+                         "statusCounts": {"passed": 21, "failed": 10, "undefined": 0, "uncompilable": 0}} for gen in gens}
+    outputs: dict[str, dict] = {"S07": gen_outputs, "S09": {"hotspot": str(hotspot_dir)}, "S10": {"tia": str(tia_dir)}}
+    if with_own_reports:
+        outputs["S04"] = {"ontology": str(_own_ontology(run_dir))}
+        outputs["S11"] = {"sonar": str(_own_sonar(run_dir))}
+        outputs["S12"] = {"compare": str(_own_compare(run_dir, tmp_path / "compare-src"))}
+    for stage_id in ("S02", "S03", "S04", "S05", "S06", "S07", "S09", "S10", "S11", "S12"):
+        extra = {"generations": generations} if stage_id == "S07" else None
+        state.end(run_dir, stage_id, "passed", outputs=outputs.get(stage_id), extra=extra)
+    state.begin(run_dir, "S13")
+    moment = _parse_iso(_started_from_run_id(REPORTS_RUN_ID))
+    for stage_id, seconds in REPORT_STAGE_SECONDS.items():
+        stage_file = run_dir / "stages" / f"{stage_id}.json"
+        data = json.loads(stage_file.read_text())
+        data.update(startedAt=_iso(moment), finishedAt=_iso(moment + timedelta(seconds=seconds)))
+        stage_file.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+        moment += timedelta(seconds=seconds)
+    return run_dir
+
+
+def render_site(tmp_path: Path, run_dir: Path, *, config: dict | None = None) -> Path:
+    """run을 사이트 디렉터리의 `suts/<sut>/runs/<runId>/`로 렌더하고(완료 표시 `_COMPLETE`) 재생성한다. 사이트 경로를 돌려준다."""
+    from td.site import pages
+    run = json.loads((Path(run_dir) / "run.json").read_text())
+    site = make_site(Path(tmp_path) / "site-root", config=config)
+    descriptor = site.parent / "suts" / run["sut"] / "sut.yaml"
+    descriptor.parent.mkdir(parents=True, exist_ok=True)
+    descriptor.write_text(f"name: {run['sut']}\n")
+    target = site / "suts" / run["sut"] / "runs" / run["runId"]
+    pages.render_run(run_dir, target)
+    (target / "_COMPLETE").write_text("{}")
+    rebuild_site(site)
+    return site
+
+
+def run_fake_publication(run_dir: Path) -> dict:
+    """test_unit_publish.py의 exec_env와 같은 방식(helpers.FakeS3, 가짜 ssh·rsync, 정상 CloudFront)으로 Publication.execute를 돌린다."""
+    import signal
+    from helpers import FakeS3
+    from td import publish
+
+    class _OkCloudFront:
+        def create_invalidation(self, DistributionId, InvalidationBatch):
+            return {"Invalidation": {"Id": "I1"}}
+
+    run_dir = Path(run_dir)
+    run = json.loads((run_dir / "run.json").read_text())
+    scratch = run_dir.parent / f"_publish-{run['runId']}"
+    work = scratch / "work"
+    (work / "infra").mkdir(parents=True)
+    (work / "infra" / "terraform.tfstate").write_text(json.dumps(
+        {"outputs": {"bucket": {"value": "td-reports-test"}, "distribution_id": {"value": "DIST"}}}))
+    bin_dir = scratch / "bin"
+    bin_dir.mkdir()
+    for name, body in (("ssh", "echo 99999999999"), ("rsync", "exit 0")):
+        (bin_dir / name).write_text(f"#!/usr/bin/env bash\n{body}\n")
+        (bin_dir / name).chmod(0o755)
+    saved_signals = {sig: signal.getsignal(sig) for sig in (signal.SIGINT, signal.SIGTERM)}
+    saved_path = os.environ["PATH"]
+    os.environ["PATH"] = f"{bin_dir}:{saved_path}"
+    env = {"TD_WORK_DIR": str(work), "TD_ROOT": str(scratch), "TD_SITE_PREFIX": "_test/u/",
+           "TD_LIGHTSAIL_IP": "203.0.113.9", "TD_SSH_KEY_PATH": "/key", "PATH": os.environ["PATH"]}
+    try:
+        return publish.Publication(run["sut"], run["runId"], run_dir, env, FakeS3(), _OkCloudFront(),
+                                   measure_hosting=False).execute()
+    finally:
+        os.environ["PATH"] = saved_path
+        for sig, handler in saved_signals.items():
+            signal.signal(sig, handler)
+
+
+# --- 작은 검사 보조 ---------------------------------------------------------------------------------------
+
+def sha256(path: Path) -> str:
+    import hashlib
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def snapshot_bytes(run_dir: Path, stage_dirs: Iterable[str]) -> dict[str, bytes]:
+    """run 디렉터리 아래 단계 디렉터리(`S09` 등)의 모든 파일 바이트(run 상대 경로 -> 바이트)."""
+    run_dir = Path(run_dir)
+    return {path.relative_to(run_dir).as_posix(): path.read_bytes()
+            for stage in stage_dirs for path in sorted((run_dir / stage).rglob("*")) if path.is_file()}
+
+
+def http_status(url: str) -> int:
+    import urllib.error
+    try:
+        with urllib.request.urlopen(url, timeout=10) as response:
+            return response.status
+    except urllib.error.HTTPError as error:
+        return error.code
+
+
+def computed(page, selector: str, prop: str) -> str:
+    """첫 `selector` 요소의 계산된 CSS 값."""
+    return page.eval_on_selector(selector, "(element, name) => getComputedStyle(element).getPropertyValue(name)", prop)

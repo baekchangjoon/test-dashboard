@@ -125,6 +125,18 @@ def _esc(text: str) -> str:
 
 
 # --- 재생성 ---------------------------------------------------------------------------------
+V2_DIR = STATIC_DIR / "v2"
+
+
+def _copy_v2(base: Path, written: list[Path]) -> None:
+    """새 디자인 자산(static/v2/의 파일)을 base/static/v2/에 복사한다(이름순)."""
+    for source in sorted(p for p in V2_DIR.iterdir() if p.is_file()):
+        target = base / "static" / "v2" / source.name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+        written.append(target)
+
+
 def rebuild(site_root, prefix: str = "", config: Config | None = None, *,
             exclude: frozenset[str] = frozenset()) -> list[Path]:
     """site_root/prefix 아래 인덱스를 다시 쓰고, 쓴 파일 목록을 돌려준다. _test 접두 목록은 site_root/_test에 쓴다.
@@ -144,11 +156,12 @@ def rebuild(site_root, prefix: str = "", config: Config | None = None, *,
     depth = len([part for part in Path(prefix).parts if part]) if prefix else 0
     test_index_href = "../" * depth + "_test/index.html"
 
-    for name in ("site.css", "site.js"):
+    for name in ("site.css", "site.js"):  # 옛 run 페이지가 쓰는 v1 자산(바이트 그대로)
         target = base / "static" / name
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(STATIC_DIR / name, target)
         written.append(target)
+    _copy_v2(base, written)
 
     summary = [{"name": name, "runCount": len(runs), "latest": runs[0]} for name, runs in suts.items()]
     _write_json(base / "suts.json", summary, written)
@@ -170,6 +183,7 @@ def rebuild(site_root, prefix: str = "", config: Config | None = None, *,
     css.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(STATIC_DIR / "site.css", css)
     written.append(css)
+    _copy_v2(test_dir, written)
     _write(test_dir / "index.html", env.get_template("test_index.html.j2").render(
         prefixes=prefixes, css_href="static/site.css", home_href="../index.html"), written)
     return written
