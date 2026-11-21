@@ -23,6 +23,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable, Iterator
 
+import pytest
 import yaml
 
 from helpers import make_site_run
@@ -760,6 +761,121 @@ def render_site(tmp_path: Path, run_dir: Path, *, config: dict | None = None) ->
     (target / "_COMPLETE").write_text("{}")
     rebuild_site(site)
     return site
+
+
+# --- 과제 페이지 고정 사이트(Task 10) ----------------------------------------------------------------------
+
+# pet의 앞선 run 4개(runId 순). 3번째 run(전체 5개 중 3번째)은 테스트 통과율이 없다.
+PROJ_PET_OLDER = [
+    {"runId": "20261116-101500Z-ppppppp-manual-00000011", "tests_pass": 0.9, "line": 0.38, "agg_line": 0.55},
+    {"runId": "20261117-101500Z-ppppppp-manual-00000012", "tests_pass": 0.95, "line": 0.39, "agg_line": 0.56},
+    {"runId": "20261118-101500Z-ppppppp-manual-00000013", "tests_pass": None, "line": 0.4, "agg_line": 0.58},
+    {"runId": "20261119-101500Z-ppppppp-manual-00000014", "tests_pass": 0.97, "line": 0.41, "agg_line": 0.6},
+]
+PROJ_PET_GENS = ("base-r1", "jqa-r1")
+# 최신 pet run의 kpis: 통과율 1, 귀속 라인 0.415 -> 결론 문장 "… 41.5%입니다"(게이트 OK·취약점 0이라 양호)
+PROJ_PET_KPIS = {
+    "tests": {"suite": "blackbox", "passed": 35, "total": 35, "passRate": 1.0},
+    "blackbox": {"line": 0.415, "branch": 0.308, "aggregate": {"line": 0.609, "branch": 0.34}},
+    "e2e-base-r1": {"line": 0.198, "branch": 0.122, "aggregate": {"line": 0.433, "branch": 0.162}},
+    "e2e-jqa-r1": {"line": 0.16, "branch": 0.087, "aggregate": {"line": 0.392, "branch": 0.123}},
+    "sonar": {"gate": "OK", "coverage": "41.7", "bugs": "2", "vulnerabilities": "0", "codeSmells": "37",
+              "issues": 3, "hotspots": 1},
+}
+# coverage.json의 묶음별 TC 수와 귀속 수
+PROJ_PET_COVERAGE_COUNTS = {"blackbox": (35, 27), "e2e-base-r1": (31, 31), "e2e-jqa-r1": (31, 30)}
+PROJ_PET_TOP10 = [{"name": f"Klass{rank}.method{rank}", "file": f"src/main/java/app/Klass{rank}.java",
+                   "method": f"method{rank}", "score": round(30.0 - rank * 2.5, 4)} for rank in range(1, 11)]
+PROJ_PET_IMPACT = {"selected": 68, "indexedTests": 134, "deterministic": 0, "conservative": 68,
+                   "allSelectedConservative": True}
+PROJ_MANY_RUNS = [{"runId": f"202610{day:02d}-090000Z-mmmmmmm-manual-{day:08d}", "tests_pass": 1.0,
+                   "line": round(0.3 + day * 0.005, 4), "agg_line": round(0.5 + day * 0.004, 4)} for day in range(1, 32)]
+PROJ_PLAIN_SNAPSHOTS = [
+    snap(date="20261121", ci_runs=20, ci_successes=17, sonar={"gate": "OK", "coverage": 90.2, "bugs": 0, "vulnerabilities": 1}),
+    snap(date="20261122", ci_runs=20, ci_successes=18, sonar={"gate": "OK", "coverage": 91.6, "bugs": 0, "vulnerabilities": 0}),
+]
+PLACEHOLDER_RUN_PAGE = '<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>run 페이지</title></head><body></body></html>'
+
+
+def _edit_json(path: Path, change) -> None:
+    data = json.loads(path.read_text())
+    change(data)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+
+
+def _prepare_pet_run(run_dir: Path) -> None:
+    """make_local_run_with_reports가 만든 로컬 run을 과제 페이지 고정 값으로 맞춘다(렌더 전에 부른다)."""
+    _edit_json(run_dir / "run.json", lambda run: run.update(kpis=json.loads(json.dumps(PROJ_PET_KPIS))))
+
+    def gate_ok(doc):  # 게이트를 통과로(run.json kpis.sonar와 같은 출처 값이 되게)
+        doc["qualityGate"] = {"status": "OK", "conditions": [
+            {"status": "OK", "metricKey": "new_violations", "comparator": "GT", "errorThreshold": "0", "actualValue": "0"}]}
+    _edit_json(run_dir / "S11" / "sonar" / "sonar.json", gate_ok)
+    suites = {name: {"kpis": {key: value for key, value in PROJ_PET_KPIS[name].items()},
+                     "tcCount": tc_count, "attributedCount": attributed, "tcs": [], "paths": {}}
+              for name, (tc_count, attributed) in PROJ_PET_COVERAGE_COUNTS.items()}
+    _edit_json(run_dir / "S08" / "coverage.json", lambda doc: doc.update(suites=suites))
+    _edit_json(run_dir / "stages" / "S09.json", lambda stage: stage.update(top10=PROJ_PET_TOP10))
+    _edit_json(run_dir / "stages" / "S10.json", lambda stage: stage.update(impact=dict(PROJ_PET_IMPACT), range="HEAD~10..HEAD"))
+
+
+def proj_site(tmp_path: Path, *, extra_plain: dict[str, list[dict]] | None = None, **sections) -> Path:
+    """과제 페이지 고정 사이트를 만들고 재생성한다. 사이트 경로를 돌려준다.
+
+    pet: `repo` 없이 `sut: pet`. run 5개이고 3번째 run은 `tests.passRate`가 없다. 최신 run은
+         make_local_run_with_reports로 만들어 render_site로 렌더한 것이라 run 페이지와 리포트가 실제로 있다(양호).
+    plain: 스냅숏 2일치(최신: CI 18/20, 게이트 OK, 커버리지 91.6, 취약점 0, 버그 0. 양호).
+    many: `sut: many`, run 31개(최신 run의 Sonar 취약점 18 -> 주의).
+    `extra_plain`은 `repo`만 가진 과제를 더하고(이름 -> 스냅숏 목록), `sections`는 설정의 status·home·project를 덮는다.
+    write_run으로 만든 run에는 run 페이지 자리에 최소 index.html을 둔다(게시된 run에는 항상 run 페이지가 있다).
+    """
+    tmp_path = Path(tmp_path)
+    extra_plain = extra_plain or {}
+    config = cfg_with(pipeline=["pet", "many"], plain=["plain", *extra_plain], **sections)
+    run_dir = make_local_run_with_reports(tmp_path / "local", gens=PROJ_PET_GENS)
+    _prepare_pet_run(run_dir)
+    site = render_site(tmp_path, run_dir, config=config)
+    for sut, run_list in (("pet", PROJ_PET_OLDER), ("many", PROJ_MANY_RUNS)):
+        for run in run_list:
+            overrides = {key: value for key, value in run.items() if key != "runId"}
+            written = write_run(site, sut, run["runId"], sonar={**DEFAULT_SONAR, "vulnerabilities": "0"} if sut == "pet"
+                                else DEFAULT_SONAR, **overrides)
+            (written / "index.html").write_text(PLACEHOLDER_RUN_PAGE)
+    for name, snapshot_list in {"plain": PROJ_PLAIN_SNAPSHOTS, **extra_plain}.items():
+        for item in snapshot_list:
+            write_snapshot(site, name, item["date"], **{key: value for key, value in item.items() if key != "date"})
+    rebuild_site(site)
+    return site
+
+
+def set_threshold(cfg: Config, metric: str, value) -> Config:
+    """상태 규칙에서 `metric`을 비교하는 조건의 값을 모두 `value`로 바꾼 설정."""
+    import copy
+    import dataclasses
+    status = copy.deepcopy(cfg.status)
+
+    def visit(condition: dict) -> None:
+        if "all" in condition:
+            for child in condition["all"]:
+                visit(child)
+        elif condition["metric"] == metric:
+            condition["value"] = value
+    for rule in status["rules"]:
+        visit(rule["when"])
+    return dataclasses.replace(cfg, status=status)
+
+
+@pytest.fixture(scope="session")
+def proj_dir(tmp_path_factory) -> Path:
+    """과제 페이지 고정 사이트(proj_site)의 디렉터리. 테스트 모듈이 가져다 쓴다."""
+    return proj_site(tmp_path_factory.mktemp("proj"))
+
+
+@pytest.fixture(scope="session")
+def proj(proj_dir) -> Iterator[str]:
+    """proj_dir을 띄운 로컬 서버의 URL(`/`로 끝난다)."""
+    with serve(proj_dir) as url:
+        yield url
 
 
 def run_fake_publication(run_dir: Path) -> dict:

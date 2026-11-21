@@ -194,8 +194,116 @@
     });
   }
 
+  // --- 과제 페이지: 탭(WAI-ARIA 탭 규약) ------------------------------------------------------------
+  // 서버는 모든 구역을 보이게 그린다. 여기서 선택된 구역만 남기고(hidden), 고른 탭을 주소의 # 부분에 남긴다.
+  function setupTabs(tablist) {
+    var tabs = Array.prototype.slice.call(tablist.querySelectorAll('[role="tab"]'));
+    if (!tabs.length) return;
+    function panelOf(tab) { return document.getElementById(tab.getAttribute("aria-controls")); }
+    function tabFor(id) {
+      if (id.indexOf("panel-") === 0) id = id.slice(6);
+      for (var i = 0; i < tabs.length; i++) if (tabs[i].dataset.tab === id) return tabs[i];
+      return null;
+    }
+    function hashId() {
+      try { return decodeURIComponent(location.hash.slice(1)); } catch (error) { return ""; }
+    }
+    function select(tab, options) {
+      tabs.forEach(function (other) {
+        var on = other === tab;
+        other.setAttribute("aria-selected", String(on));
+        other.tabIndex = on ? 0 : -1;
+        var panel = panelOf(other);
+        if (panel) panel.hidden = !on;
+      });
+      if (options.focus) tab.focus();
+      if (options.hash && window.history && history.replaceState) history.replaceState(null, "", "#" + tab.dataset.tab);
+    }
+    tabs.forEach(function (tab) {
+      tab.addEventListener("click", function () { select(tab, { hash: true }); });
+    });
+    tablist.addEventListener("keydown", function (event) {
+      var position = tabs.indexOf(event.target);
+      if (position < 0) return;
+      var next = null;
+      if (event.key === "ArrowRight") next = tabs[(position + 1) % tabs.length];
+      else if (event.key === "ArrowLeft") next = tabs[(position - 1 + tabs.length) % tabs.length];
+      else if (event.key === "Home") next = tabs[0];
+      else if (event.key === "End") next = tabs[tabs.length - 1];
+      if (!next) return;
+      event.preventDefault();
+      select(next, { focus: true, hash: true });
+    });
+    // 구역 안의 "다른 탭으로" 링크(href="#panel-<id>", data-tab-link)
+    document.addEventListener("click", function (event) {
+      var link = event.target.closest ? event.target.closest("a[data-tab-link]") : null;
+      if (!link) return;
+      var tab = tabFor(link.dataset.tabLink);
+      if (!tab) return;
+      event.preventDefault();
+      select(tab, { focus: true, hash: true });
+      tablist.scrollIntoView({ block: "nearest" });
+    });
+    window.addEventListener("hashchange", function () {
+      var tab = tabFor(hashId());
+      if (tab) select(tab, {});
+    });
+    var initial = tabFor(hashId());      // 모르는 #이나 # 없음은 첫 탭
+    select(initial || tabs[0], { hash: !!initial && hashId() !== initial.dataset.tab });
+  }
+
+  // --- 과제 페이지: 추이 차트의 툴팁과 같은 run 강조 -------------------------------------------------
+  // 점(.pt)에 마우스를 올리거나 초점을 주면 툴팁에 식별자·시각·값을 쓰고, 모든 차트와 표에서 data-id가 같은 점·행을 강조한다.
+  function setupTrend(tip) {
+    var points = Array.prototype.slice.call(document.querySelectorAll("figure.trend .pt"));
+    var rows = Array.prototype.slice.call(document.querySelectorAll("#trend-table tr[data-id]"));
+    if (!points.length) return;
+    function highlight(id) {
+      points.forEach(function (point) { point.classList.toggle("hl", id !== null && point.dataset.id === id); });
+      rows.forEach(function (row) { row.classList.toggle("hl", id !== null && row.dataset.id === id); });
+    }
+    function line(text, bold) {
+      var element = document.createElement(bold ? "b" : "span");
+      element.textContent = text;
+      tip.appendChild(element);
+      if (!bold) tip.appendChild(document.createElement("br"));
+    }
+    function dateText(id) {
+      return /^\d{8}$/.test(id) ? id.slice(0, 4) + "-" + id.slice(4, 6) + "-" + id.slice(6, 8) : id;
+    }
+    function show(point) {
+      var figure = point.closest("figure");
+      var caption = figure ? figure.querySelector("figcaption") : null;
+      tip.textContent = "";
+      line((caption ? caption.textContent + " " : "") + (point.dataset.value || ""), true);
+      line(dateText(point.dataset.id || ""));
+      if (point.dataset.at) line(point.dataset.at.replace("T", " ").replace("Z", " UTC"));
+      tip.hidden = false;
+      var box = point.getBoundingClientRect();
+      var left = Math.min(box.left + box.width / 2 + 10, window.innerWidth - tip.offsetWidth - 8);
+      var top = box.top - tip.offsetHeight - 8;
+      tip.style.left = Math.max(8, left) + "px";
+      tip.style.top = (top < 8 ? box.bottom + 8 : top) + "px";
+      highlight(point.dataset.id || null);
+    }
+    function hide() {
+      tip.hidden = true;
+      highlight(null);
+    }
+    points.forEach(function (point) {
+      point.addEventListener("mouseenter", function () { show(point); });
+      point.addEventListener("focus", function () { show(point); });
+      point.addEventListener("mouseleave", hide);
+      point.addEventListener("blur", hide);
+    });
+  }
+
   var projectsTable = document.getElementById("projects");
   if (projectsTable) setupHome(projectsTable);
+  var tablist = document.getElementById("tabs");
+  if (tablist && tablist.getAttribute("role") === "tablist") setupTabs(tablist);
+  var trendTip = document.getElementById("trend-tip");
+  if (trendTip) setupTrend(trendTip);
 
   var strip = document.getElementById("stage-strip");
   if (strip) setupStageStrip(strip);

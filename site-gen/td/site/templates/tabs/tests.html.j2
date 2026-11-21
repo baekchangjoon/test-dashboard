@@ -1,0 +1,19 @@
+{# 테스트: 기존 테스트 요약, 생성 묶음별 통과·실패 막대, Cucumber 리포트 링크 #}
+<div class="grid g3">
+  <div class="card kpi {{ view.blackbox.level }}" data-metric="tests.total"><div><span>기존 블랙박스 테스트</span><b>{{ view.blackbox.text }}</b><small>{{ view.blackbox.sub }}</small></div></div>
+  <div class="card kpi" data-metric="e2e.scenarios"><div><span>생성된 E2E 시나리오</span><b>{{ view.generated.text }}</b><small>{{ view.generated.sub }}</small></div></div>
+  <div class="card kpi" data-metric="e2e.passRate"><div><span>생성 시나리오 통과율</span><b>{{ view.generatedRate.text }}</b>{% if view.generatedRate.sub %}<small>{{ view.generatedRate.sub }}</small>{% endif %}</div></div>
+</div>
+{% if view.rows %}
+<div class="card"><h3>생성 묶음별 결과</h3>
+  <div class="legend"><span><i style="background:var(--good)"></i>통과</span><span><i style="background:var(--crit)"></i>실패</span></div>
+  <div class="scroll"><table id="gens">
+    <thead><tr><th>방식</th><th>묶음</th><th class="n">시나리오</th><th class="n">통과</th><th class="n">실패</th><th>통과 / 실패</th><th class="n">통과율</th><th></th></tr></thead>
+    <tbody>
+{% for row in view.rows %}
+      <tr data-gen="{{ row.id }}"><td>{% if row.arm %}<span class="arm a-{{ row.arm }}">{{ row.arm }}</span>{% else %}<span class="dim">—</span>{% endif %}</td><td class="mono">{{ row.id }}</td><td class="n" data-col="scenarios">{{ row.scenarios if row.scenarios is not none else "—" }}</td><td class="n" data-col="passed">{{ row.passed if row.passed is not none else "—" }}</td><td class="n" data-col="failed">{{ row.failed if row.failed is not none else "—" }}</td><td><div class="stack" title="통과 {{ row.passed if row.passed is not none else '—' }} · 실패 {{ row.failed if row.failed is not none else '—' }}"><i class="p" style="width:{{ row.passedWidth }}%"></i><i class="f" style="width:{{ row.failedWidth }}%"></i></div></td><td class="n" data-col="rate">{{ row.rateText }}</td><td>{% if row.link %}<a class="report-link" data-report="{{ row.link.report }}" href="{{ row.link.href }}">Cucumber 리포트</a>{% endif %}</td></tr>
+{% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endif %}

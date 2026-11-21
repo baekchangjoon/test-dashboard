@@ -1,0 +1,29 @@
+{% extends "base_v2.html.j2" %}
+{# 과제 페이지(설계 §5.2). 서버가 모든 탭 구역을 설정 순서대로 그린다. 스크립트가 켜지면 app.js가 선택된 구역만 남긴다. #}
+{% block title %}{{ project.name }} 품질 현황{% endblock %}
+{% block crumbs %}<span class="crumb"><a href="{{ home_href }}">과제</a> › <b>{{ project.name }}</b></span>
+<span class="st s-{{ verdict.level }}">{{ verdict.label }}</span>{% if verdict.partial %}<span class="tag tag-partial">부분 측정</span>{% endif %}{% if stale %}<span class="tag tag-stale">수집 실패 · {{ stale }}</span>{% endif %}
+<span class="meta">{{ meta }}{% if run_page %} · <a href="{{ run_page.href }}">실행 결과 열기</a>{% endif %}</span>{% endblock %}
+{% block content %}
+<div class="proj-page">
+<div class="proj-hero">
+  <div class="eyebrow">과제 품질 현황</div>
+  <h1 id="headline">{{ headline }}</h1>
+  {% if project.description %}<p class="lede">{{ project.description }}</p>{% endif %}
+  <div class="tabs" role="tablist" id="tabs" aria-label="과제 페이지 탭">
+{% for tab in tabs %}
+    <button type="button" role="tab" id="tab-{{ tab.id }}" data-tab="{{ tab.id }}" aria-controls="panel-{{ tab.id }}" aria-selected="{{ 'true' if loop.first else 'false' }}" tabindex="{{ '0' if loop.first else '-1' }}">{{ tab.label }}</button>
+{% endfor %}
+  </div>
+</div>
+{% for tab in tabs %}
+<section role="tabpanel" id="panel-{{ tab.id }}" class="panel" aria-labelledby="tab-{{ tab.id }}" tabindex="0">
+  <div class="q"><span class="tab-name">{{ tab.label }}</span><h2>{{ tab.question }}</h2></div>
+  <div class="guide tab-guide"><b>이 탭 읽는 법</b> · {{ tab.guide }}</div>
+{% set view = tab.view %}
+{% include "tabs/" ~ tab.id ~ ".html.j2" %}
+</section>
+{% endfor %}
+</div>
+<script type="application/json" id="project-data">{{ data_json|safe }}</script>
+{% endblock %}

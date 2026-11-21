@@ -1,0 +1,66 @@
+{# 한눈에: KPI 칸 5개와 작은 추세선, (파이프라인 과제) 먼저 손볼 곳·이번 변경의 영향·단계 띠·리포트 바로가기,
+   (그 밖의 과제) 최근 CI 이력. #}
+<div class="grid g5">
+{% for k in view.kpis %}
+  <div class="card kpi {{ k.level }}" data-metric="{{ k.metric }}"><div><span>{{ k.label }}</span><b>{{ k.text }}</b>{% if k.sub %}<small>{{ k.sub }}</small>{% endif %}</div>{% if k.spark %}<svg class="sp" viewBox="0 0 100 26" preserveAspectRatio="none" aria-hidden="true">{% for line in k.spark.lines %}<polyline points="{{ line }}"/>{% endfor %}<circle cx="{{ k.spark.dot[0] }}" cy="{{ k.spark.dot[1] }}" r="2.4"/></svg>{% endif %}</div>
+{% endfor %}
+</div>
+{% if view.kind == "run" %}
+<div class="grid g2">
+  <div class="card"><h3>먼저 손볼 곳 <a href="#panel-hotspot" data-tab-link="hotspot">위험 지점 전체 →</a></h3>
+{% if view.top %}
+    <ol class="bars hot">
+{% for row in view.top %}
+      <li><span class="n">{{ row.rank }}</span><span class="nm" title="{{ row.file }}">{{ row.name }}</span><span class="v">{{ row.score }}</span><span class="tr"><i style="width:{{ row.width }}%"></i></span></li>
+{% endfor %}
+    </ol>
+    <p class="sub dim">위험 점수 = 복잡도 × 최근 변경 압력 × 커버리지 배수</p>
+{% else %}
+    <p class="dim">측정 없음</p>
+{% endif %}
+  </div>
+  <div class="card"><h3>이번 변경의 영향 {% if view.tiaLink %}<a class="report-link" data-report="{{ view.tiaLink.report }}" href="{{ view.tiaLink.href }}">TIA 리포트 열기 →</a>{% endif %}</h3>
+{% if view.impact %}
+    <div class="ringrow impact" data-selected="{{ view.impact.selected }}" data-indexed="{{ view.impact.indexedTests }}">
+      <div class="ring"><svg viewBox="0 0 110 110" aria-hidden="true"><circle class="bg" cx="55" cy="55" r="45"/><circle class="fg" cx="55" cy="55" r="45" stroke-dasharray="{{ view.ring.dasharray }}" stroke-dashoffset="{{ view.ring.dashoffset }}"/></svg><div><b>{{ view.ring.share }}</b><span>다시 실행</span></div></div>
+      <p class="sub">{% if view.impact.range %}변경 범위 <code>{{ view.impact.range }}</code>에서{% else %}이번 변경 범위에서{% endif %} 테스트 {{ view.impact.indexedTests }}개 중 <b>{{ view.impact.selected }}개</b>가 선택됐습니다.{% if view.impact.deterministic is not none %} 변경된 코드와 정확히 이어진 선별은 {{ view.impact.deterministic }}개입니다.{% endif %}</p>
+    </div>
+{% else %}
+    <p class="dim">측정 없음</p>
+{% endif %}
+  </div>
+</div>
+<div class="card"><h3>파이프라인 14단계 <span class="dim">전체 {{ view.stages.total }} · 칸 너비는 걸린 시간</span>{% if view.runPage %} <a class="report-link" data-report="{{ view.runPage.report }}" href="{{ view.runPage.href }}">실행 결과 열기 →</a>{% endif %}</h3>
+  <div id="stage-strip" class="stages" role="group" aria-label="단계 고르기">
+{% for item in view.stages["items"] %}
+    <button type="button" class="{{ item.css }}" data-stage="{{ item.id }}" data-status="{{ item.status or 'none' }}" aria-pressed="{{ 'true' if item.id == view.stages.selected else 'false' }}" aria-controls="stage-detail" style="--w:{{ item.width }}" title="{{ item.id }} {{ item.label }} · {{ item.statusText }} · {{ item.duration }}">{{ item.id[1:] }}</button>
+{% endfor %}
+  </div>
+  <div id="stage-detail" class="stagebox" aria-live="polite">
+{% for item in view.stages["items"] %}
+    <p class="stage-item{{ ' on' if item.id == view.stages.selected else '' }}" data-detail="{{ item.id }}"><b>{{ item.id }} {{ item.label }}</b><span class="st {{ item.css }}">{{ item.statusText }}</span><span>{{ item.duration }}</span><span class="stage-reason">{{ item.reason }}</span></p>
+{% endfor %}
+  </div>
+</div>
+<div class="card"><h3>리포트 바로가기</h3>
+{% if view.reports %}
+  <div class="links">
+{% for link in view.reports %}
+    <a class="report-link" data-report="{{ link.report }}" href="{{ link.href }}">{{ link.label }}<small>{{ link.note }}</small></a>
+{% endfor %}
+  </div>
+{% else %}
+  <p class="dim">게시된 리포트가 없습니다.</p>
+{% endif %}
+</div>
+{% else %}
+<div class="card"><h3>최근 CI 이력</h3>
+{% if view.history %}
+  <div class="hist" title="왼쪽이 오래된 실행" aria-label="최근 CI {{ view.history|length }}회, 실패 {{ view.historyFailures }}회">{% for outcome in view.history %}{% if outcome %}<i></i>{% else %}<i class="f"></i>{% endif %}{% endfor %}</div>
+  <p class="sub dim">왼쪽이 오래된 실행입니다. 빨간 칸이 실패입니다.</p>
+{% else %}
+  <p class="dim">{{ view.historyNote }}</p>
+{% endif %}
+  <p class="sub dim">파이프라인을 아직 돌리지 않아 테스트별 커버리지·hotspot·TIA 리포트가 없습니다.</p>
+</div>
+{% endif %}

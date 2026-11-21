@@ -1,0 +1,9 @@
+{# 위험 지점: 상위 10개 메서드, hotspot 리포트 열기 #}
+<div class="card"><h3>위험 점수 상위 {{ view.top|length }}개 메서드 {% if view.link %}<a class="report-link" data-report="{{ view.link.report }}" href="{{ view.link.href }}">hotspot 리포트 열기 →</a>{% endif %}</h3>
+  <ol class="bars hot">
+{% for row in view.top %}
+    <li><span class="n">{{ row.rank }}</span><span class="nm" title="{{ row.file }}">{{ row.name }}</span><span class="v">{{ row.score }}</span><span class="tr"><i style="width:{{ row.width }}%"></i></span></li>
+{% endfor %}
+  </ol>
+  <p class="sub dim">위험 점수 = 복잡도 × 최근 변경 압력 × 커버리지 배수</p>
+</div>

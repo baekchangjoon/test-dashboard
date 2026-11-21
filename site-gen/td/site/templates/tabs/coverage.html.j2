@@ -1,0 +1,12 @@
+{# 커버리지: 묶음별 귀속·집계 막대, 테스트별 상세 링크 #}
+<div class="card"><h3>테스트 묶음별 라인 커버리지 {% if view.link %}<a class="report-link" data-report="{{ view.link.report }}" href="{{ view.link.href }}">테스트별 상세 열기 →</a>{% endif %}</h3>
+  <div class="legend"><span><i style="background:var(--accent)"></i>귀속</span><span><i style="background:color-mix(in srgb,var(--accent) 40%,var(--sunk))"></i>집계</span></div>
+  <div class="scroll"><table id="suites">
+    <thead><tr><th>묶음</th><th class="n">테스트</th><th>라인</th><th class="n">귀속</th><th class="n">집계</th><th class="n">분기(귀속)</th></tr></thead>
+    <tbody>
+{% for row in view.rows %}
+      <tr data-suite="{{ row.name }}"><td class="mono">{{ row.name }}</td><td class="n" data-col="tc">{{ row.tcText }}</td><td><div class="pair"><div class="a"><i style="width:{{ row.lineWidth }}%"></i></div><div class="g"><i style="width:{{ row.aggregateWidth }}%"></i></div></div></td><td class="n" data-col="line"><b>{{ row.lineText }}</b></td><td class="n" data-col="aggregate">{{ row.aggregateText }}</td><td class="n" data-col="branch">{{ row.branchText }}</td></tr>
+{% endfor %}
+    </tbody>
+  </table></div>
+</div>

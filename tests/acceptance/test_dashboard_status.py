@@ -1,7 +1,11 @@
-"""상태 판정 수용 테스트(Unit): REQ-081(규칙별 판정), REQ-082(없는 값과 경계), REQ-084(결론 문장 선택)."""
+"""상태 판정 수용 테스트: REQ-081(규칙별 판정), REQ-082(없는 값과 경계), REQ-084(결론 문장 선택), REQ-083(임계값 변경, Int)."""
+import html
+import json
+
 import pytest
 
 from td import dashboard_config
+from dashboard_fixtures import cfg_with, load_cfg, make_site, rebuild_site, set_threshold, snap, status_of
 
 CFG = dashboard_config.empty()
 OKCI = {"ci.runs": 9, "ci.successRate": 1.0, "ci.lastFailed": False, "ci.failedChecks": 0}
@@ -52,3 +56,18 @@ def test_rules_text_shows_thresholds():
     lines = dashboard_config.rules_text(CFG)
     assert "주의: CI 실행 수 ≥ 5 그리고 CI 성공률 < 90.0% / Sonar 취약점 > 0" in lines
     assert lines[0].startswith("위험: Sonar 게이트 = 실패")
+
+
+def test_req083_threshold_change_changes_verdict(tmp_path):
+    site = make_site(tmp_path, snapshots={"p": [snap(ci_runs=25, ci_successes=23, sonar={"gate": "OK", "vulnerabilities": 0})]},
+                     config=cfg_with(plain="p"))
+    rebuild_site(site)
+    assert status_of(site, "p") == "good"
+    rebuild_site(site, set_threshold(load_cfg(site), "ci.successRate", 0.95))
+    rules = json.loads((site / "projects.json").read_text())["rules"]
+    warn_line = next(line for line in rules if line.startswith("주의"))
+    assert status_of(site, "p") == "warn" and "95.0%" in warn_line and "90.0%" not in warn_line
+    # 홈 각주는 HTML이라 "<"가 "&lt;"로 적힌다. 글자로 되돌려 비교한다.
+    assert warn_line in html.unescape((site / "index.html").read_text())
+    page = (site / "projects/p/index.html").read_text()
+    assert "주의: 최근 CI 25회 중 2회 실패" in html.unescape(page)

@@ -1,4 +1,5 @@
-"""인덱스 재생성: `_COMPLETE`가 있는 run만 읽어 suts.json, runs.json, projects.json, 홈, SUT 페이지, _test 목록을 쓴다.
+"""인덱스 재생성: `_COMPLETE`가 있는 run만 읽어 suts.json, runs.json, projects.json, 홈, 과제 페이지와 series.json,
+SUT 안내 페이지, _test 목록을 쓴다.
 
 멱등이다. 실행 시각 같은 비결정 값은 쓰지 않고, 모든 목록을 안정적으로 정렬한다(REQ-045).
 """
@@ -13,7 +14,7 @@ from pathlib import Path
 
 from td import dashboard_config
 from td.dashboard_config import Config, ConfigError
-from td.site import metrics
+from td.site import metrics, project_page
 from td.site.pages import STATIC_DIR, jinja_env, json_for_script, read_json as _read
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -78,7 +79,8 @@ def _collect(base: Path) -> dict[str, list[dict]]:
 
 # --- 추이 차트(인라인 SVG, 외부 라이브러리 없음) ---------------------------------------------------
 def line_chart(title: str, desc: str, runs_oldest_first: list[dict], key: str) -> str:
-    """값은 0~1 비율(y축 0~100%). 값이 없는 run은 선을 끊는다. 색은 CSS 변수라 다크 모드를 따른다."""
+    """옛 SUT 페이지의 차트. 재생성은 더 쓰지 않고(SUT 페이지는 안내 페이지가 됐다) PoC 단위 테스트만 부른다.
+    값은 0~1 비율(y축 0~100%). 값이 없는 run은 선을 끊는다. 색은 CSS 변수라 다크 모드를 따른다."""
     plot_w, plot_h = CHART_W - PAD_L - PAD_R, CHART_H - PAD_T - PAD_B
     count = len(runs_oldest_first)
 
@@ -304,17 +306,18 @@ def rebuild(site_root, prefix: str = "", config: Config | None = None, *,
     _write_json(base / "suts.json", summary, written)
     for name, runs in suts.items():
         _write_json(base / "suts" / name / "runs.json", runs, written)
-        oldest_first = list(reversed(runs))
-        charts = [
-            line_chart("테스트 통과율 추이", f"{name}의 run별 테스트 통과율(0~100%)", oldest_first, "passRate"),
-            line_chart("귀속 라인 커버리지 추이", f"{name}의 run별 귀속 라인 커버리지(0~100%)", oldest_first, "line"),
-        ]
-        _write(base / "suts" / name / "index.html", env.get_template("sut.html.j2").render(
-            sut=name, runs=runs, charts=charts, css_href="../../static/site.css", home_href="../../index.html"), written)
     projects = metrics.build_projects(base, config, exclude=exclude)
     document = projects_document(projects, config)
     _write_json(base / "projects.json", document, written)
     _write(base / "index.html", render_home(env, projects, config, document, test_index_href), written)
+    # 과제 페이지와 시계열(그리는 과제만), SUT 안내 페이지(그려진 과제가 없으면 첫 화면으로 보낸다)
+    for project, entry in zip(projects, document["projects"]):
+        html, series_doc = project_page.render_project(env, project, config, base, entry)
+        _write(base / "projects" / project["name"] / "index.html", html, written)
+        _write_json(base / "projects" / project["name"] / "series.json", series_doc, written)
+    drawn_by_sut = {project["sut"]: project["name"] for project in projects if project["sut"]}
+    for name in suts:
+        _write(base / "suts" / name / "index.html", project_page.render_landing(env, name, drawn_by_sut.get(name)), written)
 
     test_dir = site_root / "_test"
     prefixes = sorted(p.name for p in test_dir.iterdir() if (p / "suts.json").exists()) if test_dir.is_dir() else []

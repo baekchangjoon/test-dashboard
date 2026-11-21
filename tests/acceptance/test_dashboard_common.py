@@ -45,6 +45,12 @@ def test_req137_v2_asset_paths(tmp_path):
         refs = re.findall(r'<(?:link|script)[^>]+(?:href|src)="([^"]+)"', index_html)
         assert refs and all(ref.startswith(expected_prefix) for ref in refs), (index_page, refs)
         assert "static/site.css" not in index_html and "site.js" not in index_html, index_page
+    # 과제 페이지와 SUT 안내 페이지도 static/v2/에서만 불러온다(Task 10)
+    for new_page in (site / "projects/pet/index.html", site / "suts/pet/index.html"):
+        new_html = new_page.read_text()
+        refs = re.findall(r'<(?:link|script)[^>]+(?:href|src)="([^"]+)"', new_html)
+        assert refs and all(ref.startswith("../../static/v2/") for ref in refs), (new_page, refs)
+        assert "static/site.css" not in new_html and "site.js" not in new_html, new_page
 
 
 def test_req137_app_css_tokens_and_no_external_requests():
