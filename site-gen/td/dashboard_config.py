@@ -6,12 +6,14 @@
   3. 로딩과 검증(스키마 + 등록 규칙 + 카탈로그 대조)
   4. 설정 선택(resolve)과 암묵 과제
   5. 값 표시 형식
+  6. 상태 판정, 결론 문장, 규칙 각주
 오류 메시지는 `<키 경로>: <사유>` 형식이다.
 """
 from __future__ import annotations
 
 import copy
 import json
+import operator
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -328,3 +330,99 @@ def format_value(metric: str, value) -> str:
     if unit == "list":
         return ", ".join(str(item) for item in value)
     return str(value)
+
+
+# --- 6. 상태 판정, 결론 문장, 규칙 각주 ---------------------------------------------------
+
+OPERATORS = {"eq": operator.eq, "ne": operator.ne, "lt": operator.lt,
+             "le": operator.le, "gt": operator.gt, "ge": operator.ge}
+OPERATOR_SYMBOLS = {"eq": "=", "ne": "≠", "lt": "<", "le": "≤", "gt": ">", "ge": "≥"}
+HEADLINE_NO_METRICS = "측정된 지표가 없습니다"
+
+
+@dataclass(frozen=True)
+class Verdict:
+    level: str
+    reasons: tuple[str, ...]
+    partial: bool
+
+
+def _holds(condition: dict, values: Mapping[str, object]) -> bool:
+    """조건이 참인가. 값이 없거나 비교할 수 없는 타입이면 거짓."""
+    if "all" in condition:
+        return all(_holds(child, values) for child in condition["all"])
+    actual = values.get(condition["metric"])
+    if actual is None:
+        return False
+    try:
+        return bool(OPERATORS[condition["op"]](actual, condition["value"]))
+    except TypeError:
+        return False
+
+
+def _substitute(text: str, values: Mapping[str, object]) -> str | None:
+    """`{지표}`를 표시 형식의 값으로 바꾼다. 치환할 값이 하나라도 없으면 None."""
+    missing = False
+
+    def replace(match: re.Match) -> str:
+        nonlocal missing
+        value = values.get(match.group(1))
+        if value is None:
+            missing = True
+            return ""
+        return format_value(match.group(1), value)
+
+    result = PLACEHOLDER_PATTERN.sub(replace, text)
+    return None if missing else result
+
+
+def evaluate(values: Mapping[str, object], cfg: Config, *, has_repo: bool = True) -> Verdict:
+    """설계 §6.2 "상태 판정 순서"대로 판정한다."""
+    status = cfg.status
+    all_missing = status["none"]["allMissing"]
+    if all_missing and all(values.get(name) is None for name in all_missing):
+        return Verdict("none", (), False)
+    order = status["order"]
+    fired = []
+    for rule in status["rules"]:
+        if not _holds(rule["when"], values):
+            continue
+        reason = _substitute(rule["reason"], values)
+        if reason is not None:
+            fired.append((order.index(rule["level"]), rule["level"], reason))
+    partial = has_repo and (values.get("ci.runs") is None) != (values.get("sonar.gate") is None)
+    if not fired:
+        return Verdict("good", (), partial)
+    return Verdict(min(fired)[1], tuple(reason for _, _, reason in fired), partial)
+
+
+def headline(values: Mapping[str, object], verdict: Verdict, cfg: Config) -> str:
+    """과제 페이지의 결론 문장."""
+    if verdict.level in ("crit", "warn"):
+        return f"{cfg.status['labels'][verdict.level]}: {' · '.join(verdict.reasons)}"
+    if verdict.level == "none":
+        return HEADLINE_NO_METRICS
+    for item in cfg.project["headline"]:
+        if "when" in item and not _holds(item["when"], values):
+            continue
+        text = _substitute(item["text"], values)
+        if text is not None:
+            return text
+    return ""
+
+
+def _condition_text(condition: dict) -> str:
+    if "all" in condition:
+        return " 그리고 ".join(_condition_text(child) for child in condition["all"])
+    metric = condition["metric"]
+    return f"{CATALOG[metric].label} {OPERATOR_SYMBOLS[condition['op']]} {format_value(metric, condition['value'])}"
+
+
+def rules_text(cfg: Config) -> list[str]:
+    """각주: 수준마다 한 줄. 규칙이 없는 수준은 줄이 없다."""
+    lines = []
+    for level in cfg.status["order"]:
+        conditions = [_condition_text(rule["when"]) for rule in cfg.status["rules"] if rule["level"] == level]
+        if conditions:
+            lines.append(f"{cfg.status['labels'][level]}: {' / '.join(conditions)}")
+    return lines
