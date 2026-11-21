@@ -243,13 +243,17 @@ def requested_reps(run_dir) -> int:
     return int(read_run(run_dir).get("options", {}).get("reps") or 1)
 
 
+def reps_by_arm(arms, reps: int) -> dict[str, int]:
+    """arm별 요청 반복 수 계산의 단일 지점: det는 항상 1, 나머지는 reps(설계 §5.4)."""
+    return {arm: (1 if arm == "det" else reps) for arm in arms}
+
+
 def requested_reps_by_arm(run_dir) -> dict[str, int]:
     """arm별 요청 반복 수. run.json의 requestedRepsByArm이 우선이고, 없으면 요청 arm 전체에 reps를 쓰되 det는 1로 고정한다."""
     recorded = read_run(run_dir).get("requestedRepsByArm")
     if isinstance(recorded, dict) and recorded:
         return {arm: int(reps) for arm, reps in recorded.items()}
-    reps = requested_reps(run_dir)
-    return {arm: (1 if arm == "det" else reps) for arm in requested_arms(run_dir)}
+    return reps_by_arm(requested_arms(run_dir), requested_reps(run_dir))
 
 
 def arm_plan(run_dir, arms: list[str] | None = None) -> dict[str, str | None]:
@@ -267,12 +271,13 @@ def stub_gen_id(arm: str, rep: int) -> str:
 
 def _s06_extra(run_dir) -> dict:
     plan = arm_plan(run_dir)
+    reps_per_arm = requested_reps_by_arm(run_dir)
     arms = {}
     generations = {}
     for arm, skip_reason in plan.items():
         arms[arm] = {"status": "skipped", "reason": skip_reason} if skip_reason else {"status": "passed"}
         if _stub_mode():
-            for rep in range(1, requested_reps(run_dir) + 1):
+            for rep in range(1, reps_per_arm.get(arm, requested_reps(run_dir)) + 1):
                 generations[stub_gen_id(arm, rep)] = {"arm": arm, **arms[arm]}
     extra = {"arms": arms}
     if generations:

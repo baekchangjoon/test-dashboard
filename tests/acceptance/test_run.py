@@ -300,6 +300,7 @@ def test_arms_det_accepted(stub_stages):
     result = stub_stages.run("--arms", "det")
     assert result.returncode == 0, result.stderr
     assert set(result.stage("S06")["arms"]) == {"det"}
+    assert len(result.stage("S06")["generations"]) == 1  # det는 reps와 무관하게 r1 하나
 
 
 def test_style_junit_is_rejected_as_deferred(stub_stages):

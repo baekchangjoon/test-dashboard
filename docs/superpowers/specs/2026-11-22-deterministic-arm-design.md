@@ -174,7 +174,7 @@ A1과의 관계: 상위 설계의 A1은 "LLM 호출의 생성 입력"에 대한 
 
 ### 5.5 통합 변경 목록
 
-- arm 목록·패턴: `site-gen/td/bundle.py`(ARMS — det 번들 없음, det는 번들 조립 대상에서 제외), `testid.py`, `compare.py`(ARMS_ORDER, DOT_COLORS, 입력 체제 표기; `verdict.judge`에는 base·jqa·owl만 명시적으로 넘기고, det는 별도 `deterministic` 결과 블록으로 보고), `state.py`(ARMS_ALL, `ARM_DEPENDENCIES["det"]=("S03",)` — S02는 모든 arm 공통으로 앞에 붙는다), `scenarios.py`·`tia.py`(genId 정규식), `pipeline/run-all.sh`(arms 검증), `site-gen/td/schemas/bdd-gen.schema.json`(genId 패턴, arm enum, det 분기: LLM 필드 대신 `generator{name,version,glueChecksum}`), `site-gen/td/schemas/compare.schema.json`, `e2e/harness/.../TestIds.java`와 `TestIdsTest`, `site.css`(`--arm-det` 토큰).
+- arm 목록·패턴: `site-gen/td/bundle.py`(ARMS — det 번들 없음, det는 번들 조립 대상에서 제외), `testid.py`, `compare.py`(ARMS_ORDER, DOT_COLORS, 입력 체제 표기; `verdict.judge`에는 base·jqa·owl만 명시적으로 넘기고, det는 별도 `deterministic` 결과 블록으로 보고), `state.py`(ARMS_DEFAULT=base,jqa,owl 기본 유지 / ARMS_KNOWN=+det, `ARM_DEPENDENCIES["det"]=("S03",)` — S02는 모든 arm 공통으로 앞에 붙는다), `scenarios.py`·`tia.py`(genId 정규식), `pipeline/run-all.sh`(arms 검증), `site-gen/td/schemas/bdd-gen.schema.json`(genId 패턴, arm enum, det 분기: LLM 필드 대신 `generator{name,version,glueChecksum}`), `site-gen/td/schemas/compare.schema.json`, `e2e/harness/.../TestIds.java`와 `TestIdsTest`, `site.css`(`--arm-det` 토큰).
 - 기본 arms는 `base,jqa,owl` 그대로 두고, det는 `--arms`로 명시할 때만 돈다.
 - S03: ext 질의 실행과 ext 파일 기록. S04, S05는 변경 없음.
 - 문서: 상위 설계(§5, §6.6, §6.12, §13.5의 arm 목록·reps 서술), 요구사항명세(det REQ 추가), README(`--arms det`), 백서 §5.3(DTO 필드 정정)과 det 결과 절.
