@@ -388,3 +388,15 @@ def test_req113_all_real_fixture_conditions_never_raise():
                 parsed_count += 1
     # 실제 조건 중 Java 식인 것(자연어 설명 제외)은 모두 파싱된다
     assert parsed_count >= 20
+
+
+@pytest.mark.parametrize("condition", ["a\n/Users/example/x", "x\t/home/example/y"])
+def test_leak_after_escape_sequence_is_fatal(tmp_path, condition):
+    """이스케이프(\\n, \\t) 바로 뒤의 경로도 원시 문자열 검사로 잡아 fatal이 된다."""
+    run = _copy(RAW_MIN, tmp_path / "run")
+    plan = run / "S02" / "bbtg" / "raw" / "stdout" / "plan-tests-Foo.baz.json"
+    data = json.loads(plan.read_text(encoding="utf-8"))
+    data["test_cases"][0]["condition"] = condition
+    plan.write_text(json.dumps(data), encoding="utf-8")
+    projection = inputs.project(run, SUT_FILE, tmp_path / "out")
+    assert projection.fatal and "redaction" in projection.fatal
