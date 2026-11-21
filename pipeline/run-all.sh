@@ -28,7 +28,7 @@ done
 IFS=',' read -r -a arm_list <<< "$ARMS"
 [[ ${#arm_list[@]} -gt 0 ]] || die "--arms가 비었다"
 for arm in "${arm_list[@]}"; do
-  [[ "$arm" == "base" || "$arm" == "jqa" || "$arm" == "owl" ]] || die "--arms는 base,jqa,owl 중에서만 고른다: '$arm'"
+  [[ "$arm" == "base" || "$arm" == "jqa" || "$arm" == "owl" || "$arm" == "det" ]] || die "--arms는 base,jqa,owl,det 중에서만 고른다: '$arm'"
 done
 if [[ -n "$ONLY" ]]; then
   IFS=',' read -r -a only_list <<< "$ONLY"

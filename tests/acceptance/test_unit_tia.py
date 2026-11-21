@@ -151,3 +151,8 @@ def test_base_generations_pick_runnable_rep1_per_arm():
     assert tia.base_generations(stage) == [("base-0123abcd-r1", "base", "/g/base-0123abcd-r1"),
                                        ("jqa-89abcdef-r1-g2", "jqa", "/g/jqa-2")]
     assert tia.base_generations({}) == []
+
+
+def test_rep1_det():
+    stage = {"generations": {"det-0123abcd-r1": {"status": "passed", "dir": "/g/det"}}}
+    assert tia.base_generations(stage) == [("det-0123abcd-r1", "det", "/g/det")]

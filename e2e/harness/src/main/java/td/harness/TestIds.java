@@ -22,7 +22,7 @@ import java.util.regex.Pattern;
  */
 public final class TestIds {
 
-    static final List<String> ARMS = List.of("base", "jqa", "owl");
+    static final List<String> ARMS = List.of("base", "jqa", "owl", "det");
     static final int MAX_SLUG_LENGTH = 60;
 
     private static final Pattern WINDOWS_DRIVE = Pattern.compile("^[A-Za-z]:/.*");

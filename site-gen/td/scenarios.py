@@ -34,7 +34,7 @@ from td import testid
 FEATURES_DIR = "features"
 GLUE_DIR = "glue"
 RESULT_STATUSES = ("passed", "failed", "undefined", "uncompilable")
-GEN_ID_RE = re.compile(r"^(base|jqa|owl)-([0-9a-f]{8})-r([1-9])(?:-g([0-9]+))?$")
+GEN_ID_RE = re.compile(r"^(base|jqa|owl|det)-([0-9a-f]{8})-r([1-9])(?:-g([0-9]+))?$")
 GRADLE_TIMEOUT_SEC = 1800
 
 

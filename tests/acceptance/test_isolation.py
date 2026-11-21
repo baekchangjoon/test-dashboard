@@ -450,3 +450,10 @@ def test_req022_llm_hang_is_killed_by_timeout(tmp_path):
     time.sleep(0.5)
     with pytest.raises(ProcessLookupError):
         os.kill(child, 0)
+
+
+def test_det_arm_is_not_a_bundle_kind(tmp_path):
+    """det는 입력 번들(LLM 호출)을 쓰지 않는다: ARMS/KINDS에 없고 assemble은 거부한다."""
+    assert "det" not in bundle.ARMS and "det" not in bundle.KINDS
+    with pytest.raises(bundle.BundleError):
+        bundle.assemble("det", tmp_path, tmp_path / "out")

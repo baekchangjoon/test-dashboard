@@ -296,6 +296,12 @@ def test_valid_option_values_accepted(stub_stages):
     assert len(result.stage("S06")["generations"]) == 4
 
 
+def test_arms_det_accepted(stub_stages):
+    result = stub_stages.run("--arms", "det")
+    assert result.returncode == 0, result.stderr
+    assert set(result.stage("S06")["arms"]) == {"det"}
+
+
 def test_style_junit_is_rejected_as_deferred(stub_stages):
     """REQ-030(junit 스타일)은 연기됐다: 조용히 cucumber로 돌지 않고 분명한 메시지로 멈춘다(M-1)."""
     result = stub_stages.run("--style", "junit")

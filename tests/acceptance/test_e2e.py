@@ -15,7 +15,7 @@ from helpers import find_leaked_resources, make_site_run
 from td import coverage, scenarios, testid
 from td.site import pages
 
-TEST_ID_RE = re.compile(r"^E2E_(base|jqa|owl)_[0-9a-f]{8}r[1-9](g[0-9]+)?_[A-Za-z0-9_]+#L\d+$")
+TEST_ID_RE = re.compile(r"^E2E_(base|jqa|owl|det)_[0-9a-f]{8}r[1-9](g[0-9]+)?_[A-Za-z0-9_]+#L\d+$")
 HASH = "0123456789abcdef" * 4
 
 OUTLINE_FEATURE = """\
@@ -537,3 +537,7 @@ def test_req028_reconcile_rejects_malformed_harness_lines(tmp_path):
                 {"testId": "x", "status": "passed", "requests": 1, "exec": 5}):
         with pytest.raises(scenarios.ReconcileError, match="모양"):
             scenarios.reconcile(gen_dir / "features", _dryrun(tmp_path), [bad], [], ident=SAMPLE_IDENT)
+
+
+def test_testid_det():
+    assert testid.make("det", HASH, 1, None, "a/x.feature", 3, set()).startswith("E2E_det_")

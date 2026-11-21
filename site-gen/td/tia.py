@@ -104,7 +104,7 @@ def build_scenarios(doc, diff_text: str, indexed_tests: int, base: str, head: st
              "total": indexed_tests, "count": len(selected), "reasons": list(doc.get("warnings") or [])}]
 
 
-_REP1_RE = re.compile(r"^(base|jqa|owl)-[0-9a-f]{8}-r1(?:-g([0-9]+))?$")
+_REP1_RE = re.compile(r"^(base|jqa|owl|det)-[0-9a-f]{8}-r1(?:-g([0-9]+))?$")
 
 
 def base_generations(s06_stage: dict) -> list[tuple[str, str, str]]:
