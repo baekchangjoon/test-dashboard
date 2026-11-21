@@ -350,7 +350,7 @@
   - `test_compare.py::test_det_reference_column`: 렌더 HTML에 `data-arm="det"` 열과 입력 체제 문구(`LLM 없음, 조건식 포함`)가 있다. 헤더는 `det (n=1/1)`이다.
   - `test_unit_detgen.py::test_results_summarize`: 합성 결과로 strict와 class 통과 수, blocked-by-baseline, verified violations가 계산 기대값과 같다.
 - [ ] **Step 2: 실행해 실패 확인** → FAIL
-- [ ] **Step 3: 구현** — S07의 det generation `exec` 로그에서 `DET-STATUS` 줄을 읽는다. 로그 위치는 S07 generation 디렉터리의 `gradle.log`다. 줄이 없으면 class 판정을 null로 두고 사유를 기록한다.
+- [ ] **Step 3: 구현** — 관측 코드는 S07 generation 디렉터리의 `cucumber.json`에서 `td.detgen.observed.observed_codes`(Task 5)로 얻는다. 실패 시나리오는 단정 메시지의 `DET-STATUS <caseId> <code>`에서, 통과 시나리오는 strict 기대를 만족한 것으로 본다. 코드를 못 찾으면 class 판정을 null로 두고 사유를 기록한다. pair 판정은 "같은 엔드포인트의 2xx 케이스 중 sources가 위반 케이스 sources를 포함하는 것"이다(Task 4 ruling).
 - [ ] **Step 4: 통과 확인** → PASS
 - [ ] **Step 5: 커밋** — `git commit -m "feat(compare): det reference column, input regime, deterministic results block"`
 
