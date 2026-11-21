@@ -1,0 +1,85 @@
+{
+  "class": "ReservationService",
+  "method": "getById",
+  "input_params": [
+    "id",
+    "includeStale"
+  ],
+  "parameters": [
+    {
+      "name": "id",
+      "accessor": "id",
+      "dto": "id",
+      "impact": "RED",
+      "reasons": [
+        {
+          "type": "DB_WHERE",
+          "location": "getById",
+          "depth": 1,
+          "detail": "repository.findById(id).orElseThrow(...)"
+        },
+        {
+          "type": "DB_WHERE",
+          "location": "getById",
+          "depth": 1,
+          "detail": "repository.findById(...)"
+        }
+      ],
+      "depth_used": [
+        1
+      ],
+      "test_suggestion": "DB 조회 조건 → 존재/미존재 데이터 케이스",
+      "java_type": "int",
+      "ddl_max_length": null,
+      "has_format_constraint": true,
+      "http_name": "id"
+    },
+    {
+      "name": "includeStale",
+      "accessor": "includeStale",
+      "dto": "includeStale",
+      "impact": "RED",
+      "reasons": [
+        {
+          "type": "BRANCH_CONDITION",
+          "location": "getById",
+          "depth": 1,
+          "detail": "!includeStale && r.getCheckInDate().isBefore(LocalDate.now())"
+        },
+        {
+          "type": "ERROR_TRIGGER",
+          "location": "getById",
+          "depth": 1,
+          "detail": ""
+        }
+      ],
+      "depth_used": [
+        1
+      ],
+      "test_suggestion": "빈값/null → Invalid Input 에러 케이스",
+      "java_type": "boolean",
+      "ddl_max_length": null,
+      "has_format_constraint": false,
+      "http_name": "includeStale"
+    }
+  ],
+  "methods_analyzed": [
+    "getById"
+  ],
+  "summary": {
+    "direct_input": {
+      "RED": 2,
+      "YELLOW": 0,
+      "WHITE": 0,
+      "total": 2
+    },
+    "via_internal_transform": {
+      "RED": 0,
+      "YELLOW": 0,
+      "WHITE": 0,
+      "total": 0
+    },
+    "total": 2
+  },
+  "http_method": "GET"
+}

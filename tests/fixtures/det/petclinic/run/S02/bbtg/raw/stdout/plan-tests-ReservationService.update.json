@@ -1,0 +1,83 @@
+{
+  "artifact_path": ".bbtg/artifacts/test-plan/ReservationService_update.md",
+  "class": "ReservationService",
+  "cross_check_warnings": [],
+  "key_params_path": ".bbtg/artifacts/key-params/ReservationService_update.json",
+  "method": "update",
+  "summary": {
+    "errorPath": 6,
+    "happyPath": 1,
+    "invalidInput": 0,
+    "total": 7
+  },
+  "test_cases": [
+    {
+      "branch_value": "no_data",
+      "condition": "DB에 id 조건에 맞는 데이터 없음 (repository.findById)",
+      "expected": "데이터 미존재 시 예외 또는 빈 응답",
+      "id": "errorPath_id_noData",
+      "param": "id",
+      "prefix": "errorPath",
+      "source": "collect-key-params (DB_WHERE)"
+    },
+    {
+      "branch_value": "400",
+      "condition": "!LocalDate.now().isBefore(existing.getCheckInDate())",
+      "description": "ReservationValidationException (code=unknown)",
+      "expected": "ReservationValidationException code=400",
+      "id": "errorPath_code400",
+      "param": "(from scenarios)",
+      "prefix": "errorPath",
+      "source": "collect-test-scenarios (exception_paths)"
+    },
+    {
+      "branch_value": "409",
+      "condition": "req.status() != null && req.status() != existing.getStatus()\n\t\t\t\t&& !existing.getStatus().canTransitionTo(req.status())",
+      "description": "ReservationConflictException (code=unknown)",
+      "expected": "ReservationConflictException code=409",
+      "id": "errorPath_code409",
+      "param": "(from scenarios)",
+      "prefix": "errorPath",
+      "source": "collect-test-scenarios (exception_paths)"
+    },
+    {
+      "branch_value": "400",
+      "condition": "req.nights() != null",
+      "description": "ReservationValidationException (code=unknown)",
+      "expected": "ReservationValidationException code=400",
+      "id": "errorPath_code400",
+      "param": "(from scenarios)",
+      "prefix": "errorPath",
+      "source": "collect-test-scenarios (exception_paths)"
+    },
+    {
+      "branch_value": "400",
+      "condition": "req.nights() < 1 || req.nights() > 30",
+      "description": "ReservationValidationException (code=unknown)",
+      "expected": "ReservationValidationException code=400",
+      "id": "errorPath_code400",
+      "param": "(from scenarios)",
+      "prefix": "errorPath",
+      "source": "collect-test-scenarios (exception_paths)"
+    },
+    {
+      "branch_value": "409",
+      "condition": "req.nights() != existing.getNights() && repository.countByRoomNumberAndStatus(existing.getRoomNumber(),\n\t\t\t\t\tReservationStatus.CONFIRMED) >= ROOM_CAPACITY",
+      "description": "ReservationConflictException (code=unknown)",
+      "expected": "ReservationConflictException code=409",
+      "id": "errorPath_code409",
+      "param": "(from scenarios)",
+      "prefix": "errorPath",
+      "source": "collect-test-scenarios (exception_paths)"
+    },
+    {
+      "branch_value": "business_branch",
+      "condition": "Happy Path (PUT — 상태코드 실측 필요, 코드에서 확정 불가)",
+      "expected": "분기 진입: Happy Path (PUT — 상태코드 실측 필요, 코드에서 확정 불가)",
+      "id": "happyPath_branch_update_6",
+      "param": "(from scenarios)",
+      "prefix": "happyPath",
+      "source": "collect-test-scenarios (business_branch in update)"
+    }
+  ]
+}

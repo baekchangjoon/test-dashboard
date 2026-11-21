@@ -1,0 +1,7 @@
+{
+  "class": "Foo",
+  "method": "baz",
+  "test_cases": [
+    {"id": "happyPath_b", "condition": "flag", "expected": "ok", "branch_value": "true", "param": "flag", "prefix": "happyPath"}
+  ]
+}

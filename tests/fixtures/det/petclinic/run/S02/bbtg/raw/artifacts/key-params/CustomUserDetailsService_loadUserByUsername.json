@@ -1,0 +1,61 @@
+{
+  "class": "CustomUserDetailsService",
+  "method": "loadUserByUsername",
+  "input_params": [
+    "username"
+  ],
+  "parameters": [
+    {
+      "name": "username",
+      "accessor": "username",
+      "dto": "username",
+      "impact": "RED",
+      "reasons": [
+        {
+          "type": "BRANCH_CONDITION",
+          "location": "loadUserByUsername",
+          "depth": 1,
+          "detail": "\"admin\".equals(username)"
+        },
+        {
+          "type": "BRANCH_CONDITION",
+          "location": "loadUserByUsername",
+          "depth": 1,
+          "detail": "\"user\".equals(username)"
+        },
+        {
+          "type": "ERROR_TRIGGER",
+          "location": "loadUserByUsername",
+          "depth": 1,
+          "detail": ""
+        }
+      ],
+      "depth_used": [
+        1
+      ],
+      "test_suggestion": "빈값/null → Invalid Input 에러 케이스",
+      "java_type": "String",
+      "ddl_max_length": null,
+      "has_format_constraint": false
+    }
+  ],
+  "methods_analyzed": [
+    "loadUserByUsername"
+  ],
+  "summary": {
+    "direct_input": {
+      "RED": 1,
+      "YELLOW": 0,
+      "WHITE": 0,
+      "total": 1
+    },
+    "via_internal_transform": {
+      "RED": 0,
+      "YELLOW": 0,
+      "WHITE": 0,
+      "total": 0
+    },
+    "total": 1
+  },
+  "http_method": "POST"
+}

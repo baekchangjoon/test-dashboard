@@ -1,0 +1,598 @@
+{
+  "calls": [
+    {
+      "endpoint": "endpoint:DELETE /api/reservations/{id}",
+      "handler": "org.springframework.samples.petclinic.boarding.ReservationRestController#delete",
+      "method": "delete",
+      "service": "org.springframework.samples.petclinic.boarding.ReservationService"
+    },
+    {
+      "endpoint": "endpoint:GET /api/reservations",
+      "handler": "org.springframework.samples.petclinic.boarding.ReservationRestController#list",
+      "method": "list",
+      "service": "org.springframework.samples.petclinic.boarding.ReservationService"
+    },
+    {
+      "endpoint": "endpoint:GET /api/reservations/{id}",
+      "handler": "org.springframework.samples.petclinic.boarding.ReservationRestController#get",
+      "method": "getById",
+      "service": "org.springframework.samples.petclinic.boarding.ReservationService"
+    },
+    {
+      "endpoint": "endpoint:POST /api/auth/login",
+      "handler": "org.springframework.samples.petclinic.security.AuthController#login",
+      "method": "loadUserByUsername",
+      "service": "org.springframework.samples.petclinic.security.CustomUserDetailsService"
+    },
+    {
+      "endpoint": "endpoint:POST /api/reservations",
+      "handler": "org.springframework.samples.petclinic.boarding.ReservationRestController#create",
+      "method": "create",
+      "service": "org.springframework.samples.petclinic.boarding.ReservationService"
+    },
+    {
+      "endpoint": "endpoint:PUT /api/reservations/{id}",
+      "handler": "org.springframework.samples.petclinic.boarding.ReservationRestController#update",
+      "method": "update",
+      "service": "org.springframework.samples.petclinic.boarding.ReservationService"
+    }
+  ],
+  "constants": [
+    {
+      "name": "ROOM_CAPACITY",
+      "owner": "org.springframework.samples.petclinic.boarding.ReservationService",
+      "type": "int",
+      "value": 2
+    },
+    {
+      "name": "VIEWS_OWNER_CREATE_OR_UPDATE_FORM",
+      "owner": "org.springframework.samples.petclinic.owner.OwnerController",
+      "type": "java.lang.String",
+      "value": "owners/createOrUpdateOwnerForm"
+    },
+    {
+      "name": "VIEWS_PETS_CREATE_OR_UPDATE_FORM",
+      "owner": "org.springframework.samples.petclinic.owner.PetController",
+      "type": "java.lang.String",
+      "value": "pets/createOrUpdatePetForm"
+    },
+    {
+      "name": "REQUIRED",
+      "owner": "org.springframework.samples.petclinic.owner.PetValidator",
+      "type": "java.lang.String",
+      "value": "required"
+    }
+  ],
+  "dtos": {
+    "org.springframework.samples.petclinic.boarding.ReservationDtos$CreateReservationRequest": {
+      "fields": [
+        {
+          "name": "animalCount",
+          "type": "int"
+        },
+        {
+          "name": "checkInDate",
+          "type": "java.time.LocalDate"
+        },
+        {
+          "name": "depositAmount",
+          "type": "double"
+        },
+        {
+          "name": "loyaltyPoints",
+          "type": "int"
+        },
+        {
+          "name": "nights",
+          "type": "int"
+        },
+        {
+          "name": "ownerEmail",
+          "type": "java.lang.String"
+        },
+        {
+          "name": "petName",
+          "type": "java.lang.String"
+        },
+        {
+          "name": "priceTier",
+          "type": "org.springframework.samples.petclinic.boarding.PriceTier"
+        },
+        {
+          "name": "promoCode",
+          "type": "java.lang.String"
+        },
+        {
+          "name": "roomNumber",
+          "type": "int"
+        }
+      ]
+    },
+    "org.springframework.samples.petclinic.boarding.ReservationDtos$ReservationResponse": {
+      "fields": [
+        {
+          "name": "animalCount",
+          "type": "int"
+        },
+        {
+          "name": "checkInDate",
+          "type": "java.time.LocalDate"
+        },
+        {
+          "name": "depositAmount",
+          "type": "double"
+        },
+        {
+          "name": "id",
+          "type": "java.lang.Integer"
+        },
+        {
+          "name": "loyaltyPoints",
+          "type": "int"
+        },
+        {
+          "name": "nights",
+          "type": "int"
+        },
+        {
+          "name": "ownerEmail",
+          "type": "java.lang.String"
+        },
+        {
+          "name": "petName",
+          "type": "java.lang.String"
+        },
+        {
+          "name": "priceTier",
+          "type": "org.springframework.samples.petclinic.boarding.PriceTier"
+        },
+        {
+          "name": "promoApplied",
+          "type": "boolean"
+        },
+        {
+          "name": "roomNumber",
+          "type": "int"
+        },
+        {
+          "name": "status",
+          "type": "org.springframework.samples.petclinic.boarding.ReservationStatus"
+        }
+      ]
+    },
+    "org.springframework.samples.petclinic.boarding.ReservationDtos$UpdateReservationRequest": {
+      "fields": [
+        {
+          "name": "nights",
+          "type": "java.lang.Integer"
+        },
+        {
+          "name": "status",
+          "type": "org.springframework.samples.petclinic.boarding.ReservationStatus"
+        }
+      ]
+    },
+    "org.springframework.samples.petclinic.security.AuthController$LoginRequest": {
+      "fields": [
+        {
+          "name": "password",
+          "type": "java.lang.String"
+        },
+        {
+          "name": "username",
+          "type": "java.lang.String"
+        }
+      ]
+    }
+  },
+  "endpoints": {
+    "endpoint:DELETE /api/reservations/{id}": {
+      "params": [
+        {
+          "defaultValue": null,
+          "index": 0,
+          "kind": "PathVariable",
+          "name": null,
+          "required": null,
+          "type": "java.lang.Integer"
+        },
+        {
+          "defaultValue": "false",
+          "index": 1,
+          "kind": "RequestParam",
+          "name": null,
+          "required": null,
+          "type": "boolean"
+        }
+      ],
+      "responseDto": null
+    },
+    "endpoint:GET /": {
+      "params": [],
+      "responseDto": null
+    },
+    "endpoint:GET /api/owners": {
+      "params": [
+        {
+          "defaultValue": null,
+          "index": 0,
+          "kind": "RequestParam",
+          "name": null,
+          "required": false,
+          "type": "java.lang.String"
+        }
+      ],
+      "responseDto": null
+    },
+    "endpoint:GET /api/owners/{ownerId}": {
+      "params": [
+        {
+          "defaultValue": null,
+          "index": 0,
+          "kind": "PathVariable",
+          "name": null,
+          "required": null,
+          "type": "java.lang.Integer"
+        }
+      ],
+      "responseDto": null
+    },
+    "endpoint:GET /api/pets/types": {
+      "params": [],
+      "responseDto": null
+    },
+    "endpoint:GET /api/pets/{petId}": {
+      "params": [
+        {
+          "defaultValue": null,
+          "index": 0,
+          "kind": "PathVariable",
+          "name": null,
+          "required": null,
+          "type": "java.lang.Integer"
+        }
+      ],
+      "responseDto": null
+    },
+    "endpoint:GET /api/reservations": {
+      "params": [
+        {
+          "defaultValue": null,
+          "index": 0,
+          "kind": "RequestParam",
+          "name": null,
+          "required": false,
+          "type": "java.lang.Integer"
+        },
+        {
+          "defaultValue": null,
+          "index": 1,
+          "kind": "RequestParam",
+          "name": null,
+          "required": false,
+          "type": "org.springframework.samples.petclinic.boarding.PriceTier"
+        },
+        {
+          "defaultValue": "false",
+          "index": 2,
+          "kind": "RequestParam",
+          "name": null,
+          "required": null,
+          "type": "boolean"
+        }
+      ],
+      "responseDto": "org.springframework.samples.petclinic.boarding.ReservationDtos$ReservationResponse"
+    },
+    "endpoint:GET /api/reservations/{id}": {
+      "params": [
+        {
+          "defaultValue": null,
+          "index": 0,
+          "kind": "PathVariable",
+          "name": null,
+          "required": null,
+          "type": "java.lang.Integer"
+        },
+        {
+          "defaultValue": "true",
+          "index": 1,
+          "kind": "RequestParam",
+          "name": null,
+          "required": null,
+          "type": "boolean"
+        }
+      ],
+      "responseDto": "org.springframework.samples.petclinic.boarding.ReservationDtos$ReservationResponse"
+    },
+    "endpoint:GET /api/vets": {
+      "params": [
+        {
+          "defaultValue": null,
+          "index": 0,
+          "kind": "RequestParam",
+          "name": null,
+          "required": false,
+          "type": "java.lang.String"
+        }
+      ],
+      "responseDto": null
+    },
+    "endpoint:GET /api/vets/{vetId}": {
+      "params": [
+        {
+          "defaultValue": null,
+          "index": 0,
+          "kind": "PathVariable",
+          "name": null,
+          "required": null,
+          "type": "java.lang.Integer"
+        }
+      ],
+      "responseDto": null
+    },
+    "endpoint:GET /oups": {
+      "params": [],
+      "responseDto": null
+    },
+    "endpoint:GET /owners": {
+      "params": [
+        {
+          "defaultValue": "1",
+          "index": 0,
+          "kind": "RequestParam",
+          "name": null,
+          "required": null,
+          "type": "int"
+        }
+      ],
+      "responseDto": null
+    },
+    "endpoint:GET /owners/find": {
+      "params": [],
+      "responseDto": null
+    },
+    "endpoint:GET /owners/new": {
+      "params": [],
+      "responseDto": null
+    },
+    "endpoint:GET /owners/{ownerId}": {
+      "params": [
+        {
+          "defaultValue": null,
+          "index": 0,
+          "kind": "PathVariable",
+          "name": "ownerId",
+          "required": null,
+          "type": "int"
+        }
+      ],
+      "responseDto": null
+    },
+    "endpoint:GET /owners/{ownerId}/edit": {
+      "params": [],
+      "responseDto": null
+    },
+    "endpoint:GET /owners/{ownerId}/pets/new": {
+      "params": [],
+      "responseDto": null
+    },
+    "endpoint:GET /owners/{ownerId}/pets/{petId}/edit": {
+      "params": [],
+      "responseDto": null
+    },
+    "endpoint:GET /owners/{ownerId}/pets/{petId}/visits/new": {
+      "params": [],
+      "responseDto": null
+    },
+    "endpoint:GET /vets": {
+      "params": [],
+      "responseDto": null
+    },
+    "endpoint:GET /vets.html": {
+      "params": [
+        {
+          "defaultValue": "1",
+          "index": 0,
+          "kind": "RequestParam",
+          "name": null,
+          "required": null,
+          "type": "int"
+        }
+      ],
+      "responseDto": null
+    },
+    "endpoint:POST /api/auth/login": {
+      "params": [
+        {
+          "defaultValue": null,
+          "index": 0,
+          "kind": "RequestBody",
+          "name": null,
+          "required": null,
+          "type": "org.springframework.samples.petclinic.security.AuthController$LoginRequest"
+        }
+      ],
+      "responseDto": null
+    },
+    "endpoint:POST /api/auth/validate": {
+      "params": [],
+      "responseDto": null
+    },
+    "endpoint:POST /api/owners": {
+      "params": [
+        {
+          "defaultValue": null,
+          "index": 0,
+          "kind": "RequestBody",
+          "name": null,
+          "required": null,
+          "type": "org.springframework.samples.petclinic.owner.Owner"
+        }
+      ],
+      "responseDto": null
+    },
+    "endpoint:POST /api/pets": {
+      "params": [
+        {
+          "defaultValue": null,
+          "index": 0,
+          "kind": "RequestBody",
+          "name": null,
+          "required": null,
+          "type": "org.springframework.samples.petclinic.owner.Pet"
+        }
+      ],
+      "responseDto": null
+    },
+    "endpoint:POST /api/reservations": {
+      "params": [
+        {
+          "defaultValue": null,
+          "index": 0,
+          "kind": "RequestBody",
+          "name": null,
+          "required": null,
+          "type": "org.springframework.samples.petclinic.boarding.ReservationDtos$CreateReservationRequest"
+        }
+      ],
+      "responseDto": "org.springframework.samples.petclinic.boarding.ReservationDtos$ReservationResponse"
+    },
+    "endpoint:POST /owners/new": {
+      "params": [],
+      "responseDto": null
+    },
+    "endpoint:POST /owners/{ownerId}/edit": {
+      "params": [
+        {
+          "defaultValue": null,
+          "index": 2,
+          "kind": "PathVariable",
+          "name": "ownerId",
+          "required": null,
+          "type": "int"
+        }
+      ],
+      "responseDto": null
+    },
+    "endpoint:POST /owners/{ownerId}/pets/new": {
+      "params": [],
+      "responseDto": null
+    },
+    "endpoint:POST /owners/{ownerId}/pets/{petId}/edit": {
+      "params": [],
+      "responseDto": null
+    },
+    "endpoint:POST /owners/{ownerId}/pets/{petId}/visits/new": {
+      "params": [
+        {
+          "defaultValue": null,
+          "index": 1,
+          "kind": "PathVariable",
+          "name": null,
+          "required": null,
+          "type": "int"
+        }
+      ],
+      "responseDto": null
+    },
+    "endpoint:PUT /api/owners/{ownerId}": {
+      "params": [
+        {
+          "defaultValue": null,
+          "index": 0,
+          "kind": "PathVariable",
+          "name": null,
+          "required": null,
+          "type": "java.lang.Integer"
+        },
+        {
+          "defaultValue": null,
+          "index": 1,
+          "kind": "RequestBody",
+          "name": null,
+          "required": null,
+          "type": "org.springframework.samples.petclinic.owner.Owner"
+        }
+      ],
+      "responseDto": null
+    },
+    "endpoint:PUT /api/pets/{petId}": {
+      "params": [
+        {
+          "defaultValue": null,
+          "index": 0,
+          "kind": "PathVariable",
+          "name": null,
+          "required": null,
+          "type": "java.lang.Integer"
+        },
+        {
+          "defaultValue": null,
+          "index": 1,
+          "kind": "RequestBody",
+          "name": null,
+          "required": null,
+          "type": "org.springframework.samples.petclinic.owner.Pet"
+        }
+      ],
+      "responseDto": null
+    },
+    "endpoint:PUT /api/reservations/{id}": {
+      "params": [
+        {
+          "defaultValue": null,
+          "index": 0,
+          "kind": "PathVariable",
+          "name": null,
+          "required": null,
+          "type": "java.lang.Integer"
+        },
+        {
+          "defaultValue": null,
+          "index": 1,
+          "kind": "RequestBody",
+          "name": null,
+          "required": null,
+          "type": "org.springframework.samples.petclinic.boarding.ReservationDtos$UpdateReservationRequest"
+        }
+      ],
+      "responseDto": "org.springframework.samples.petclinic.boarding.ReservationDtos$ReservationResponse"
+    }
+  },
+  "enums": {
+    "org.springframework.samples.petclinic.boarding.PriceTier": {
+      "constants": [
+        "BASIC",
+        "PREMIUM",
+        "VIP"
+      ]
+    },
+    "org.springframework.samples.petclinic.boarding.ReservationStatus": {
+      "constants": [
+        "CANCELLED",
+        "CHECKED_IN",
+        "CONFIRMED",
+        "PENDING"
+      ]
+    }
+  },
+  "exceptions": {
+    "org.springframework.samples.petclinic.boarding.ReservationExceptions$ReservationBadRequestException": {
+      "handler": "org.springframework.samples.petclinic.boarding.ReservationRestController$ReservationExceptionHandler#onBadRequest",
+      "status": 400
+    },
+    "org.springframework.samples.petclinic.boarding.ReservationExceptions$ReservationConflictException": {
+      "handler": "org.springframework.samples.petclinic.boarding.ReservationRestController$ReservationExceptionHandler#onConflict",
+      "status": 409
+    },
+    "org.springframework.samples.petclinic.boarding.ReservationExceptions$ReservationNotFoundException": {
+      "handler": "org.springframework.samples.petclinic.boarding.ReservationRestController$ReservationExceptionHandler#onNotFound",
+      "status": 404
+    },
+    "org.springframework.samples.petclinic.boarding.ReservationExceptions$ReservationValidationException": {
+      "handler": "org.springframework.samples.petclinic.boarding.ReservationRestController$ReservationExceptionHandler#onValidation",
+      "status": 422
+    }
+  },
+  "schema": 1
+}

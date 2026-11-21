@@ -1,0 +1,11 @@
+{
+  "artifact_path": "/Users/example/sut/.bbtg/artifacts/test-plan/Foo_bar.md",
+  "class": "Foo",
+  "key_params_path": "/Users/example/sut/.bbtg/artifacts/key-params/Foo_bar.json",
+  "method": "bar",
+  "test_cases": [
+    {"id": "errorPath_code400", "condition": "req.nights() < 1", "expected": "IllegalArgumentException code=400", "branch_value": "400", "param": "req", "prefix": "errorPath", "file_path": "/Users/example/sut/Foo.java", "source": "x"},
+    {"id": "errorPath_code400", "condition": "req.nights() > 30", "expected": "IllegalArgumentException code=400", "branch_value": "400", "param": "req", "prefix": "errorPath", "file_path": "/Users/example/sut/Foo.java"},
+    {"id": "happyPath_a", "condition": "id = 1", "expected": "분기 진입", "branch_value": "1", "param": "id", "prefix": "happyPath"}
+  ]
+}

@@ -1,0 +1,108 @@
+{
+  "class": "ReservationService",
+  "method": "update",
+  "input_params": [
+    "id",
+    "req"
+  ],
+  "parameters": [
+    {
+      "name": "id",
+      "accessor": "id",
+      "dto": "id",
+      "impact": "RED",
+      "reasons": [
+        {
+          "type": "DB_WHERE",
+          "location": "update",
+          "depth": 1,
+          "detail": "repository.findById(id).orElseThrow(...)"
+        },
+        {
+          "type": "DB_WHERE",
+          "location": "update",
+          "depth": 1,
+          "detail": "repository.findById(...)"
+        }
+      ],
+      "depth_used": [
+        1
+      ],
+      "test_suggestion": "DB 조회 조건 → 존재/미존재 데이터 케이스",
+      "java_type": "int",
+      "ddl_max_length": null,
+      "has_format_constraint": true,
+      "http_name": "id"
+    },
+    {
+      "name": "req",
+      "accessor": "req",
+      "dto": "req",
+      "impact": "RED",
+      "reasons": [
+        {
+          "type": "BRANCH_CONDITION",
+          "location": "update",
+          "depth": 1,
+          "detail": "req.status() != null && req.status() != existing.getStatus()\n\t\t\t\t&& !existing.getStatus().canTransitionTo(req.status())"
+        },
+        {
+          "type": "ERROR_TRIGGER",
+          "location": "update",
+          "depth": 1,
+          "detail": ""
+        },
+        {
+          "type": "BRANCH_CONDITION",
+          "location": "update",
+          "depth": 1,
+          "detail": "req.nights() != null"
+        },
+        {
+          "type": "BRANCH_CONDITION",
+          "location": "update",
+          "depth": 1,
+          "detail": "req.nights() < 1 || req.nights() > 30"
+        },
+        {
+          "type": "BRANCH_CONDITION",
+          "location": "update",
+          "depth": 1,
+          "detail": "req.nights() != existing.getNights() && repository.countByRoomNumberAndStatus(existing.getRoomNumber(),\n\t\t\t\t\tReservation"
+        },
+        {
+          "type": "BRANCH_CONDITION",
+          "location": "update",
+          "depth": 1,
+          "detail": "req.status() != null"
+        }
+      ],
+      "depth_used": [
+        1
+      ],
+      "test_suggestion": "빈값/null → Invalid Input 에러 케이스",
+      "java_type": "UpdateReservationRequest",
+      "ddl_max_length": null,
+      "has_format_constraint": false
+    }
+  ],
+  "methods_analyzed": [
+    "update"
+  ],
+  "summary": {
+    "direct_input": {
+      "RED": 2,
+      "YELLOW": 0,
+      "WHITE": 0,
+      "total": 2
+    },
+    "via_internal_transform": {
+      "RED": 0,
+      "YELLOW": 0,
+      "WHITE": 0,
+      "total": 0
+    },
+    "total": 2
+  },
+  "http_method": "PUT"
+}

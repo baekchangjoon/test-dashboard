@@ -1,0 +1,133 @@
+{
+  "class": "ReservationService",
+  "method": "create",
+  "input_params": [
+    "req"
+  ],
+  "parameters": [
+    {
+      "name": "req",
+      "accessor": "req",
+      "dto": "req",
+      "impact": "RED",
+      "reasons": [
+        {
+          "type": "BRANCH_CONDITION",
+          "location": "create",
+          "depth": 1,
+          "detail": "req.nights() < 1 || req.nights() > 30"
+        },
+        {
+          "type": "ERROR_TRIGGER",
+          "location": "create",
+          "depth": 1,
+          "detail": ""
+        },
+        {
+          "type": "BRANCH_CONDITION",
+          "location": "create",
+          "depth": 1,
+          "detail": "req.roomNumber() < 100 || req.roomNumber() > 499"
+        },
+        {
+          "type": "BRANCH_CONDITION",
+          "location": "create",
+          "depth": 1,
+          "detail": "req.animalCount() < 1 || req.animalCount() > 4"
+        },
+        {
+          "type": "BRANCH_CONDITION",
+          "location": "create",
+          "depth": 1,
+          "detail": "req.petName() == null || req.petName().length() < 2 || req.petName().length() > 50"
+        },
+        {
+          "type": "BRANCH_CONDITION",
+          "location": "create",
+          "depth": 1,
+          "detail": "req.priceTier() == null"
+        },
+        {
+          "type": "BRANCH_CONDITION",
+          "location": "create",
+          "depth": 1,
+          "detail": "req.priceTier() == PriceTier.VIP && req.loyaltyPoints() < 500"
+        },
+        {
+          "type": "BRANCH_CONDITION",
+          "location": "create",
+          "depth": 1,
+          "detail": "req.ownerEmail() == null || !EMAIL.matcher(req.ownerEmail()).matches()"
+        },
+        {
+          "type": "BRANCH_CONDITION",
+          "location": "create",
+          "depth": 1,
+          "detail": "req.checkInDate() == null || !req.checkInDate().isAfter(LocalDate.now())"
+        },
+        {
+          "type": "BRANCH_CONDITION",
+          "location": "create",
+          "depth": 1,
+          "detail": "req.depositAmount() * 1.1 < req.nights() * req.priceTier().getNightlyRate()"
+        },
+        {
+          "type": "BRANCH_CONDITION",
+          "location": "create",
+          "depth": 1,
+          "detail": "repository.countByRoomNumberAndStatus(req.roomNumber(), ReservationStatus.CONFIRMED) >= ROOM_CAPACITY"
+        },
+        {
+          "type": "BRANCH_CONDITION",
+          "location": "create",
+          "depth": 1,
+          "detail": "\"WELCOME10\".equals(req.promoCode())"
+        },
+        {
+          "type": "BRANCH_CONDITION",
+          "location": "create",
+          "depth": 1,
+          "detail": "req.promoCode() != null && Math.floorMod(req.promoCode().hashCode(), 7) == 3"
+        },
+        {
+          "type": "DB_WHERE",
+          "location": "create",
+          "depth": 1,
+          "detail": "repository.countByRoomNumberAndStatus(...)"
+        },
+        {
+          "type": "DB_WHERE",
+          "location": "create",
+          "depth": 1,
+          "detail": "r.setAnimalCount(...)"
+        }
+      ],
+      "depth_used": [
+        1
+      ],
+      "test_suggestion": "빈값/null → Invalid Input 에러 케이스 | DB 조회 조건 → 존재/미존재 데이터 케이스",
+      "java_type": "CreateReservationRequest",
+      "ddl_max_length": null,
+      "has_format_constraint": false
+    }
+  ],
+  "methods_analyzed": [
+    "create"
+  ],
+  "summary": {
+    "direct_input": {
+      "RED": 1,
+      "YELLOW": 0,
+      "WHITE": 0,
+      "total": 1
+    },
+    "via_internal_transform": {
+      "RED": 0,
+      "YELLOW": 0,
+      "WHITE": 0,
+      "total": 0
+    },
+    "total": 1
+  },
+  "http_method": "POST"
+}

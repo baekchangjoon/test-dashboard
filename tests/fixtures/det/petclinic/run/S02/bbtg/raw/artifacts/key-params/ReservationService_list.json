@@ -1,0 +1,96 @@
+{
+  "class": "ReservationService",
+  "method": "list",
+  "input_params": [
+    "minNights",
+    "tier",
+    "recentOnly"
+  ],
+  "parameters": [
+    {
+      "name": "minNights",
+      "accessor": "minNights",
+      "dto": "minNights",
+      "impact": "RED",
+      "reasons": [
+        {
+          "type": "DB_WHERE",
+          "location": "list",
+          "depth": 1,
+          "detail": "repository.findAll().stream().filter(...)"
+        }
+      ],
+      "depth_used": [
+        1
+      ],
+      "test_suggestion": "DB 조회 조건 → 존재/미존재 데이터 케이스",
+      "java_type": "Integer",
+      "ddl_max_length": null,
+      "has_format_constraint": true,
+      "http_name": "minNights"
+    },
+    {
+      "name": "recentOnly",
+      "accessor": "recentOnly",
+      "dto": "recentOnly",
+      "impact": "RED",
+      "reasons": [
+        {
+          "type": "DB_WHERE",
+          "location": "list",
+          "depth": 1,
+          "detail": "repository.findAll().stream().filter(r -> minNights == null || r.getNights() >= minNights).filter(r -> {\n\t\t\treturn tier == null || r.getPriceTier() == tier;\n\t\t}).filter(...)"
+        }
+      ],
+      "depth_used": [
+        1
+      ],
+      "test_suggestion": "DB 조회 조건 → 존재/미존재 데이터 케이스",
+      "java_type": "boolean",
+      "ddl_max_length": null,
+      "has_format_constraint": false,
+      "http_name": "recentOnly"
+    },
+    {
+      "name": "tier",
+      "accessor": "tier",
+      "dto": "tier",
+      "impact": "RED",
+      "reasons": [
+        {
+          "type": "DB_WHERE",
+          "location": "list",
+          "depth": 1,
+          "detail": "repository.findAll().stream().filter(r -> minNights == null || r.getNights() >= minNights).filter(...)"
+        }
+      ],
+      "depth_used": [
+        1
+      ],
+      "test_suggestion": "DB 조회 조건 → 존재/미존재 데이터 케이스",
+      "java_type": "PriceTier",
+      "ddl_max_length": null,
+      "has_format_constraint": false,
+      "http_name": "tier"
+    }
+  ],
+  "methods_analyzed": [
+    "list"
+  ],
+  "summary": {
+    "direct_input": {
+      "RED": 3,
+      "YELLOW": 0,
+      "WHITE": 0,
+      "total": 3
+    },
+    "via_internal_transform": {
+      "RED": 0,
+      "YELLOW": 0,
+      "WHITE": 0,
+      "total": 0
+    },
+    "total": 3
+  },
+  "http_method": "GET"
+}
