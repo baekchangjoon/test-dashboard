@@ -64,6 +64,16 @@
       "pattern": "^[0-9a-f]{64}$"
     },
     "generation": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/llmGeneration"
+        },
+        {
+          "$ref": "#/$defs/detGeneration"
+        }
+      ]
+    },
+    "llmGeneration": {
       "type": "object",
       "required": [
         "genId",
@@ -229,6 +239,104 @@
               "minimum": 0
             }
           }
+        }
+      },
+      "description": "LLM arm(base/jqa/owl) generation 항목."
+    },
+    "detGeneration": {
+      "description": "det arm generation 항목(설계 §5.4). LLM을 부르지 않으므로 모델·토큰·수리 필드가 없고, rep은 항상 1이다. inputHash = sha256(bundleHash + generator.version + generator.glueChecksum).",
+      "type": "object",
+      "required": [
+        "genId",
+        "arm",
+        "rep",
+        "status",
+        "reason",
+        "reused",
+        "inputHash",
+        "bundleHash",
+        "generator",
+        "cases",
+        "unresolved",
+        "seconds",
+        "dir"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "genId": {
+          "type": "string",
+          "pattern": "^det-[0-9a-f]{8}-r1$"
+        },
+        "arm": {
+          "const": "det"
+        },
+        "rep": {
+          "const": 1
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "degraded",
+            "failed"
+          ]
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reused": {
+          "type": "boolean"
+        },
+        "inputHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "bundleHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "generator": {
+          "type": "object",
+          "required": [
+            "name",
+            "version",
+            "glueChecksum"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "const": "td.detgen"
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1
+            },
+            "glueChecksum": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "cases": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unresolved": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "dir": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "warnings": {
+          "description": "재생성 경고. checksum-changed = 같은 키로 다시 만든 파일 체크섬이 기존 스냅샷과 다르다(결정성 위반 신호).",
+          "$ref": "#/$defs/stringList"
         }
       }
     }
