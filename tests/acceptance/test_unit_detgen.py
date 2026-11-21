@@ -688,3 +688,97 @@ def test_auth_cases_exclude_login(tmp_path):
     for case in auth:
         assert case.expect["strict"] == 403 and case.expect["source"] == "harness-config"
         assert "보호됨" in case.assumes and case.auth == "anonymous"
+
+
+# --- Task 4 fix round 1 ---------------------------------------------------------------------------
+
+def test_reasons_tuple_is_closed():
+    assert derive_module.REASONS == (
+        "no-endpoint-mapping", "unparsed", "unresolved-operand", "unreachable-state", "needs-state-transition",
+        "param-name-unknown", "no-id-ref", "no-condition", "no-body-schema", "format-unknown", "input-missing",
+        "input-contradiction")
+
+
+def test_input_contradiction_keeps_other_boundaries(tmp_path):
+    def add_contradiction(docs):
+        items = _plan(docs, "place")["items"]
+        items.append({"index": len(items), "condition": "form.quantity() != null", "expected": "OrderInvalidException code=400",
+                      "branch_value": "400", "param": "(from scenarios)", "prefix": "errorPath"})
+
+    derivation = derive_module.derive(_controlled(tmp_path, add_contradiction))
+    entries = [entry for entry in derivation.unresolved if "#8@" in entry["source"]]
+    assert len(entries) == 2 and {entry["reason"] for entry in entries} == {"input-contradiction"}
+    place = "plan-tests-OrderService.place.json#1@"
+    boundaries = [case for case in derivation.cases if case.rule == "valid-boundary" and any(place in s for s in case.sources)]
+    assert sorted(_plain(case.values["quantity"]) for case in boundaries) == [1, 9]
+    by_id = {case.id: case for case in derivation.cases}
+    for case in derivation.cases:
+        if case.rule == "violation" and any(place in s for s in case.sources):
+            assert by_id[case.pair].rule == "valid-boundary"
+            assert not [a for a in case.assumes if a.startswith("also-violates")]
+
+
+def test_concurrency_race_factor_out_of_scope(tmp_path):
+    universe = derive_module.derive(_controlled(tmp_path)).universe
+    races = [f for f in universe["theoretical"]["factors"] if f.get("kind") == "concurrency-race"]
+    assert len(races) == 1 and races[0]["outOfScope"] is True and "#6@" in races[0]["item"]
+    assert races[0]["endpoint"] == "POST /svc/orders"
+    assert universe["theoretical"]["value"] == 868
+
+
+def test_baseline_avoids_numeric_equality_violation(tmp_path):
+    def add_equality(docs):
+        items = _plan(docs, "place")["items"]
+        items.append({"index": len(items), "condition": "form.credit() == 50", "expected": "OrderInvalidException code=400",
+                      "branch_value": "400", "param": "(from scenarios)", "prefix": "errorPath"})
+
+    derivation = derive_module.derive(_controlled(tmp_path, add_equality))
+    baseline = next(case for case in derivation.cases if case.rule == "baseline-valid" and case.endpoint == "POST /svc/orders")
+    assert _plain(baseline.values["credit"]) == 51
+
+
+def test_auth_requires_authorization_header(tmp_path):
+    def other_header(docs):
+        docs["auth.json"] = {"required_headers": [{"name": "X-Api-Token", "required": True}]}
+
+    derivation = derive_module.derive(_controlled(tmp_path, other_header))
+    assert not [case for case in derivation.cases if case.rule == "auth"]
+
+
+def test_second_plan_on_same_endpoint_names_its_params(tmp_path):
+    def second_plan(docs):
+        fetch = docs["ext.json"]["endpoints"]["endpoint:GET /svc/orders/{orderId}"]
+        fetch["params"].append({"index": 2, "kind": "RequestParam", "type": "boolean", "name": None,
+                                "defaultValue": "false", "required": None})
+        docs["ext.json"]["calls"].append({"endpoint": "endpoint:GET /svc/orders/{orderId}", "handler": "ex.shop.OrderController#fetch",
+                                          "service": "ex.shop.OrderService", "method": "peek"})
+        docs["keyparams.json"].append({"file": "OrderService_peek.json", "class": "OrderService", "method": "peek", "parameters": [
+            {"name": "verbose", "accessor": "verbose", "http_name": "verbose", "java_type": "boolean", "reasons": []}]})
+        docs["plans.json"].append({"file": "plan-tests-OrderService.peek.json", "class": "OrderService", "method": "peek", "items": [
+            {"index": 0, "condition": "verbose == true", "expected": "OrderInvalidException code=400", "branch_value": "400",
+             "param": "(from scenarios)", "prefix": "errorPath"}]})
+
+    derivation = derive_module.derive(_controlled(tmp_path, second_plan))
+    assert not [entry for entry in derivation.unresolved if entry["reason"] == "param-name-unknown"]
+    peek = [case for case in derivation.cases if any("peek" in s for s in case.sources) and case.rule == "violation"]
+    assert len(peek) == 1 and _plain(peek[0].query["verbose"]) is True
+
+
+def test_real_fixture_regression(tmp_path):
+    """기준 petclinic 입력의 슬롯 수 고정(규칙 변경 시 의도적으로 갱신한다)."""
+    derivation = derive_module.derive(_real_bundle(tmp_path))
+    slots = derivation.universe["bySlot"]
+    assert (slots["total"], slots["generated"], slots["unresolved"], slots["deduplicated"]) == (130, 80, 50, 1)
+    assert {k: v for k, v in slots["byReason"].items() if v} == {
+        "unparsed": 5, "unresolved-operand": 6, "unreachable-state": 5, "needs-state-transition": 14,
+        "param-name-unknown": 1, "no-id-ref": 3, "no-condition": 7, "no-body-schema": 4, "input-missing": 3,
+        "input-contradiction": 2}
+    assert derivation.universe["theoretical"]["value"] == 46689
+    login = [entry for entry in derivation.unresolved if entry["reason"] == "input-missing"]
+    assert {entry["rule"] for entry in login} == {"baseline-valid", "valid-boundary", "branch-entry"}
+    assert {entry["cause"] for entry in login} == {"credentials"}
+    assert [case for case in derivation.cases if case.endpoint == login[0]["endpoint"] and case.rule == "violation"]
+    # 다른 규칙의 같은 요청은 하나만 남고 출처가 합쳐진다(list tier 필터 vs enum-value)
+    rows = [_case_row(case) for case in derivation.cases]
+    assert len(rows) == len(set(rows))
+    assert any(case.rule == "enum-value" and any(s.startswith("plan-tests-") for s in case.sources) for case in derivation.cases)
