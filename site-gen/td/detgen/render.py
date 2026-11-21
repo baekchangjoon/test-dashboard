@@ -11,7 +11,7 @@
 - 선행 요청: `And a prior request to "<METHOD> <path>" with body <json-object>[ capturing "<jsonField>" as "<var>"]`.
   capture가 둘 이상이면 변수 이름 순으로 첫째를 같은 줄에, 나머지를 `And the prior response field "<f>" is captured as "<v>"`로 쓴다.
 - 단정: `expect.strict`가 정수면 `Then the response status is <n>`, `"2xx"`/`"4xx"`면 `Then the response status is in class "<c>"`.
-- `empty-body` 규칙은 본문 없이 보낸다(`And the request has no body`). 그 밖의 POST/PUT은 본문 필드가 없어도 `{}`를 보낸다(glue).
+- `empty-body` 규칙은 본문 없이 보낸다(`And the request has no body`). 그 밖의 POST/PUT/PATCH는 본문 필드가 없어도 `{}`를 보낸다(glue).
 - `cases.json`: 키 정렬·들여쓰기 2·끝 줄바꿈. values는 `body.<f>`/`query.<f>`/`path.<f>` 키(통제 fixture의 기대 목록과 같은 표기)로
   모으고, 재현에 필요한 `auth`와 `setup`을 덧붙인다.
 
@@ -137,6 +137,8 @@ def _scenario(case: Case) -> list[str]:
     steps = [f'Given the case "{case.id}"', *_prior_steps(case)]
     steps.append(f'And a request to "{method} {path}"')
     for name in template_vars:
+        if _plain(case.path[name], case.id) is None:
+            raise RenderError(f"{case.id}: 경로 변수 {name!r} 값이 null이다")
         steps.append(f'And path variable "{_name(name, case.id)}" is {_literal(_plain(case.path[name], case.id), case.id)}')
     for name in sorted(set(case.path) - set(template_vars)):
         raise RenderError(f"{case.id}: 경로 템플릿에 없는 경로 변수 {name!r}")

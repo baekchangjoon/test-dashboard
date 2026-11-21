@@ -22,12 +22,14 @@ import td.harness.Harness;
  * <p>시나리오 상태는 인스턴스 필드에 둔다. Cucumber(DefaultObjectFactory)는 시나리오마다 새 인스턴스를 만든다.
  * 하네스 계약상 훅(@Before)을 쓸 수 없으므로 케이스 id는 시나리오 첫 step {@code Given the case "<id>"}로 받는다.
  * 본 요청의 응답을 받으면 {@code DET-STATUS <caseId> <code>} 한 줄을 표준 출력에 남긴다(선행 요청은 남기지 않는다).
- * 결과 집계는 이 줄로 class 기준 판정을 계산한다.
+ * 표준 출력은 보관되는 로그에 남지 않으므로, 두 상태 단정은 실패 메시지 설명에 같은 {@code DET-STATUS <caseId> <code>}를 넣는다.
+ * 그래서 실패한 시나리오의 관측 코드는 Cucumber 보고서(cucumber.json/ndjson)의 error_message에서 되살린다
+ * ({@code td.detgen.observed}). 통과한 시나리오는 관측 코드가 strict 기대를 만족했다는 뜻이다.
  */
 public class DetSteps {
 
     private static final Pattern PATH_VARIABLE = Pattern.compile("\\{([^}/]+)}");
-    private static final List<String> BODY_METHODS = Arrays.asList("POST", "PUT");
+    private static final List<String> BODY_METHODS = Arrays.asList("POST", "PUT", "PATCH");
     private static final String JSON_TYPE = "application/json";
 
     private String caseId = "unknown";
@@ -123,14 +125,15 @@ public class DetSteps {
     @Then("^the response status is (\\d+)$")
     public void statusIs(int expected) {
         assertThat(response).as("%s: 응답이 없다", caseId).isNotNull();
-        assertThat(response.statusCode()).as("%s 상태 코드", caseId).isEqualTo(expected);
+        int code = response.statusCode();
+        assertThat(code).as("DET-STATUS %s %d", caseId, code).isEqualTo(expected);
     }
 
     @Then("^the response status is in class \"([1-5])xx\"$")
     public void statusClassIs(int expectedClass) {
         assertThat(response).as("%s: 응답이 없다", caseId).isNotNull();
-        assertThat(response.statusCode() / 100).as("%s 상태 코드 class(실제 %d)", caseId, response.statusCode())
-                .isEqualTo(expectedClass);
+        int code = response.statusCode();
+        assertThat(code / 100).as("DET-STATUS %s %d", caseId, code).isEqualTo(expectedClass);
     }
 
     /** 선행 요청은 항상 인증된 요청이다. 경로의 {변수}는 앞선 선행 요청이 담은 변수로 채운다. 2xx가 아니면 시나리오를 멈춘다.

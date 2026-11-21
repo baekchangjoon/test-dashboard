@@ -84,14 +84,17 @@ def test_det_values_runtime(tmp_path):
                               capture_output=True, text=True, timeout=300)
     assert compiled.returncode == 0, compiled.stderr
     zone = "America/New_York"
+    before = datetime.now(ZoneInfo(zone)).date()
     ran = subprocess.run([str(java_home / "bin" / "java"), "-cp", str(classes), "Probe"], capture_output=True,
                          text=True, timeout=120, env={"TD_SUT_TZ": zone, "PATH": "/usr/bin:/bin"})
     assert ran.returncode == 0, ran.stderr
     lines = ran.stdout.splitlines()
-    today = datetime.now(ZoneInfo(zone)).date()
+    after = datetime.now(ZoneInfo(zone)).date()
+    # 자정 경계: Java가 본 오늘은 실행 전 또는 실행 후의 오늘 중 하나다
+    today = next((day for day in (before, after) if lines[2] == day.isoformat()), None)
+    assert today is not None, (lines[2], before, after)
     assert lines[0] == (today + timedelta(days=3)).isoformat()
     assert lines[1] == (today - timedelta(days=2)).isoformat()
-    assert lines[2] == today.isoformat()
     assert lines[3] == "42"
     assert lines[4] == "u" + hashlib.sha1(b"case-1").hexdigest()[:10]
     assert json.loads(lines[5]) == {"a": 1000000, "b": None, "c": True, "d": "x\"yé", "e": 0.01, "f": 42,
