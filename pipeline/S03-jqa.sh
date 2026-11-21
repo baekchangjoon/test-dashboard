@@ -92,7 +92,7 @@ EXT_FILE="$OUT_DIR/ontology-jqa-ext.json"
 EXT_REASON=""
 rm -f "$EXT_FILE"
 EXT_OUT="$(td_py -m td.ontology_ext export --bolt-port "$BOLT_PORT" --base "$OUT_DIR/ontology-jqa.json" \
-  --out "$EXT_FILE" 2>&1)" || { EXT_REASON="ext export 실패: $(printf '%s' "$EXT_OUT" | tail -c 600)"; rm -f "$EXT_FILE"; }
+  --out "$EXT_FILE" 2>&1)" || { EXT_REASON="ext export 실패: $(printf '%s' "$EXT_OUT" | td_tail_chars 600)"; rm -f "$EXT_FILE"; }
 
 # 질의가 끝났으니 server를 내린다(S03이 등록한 PID만 정리하고 그 파일을 지운다). 비정상 종료 경로는 종료 trap(td_pids_reap)이 정리한다.
 td_pids_reap_named jqa-server jqa-server-java
@@ -106,7 +106,7 @@ import jsonschema
 root = Path(__import__("os").environ["TD_ROOT"])
 jsonschema.validate(json.loads(Path(sys.argv[1]).read_text()), json.loads((root / "site-gen/td/schemas/ontology.schema.json").read_text()))
 PY
-)" || s03_fail "ontology-jqa.json이 스키마를 통과하지 못했다: ${SCHEMA_ERR: -600}"
+)" || s03_fail "ontology-jqa.json이 스키마를 통과하지 못했다: $(printf '%s' "$SCHEMA_ERR" | td_tail_chars 600)"
 
 if [[ -z "$EXT_REASON" ]]; then
   EXT_SCHEMA_ERR="$(td_py - "$EXT_FILE" <<'PY' 2>&1
@@ -116,7 +116,7 @@ import jsonschema
 root = Path(__import__("os").environ["TD_ROOT"])
 jsonschema.validate(json.loads(Path(sys.argv[1]).read_text()), json.loads((root / "site-gen/td/schemas/ontology-ext.schema.json").read_text()))
 PY
-)" || { EXT_REASON="ext export 실패: ontology-jqa-ext.json이 스키마를 통과하지 못했다: $(printf '%s' "$EXT_SCHEMA_ERR" | tail -c 600)"; rm -f "$EXT_FILE"; }
+)" || { EXT_REASON="ext export 실패: ontology-jqa-ext.json이 스키마를 통과하지 못했다: $(printf '%s' "$EXT_SCHEMA_ERR" | td_tail_chars 600)"; rm -f "$EXT_FILE"; }
 fi
 
 FALLBACKS="$(jq -c '.meta.fallbacks' "$OUT_DIR/ontology-jqa.json")"

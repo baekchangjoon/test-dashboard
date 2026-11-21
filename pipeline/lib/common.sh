@@ -39,6 +39,13 @@ td_java_home() {
 
 td_log() { printf '[td] %s\n' "$*" >&2; }
 
+# td_tail_chars <n> — stdin의 마지막 n "문자"를 낸다(바이트가 아니다). 사유 문자열을 자를 때 쓴다.
+# `tail -c`는 UTF-8 다중 바이트 문자를 쪼개 td.state 기록이 UnicodeEncodeError로 깨지고, `${var: -n}`은 n보다 짧으면 빈 문자열이 된다.
+# 잘못된 바이트는 U+FFFD로 바꾼다.
+td_tail_chars() {
+  td_py -c 'import sys; n = int(sys.argv[1]); text = sys.stdin.buffer.read().decode("utf-8", "replace"); sys.stdout.write(text[-n:] if n > 0 else "")' "${1:?n}"
+}
+
 # --- 단계 수명주기 ------------------------------------------------------------------
 td_stage_begin() { td_py -m td.state begin "${TD_RUN_DIR:?TD_RUN_DIR가 필요하다}" "$1"; }
 

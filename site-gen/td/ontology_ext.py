@@ -53,7 +53,7 @@ def _member_name(value: str | None) -> str | None:
 def _read(queries_dir: Path, name: str) -> str:
     path = Path(queries_dir) / f"{name}.cypher"
     if not path.is_file():
-        raise OntologyExtError(f"Cypher 파일이 없다: {path}")
+        raise OntologyExtError(f"Cypher 파일이 없다: ext/{path.name}")  # 절대 경로는 사유에 남기지 않는다
     return path.read_text()
 
 
@@ -162,7 +162,11 @@ def handler_status(builders: list[str], status_fields: list[str]) -> int | None:
 
 
 def _exceptions(rows: list[Row], exception_handlers: dict[str, list[str]]) -> dict:
-    status_by_handler = {row["handler"]: handler_status(row.get("builders"), row.get("statusFields")) for row in rows}
+    statuses: dict[str, set] = {}
+    for row in rows:
+        statuses.setdefault(row["handler"], set()).add(handler_status(row.get("builders"), row.get("statusFields")))
+    # 같은 `fqn#method`(오버로드)가 서로 다른 상태를 내면 정할 수 없으므로 상태를 쓰지 않는다.
+    status_by_handler = {handler: next(iter(codes)) for handler, codes in statuses.items() if len(codes) == 1}
     result = {}
     for fqn, handlers in exception_handlers.items():
         handler = handlers[0] if handlers else None  # 여럿이면 정렬상 첫 핸들러(base가 정렬해 둔다)

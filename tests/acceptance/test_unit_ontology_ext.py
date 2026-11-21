@@ -171,3 +171,63 @@ def test_unit_ext_cli_failure_returns_1_without_output(tmp_path, capsys):
     rc = ontology_ext.main(["export", "--bolt-port", "1", "--base", str(tmp_path / "missing.json"), "--out", str(out)])
     assert rc == 1 and not out.exists()
     assert "보강 질의 실패" in capsys.readouterr().err
+
+
+def test_unit_ext_missing_query_error_has_no_absolute_path(tmp_path):
+    with pytest.raises(ontology_ext.OntologyExtError) as caught:
+        ontology_ext.export_with_runner(lambda cypher: [], tmp_path / "nowhere", base=_base())
+    assert str(tmp_path) not in str(caught.value) and "ext/dto_fields.cypher" in str(caught.value)
+
+
+def test_ext_exception_status_conflicting_overload_rows_emit_no_status():
+    handler = f"{HANDLER_TYPE}#on"
+    rows = [{"handler": handler, "builders": ["badRequest"], "statusFields": []},
+            {"handler": handler, "builders": ["notFound"], "statusFields": []}]
+    ext = _export({"exception_status": rows}, _base(exceptions=[("a.Ex", [handler])]))
+    assert ext["exceptions"]["a.Ex"] == {"handler": handler}
+
+
+# --- 실제 저장소 fixture(REQ-101 값) -----------------------------------------------------------------------------
+FIXTURE = REPO_ROOT / "tests" / "fixtures" / "det" / "petclinic"
+BOARDING = "org.springframework.samples.petclinic.boarding."
+
+
+def test_unit_ext_fixture_matches_req101():
+    ext = json.loads((FIXTURE / "ext.json").read_text())
+    jsonschema.validate(ext, json.loads(SCHEMA.read_text()))
+    field_counts = {fqn.rsplit("$", 1)[-1]: len(entry["fields"]) for fqn, entry in ext["dtos"].items()}
+    assert field_counts == {"CreateReservationRequest": 10, "UpdateReservationRequest": 2,
+                            "ReservationResponse": 12, "LoginRequest": 2}
+    assert len(ext["enums"][BOARDING + "PriceTier"]["constants"]) == 3
+    assert len(ext["enums"][BOARDING + "ReservationStatus"]["constants"]) == 4
+    assert {"owner": BOARDING + "ReservationService", "name": "ROOM_CAPACITY", "type": "int", "value": 2} in ext["constants"]
+    assert len(ext["calls"]) >= 6 and all(call["endpoint"] for call in ext["calls"])
+    statuses = {fqn.rsplit("$", 1)[-1]: entry.get("status") for fqn, entry in ext["exceptions"].items()}
+    assert statuses == {"ReservationValidationException": 422, "ReservationConflictException": 409,
+                        "ReservationNotFoundException": 404, "ReservationBadRequestException": 400}
+
+
+# --- S03 사유 자르기(td_tail_chars) ------------------------------------------------------------------------------
+def _bash(script: str, tmp_path) -> "subprocess.CompletedProcess":
+    import os
+    import subprocess
+    env = {k: v for k, v in os.environ.items() if not k.startswith("TD_")}
+    env.update(TD_ROOT=str(REPO_ROOT), TD_WORK_DIR=str(tmp_path), TD_RUN_DIR=str(tmp_path))
+    header = f'source "{REPO_ROOT}/pipeline/lib/common.sh"\n'
+    return subprocess.run(["bash", "-c", header + script], capture_output=True, env=env, timeout=60)
+
+
+def test_unit_tail_chars_keeps_multibyte_boundary_intact(tmp_path):
+    # '가나다 error'는 15바이트다. 바이트 11개로 자르면 '나'가 쪼개지지만 문자 단위로는 마지막 7자 '다 error'다.
+    done = _bash("printf '%s' '가나다 error' | td_tail_chars 7; echo '|'; printf 'short' | td_tail_chars 600", tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.decode("utf-8") == "다 error|\nshort"
+
+
+def test_unit_tail_chars_reason_records_in_stage_state(tmp_path):
+    """잘린 사유가 td_stage_end -> td.state로 그대로 기록된다(실패 격리 경로, REQ-110)."""
+    done = _bash('td_stage_begin S03\n'
+                 'REASON="ext export 실패: $(printf \'%s\' "가나다 error" | td_tail_chars 7)"\n'
+                 'td_stage_end S03 degraded "$REASON"', tmp_path)
+    assert done.returncode == 0, done.stderr.decode("utf-8", "replace")
+    assert json.loads((tmp_path / "stages" / "S03.json").read_text(encoding="utf-8"))["reason"] == "ext export 실패: 다 error"
