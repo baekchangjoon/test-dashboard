@@ -121,3 +121,208 @@ def test_req110_failure_isolated(det_env):
     run = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
     assert run["requestedRepsByArm"] == {"base": 2, "det": 1}
     assert "det" not in run["arms"]["generations"]
+
+
+# === E2E: 실제 run 산출물 검사 (work/det-session.json이 가리키는 run) ==============================
+# 파이프라인은 이 테스트가 돌리지 않는다. 컨트롤러가 먼저 run-all을 돌리고 세션 파일에 run 경로를 적는다.
+import hashlib  # noqa: E402
+import re  # noqa: E402
+
+from conftest import DET_SESSION_FILE  # noqa: E402
+from td.detgen.derive import REASONS  # noqa: E402
+
+_PLAN_PREFIX = "plan-tests-"
+
+
+def _session() -> dict:
+    return json.loads(DET_SESSION_FILE.read_text(encoding="utf-8"))
+
+
+@pytest.fixture
+def det_run() -> Path:
+    return Path(_session()["runDir"])
+
+
+@pytest.fixture
+def baseline_run() -> Path:
+    return Path(_session()["baselineRunDir"])
+
+
+def _read_json(path: Path):
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _det_generation_dir(run_dir: Path) -> Path:
+    """S06 bdd-gen.json의 det generation 항목(`dir`)이 가리키는 스냅샷 디렉터리."""
+    records = [g for g in _read_json(run_dir / "S06" / "bdd-gen.json")["generations"] if g["arm"] == "det"]
+    assert len(records) == 1, f"det generation이 정확히 1개여야 한다: {[g['genId'] for g in records]}"
+    assert records[0]["status"] == "passed", records[0]
+    gen_dir = Path(records[0]["dir"])
+    assert (gen_dir / "_COMPLETE").is_file() and (gen_dir / "cases.json").is_file(), gen_dir
+    return gen_dir
+
+
+def _det_cases(run_dir: Path) -> dict:
+    return _read_json(_det_generation_dir(run_dir) / "cases.json")
+
+
+def _simple(name: str) -> str:
+    return re.split(r"[.$]", name)[-1]
+
+
+@pytest.mark.det_e2e
+def test_req101_ext_ontology(det_run):
+    ext = _read_json(det_run / "S03" / "ontology-jqa-ext.json")
+    field_counts = {_simple(name): len(dto["fields"]) for name, dto in ext["dtos"].items()}
+    expected_fields = {"CreateReservationRequest": 10, "UpdateReservationRequest": 2, "ReservationResponse": 12,
+                       "LoginRequest": 2}
+    for name, count in expected_fields.items():
+        assert field_counts.get(name) == count, f"{name}: {field_counts.get(name)} != {count}"
+    enum_counts = {_simple(name): len(enum["constants"]) for name, enum in ext["enums"].items()}
+    assert enum_counts.get("PriceTier") == 3 and enum_counts.get("ReservationStatus") == 4, enum_counts
+    room_capacity = [c for c in ext["constants"] if c["name"] == "ROOM_CAPACITY"]
+    assert [c["value"] for c in room_capacity] == [2], room_capacity
+    assert len(ext["calls"]) >= 6, len(ext["calls"])
+    statuses = {item["status"] for item in ext["exceptions"].values()}
+    assert {422, 409, 404, 400} <= statuses, statuses
+    # 음성 단정: EMAIL 상수와 nightly rate 값은 보강 파일에 없다
+    assert not [c for c in ext["constants"] if "EMAIL" in c["name"].upper()], "EMAIL 상수가 있으면 안 된다"
+    assert not re.search(r"nightly|NIGHTLY|_RATE\b", json.dumps(ext)), "nightly rate가 보강 파일에 있으면 안 된다"
+
+
+@pytest.mark.det_e2e
+def test_req102_existing_inputs_unchanged(det_run, baseline_run):
+    def sha256(path: Path) -> str:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+
+    assert sha256(det_run / "S03" / "ontology-jqa.json") == sha256(baseline_run / "S03" / "ontology-jqa.json")
+    for arm in ("base", "jqa", "owl"):
+        current = _read_json(det_run / "S06" / f"bundle-{arm}.json")["inputHash"]
+        reference = _read_json(baseline_run / "S06" / f"bundle-{arm}.json")["inputHash"]
+        assert current == reference, f"{arm} 번들 inputHash가 기준 run과 다르다"
+    assert (_read_json(det_run / "S05" / "owl-gen.json")["inputHash"]
+            == _read_json(baseline_run / "S05" / "owl-gen.json")["inputHash"])
+
+
+def _resolve_address(address: str, plans: dict[str, dict], keyparams: dict[str, dict]) -> bool:
+    """`<file>#<index>@<sha12>`가 det 번들 입력 항목을 가리키는지. 계획은 conditionSha, keyparams(`p.r`)는 detail sha256."""
+    match = re.fullmatch(r"(?P<file>[^#]+)#(?P<index>[\d.]+)@(?P<sha>[0-9a-f]{12})", address)
+    assert match, f"주소 형식이 아니다: {address}"
+    file, index, sha = match["file"], match["index"], match["sha"]
+    if file in plans:
+        return any(str(item["index"]) == index and item["conditionSha"].startswith(sha) for item in plans[file]["items"])
+    if file in keyparams and re.fullmatch(r"\d+\.\d+", index):
+        p_index, r_index = (int(part) for part in index.split("."))
+        try:
+            detail = keyparams[file]["parameters"][p_index]["reasons"][r_index]["detail"]
+        except IndexError:
+            return False
+        return hashlib.sha256(detail.encode("utf-8")).hexdigest().startswith(sha)
+    return False
+
+
+@pytest.mark.det_e2e
+def test_req105_provenance_real(det_run):
+    gen_dir = _det_generation_dir(det_run)
+    document = _read_json(gen_dir / "cases.json")
+    case_ids = {case["id"] for case in document["cases"]}
+    assert case_ids and len(case_ids) == len(document["cases"]), "case id는 비어 있지 않고 유일해야 한다"
+    tagged = []
+    for feature in sorted((gen_dir / "features").glob("*.feature")):
+        tagged += re.findall(r"@case:(\S+)", feature.read_text(encoding="utf-8"))
+    assert set(tagged) <= case_ids, f"cases.json에 없는 @case: {sorted(set(tagged) - case_ids)}"
+    assert set(tagged) == case_ids, f"feature에 태그가 없는 case: {sorted(case_ids - set(tagged))}"
+
+    bundle = det_run / "S06" / "bundles" / "det"
+    plans = {plan["file"]: plan for plan in _read_json(bundle / "plans.json")}
+    keyparams = {entry["file"]: entry for entry in _read_json(bundle / "keyparams.json")}
+    bad = []
+    for case in document["cases"]:
+        assert case["sources"], f"{case['id']}: sources가 비었다"
+        for source in case["sources"]:
+            if source.startswith(("graph:", "harness:")):
+                continue
+            if not _resolve_address(source, plans, keyparams):
+                bad.append((case["id"], source))
+    for entry in document["unresolved"]:
+        if entry["source"].startswith(("graph:", "harness:")):
+            continue
+        if not _resolve_address(entry["source"], plans, keyparams):
+            bad.append(("unresolved", entry["source"]))
+    assert not bad, f"입력 파일에서 해석되지 않는 근거 주소: {bad[:5]} (총 {len(bad)}건)"
+
+
+@pytest.mark.det_e2e
+def test_req107_universe_real(det_run):
+    document = _det_cases(det_run)
+    slots = document["universe"]["bySlot"]
+    assert slots["generated"] + slots["unresolved"] == slots["total"], slots
+    assert slots["generated"] == len(document["cases"]) and slots["unresolved"] == len(document["unresolved"]), slots
+    assert sum(slots["byReason"].values()) == slots["unresolved"], slots["byReason"]
+    assert set(slots["byReason"]) == set(REASONS)
+    for entry in document["unresolved"]:
+        assert entry["reason"] in REASONS, entry
+    theoretical = document["universe"]["theoretical"]
+    assert theoretical["formula"] and theoretical["factors"], theoretical.keys()
+    assert theoretical["value"] > 0
+
+
+@pytest.mark.det_e2e
+def test_req111_mapping_real(det_run):
+    bundle = det_run / "S06" / "bundles" / "det"
+    plan_files = [plan["file"] for plan in _read_json(bundle / "plans.json")]
+    assert len(plan_files) == 6, plan_files
+    calls = _read_json(bundle / "ext.json")["calls"]
+    mapped = set()
+    for file in plan_files:
+        service, method = file.removeprefix(_PLAN_PREFIX).removesuffix(".json").rsplit(".", 1)
+        endpoints = {call["endpoint"] for call in calls if _simple(call["service"]) == service and call["method"] == method}
+        assert len(endpoints) == 1, f"{file}: 대응 엔드포인트가 정확히 1개여야 한다: {endpoints}"
+        mapped |= endpoints
+    assert len(mapped) == 6, f"서로 다른 엔드포인트 6개여야 한다: {sorted(mapped)}"
+    document = _det_cases(det_run)
+    assert document["universe"]["bySlot"]["byReason"]["no-endpoint-mapping"] == 0
+    assert not [e for e in document["unresolved"] if e["reason"] == "no-endpoint-mapping"]
+    case_endpoints = {case["endpoint"] for case in document["cases"]}
+    assert {label.removeprefix("endpoint:") for label in mapped} <= case_endpoints, "대응된 엔드포인트의 case가 없다"
+
+
+@pytest.mark.det_e2e
+def test_req115_baseline_real(det_run):
+    cases = _det_cases(det_run)["cases"]
+    violated = {case["endpoint"] for case in cases if case["rule"] == "violation"}
+    assert violated, "위반 case가 하나도 없다"
+    for endpoint in sorted(violated):
+        baselines = [case["id"] for case in cases if case["endpoint"] == endpoint and case["rule"] == "baseline-valid"]
+        assert len(baselines) == 1, f"{endpoint}: baseline-valid case가 정확히 1개여야 한다: {baselines}"
+
+
+def _stage(run_dir: Path, stage: str) -> dict:
+    return _read_json(run_dir / "stages" / f"{stage}.json")
+
+
+def _mentions_det(text: str | None) -> bool:
+    return bool(text) and re.search(r"\bdet\b", text) is not None  # det-<hash> generation id도 \bdet\b로 잡힌다
+
+
+@pytest.mark.det_e2e
+def test_req108_pipeline_compare(det_run):
+    for number in range(7, 14):
+        stage = _stage(det_run, f"S{number:02d}")
+        assert stage["status"] in ("passed", "degraded"), f"S{number:02d}: {stage['status']} {stage.get('reason')}"
+        assert not _mentions_det(stage.get("reason")), f"S{number:02d} 사유가 det와 관련 있다: {stage['reason']}"
+    compare = _read_json(det_run / "S12" / "compare" / "compare.json")
+    det_arm = compare["arms"]["det"]
+    assert det_arm["requestedReps"] == 1 and det_arm["measured"] == 1, det_arm  # reps는 run 전체 값(3)이라 보지 않는다
+    assert det_arm["inputRegime"] == {"llm": False, "conditions": True, "graph": "jqa+ext"}
+    assert compare["deterministic"] is not None and compare["deterministic"]["status"] == "measured", compare["deterministic"]
+    verdict_text = json.dumps(compare["verdict"], ensure_ascii=False)
+    assert not _mentions_det(verdict_text), "판정에 det가 들어가면 안 된다(참고 열)"
+    # LLM 호출 0회: 기존 arm은 스냅샷 재사용이므로 이 run 전체의 claude shim 호출 기록이 없다
+    calls = claude_call_log_for(det_run)
+    assert calls == [], f"이 run에서 claude 호출이 기록됐다: {calls[:3]}"
+
+
+def claude_call_log_for(run_dir: Path) -> list[dict]:
+    from helpers import claude_call_log
+    return claude_call_log(run_dir)
