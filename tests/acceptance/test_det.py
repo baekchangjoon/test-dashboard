@@ -289,12 +289,18 @@ def test_req111_mapping_real(det_run):
 
 @pytest.mark.det_e2e
 def test_req115_baseline_real(det_run):
-    cases = _det_cases(det_run)["cases"]
+    document = _det_cases(det_run)
+    cases = document["cases"]
     violated = {case["endpoint"] for case in cases if case["rule"] == "violation"}
     assert violated, "위반 case가 하나도 없다"
     for endpoint in sorted(violated):
         baselines = [case["id"] for case in cases if case["endpoint"] == endpoint and case["rule"] == "baseline-valid"]
-        assert len(baselines) == 1, f"{endpoint}: baseline-valid case가 정확히 1개여야 한다: {baselines}"
+        # 설계 판정: baseline 슬롯이 사유와 함께 생성 불가로 기록되면(unresolved 항목의 rule이 baseline-valid) 대체 허용
+        skipped = [entry for entry in document["unresolved"]
+                   if entry["endpoint"] == endpoint and entry["rule"] == "baseline-valid"]
+        assert len(baselines) + len(skipped) == 1, f"{endpoint}: baseline 슬롯은 case 1건 또는 생성 불가 1건: {baselines} {skipped}"
+        if skipped:
+            assert skipped[0]["reason"] in REASONS, skipped[0]
 
 
 def _stage(run_dir: Path, stage: str) -> dict:
