@@ -2,6 +2,7 @@
 # S03 jqa: jQAssistant로 SUT classes를 scan -> analyze(Spring 개념) 하고, 루프백 server를 백그라운드로 띄워 고정 Cypher
 # 묶음(ontology/jqa/queries)을 Bolt로 질의해 S03/ontology-jqa.json을 만든다.
 # 입력: S00(tools/jqassistant, tools/jqa-repo), SUT classes 디렉터리(sut.yaml classes). 산출물: S03/{ontology-jqa.json, store/, *.log}.
+# 보강: 같은 server에 ontology/jqa/queries/ext를 질의해 S03/ontology-jqa-ext.json(det arm 입력)을 쓴다. 실패하면 S03은 degraded다.
 # 모든 jQA 호출은 같은 전용 로컬 저장소(-Djqassistant.repositories.local=tools/jqa-repo)를 쓰고, 시작 전에 그 안의
 # Spring 플러그인 jar가 tools.pin.yaml의 sha256과 같은지 확인한다. 외부 명령은 td_run으로 시간 제한을 건다(jQA 900초).
 # server는 stdin이 열려 있는 동안만 산다(jQA 2.9.1은 Enter를 기다린다). fifo를 읽기/쓰기로 열어 stdin을 붙들고, 종료 시
@@ -85,6 +86,14 @@ LISTENERS="$(td_py -m td.ontology_jqa check-loopback --pid "$JAVA_PID" 2>&1)" ||
 EXPORT_OUT="$(td_py -m td.ontology_jqa export --bolt-port "$BOLT_PORT" --run-dir "$TD_RUN_DIR" --sut-file "$TD_SUT_FILE" \
   --out "$OUT_DIR/ontology-jqa.json" 2>&1)" || s03_fail "$EXPORT_OUT"
 
+# 보강 그래프(ontology/jqa/queries/ext -> ontology-jqa-ext.json, det arm 입력). 기존 산출물과 별도 파일이며, 실패해도 S03을
+# 실패시키지 않고 degraded로 둔다(기존 ontology-jqa.json은 그대로 쓴다).
+EXT_FILE="$OUT_DIR/ontology-jqa-ext.json"
+EXT_REASON=""
+rm -f "$EXT_FILE"
+EXT_OUT="$(td_py -m td.ontology_ext export --bolt-port "$BOLT_PORT" --base "$OUT_DIR/ontology-jqa.json" \
+  --out "$EXT_FILE" 2>&1)" || { EXT_REASON="ext export 실패: $(printf '%s' "$EXT_OUT" | tail -c 600)"; rm -f "$EXT_FILE"; }
+
 # 질의가 끝났으니 server를 내린다(S03이 등록한 PID만 정리하고 그 파일을 지운다). 비정상 종료 경로는 종료 trap(td_pids_reap)이 정리한다.
 td_pids_reap_named jqa-server jqa-server-java
 wait "$SERVER_PID" 2>/dev/null || true
@@ -99,11 +108,30 @@ jsonschema.validate(json.loads(Path(sys.argv[1]).read_text()), json.loads((root 
 PY
 )" || s03_fail "ontology-jqa.json이 스키마를 통과하지 못했다: ${SCHEMA_ERR: -600}"
 
+if [[ -z "$EXT_REASON" ]]; then
+  EXT_SCHEMA_ERR="$(td_py - "$EXT_FILE" <<'PY' 2>&1
+import json, sys
+from pathlib import Path
+import jsonschema
+root = Path(__import__("os").environ["TD_ROOT"])
+jsonschema.validate(json.loads(Path(sys.argv[1]).read_text()), json.loads((root / "site-gen/td/schemas/ontology-ext.schema.json").read_text()))
+PY
+)" || { EXT_REASON="ext export 실패: ontology-jqa-ext.json이 스키마를 통과하지 못했다: $(printf '%s' "$EXT_SCHEMA_ERR" | tail -c 600)"; rm -f "$EXT_FILE"; }
+fi
+
 FALLBACKS="$(jq -c '.meta.fallbacks' "$OUT_DIR/ontology-jqa.json")"
 EXTRA="$(jq -c --argjson listeners "$LISTENERS" '{nodes: (.nodes | length), edges: (.edges | length), fallbacks: .meta.fallbacks, listeners: $listeners}' "$OUT_DIR/ontology-jqa.json")"
-OUTPUTS="$(jq -cn --arg ontology "$OUT_DIR/ontology-jqa.json" '{ontology: $ontology}')"
-if [[ "$FALLBACKS" == "[]" ]]; then
+if [[ -z "$EXT_REASON" ]]; then
+  OUTPUTS="$(jq -cn --arg ontology "$OUT_DIR/ontology-jqa.json" --arg ext "$EXT_FILE" '{ontology: $ontology, ontologyExt: $ext}')"
+else
+  OUTPUTS="$(jq -cn --arg ontology "$OUT_DIR/ontology-jqa.json" '{ontology: $ontology}')"
+fi
+REASONS=()   # ext 실패 사유가 있으면 맨 앞에 둔다(사유 접두사 `ext export 실패:`로 판별할 수 있게)
+[[ -z "$EXT_REASON" ]] || { td_log "S03 $EXT_REASON"; REASONS+=("$EXT_REASON"); }
+[[ "$FALLBACKS" == "[]" ]] || REASONS+=("Spring 개념이 비어 :Annotation 쿼리로 대체: $FALLBACKS")
+if [[ ${#REASONS[@]} -eq 0 ]]; then
   td_stage_end S03 passed --outputs-json "$OUTPUTS" --extra-json "$EXTRA"
 else
-  td_stage_end S03 degraded "Spring 개념이 비어 :Annotation 쿼리로 대체: $FALLBACKS" --outputs-json "$OUTPUTS" --extra-json "$EXTRA"
+  REASON="$(printf '%s; ' "${REASONS[@]}")"
+  td_stage_end S03 degraded "${REASON%; }" --outputs-json "$OUTPUTS" --extra-json "$EXTRA"
 fi

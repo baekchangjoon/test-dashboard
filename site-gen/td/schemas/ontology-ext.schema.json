@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "jQA 보강 그래프(S03 ontology-jqa-ext.json, 설계 2026-11-22-deterministic-arm §5.1)",
+  "type": "object",
+  "required": ["schema", "dtos", "enums", "constants", "calls", "endpoints", "exceptions"],
+  "additionalProperties": false,
+  "$defs": {
+    "typeName": {"type": ["string", "null"]},
+    "handler": {"type": "string", "pattern": "^[^#\\s]+#[^#\\s]+$"}
+  },
+  "properties": {
+    "schema": {"const": 1},
+    "dtos": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["fields"],
+        "additionalProperties": false,
+        "properties": {
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "type"],
+              "additionalProperties": false,
+              "properties": {"name": {"type": "string", "minLength": 1}, "type": {"$ref": "#/$defs/typeName"}}
+            }
+          }
+        }
+      }
+    },
+    "enums": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["constants"],
+        "additionalProperties": false,
+        "properties": {"constants": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}}
+      }
+    },
+    "constants": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["owner", "name", "type", "value"],
+        "additionalProperties": false,
+        "properties": {
+          "owner": {"type": "string", "minLength": 1},
+          "name": {"type": "string", "minLength": 1},
+          "type": {"$ref": "#/$defs/typeName"},
+          "value": {"type": ["string", "number", "boolean", "null"]}
+        }
+      }
+    },
+    "calls": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["endpoint", "handler", "service", "method"],
+        "additionalProperties": false,
+        "properties": {
+          "endpoint": {"type": ["string", "null"], "pattern": "^endpoint:"},
+          "handler": {"$ref": "#/$defs/handler"},
+          "service": {"type": "string", "minLength": 1},
+          "method": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "endpoints": {
+      "type": "object",
+      "propertyNames": {"pattern": "^endpoint:"},
+      "additionalProperties": {
+        "type": "object",
+        "required": ["params", "responseDto"],
+        "additionalProperties": false,
+        "properties": {
+          "params": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["index", "kind", "type", "name", "defaultValue", "required"],
+              "additionalProperties": false,
+              "properties": {
+                "index": {"type": "integer", "minimum": 0},
+                "kind": {"enum": ["PathVariable", "RequestParam", "RequestBody"]},
+                "type": {"$ref": "#/$defs/typeName"},
+                "name": {"type": ["string", "null"]},
+                "defaultValue": {"type": ["string", "null"]},
+                "required": {"type": ["boolean", "null"]}
+              }
+            }
+          },
+          "responseDto": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "exceptions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["handler"],
+        "additionalProperties": false,
+        "properties": {
+          "handler": {"oneOf": [{"$ref": "#/$defs/handler"}, {"type": "null"}]},
+          "status": {"type": "integer", "minimum": 100, "maximum": 599}
+        }
+      }
+    }
+  }
+}
