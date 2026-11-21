@@ -1,6 +1,6 @@
 # test-dashboard 화면 재설계
 
-- 작성일: 2026-11-22 (v2: 빌더 점검과 리뷰 반영)
+- 작성일: 2026-11-22 (v2: 빌더 점검과 Claude·GPT 리뷰 반영, v2.1: Gemini 리뷰 반영)
 - 상태: 승인됨 (2026-11-22)
 - 저장소: `baekchangjoon/test-dashboard` (공개), 브랜치 `feat/dashboard-design`
 - 앞선 문서: `docs/superpowers/specs/2026-11-18-test-dashboard-poc-design.md` (PoC 설계 v3)
@@ -237,7 +237,7 @@ project:
 - `sut`는 `suts/<sut>/sut.yaml`이 있어야 하고, SUT 하나는 과제 하나에만 이어진다.
 - 과제를 자동으로 긁지 않는다. 설정에 직접 적는다.
 
-**설정에 없는 SUT**: 완료된 run이 있는데 어느 과제에도 이어지지 않은 SUT는 **암묵 과제**로 표에 넣는다. 이름은 SUT 이름이고, "파이프라인" 표시가 붙고, `repo`가 없어 수집하지 않는다(run 값만 쓴다). 수용 테스트의 mini-sut과 접두 게시가 이 경로를 탄다. 설정의 과제 이름과 겹치면 검증 실패다.
+**설정에 없는 SUT**: 완료된 run이 있는데 어느 과제에도 이어지지 않은 SUT는 **암묵 과제**로 표에 넣는다. 이름은 SUT 이름이고, "파이프라인" 표시가 붙고, `repo`가 없어 수집하지 않는다(run 값만 쓴다). 과제 페이지도 만들고, 탭은 다른 파이프라인 과제와 같다. 상태 규칙과 결론 문장 규칙은 과제마다 따로 두지 않으므로 암묵 과제에도 같은 설정이 적용된다. 수용 테스트의 mini-sut과 접두 게시가 이 경로를 탄다. 설정의 과제 이름과 겹치면 검증 실패다.
 
 **상태 판정 순서**
 
@@ -269,8 +269,8 @@ project:
 | `coverage.aggregateLine` | 비율 | `run.json` `kpis.blackbox.aggregate.line` | 그대로 |
 | `e2e.passRate` | 비율 | `stages/S07.json` `generations.*.statusCounts` | 모든 묶음의 통과 수 합 ÷ 시나리오 수 합. 분모가 0이면 없음 |
 | `sonar.gate` | 문자열 | `run.json` `kpis.sonar.gate` | `OK`, `ERROR` 등 그대로 |
-| `sonar.coverage` | 퍼센트 값 | run의 `sonar/sonar.json` `measures.coverage` | 문자열을 수로 |
-| `sonar.vulnerabilities`, `sonar.bugs`, `sonar.codeSmells` | 개수 | 같은 파일 `measures` | 문자열을 정수로 |
+| `sonar.coverage` | 퍼센트 값 | `run.json` `kpis.sonar.coverage` | 문자열을 수로 |
+| `sonar.vulnerabilities`, `sonar.bugs`, `sonar.codeSmells` | 개수 | `run.json` `kpis.sonar`의 `vulnerabilities`, `bugs`, `codeSmells` | 문자열을 정수로 |
 | `hotspot.topScore` | 점수 | `stages/S09.json` `top10[0].score` | 그대로 |
 | `tia.selectedRatio` | 비율 | `stages/S10.json` `impact` | `selected ÷ indexedTests`. 분모가 0이면 없음 |
 | `run.durationSec` | 초 | 단계 JSON의 시각 | S00~S12 가운데 가장 늦은 `finishedAt` − `run.json` `startedAt` |
@@ -290,7 +290,7 @@ project:
 | `sonar.gate`, `sonar.coverage`, `sonar.vulnerabilities`, `sonar.bugs`, `sonar.codeSmells` | 위와 같음 | Sonar API |
 | `repo.pushedAt`, `repo.language`, `repo.description` | 문자열 | GitHub |
 
-**같은 이름이 두 출처에 있을 때**: 과제가 SUT와 이어져 있고 완료된 run이 하나라도 있으면 `sonar.*`는 최신 run의 값을 쓰고, 수집기는 그 과제의 Sonar를 읽지 않는다. 그래서 한 과제의 `sonar.*`는 항상 한 출처에서만 온다. `ci.*`와 `repo.*`는 항상 스냅숏에서 온다.
+**같은 이름이 두 출처에 있을 때**: 과제가 SUT와 이어져 있고 완료된 run이 하나라도 있으면 `sonar.*`는 최신 run의 값을 쓰고, 수집기는 그 과제의 Sonar를 읽지 않는다. 그래서 한 과제의 `sonar.*`는 항상 한 출처에서만 온다. SUT와 이어졌지만 완료된 run이 아직 없는 과제는 수집기가 읽고, `sonarKey`를 적지 않았으면 `suts/<sut>/sut.yaml`의 `sonar.projectKey`를 쓴다. Sonar API의 `code_smells`는 스냅숏에 `codeSmells`로 적는다. `ci.*`와 `repo.*`는 항상 스냅숏에서 온다.
 
 집계 지표(`home.summary`에만 쓴다):
 
@@ -319,6 +319,8 @@ project:
 
 게시의 인덱스 단계 안에서만 돈다(§6.4). 따로 돌려 미러에 써 두는 방식은 쓰지 않는다(제약 4).
 
+**실행 경계**: 게시기(Python)가 인덱스 단계에서 `pipeline/collect.sh`를 자식 프로세스로 부른다. `collect.sh`가 토큰 함수를 불러 발급하고, 정리를 종료 trap에 걸고, `python -m td.collect`를 실행한다. 토큰 정리의 책임은 `collect.sh`에 있다. 게시기가 신호를 받으면 자식에게 넘기고 자식이 끝나기를 기다린다. `td.collect`는 쓴 파일의 목록과 상태(`ok`, `degraded`)와 사유를 JSON으로 표준 출력에 내고, 게시기가 그 목록을 `rebuild`의 목록과 합쳐 올린다.
+
 **GitHub** (`gh api`)
 
 - 저장소 정보: 공개 여부, 기본 브랜치, 언어, 설명, 최근 push.
@@ -331,7 +333,7 @@ project:
 | 실패 | `failure`, `timed_out`, `startup_failure` | 집계 대상 |
 | 제외 | `cancelled`, `skipped`, `neutral`, `action_required`, `stale` | 세지 않는다 |
 
-- 최신 커밋의 검사 결과. 같은 이름의 검사가 여러 번 돌았으면 가장 늦게 시작한 것만 본다. 진행 중인 검사는 실패로 세지 않는다.
+- 최신 커밋의 검사 결과는 Check Runs API(`repos/<repo>/commits/<기본 브랜치>/check-runs`)로 읽는다. 같은 이름의 검사가 여러 번 돌았으면 가장 늦게 시작한 것만 본다. 실패로 세는 결론값은 위 표의 "실패"와 같다(`failure`, `timed_out`, `startup_failure`). 진행 중인 검사는 세지 않는다.
 
 **SonarQube**
 
@@ -376,17 +378,24 @@ project:
  → 무효화 → Lightsail rsync
 ```
 
-- 수집이 같은 잠금 안에서 돌기 때문에 두 게시가 같은 스냅숏을 동시에 쓰지 않는다.
+- 수집이 같은 잠금 안에서 돌기 때문에 두 게시가 같은 스냅숏을 동시에 쓰지 않는다. 그동안 다른 게시는 잠금을 기다린다(최대 5분의 수집 예산만큼). 게시를 한 사람이 손으로 돌리는 지금 운영에서는 받아들인다. 과제는 차례로 읽는다.
 - **인덱스 전용 게시** `pipeline/publish-index.sh`(게시기의 `index-only`)를 새로 둔다. 파이프라인 run 없이 수집과 인덱스만 갱신한다. 과제 20개 가운데 19개는 파이프라인을 돌리지 않으므로 이 경로가 있어야 첫 화면이 갱신된다. 새 렌더러를 배포한 뒤 옛 run을 S13으로 다시 게시하면 `ContentConflict`가 나므로(제약 2), 화면만 갱신할 때도 이 경로를 쓴다.
 - **수집 결과가 게시 상태에 주는 영향**: 수집이 `degraded`이거나 실패해도 인덱스는 있는 스냅숏으로 다시 만들어 게시한다. S13(또는 인덱스 전용 게시)의 상태는 `degraded`이고 사유에 수집 결과를 적는다.
 - **무효화**: 과제 파일은 `/<접두>projects/*` 한 경로로 묶는다. 파일마다 경로를 하나씩 내지 않는다.
-- **삭제 범위**: `projects/` 바로 아래에서, 설정의 과제도 암묵 과제도 아닌 이름의 디렉터리만 지운다. 다른 곳은 건드리지 않는다. Lightsail 쪽은 그 디렉터리만 지우는 명령을 따로 보낸다(지금 rsync에는 삭제 옵션이 없다).
+- **삭제 범위**: `projects/` 바로 아래에서, 설정의 과제도 암묵 과제도 아닌 이름의 디렉터리만 지운다. 다른 곳은 건드리지 않는다. S3에는 디렉터리가 없으므로 그 접두의 객체를 나열해 묶어서 지운다(지금 게시기에는 객체 하나를 지우는 함수만 있어 새로 만든다). Lightsail 쪽은 그 디렉터리만 지우는 명령을 따로 보낸다(지금 rsync에는 삭제 옵션이 없다).
 - `TD_SITE_PREFIX`가 있는 실행에서는 넘겨받은 설정에 `repo`가 있는 과제가 있을 때만 수집한다. 수집 대상 주소(GitHub는 `gh` 실행 파일 경로, Sonar는 URL과 SSH)는 환경 변수로 바꿀 수 있고, 테스트는 가짜로 바꾼다.
 
 **`rebuild`가 더 하는 일**
 
 - `summarize_run`이 §6.2 카탈로그의 run 지표를 읽는다.
-- 과제마다 `projects/<name>/series.json`을 쓴다. 점마다 `kind`(`run` 또는 `snapshot`), 식별자(runId 또는 날짜), 시각, 지표 값이 있고 값이 없으면 `null`이다. run은 runId 순, 스냅숏은 날짜 순이다.
+- 과제마다 `projects/<name>/series.json`을 쓴다. 점의 배열이고, run은 runId 순, 스냅숏은 날짜 순이다. 값이 없으면 `null`이다.
+
+  ```json
+  {"schema": 1, "kind": "run", "metrics": ["tests.passRate", "coverage.line"],
+   "points": [{"id": "20261120-131022Z-b6f9393-manual-036c288d", "at": "2026-11-20T13:10:22Z",
+               "href": "../../suts/petclinic/runs/20261120-131022Z-b6f9393-manual-036c288d/index.html",
+               "values": {"tests.passRate": 1.0, "coverage.line": 0.4152}}]}
+  ```
 - 상태 판정과 결론 문장을 여기서 정한다. 결과(수준, 사유 목록, 판정에 쓴 값)를 `projects.json`에 쓴다. 브라우저는 판정하지 않고 보여 주기만 한다.
 - 홈과 과제 페이지는 표와 수치를 HTML로 먼저 그린다. 같은 데이터를 `<script type="application/json">` 블록으로도 싣고, 스크립트가 거르기·정렬·펼치기·툴팁을 덧입힌다.
 - `suts/<sut>/index.html`은 과제 페이지로 가는 안내 페이지다. 이어진 과제(설정의 과제 또는 암묵 과제)가 항상 있으므로 갈 곳이 있다. 링크와 `<meta http-equiv="refresh">`를 같이 둔다.
@@ -402,7 +411,7 @@ project:
 
 - 고정 방식은 커밋 하나로 통일한다. hotspot에 새 릴리스가 나오면 그 태그의 커밋으로 올리면 된다.
 - `tools.pin.yaml`의 `hotspot`은 `repo`, `commit`(40자), `jdk`, `gradleTask`, `jarGlob`을 갖는다. `load_pin`의 40자 SHA 검증에 hotspot을 넣고, 릴리스 내려받기 목록(`ARTIFACT_TOOLS`)에서 뺀다.
-- 소스 받기와 빌드는 `pipeline/S00-prepare.sh`가 한다(지금 tia를 빌드하는 자리). `tools.lock`에는 tia와 같은 모양으로 커밋과 빌드된 jar의 sha256을 적는다.
+- 소스 받기와 빌드는 `pipeline/S00-prepare.sh`가 한다(지금 tia를 빌드하는 자리). 빌드한 jar를 지금과 같은 `<도구 디렉터리>/hotspot.jar`로 복사하므로 S09는 바꾸지 않는다. `tools.lock`에는 tia와 같은 모양으로 커밋과 빌드된 jar의 sha256을 적는다.
 - 과제 페이지 "위험 지점" 탭의 상위 10개는 지금처럼 `hotspots.yml`에서 만든 `top10`을 쓴다. HTML 안의 JSON 블록은 읽지 않는다(도구의 화면 쪽에 묶이지 않기 위해서다).
 - 새 버전의 리포트가 실제로 실렸는지는 수용 테스트가 확인한다(§8).
 
