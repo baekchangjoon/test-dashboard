@@ -1,0 +1,64 @@
+[
+ {
+  "class": "OrderService",
+  "file": "OrderService_fetch.json",
+  "method": "fetch",
+  "parameters": [
+   {
+    "accessor": "orderId",
+    "http_name": "orderId",
+    "java_type": "Long",
+    "name": "orderId",
+    "reasons": [
+     {
+      "detail": "repository.findById(orderId)",
+      "type": "DB_WHERE"
+     }
+    ]
+   },
+   {
+    "accessor": "limit",
+    "http_name": "limit",
+    "java_type": "Integer",
+    "name": "limit",
+    "reasons": [
+     {
+      "detail": "limit >  100",
+      "type": "BRANCH_CONDITION"
+     },
+     {
+      "detail": "",
+      "type": "ERROR_TRIGGER"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "class": "OrderService",
+  "file": "OrderService_place.json",
+  "method": "place",
+  "parameters": [
+   {
+    "accessor": "form",
+    "http_name": "",
+    "java_type": "OrderForm",
+    "name": "form",
+    "reasons": [
+     {
+      "detail": "form.quantity() < 1 ||\n\tform.quantity() > 9",
+      "type": "BRANCH_CONDITION"
+     },
+     {
+      "detail": "",
+      "type": "ERROR_TRIGGER"
+     },
+     {
+      "detail": "repository.countByBay(...)",
+      "type": "DB_WHERE"
+     }
+    ]
+   }
+  ]
+ }
+]

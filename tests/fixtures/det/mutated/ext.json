@@ -1,0 +1,598 @@
+{
+ "calls": [
+  {
+   "endpoint": "endpoint:DELETE /svc/bookings/{id}",
+   "handler": "org.springframework.samples.zooapp.kennel.BookingApiController#delete",
+   "method": "delete",
+   "service": "org.springframework.samples.zooapp.kennel.BookingService"
+  },
+  {
+   "endpoint": "endpoint:GET /svc/bookings",
+   "handler": "org.springframework.samples.zooapp.kennel.BookingApiController#list",
+   "method": "list",
+   "service": "org.springframework.samples.zooapp.kennel.BookingService"
+  },
+  {
+   "endpoint": "endpoint:GET /svc/bookings/{id}",
+   "handler": "org.springframework.samples.zooapp.kennel.BookingApiController#get",
+   "method": "getById",
+   "service": "org.springframework.samples.zooapp.kennel.BookingService"
+  },
+  {
+   "endpoint": "endpoint:POST /svc/auth/login",
+   "handler": "org.springframework.samples.zooapp.security.AuthController#login",
+   "method": "loadUserByHandle",
+   "service": "org.springframework.samples.zooapp.security.CustomUserDetailsService"
+  },
+  {
+   "endpoint": "endpoint:POST /svc/bookings",
+   "handler": "org.springframework.samples.zooapp.kennel.BookingApiController#create",
+   "method": "create",
+   "service": "org.springframework.samples.zooapp.kennel.BookingService"
+  },
+  {
+   "endpoint": "endpoint:PUT /svc/bookings/{id}",
+   "handler": "org.springframework.samples.zooapp.kennel.BookingApiController#update",
+   "method": "update",
+   "service": "org.springframework.samples.zooapp.kennel.BookingService"
+  }
+ ],
+ "constants": [
+  {
+   "keeper": "org.springframework.samples.zooapp.kennel.BookingService",
+   "name": "SLOT_LIMIT",
+   "type": "int",
+   "value": 3
+  },
+  {
+   "keeper": "org.springframework.samples.zooapp.keeper.KeeperController",
+   "name": "VIEWS_OWNER_CREATE_OR_UPDATE_FORM",
+   "type": "java.lang.String",
+   "value": "keepers/createOrUpdateKeeperForm"
+  },
+  {
+   "keeper": "org.springframework.samples.zooapp.keeper.CritterController",
+   "name": "VIEWS_PETS_CREATE_OR_UPDATE_FORM",
+   "type": "java.lang.String",
+   "value": "critters/createOrUpdateCritterForm"
+  },
+  {
+   "keeper": "org.springframework.samples.zooapp.keeper.CritterValidator",
+   "name": "REQUIRED",
+   "type": "java.lang.String",
+   "value": "required"
+  }
+ ],
+ "dtos": {
+  "org.springframework.samples.zooapp.kennel.BookingForms$AmendBookingForm": {
+   "fields": [
+    {
+     "name": "stays",
+     "type": "java.lang.Integer"
+    },
+    {
+     "name": "status",
+     "type": "org.springframework.samples.zooapp.kennel.BookingState"
+    }
+   ]
+  },
+  "org.springframework.samples.zooapp.kennel.BookingForms$BookingView": {
+   "fields": [
+    {
+     "name": "beastTotal",
+     "type": "int"
+    },
+    {
+     "name": "arrivalDay",
+     "type": "java.time.LocalDate"
+    },
+    {
+     "name": "prepayment",
+     "type": "double"
+    },
+    {
+     "name": "id",
+     "type": "java.lang.Integer"
+    },
+    {
+     "name": "rewardScore",
+     "type": "int"
+    },
+    {
+     "name": "stays",
+     "type": "int"
+    },
+    {
+     "name": "keeperMail",
+     "type": "java.lang.String"
+    },
+    {
+     "name": "critterTitle",
+     "type": "java.lang.String"
+    },
+    {
+     "name": "rateBand",
+     "type": "org.springframework.samples.zooapp.kennel.RateBand"
+    },
+    {
+     "name": "discountUsed",
+     "type": "boolean"
+    },
+    {
+     "name": "kennelSlot",
+     "type": "int"
+    },
+    {
+     "name": "status",
+     "type": "org.springframework.samples.zooapp.kennel.BookingState"
+    }
+   ]
+  },
+  "org.springframework.samples.zooapp.kennel.BookingForms$OpenBookingForm": {
+   "fields": [
+    {
+     "name": "beastTotal",
+     "type": "int"
+    },
+    {
+     "name": "arrivalDay",
+     "type": "java.time.LocalDate"
+    },
+    {
+     "name": "prepayment",
+     "type": "double"
+    },
+    {
+     "name": "rewardScore",
+     "type": "int"
+    },
+    {
+     "name": "stays",
+     "type": "int"
+    },
+    {
+     "name": "keeperMail",
+     "type": "java.lang.String"
+    },
+    {
+     "name": "critterTitle",
+     "type": "java.lang.String"
+    },
+    {
+     "name": "rateBand",
+     "type": "org.springframework.samples.zooapp.kennel.RateBand"
+    },
+    {
+     "name": "discountKey",
+     "type": "java.lang.String"
+    },
+    {
+     "name": "kennelSlot",
+     "type": "int"
+    }
+   ]
+  },
+  "org.springframework.samples.zooapp.security.AuthController$LoginRequest": {
+   "fields": [
+    {
+     "name": "password",
+     "type": "java.lang.String"
+    },
+    {
+     "name": "handle",
+     "type": "java.lang.String"
+    }
+   ]
+  }
+ },
+ "endpoints": {
+  "endpoint:DELETE /svc/bookings/{id}": {
+   "params": [
+    {
+     "defaultValue": null,
+     "index": 0,
+     "kind": "PathVariable",
+     "name": null,
+     "required": null,
+     "type": "java.lang.Integer"
+    },
+    {
+     "defaultValue": "false",
+     "index": 1,
+     "kind": "RequestParam",
+     "name": null,
+     "required": null,
+     "type": "boolean"
+    }
+   ],
+   "responseDto": null
+  },
+  "endpoint:GET /": {
+   "params": [],
+   "responseDto": null
+  },
+  "endpoint:GET /keepers": {
+   "params": [
+    {
+     "defaultValue": "1",
+     "index": 0,
+     "kind": "RequestParam",
+     "name": null,
+     "required": null,
+     "type": "int"
+    }
+   ],
+   "responseDto": null
+  },
+  "endpoint:GET /keepers/find": {
+   "params": [],
+   "responseDto": null
+  },
+  "endpoint:GET /keepers/new": {
+   "params": [],
+   "responseDto": null
+  },
+  "endpoint:GET /keepers/{keeperId}": {
+   "params": [
+    {
+     "defaultValue": null,
+     "index": 0,
+     "kind": "PathVariable",
+     "name": "keeperId",
+     "required": null,
+     "type": "int"
+    }
+   ],
+   "responseDto": null
+  },
+  "endpoint:GET /keepers/{keeperId}/critters/new": {
+   "params": [],
+   "responseDto": null
+  },
+  "endpoint:GET /keepers/{keeperId}/critters/{critterId}/edit": {
+   "params": [],
+   "responseDto": null
+  },
+  "endpoint:GET /keepers/{keeperId}/critters/{critterId}/visits/new": {
+   "params": [],
+   "responseDto": null
+  },
+  "endpoint:GET /keepers/{keeperId}/edit": {
+   "params": [],
+   "responseDto": null
+  },
+  "endpoint:GET /medics": {
+   "params": [],
+   "responseDto": null
+  },
+  "endpoint:GET /medics.html": {
+   "params": [
+    {
+     "defaultValue": "1",
+     "index": 0,
+     "kind": "RequestParam",
+     "name": null,
+     "required": null,
+     "type": "int"
+    }
+   ],
+   "responseDto": null
+  },
+  "endpoint:GET /oups": {
+   "params": [],
+   "responseDto": null
+  },
+  "endpoint:GET /svc/bookings": {
+   "params": [
+    {
+     "defaultValue": null,
+     "index": 0,
+     "kind": "RequestParam",
+     "name": null,
+     "required": false,
+     "type": "java.lang.Integer"
+    },
+    {
+     "defaultValue": null,
+     "index": 1,
+     "kind": "RequestParam",
+     "name": null,
+     "required": false,
+     "type": "org.springframework.samples.zooapp.kennel.RateBand"
+    },
+    {
+     "defaultValue": "false",
+     "index": 2,
+     "kind": "RequestParam",
+     "name": null,
+     "required": null,
+     "type": "boolean"
+    }
+   ],
+   "responseDto": "org.springframework.samples.zooapp.kennel.BookingForms$BookingView"
+  },
+  "endpoint:GET /svc/bookings/{id}": {
+   "params": [
+    {
+     "defaultValue": null,
+     "index": 0,
+     "kind": "PathVariable",
+     "name": null,
+     "required": null,
+     "type": "java.lang.Integer"
+    },
+    {
+     "defaultValue": "true",
+     "index": 1,
+     "kind": "RequestParam",
+     "name": null,
+     "required": null,
+     "type": "boolean"
+    }
+   ],
+   "responseDto": "org.springframework.samples.zooapp.kennel.BookingForms$BookingView"
+  },
+  "endpoint:GET /svc/critters/types": {
+   "params": [],
+   "responseDto": null
+  },
+  "endpoint:GET /svc/critters/{critterId}": {
+   "params": [
+    {
+     "defaultValue": null,
+     "index": 0,
+     "kind": "PathVariable",
+     "name": null,
+     "required": null,
+     "type": "java.lang.Integer"
+    }
+   ],
+   "responseDto": null
+  },
+  "endpoint:GET /svc/keepers": {
+   "params": [
+    {
+     "defaultValue": null,
+     "index": 0,
+     "kind": "RequestParam",
+     "name": null,
+     "required": false,
+     "type": "java.lang.String"
+    }
+   ],
+   "responseDto": null
+  },
+  "endpoint:GET /svc/keepers/{keeperId}": {
+   "params": [
+    {
+     "defaultValue": null,
+     "index": 0,
+     "kind": "PathVariable",
+     "name": null,
+     "required": null,
+     "type": "java.lang.Integer"
+    }
+   ],
+   "responseDto": null
+  },
+  "endpoint:GET /svc/medics": {
+   "params": [
+    {
+     "defaultValue": null,
+     "index": 0,
+     "kind": "RequestParam",
+     "name": null,
+     "required": false,
+     "type": "java.lang.String"
+    }
+   ],
+   "responseDto": null
+  },
+  "endpoint:GET /svc/medics/{medicId}": {
+   "params": [
+    {
+     "defaultValue": null,
+     "index": 0,
+     "kind": "PathVariable",
+     "name": null,
+     "required": null,
+     "type": "java.lang.Integer"
+    }
+   ],
+   "responseDto": null
+  },
+  "endpoint:POST /keepers/new": {
+   "params": [],
+   "responseDto": null
+  },
+  "endpoint:POST /keepers/{keeperId}/critters/new": {
+   "params": [],
+   "responseDto": null
+  },
+  "endpoint:POST /keepers/{keeperId}/critters/{critterId}/edit": {
+   "params": [],
+   "responseDto": null
+  },
+  "endpoint:POST /keepers/{keeperId}/critters/{critterId}/visits/new": {
+   "params": [
+    {
+     "defaultValue": null,
+     "index": 1,
+     "kind": "PathVariable",
+     "name": null,
+     "required": null,
+     "type": "int"
+    }
+   ],
+   "responseDto": null
+  },
+  "endpoint:POST /keepers/{keeperId}/edit": {
+   "params": [
+    {
+     "defaultValue": null,
+     "index": 2,
+     "kind": "PathVariable",
+     "name": "keeperId",
+     "required": null,
+     "type": "int"
+    }
+   ],
+   "responseDto": null
+  },
+  "endpoint:POST /svc/auth/login": {
+   "params": [
+    {
+     "defaultValue": null,
+     "index": 0,
+     "kind": "RequestBody",
+     "name": null,
+     "required": null,
+     "type": "org.springframework.samples.zooapp.security.AuthController$LoginRequest"
+    }
+   ],
+   "responseDto": null
+  },
+  "endpoint:POST /svc/auth/validate": {
+   "params": [],
+   "responseDto": null
+  },
+  "endpoint:POST /svc/bookings": {
+   "params": [
+    {
+     "defaultValue": null,
+     "index": 0,
+     "kind": "RequestBody",
+     "name": null,
+     "required": null,
+     "type": "org.springframework.samples.zooapp.kennel.BookingForms$OpenBookingForm"
+    }
+   ],
+   "responseDto": "org.springframework.samples.zooapp.kennel.BookingForms$BookingView"
+  },
+  "endpoint:POST /svc/critters": {
+   "params": [
+    {
+     "defaultValue": null,
+     "index": 0,
+     "kind": "RequestBody",
+     "name": null,
+     "required": null,
+     "type": "org.springframework.samples.zooapp.keeper.Critter"
+    }
+   ],
+   "responseDto": null
+  },
+  "endpoint:POST /svc/keepers": {
+   "params": [
+    {
+     "defaultValue": null,
+     "index": 0,
+     "kind": "RequestBody",
+     "name": null,
+     "required": null,
+     "type": "org.springframework.samples.zooapp.keeper.Keeper"
+    }
+   ],
+   "responseDto": null
+  },
+  "endpoint:PUT /svc/bookings/{id}": {
+   "params": [
+    {
+     "defaultValue": null,
+     "index": 0,
+     "kind": "PathVariable",
+     "name": null,
+     "required": null,
+     "type": "java.lang.Integer"
+    },
+    {
+     "defaultValue": null,
+     "index": 1,
+     "kind": "RequestBody",
+     "name": null,
+     "required": null,
+     "type": "org.springframework.samples.zooapp.kennel.BookingForms$AmendBookingForm"
+    }
+   ],
+   "responseDto": "org.springframework.samples.zooapp.kennel.BookingForms$BookingView"
+  },
+  "endpoint:PUT /svc/critters/{critterId}": {
+   "params": [
+    {
+     "defaultValue": null,
+     "index": 0,
+     "kind": "PathVariable",
+     "name": null,
+     "required": null,
+     "type": "java.lang.Integer"
+    },
+    {
+     "defaultValue": null,
+     "index": 1,
+     "kind": "RequestBody",
+     "name": null,
+     "required": null,
+     "type": "org.springframework.samples.zooapp.keeper.Critter"
+    }
+   ],
+   "responseDto": null
+  },
+  "endpoint:PUT /svc/keepers/{keeperId}": {
+   "params": [
+    {
+     "defaultValue": null,
+     "index": 0,
+     "kind": "PathVariable",
+     "name": null,
+     "required": null,
+     "type": "java.lang.Integer"
+    },
+    {
+     "defaultValue": null,
+     "index": 1,
+     "kind": "RequestBody",
+     "name": null,
+     "required": null,
+     "type": "org.springframework.samples.zooapp.keeper.Keeper"
+    }
+   ],
+   "responseDto": null
+  }
+ },
+ "enums": {
+  "org.springframework.samples.zooapp.kennel.BookingState": {
+   "constants": [
+    "VOIDED",
+    "ARRIVED",
+    "LOCKED",
+    "WAITING"
+   ]
+  },
+  "org.springframework.samples.zooapp.kennel.RateBand": {
+   "constants": [
+    "BRONZE",
+    "SILVER",
+    "GOLD"
+   ]
+  }
+ },
+ "exceptions": {
+  "org.springframework.samples.zooapp.kennel.BookingErrors$BookingAbsentException": {
+   "handler": "org.springframework.samples.zooapp.kennel.BookingApiController$BookingErrorAdvice#onNotFound",
+   "status": 404
+  },
+  "org.springframework.samples.zooapp.kennel.BookingErrors$BookingClashException": {
+   "handler": "org.springframework.samples.zooapp.kennel.BookingApiController$BookingErrorAdvice#onConflict",
+   "status": 409
+  },
+  "org.springframework.samples.zooapp.kennel.BookingErrors$BookingMalformedException": {
+   "handler": "org.springframework.samples.zooapp.kennel.BookingApiController$BookingErrorAdvice#onBadRequest",
+   "status": 400
+  },
+  "org.springframework.samples.zooapp.kennel.BookingErrors$BookingRuleException": {
+   "handler": "org.springframework.samples.zooapp.kennel.BookingApiController$BookingErrorAdvice#onValidation",
+   "status": 422
+  }
+ },
+ "schema": 1
+}

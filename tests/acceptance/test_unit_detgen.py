@@ -430,3 +430,261 @@ def test_req113_internal_error_is_swallowed(monkeypatch):
         raise ZeroDivisionError("내부 버그 모사")
     monkeypatch.setattr(detparse._Classifier, "atom", boom)
     assert detparse.parse("req.nights() < 1", "req") == detparse.Parsed(None, "unparsed")
+
+
+# --- Task 4: 케이스 도출(REQ-106, REQ-107, REQ-109, REQ-111, REQ-114, REQ-115) ---------------------------
+
+import copy
+import hashlib
+
+from td.detgen import derive as derive_module
+
+CONTROLLED = FIXTURES / "controlled"
+MUTATED = FIXTURES / "mutated"
+PETCLINIC_SUT = FIXTURES / "petclinic" / "sut.yaml"
+
+
+def _load_docs(directory: Path) -> dict:
+    return {name: json.loads((directory / name).read_text(encoding="utf-8")) for name in inputs.BUNDLE_FILES}
+
+
+def _make_bundle(directory: Path, docs: dict, missing=()) -> inputs.Bundle:
+    """문서 묶음을 STAMP가 있는 det 번들로 쓴다(투영과 같은 직렬화·conditionSha 규칙)."""
+    directory.mkdir(parents=True, exist_ok=True)
+    for plan in docs["plans.json"]:
+        for item in plan["items"]:
+            item["conditionSha"] = hashlib.sha256(item["condition"].encode("utf-8")).hexdigest()
+    digests = {}
+    for name in inputs.BUNDLE_FILES:
+        text = inputs._dumps(docs[name])
+        (directory / name).write_text(text, encoding="utf-8")
+        digests[name] = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    stamp = {"files": digests, "input_hash": "0" * 64, "missing": sorted(missing), "schema": 1}
+    (directory / inputs.STAMP_NAME).write_text(inputs._dumps(stamp), encoding="utf-8")
+    return inputs.Bundle.open(directory)
+
+
+def _controlled(tmp_path, mutate=None) -> inputs.Bundle:
+    docs = _load_docs(CONTROLLED)
+    if mutate is not None:
+        mutate(docs)
+    return _make_bundle(tmp_path / "bundle", docs)
+
+
+def _plan(docs, method):
+    return next(plan for plan in docs["plans.json"] if plan["method"] == method)
+
+
+def _plain(value):
+    return value.value if isinstance(value, derive_module.Value) else value
+
+
+def _case_row(case) -> str:
+    values = {f"path.{k}": _plain(v) for k, v in case.path.items()}
+    values.update({f"query.{k}": _plain(v) for k, v in case.query.items()})
+    values.update({f"body.{k}": _plain(v) for k, v in case.values.items()})
+    return json.dumps({"rule": case.rule, "endpoint": case.endpoint, "values": values,
+                       "strict": case.expect["strict"]}, sort_keys=True, ensure_ascii=False)
+
+
+def _source_of(case, plan_file, index):
+    return any(source.startswith(f"{plan_file}#{index}@") for source in case.sources)
+
+
+def _derivation_text(derivation) -> str:
+    from dataclasses import asdict
+    return json.dumps({"cases": [asdict(case) for case in derivation.cases], "unresolved": derivation.unresolved},
+                      ensure_ascii=False, sort_keys=True, default=str)
+
+
+def _real_bundle(tmp_path) -> inputs.Bundle:
+    projection = inputs.project(PETCLINIC_RUN, PETCLINIC_SUT, tmp_path / "real")
+    assert projection.fatal is None
+    return inputs.Bundle.open(projection.dir)
+
+
+def test_req109_controlled_fixture(tmp_path):
+    derivation = derive_module.derive(_controlled(tmp_path))
+    assert derivation.unresolved == []
+    expected = json.loads((CONTROLLED / "expected-cases.json").read_text(encoding="utf-8"))["cases"]
+    expected_rows = sorted(json.dumps({key: row[key] for key in ("rule", "endpoint", "values", "strict")},
+                                      sort_keys=True, ensure_ascii=False) for row in expected)
+    assert sorted(_case_row(case) for case in derivation.cases) == expected_rows
+
+
+def test_req111_mapping(tmp_path):
+    docs = _load_docs(CONTROLLED)
+    derivation = derive_module.derive(_make_bundle(tmp_path / "a", copy.deepcopy(docs)))
+    for plan in docs["plans.json"]:
+        endpoints = {case.endpoint for case in derivation.cases
+                     if any(source.startswith(plan["file"] + "#") for source in case.sources)}
+        assert len(endpoints) == 1, plan["file"]
+
+    def drop_fetch_calls(target):
+        target["ext.json"]["calls"] = [call for call in target["ext.json"]["calls"] if call["method"] != "fetch"]
+
+    def duplicate_fetch_calls(target):
+        fetch = next(call for call in target["ext.json"]["calls"] if call["method"] == "fetch")
+        target["ext.json"]["calls"].append(dict(fetch, endpoint="endpoint:POST /svc/orders"))
+
+    for index, mutate in enumerate((drop_fetch_calls, duplicate_fetch_calls)):
+        variant = copy.deepcopy(docs)
+        mutate(variant)
+        result = derive_module.derive(_make_bundle(tmp_path / f"v{index}", variant))
+        fetch_file = _plan(variant, "fetch")["file"]
+        entries = [entry for entry in result.unresolved if entry["source"].startswith(fetch_file + "#")]
+        assert len(entries) == len(_plan(variant, "fetch")["items"])
+        assert {entry["reason"] for entry in entries} == {"no-endpoint-mapping"}
+        assert not any(source.startswith(fetch_file) for case in result.cases for source in case.sources)
+
+    # 기준 입력: 계획 메서드 6개가 각각 엔드포인트 하나에 대응한다
+    real = derive_module.derive(_real_bundle(tmp_path))
+    assert not [entry for entry in real.unresolved if entry["reason"] == "no-endpoint-mapping"]
+    planned = {case.endpoint for case in real.cases
+               if any(source.startswith("plan-tests-") for source in case.sources)}
+    planned |= {entry["endpoint"] for entry in real.unresolved if entry["source"].startswith("plan-tests-")}
+    assert len(planned) == 6
+
+
+def test_req114_expect(tmp_path):
+    docs = _load_docs(CONTROLLED)
+    place = _plan(docs, "place")["file"]
+    derivation = derive_module.derive(_make_bundle(tmp_path / "a", copy.deepcopy(docs)))
+    violations = [case for case in derivation.cases if case.rule == "violation" and _source_of(case, place, 1)]
+    assert violations
+    for case in violations:
+        assert case.expect["strict"] == 422 and case.expect["source"] == "graph"
+        assert case.expect["bbtgCode"] == 400 and case.expect["graphStatus"] == 422
+        assert case.expect["class"] == "4xx"
+    variant = copy.deepcopy(docs)
+    variant["ext.json"]["exceptions"] = {}
+    stripped = derive_module.derive(_make_bundle(tmp_path / "b", variant))
+    violations = [case for case in stripped.cases if case.rule == "violation" and _source_of(case, place, 1)]
+    assert violations
+    for case in violations:
+        assert case.expect["strict"] == 400 and case.expect["source"] == "bbtg"
+        assert "graphStatus" not in case.expect
+
+
+def test_req115_baseline(tmp_path):
+    derivation = derive_module.derive(_controlled(tmp_path))
+    by_id = {case.id: case for case in derivation.cases}
+    violation_endpoints = {case.endpoint for case in derivation.cases if case.rule == "violation"}
+    assert "GET /svc/orders/{orderId}" in violation_endpoints  # GET의 파라미터 위반 포함
+    for endpoint in violation_endpoints:
+        baselines = [case for case in derivation.cases if case.endpoint == endpoint and case.rule == "baseline-valid"]
+        assert len(baselines) == 1, endpoint
+        assert baselines[0].expect["class"] == "2xx"
+    for case in derivation.cases:
+        if case.rule != "violation":
+            continue
+        pair = by_id[case.pair]
+        assert pair.rule == "valid-boundary" and pair.sources == case.sources and pair.endpoint == case.endpoint
+
+
+def test_req107_universe(tmp_path):
+    universe = derive_module.derive(_controlled(tmp_path)).universe
+    slots = universe["bySlot"]
+    assert slots["generated"] + slots["unresolved"] == slots["total"]
+    assert slots["unresolved"] == 0
+    readme = (CONTROLLED / "README.md").read_text(encoding="utf-8")
+    assert universe["theoretical"]["value"] == 868 and "868" in readme
+    assert universe["theoretical"]["formula"] and universe["theoretical"]["factors"]
+    assert sum(universe["byRule"].values()) == slots["generated"]
+
+    real = derive_module.derive(_real_bundle(tmp_path))
+    assert {entry["reason"] for entry in real.unresolved} <= set(derive_module.REASONS)
+    real_slots = real.universe["bySlot"]
+    assert real_slots["generated"] + real_slots["unresolved"] == real_slots["total"]
+    assert real_slots["generated"] == len(real.cases) and real_slots["unresolved"] == len(real.unresolved)
+    assert sum(real_slots["byReason"].values()) == real_slots["unresolved"]
+
+
+def test_req106_mutated_fixture(tmp_path):
+    derivation = derive_module.derive(_make_bundle(tmp_path / "m", _load_docs(MUTATED)))
+    assert derivation.cases
+    text = _derivation_text(derivation)
+    originals = [line.strip() for line in (MUTATED / "original-names.txt").read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert [name for name in originals if name in text] == []
+    stays = {_plain(case.values["stays"]) for case in derivation.cases if "stays" in case.values}
+    assert {46, 45, 2, 1} <= stays  # 변조 임계값(2..45)에서 파생한 경계
+    slots = {_plain(case.values["kennelSlot"]) for case in derivation.cases if "kennelSlot" in case.values}
+    assert {199, 200, 777, 778} <= slots
+
+
+def test_req106_no_sut_literals():
+    originals = [line.strip() for line in (MUTATED / "original-names.txt").read_text(encoding="utf-8").splitlines() if line.strip()]
+    sources = sorted((REPO_ROOT / "site-gen" / "td" / "detgen").glob("*.py"))
+    sources += sorted((REPO_ROOT / "e2e" / "det-glue").glob("**/*.java"))
+    assert sources
+    for path in sources:
+        text = path.read_text(encoding="utf-8")
+        assert "/api/" not in text, path
+        assert [name for name in originals if name in text] == [], path
+
+
+def test_case_ids_unique_with_duplicate_bbtg_ids(tmp_path):
+    def triplicate(docs):
+        items = _plan(docs, "place")["items"]
+        source = items[1]
+        for offset in (1, 2):
+            items.append(dict(source, index=len(items)))
+
+    derivation = derive_module.derive(_controlled(tmp_path, triplicate))
+    ids = [case.id for case in derivation.cases]
+    assert len(ids) == len(set(ids))
+    condition = "form.quantity() < 1 || form.quantity() > 9"
+    sources = {source for case in derivation.cases if case.rule == "violation" for source in case.sources
+               if "plan-tests-OrderService.place.json#" in source}
+    sha12 = hashlib.sha256(condition.encode("utf-8")).hexdigest()[:12]
+    assert len({source for source in sources if source.endswith(sha12)}) == 3
+
+
+def test_spread_avoids_boundary_values(tmp_path):
+    derivation = derive_module.derive(_controlled(tmp_path))
+    boundary = {_plain(case.values["bay"]) for case in derivation.cases
+                if case.rule in ("valid-boundary", "violation") and "bay" in case.values
+                and any("#7@" in source for source in case.sources)}
+    assert boundary == {9, 10, 20, 21}
+    spread = [case.values["bay"] for case in derivation.cases
+              if "bay" in case.values and (case.values["bay"].transform or "").startswith("spread")]
+    assert len(spread) > 10
+    for value in spread:
+        assert value.provenance == "derived"
+        assert 10 < value.value < 20 and value.value not in boundary
+
+
+def test_constant_resolution_prefers_owner_class(tmp_path):
+    def two_owners(docs):
+        docs["ext.json"]["constants"].append({"owner": "ex.other.Thing", "name": "BAY_LIMIT", "type": "int", "value": 5})
+
+    derivation = derive_module.derive(_controlled(tmp_path / "a", two_owners))
+    counted = [case for case in derivation.cases if case.rule == "violation" and any("#6@" in s for s in case.sources)]
+    assert len(counted) == 1 and len(counted[0].setup) == 2
+
+    def foreign_owners(docs):
+        docs["ext.json"]["constants"] = [
+            {"owner": "ex.other.Alpha", "name": "BAY_LIMIT", "type": "int", "value": 2},
+            {"owner": "ex.other.Beta", "name": "BAY_LIMIT", "type": "int", "value": 5}]
+
+    derivation = derive_module.derive(_controlled(tmp_path / "b", foreign_owners))
+    entries = [entry for entry in derivation.unresolved if "#6@" in entry["source"]]
+    assert entries and {entry["reason"] for entry in entries} == {"unresolved-operand"}
+
+
+def test_needs_state_transition(tmp_path):
+    def stateful_count(docs):
+        _plan(docs, "place")["items"][6]["condition"] = "repository.countByBayAndTone(form.bay(), Tone.MATTE) >= BAY_LIMIT"
+
+    derivation = derive_module.derive(_controlled(tmp_path, stateful_count))
+    entries = [entry for entry in derivation.unresolved if "#6@" in entry["source"]]
+    assert entries and {entry["reason"] for entry in entries} == {"needs-state-transition"}
+
+
+def test_auth_cases_exclude_login(tmp_path):
+    derivation = derive_module.derive(_controlled(tmp_path))
+    auth = [case for case in derivation.cases if case.rule == "auth"]
+    assert sorted(case.endpoint for case in auth) == ["GET /svc/catalog", "GET /svc/orders/{orderId}", "POST /svc/orders"]
+    for case in auth:
+        assert case.expect["strict"] == 403 and case.expect["source"] == "harness-config"
+        assert "보호됨" in case.assumes and case.auth == "anonymous"

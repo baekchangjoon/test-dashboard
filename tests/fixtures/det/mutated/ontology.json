@@ -1,0 +1,1647 @@
+{
+ "edges": [
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.kennel.BookingApiController",
+   "target": "endpoint:DELETE /svc/bookings/{id}"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.kennel.BookingApiController",
+   "target": "endpoint:GET /svc/bookings"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.kennel.BookingApiController",
+   "target": "endpoint:GET /svc/bookings/{id}"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.kennel.BookingApiController",
+   "target": "endpoint:POST /svc/bookings"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.kennel.BookingApiController",
+   "target": "endpoint:PUT /svc/bookings/{id}"
+  },
+  {
+   "kind": "throws",
+   "source": "controller:org.springframework.samples.zooapp.kennel.BookingApiController",
+   "target": "exception:org.springframework.samples.zooapp.kennel.BookingErrors$BookingMalformedException"
+  },
+  {
+   "kind": "dependsOn",
+   "source": "controller:org.springframework.samples.zooapp.kennel.BookingApiController",
+   "target": "service:org.springframework.samples.zooapp.kennel.BookingService"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.keeper.KeeperController",
+   "target": "endpoint:GET /keepers"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.keeper.KeeperController",
+   "target": "endpoint:GET /keepers/find"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.keeper.KeeperController",
+   "target": "endpoint:GET /keepers/new"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.keeper.KeeperController",
+   "target": "endpoint:GET /keepers/{keeperId}"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.keeper.KeeperController",
+   "target": "endpoint:GET /keepers/{keeperId}/edit"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.keeper.KeeperController",
+   "target": "endpoint:POST /keepers/new"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.keeper.KeeperController",
+   "target": "endpoint:POST /keepers/{keeperId}/edit"
+  },
+  {
+   "kind": "dependsOn",
+   "source": "controller:org.springframework.samples.zooapp.keeper.KeeperController",
+   "target": "repository:org.springframework.samples.zooapp.keeper.KeeperRepository"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.keeper.KeeperRestController",
+   "target": "endpoint:GET /svc/keepers"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.keeper.KeeperRestController",
+   "target": "endpoint:GET /svc/keepers/{keeperId}"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.keeper.KeeperRestController",
+   "target": "endpoint:POST /svc/keepers"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.keeper.KeeperRestController",
+   "target": "endpoint:PUT /svc/keepers/{keeperId}"
+  },
+  {
+   "kind": "dependsOn",
+   "source": "controller:org.springframework.samples.zooapp.keeper.KeeperRestController",
+   "target": "repository:org.springframework.samples.zooapp.keeper.KeeperRepository"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.keeper.CritterController",
+   "target": "endpoint:GET /keepers/{keeperId}/critters/new"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.keeper.CritterController",
+   "target": "endpoint:GET /keepers/{keeperId}/critters/{critterId}/edit"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.keeper.CritterController",
+   "target": "endpoint:POST /keepers/{keeperId}/critters/new"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.keeper.CritterController",
+   "target": "endpoint:POST /keepers/{keeperId}/critters/{critterId}/edit"
+  },
+  {
+   "kind": "dependsOn",
+   "source": "controller:org.springframework.samples.zooapp.keeper.CritterController",
+   "target": "repository:org.springframework.samples.zooapp.keeper.KeeperRepository"
+  },
+  {
+   "kind": "dependsOn",
+   "source": "controller:org.springframework.samples.zooapp.keeper.CritterController",
+   "target": "repository:org.springframework.samples.zooapp.keeper.CritterTypeRepository"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.keeper.CritterRestController",
+   "target": "endpoint:GET /svc/critters/types"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.keeper.CritterRestController",
+   "target": "endpoint:GET /svc/critters/{critterId}"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.keeper.CritterRestController",
+   "target": "endpoint:POST /svc/critters"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.keeper.CritterRestController",
+   "target": "endpoint:PUT /svc/critters/{critterId}"
+  },
+  {
+   "kind": "dependsOn",
+   "source": "controller:org.springframework.samples.zooapp.keeper.CritterRestController",
+   "target": "repository:org.springframework.samples.zooapp.keeper.KeeperRepository"
+  },
+  {
+   "kind": "dependsOn",
+   "source": "controller:org.springframework.samples.zooapp.keeper.CritterRestController",
+   "target": "repository:org.springframework.samples.zooapp.keeper.CritterTypeRepository"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.keeper.VisitController",
+   "target": "endpoint:GET /keepers/{keeperId}/critters/{critterId}/visits/new"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.keeper.VisitController",
+   "target": "endpoint:POST /keepers/{keeperId}/critters/{critterId}/visits/new"
+  },
+  {
+   "kind": "dependsOn",
+   "source": "controller:org.springframework.samples.zooapp.keeper.VisitController",
+   "target": "repository:org.springframework.samples.zooapp.keeper.KeeperRepository"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.security.AuthController",
+   "target": "endpoint:POST /svc/auth/login"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.security.AuthController",
+   "target": "endpoint:POST /svc/auth/validate"
+  },
+  {
+   "kind": "dependsOn",
+   "source": "controller:org.springframework.samples.zooapp.security.AuthController",
+   "target": "service:org.springframework.samples.zooapp.security.CustomUserDetailsService"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.system.CrashController",
+   "target": "endpoint:GET /oups"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.system.WelcomeController",
+   "target": "endpoint:GET /"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.medic.MedicController",
+   "target": "endpoint:GET /medics"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.medic.MedicController",
+   "target": "endpoint:GET /medics.html"
+  },
+  {
+   "kind": "dependsOn",
+   "source": "controller:org.springframework.samples.zooapp.medic.MedicController",
+   "target": "repository:org.springframework.samples.zooapp.medic.MedicRepository"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.medic.MedicRestController",
+   "target": "endpoint:GET /svc/medics"
+  },
+  {
+   "kind": "declares",
+   "source": "controller:org.springframework.samples.zooapp.medic.MedicRestController",
+   "target": "endpoint:GET /svc/medics/{medicId}"
+  },
+  {
+   "kind": "dependsOn",
+   "source": "controller:org.springframework.samples.zooapp.medic.MedicRestController",
+   "target": "repository:org.springframework.samples.zooapp.medic.MedicRepository"
+  },
+  {
+   "kind": "uses",
+   "source": "endpoint:POST /svc/auth/login",
+   "target": "dto:org.springframework.samples.zooapp.security.AuthController$LoginRequest"
+  },
+  {
+   "kind": "uses",
+   "source": "endpoint:POST /svc/bookings",
+   "target": "dto:org.springframework.samples.zooapp.kennel.BookingForms$OpenBookingForm"
+  },
+  {
+   "kind": "uses",
+   "source": "endpoint:PUT /svc/bookings/{id}",
+   "target": "dto:org.springframework.samples.zooapp.kennel.BookingForms$AmendBookingForm"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.kennel.Booking",
+   "target": "field:org.springframework.samples.zooapp.kennel.Booking#beastTotal"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.kennel.Booking",
+   "target": "field:org.springframework.samples.zooapp.kennel.Booking#arrivalDay"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.kennel.Booking",
+   "target": "field:org.springframework.samples.zooapp.kennel.Booking#createdAt"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.kennel.Booking",
+   "target": "field:org.springframework.samples.zooapp.kennel.Booking#prepayment"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.kennel.Booking",
+   "target": "field:org.springframework.samples.zooapp.kennel.Booking#id"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.kennel.Booking",
+   "target": "field:org.springframework.samples.zooapp.kennel.Booking#rewardScore"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.kennel.Booking",
+   "target": "field:org.springframework.samples.zooapp.kennel.Booking#stays"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.kennel.Booking",
+   "target": "field:org.springframework.samples.zooapp.kennel.Booking#keeperMail"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.kennel.Booking",
+   "target": "field:org.springframework.samples.zooapp.kennel.Booking#critterTitle"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.kennel.Booking",
+   "target": "field:org.springframework.samples.zooapp.kennel.Booking#rateBand"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.kennel.Booking",
+   "target": "field:org.springframework.samples.zooapp.kennel.Booking#discountKey"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.kennel.Booking",
+   "target": "field:org.springframework.samples.zooapp.kennel.Booking#kennelSlot"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.kennel.Booking",
+   "target": "field:org.springframework.samples.zooapp.kennel.Booking#status"
+  },
+  {
+   "kind": "references",
+   "source": "entity:org.springframework.samples.zooapp.keeper.Keeper",
+   "target": "entity:org.springframework.samples.zooapp.keeper.Critter"
+  },
+  {
+   "kind": "references",
+   "source": "entity:org.springframework.samples.zooapp.keeper.Keeper",
+   "target": "entity:org.springframework.samples.zooapp.keeper.Visit"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.keeper.Keeper",
+   "target": "field:org.springframework.samples.zooapp.keeper.Keeper#address"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.keeper.Keeper",
+   "target": "field:org.springframework.samples.zooapp.keeper.Keeper#city"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.keeper.Keeper",
+   "target": "field:org.springframework.samples.zooapp.keeper.Keeper#firstName"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.keeper.Keeper",
+   "target": "field:org.springframework.samples.zooapp.keeper.Keeper#id"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.keeper.Keeper",
+   "target": "field:org.springframework.samples.zooapp.keeper.Keeper#lastName"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.keeper.Keeper",
+   "target": "field:org.springframework.samples.zooapp.keeper.Keeper#critters"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.keeper.Keeper",
+   "target": "field:org.springframework.samples.zooapp.keeper.Keeper#telephone"
+  },
+  {
+   "kind": "references",
+   "source": "entity:org.springframework.samples.zooapp.keeper.Critter",
+   "target": "entity:org.springframework.samples.zooapp.keeper.CritterType"
+  },
+  {
+   "kind": "references",
+   "source": "entity:org.springframework.samples.zooapp.keeper.Critter",
+   "target": "entity:org.springframework.samples.zooapp.keeper.Visit"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.keeper.Critter",
+   "target": "field:org.springframework.samples.zooapp.keeper.Critter#birthDate"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.keeper.Critter",
+   "target": "field:org.springframework.samples.zooapp.keeper.Critter#id"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.keeper.Critter",
+   "target": "field:org.springframework.samples.zooapp.keeper.Critter#name"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.keeper.Critter",
+   "target": "field:org.springframework.samples.zooapp.keeper.Critter#type"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.keeper.Critter",
+   "target": "field:org.springframework.samples.zooapp.keeper.Critter#visits"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.keeper.CritterType",
+   "target": "field:org.springframework.samples.zooapp.keeper.CritterType#id"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.keeper.CritterType",
+   "target": "field:org.springframework.samples.zooapp.keeper.CritterType#name"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.keeper.Visit",
+   "target": "field:org.springframework.samples.zooapp.keeper.Visit#date"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.keeper.Visit",
+   "target": "field:org.springframework.samples.zooapp.keeper.Visit#description"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.keeper.Visit",
+   "target": "field:org.springframework.samples.zooapp.keeper.Visit#id"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.medic.Specialty",
+   "target": "field:org.springframework.samples.zooapp.medic.Specialty#id"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.medic.Specialty",
+   "target": "field:org.springframework.samples.zooapp.medic.Specialty#name"
+  },
+  {
+   "kind": "references",
+   "source": "entity:org.springframework.samples.zooapp.medic.Medic",
+   "target": "entity:org.springframework.samples.zooapp.medic.Specialty"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.medic.Medic",
+   "target": "field:org.springframework.samples.zooapp.medic.Medic#firstName"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.medic.Medic",
+   "target": "field:org.springframework.samples.zooapp.medic.Medic#id"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.medic.Medic",
+   "target": "field:org.springframework.samples.zooapp.medic.Medic#lastName"
+  },
+  {
+   "kind": "hasField",
+   "source": "entity:org.springframework.samples.zooapp.medic.Medic",
+   "target": "field:org.springframework.samples.zooapp.medic.Medic#specialties"
+  },
+  {
+   "kind": "manages",
+   "source": "repository:org.springframework.samples.zooapp.kennel.BookingRepository",
+   "target": "entity:org.springframework.samples.zooapp.kennel.Booking"
+  },
+  {
+   "kind": "manages",
+   "source": "repository:org.springframework.samples.zooapp.keeper.KeeperRepository",
+   "target": "entity:org.springframework.samples.zooapp.keeper.Keeper"
+  },
+  {
+   "kind": "manages",
+   "source": "repository:org.springframework.samples.zooapp.keeper.CritterTypeRepository",
+   "target": "entity:org.springframework.samples.zooapp.keeper.CritterType"
+  },
+  {
+   "kind": "manages",
+   "source": "repository:org.springframework.samples.zooapp.medic.MedicRepository",
+   "target": "entity:org.springframework.samples.zooapp.medic.Medic"
+  },
+  {
+   "kind": "throws",
+   "source": "service:org.springframework.samples.zooapp.kennel.BookingService",
+   "target": "exception:org.springframework.samples.zooapp.kennel.BookingErrors$BookingClashException"
+  },
+  {
+   "kind": "throws",
+   "source": "service:org.springframework.samples.zooapp.kennel.BookingService",
+   "target": "exception:org.springframework.samples.zooapp.kennel.BookingErrors$BookingAbsentException"
+  },
+  {
+   "kind": "throws",
+   "source": "service:org.springframework.samples.zooapp.kennel.BookingService",
+   "target": "exception:org.springframework.samples.zooapp.kennel.BookingErrors$BookingRuleException"
+  },
+  {
+   "kind": "dependsOn",
+   "source": "service:org.springframework.samples.zooapp.kennel.BookingService",
+   "target": "repository:org.springframework.samples.zooapp.kennel.BookingRepository"
+  }
+ ],
+ "meta": {
+  "commit": "b6f939355e8790202ddfc71e3f3507252745ed37",
+  "fallbacks": [],
+  "tool": "jqassistant",
+  "version": "2.9.1"
+ },
+ "nodes": [
+  {
+   "id": "controller:org.springframework.samples.zooapp.kennel.BookingApiController",
+   "kind": "Controller",
+   "label": "BookingApiController",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.kennel.BookingApiController",
+    "rest": true
+   }
+  },
+  {
+   "id": "controller:org.springframework.samples.zooapp.keeper.KeeperController",
+   "kind": "Controller",
+   "label": "KeeperController",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.keeper.KeeperController",
+    "rest": false
+   }
+  },
+  {
+   "id": "controller:org.springframework.samples.zooapp.keeper.KeeperRestController",
+   "kind": "Controller",
+   "label": "KeeperRestController",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.keeper.KeeperRestController",
+    "rest": true
+   }
+  },
+  {
+   "id": "controller:org.springframework.samples.zooapp.keeper.CritterController",
+   "kind": "Controller",
+   "label": "CritterController",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.keeper.CritterController",
+    "rest": false
+   }
+  },
+  {
+   "id": "controller:org.springframework.samples.zooapp.keeper.CritterRestController",
+   "kind": "Controller",
+   "label": "CritterRestController",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.keeper.CritterRestController",
+    "rest": true
+   }
+  },
+  {
+   "id": "controller:org.springframework.samples.zooapp.keeper.VisitController",
+   "kind": "Controller",
+   "label": "VisitController",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.keeper.VisitController",
+    "rest": false
+   }
+  },
+  {
+   "id": "controller:org.springframework.samples.zooapp.security.AuthController",
+   "kind": "Controller",
+   "label": "AuthController",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.security.AuthController",
+    "rest": true
+   }
+  },
+  {
+   "id": "controller:org.springframework.samples.zooapp.system.CrashController",
+   "kind": "Controller",
+   "label": "CrashController",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.system.CrashController",
+    "rest": false
+   }
+  },
+  {
+   "id": "controller:org.springframework.samples.zooapp.system.WelcomeController",
+   "kind": "Controller",
+   "label": "WelcomeController",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.system.WelcomeController",
+    "rest": false
+   }
+  },
+  {
+   "id": "controller:org.springframework.samples.zooapp.medic.MedicController",
+   "kind": "Controller",
+   "label": "MedicController",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.medic.MedicController",
+    "rest": false
+   }
+  },
+  {
+   "id": "controller:org.springframework.samples.zooapp.medic.MedicRestController",
+   "kind": "Controller",
+   "label": "MedicRestController",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.medic.MedicRestController",
+    "rest": true
+   }
+  },
+  {
+   "id": "dto:org.springframework.samples.zooapp.kennel.BookingForms$OpenBookingForm",
+   "kind": "DTO",
+   "label": "BookingForms$OpenBookingForm",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.kennel.BookingForms$OpenBookingForm"
+   }
+  },
+  {
+   "id": "dto:org.springframework.samples.zooapp.kennel.BookingForms$BookingView",
+   "kind": "DTO",
+   "label": "BookingForms$BookingView",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.kennel.BookingForms$BookingView"
+   }
+  },
+  {
+   "id": "dto:org.springframework.samples.zooapp.kennel.BookingForms$AmendBookingForm",
+   "kind": "DTO",
+   "label": "BookingForms$AmendBookingForm",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.kennel.BookingForms$AmendBookingForm"
+   }
+  },
+  {
+   "id": "dto:org.springframework.samples.zooapp.security.AuthController$LoginRequest",
+   "kind": "DTO",
+   "label": "AuthController$LoginRequest",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.security.AuthController$LoginRequest"
+   }
+  },
+  {
+   "id": "endpoint:DELETE /svc/bookings/{id}",
+   "kind": "Endpoint",
+   "label": "DELETE /svc/bookings/{id}",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.kennel.BookingApiController#delete",
+    "method": "DELETE",
+    "path": "/svc/bookings/{id}",
+    "view": false
+   }
+  },
+  {
+   "id": "endpoint:GET /",
+   "kind": "Endpoint",
+   "label": "GET /",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.system.WelcomeController#welcome",
+    "method": "GET",
+    "path": "/",
+    "view": true
+   }
+  },
+  {
+   "id": "endpoint:GET /svc/keepers",
+   "kind": "Endpoint",
+   "label": "GET /svc/keepers",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.keeper.KeeperRestController#getAllKeepers",
+    "method": "GET",
+    "path": "/svc/keepers",
+    "view": false
+   }
+  },
+  {
+   "id": "endpoint:GET /svc/keepers/{keeperId}",
+   "kind": "Endpoint",
+   "label": "GET /svc/keepers/{keeperId}",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.keeper.KeeperRestController#getKeeper",
+    "method": "GET",
+    "path": "/svc/keepers/{keeperId}",
+    "view": false
+   }
+  },
+  {
+   "id": "endpoint:GET /svc/critters/types",
+   "kind": "Endpoint",
+   "label": "GET /svc/critters/types",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.keeper.CritterRestController#getCritterTypes",
+    "method": "GET",
+    "path": "/svc/critters/types",
+    "view": false
+   }
+  },
+  {
+   "id": "endpoint:GET /svc/critters/{critterId}",
+   "kind": "Endpoint",
+   "label": "GET /svc/critters/{critterId}",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.keeper.CritterRestController#getCritter",
+    "method": "GET",
+    "path": "/svc/critters/{critterId}",
+    "view": false
+   }
+  },
+  {
+   "id": "endpoint:GET /svc/bookings",
+   "kind": "Endpoint",
+   "label": "GET /svc/bookings",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.kennel.BookingApiController#list",
+    "method": "GET",
+    "path": "/svc/bookings",
+    "view": false
+   }
+  },
+  {
+   "id": "endpoint:GET /svc/bookings/{id}",
+   "kind": "Endpoint",
+   "label": "GET /svc/bookings/{id}",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.kennel.BookingApiController#get",
+    "method": "GET",
+    "path": "/svc/bookings/{id}",
+    "view": false
+   }
+  },
+  {
+   "id": "endpoint:GET /svc/medics",
+   "kind": "Endpoint",
+   "label": "GET /svc/medics",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.medic.MedicRestController#getAllMedics",
+    "method": "GET",
+    "path": "/svc/medics",
+    "view": false
+   }
+  },
+  {
+   "id": "endpoint:GET /svc/medics/{medicId}",
+   "kind": "Endpoint",
+   "label": "GET /svc/medics/{medicId}",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.medic.MedicRestController#getMedic",
+    "method": "GET",
+    "path": "/svc/medics/{medicId}",
+    "view": false
+   }
+  },
+  {
+   "id": "endpoint:GET /oups",
+   "kind": "Endpoint",
+   "label": "GET /oups",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.system.CrashController#triggerException",
+    "method": "GET",
+    "path": "/oups",
+    "view": true
+   }
+  },
+  {
+   "id": "endpoint:GET /keepers",
+   "kind": "Endpoint",
+   "label": "GET /keepers",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.keeper.KeeperController#processFindForm",
+    "method": "GET",
+    "path": "/keepers",
+    "view": true
+   }
+  },
+  {
+   "id": "endpoint:GET /keepers/find",
+   "kind": "Endpoint",
+   "label": "GET /keepers/find",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.keeper.KeeperController#initFindForm",
+    "method": "GET",
+    "path": "/keepers/find",
+    "view": true
+   }
+  },
+  {
+   "id": "endpoint:GET /keepers/new",
+   "kind": "Endpoint",
+   "label": "GET /keepers/new",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.keeper.KeeperController#initCreationForm",
+    "method": "GET",
+    "path": "/keepers/new",
+    "view": true
+   }
+  },
+  {
+   "id": "endpoint:GET /keepers/{keeperId}",
+   "kind": "Endpoint",
+   "label": "GET /keepers/{keeperId}",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.keeper.KeeperController#showKeeper",
+    "method": "GET",
+    "path": "/keepers/{keeperId}",
+    "view": true
+   }
+  },
+  {
+   "id": "endpoint:GET /keepers/{keeperId}/edit",
+   "kind": "Endpoint",
+   "label": "GET /keepers/{keeperId}/edit",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.keeper.KeeperController#initUpdateKeeperForm",
+    "method": "GET",
+    "path": "/keepers/{keeperId}/edit",
+    "view": true
+   }
+  },
+  {
+   "id": "endpoint:GET /keepers/{keeperId}/critters/new",
+   "kind": "Endpoint",
+   "label": "GET /keepers/{keeperId}/critters/new",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.keeper.CritterController#initCreationForm",
+    "method": "GET",
+    "path": "/keepers/{keeperId}/critters/new",
+    "view": true
+   }
+  },
+  {
+   "id": "endpoint:GET /keepers/{keeperId}/critters/{critterId}/edit",
+   "kind": "Endpoint",
+   "label": "GET /keepers/{keeperId}/critters/{critterId}/edit",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.keeper.CritterController#initUpdateForm",
+    "method": "GET",
+    "path": "/keepers/{keeperId}/critters/{critterId}/edit",
+    "view": true
+   }
+  },
+  {
+   "id": "endpoint:GET /keepers/{keeperId}/critters/{critterId}/visits/new",
+   "kind": "Endpoint",
+   "label": "GET /keepers/{keeperId}/critters/{critterId}/visits/new",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.keeper.VisitController#initNewVisitForm",
+    "method": "GET",
+    "path": "/keepers/{keeperId}/critters/{critterId}/visits/new",
+    "view": true
+   }
+  },
+  {
+   "id": "endpoint:GET /medics",
+   "kind": "Endpoint",
+   "label": "GET /medics",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.medic.MedicController#showResourcesMedicList",
+    "method": "GET",
+    "path": "/medics",
+    "view": true
+   }
+  },
+  {
+   "id": "endpoint:GET /medics.html",
+   "kind": "Endpoint",
+   "label": "GET /medics.html",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.medic.MedicController#showMedicList",
+    "method": "GET",
+    "path": "/medics.html",
+    "view": true
+   }
+  },
+  {
+   "id": "endpoint:POST /svc/auth/login",
+   "kind": "Endpoint",
+   "label": "POST /svc/auth/login",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.security.AuthController#login",
+    "method": "POST",
+    "path": "/svc/auth/login",
+    "view": false
+   }
+  },
+  {
+   "id": "endpoint:POST /svc/auth/validate",
+   "kind": "Endpoint",
+   "label": "POST /svc/auth/validate",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.security.AuthController#validateToken",
+    "method": "POST",
+    "path": "/svc/auth/validate",
+    "view": false
+   }
+  },
+  {
+   "id": "endpoint:POST /svc/keepers",
+   "kind": "Endpoint",
+   "label": "POST /svc/keepers",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.keeper.KeeperRestController#createKeeper",
+    "method": "POST",
+    "path": "/svc/keepers",
+    "view": false
+   }
+  },
+  {
+   "id": "endpoint:POST /svc/critters",
+   "kind": "Endpoint",
+   "label": "POST /svc/critters",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.keeper.CritterRestController#createCritter",
+    "method": "POST",
+    "path": "/svc/critters",
+    "view": false
+   }
+  },
+  {
+   "id": "endpoint:POST /svc/bookings",
+   "kind": "Endpoint",
+   "label": "POST /svc/bookings",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.kennel.BookingApiController#create",
+    "method": "POST",
+    "path": "/svc/bookings",
+    "view": false
+   }
+  },
+  {
+   "id": "endpoint:POST /keepers/new",
+   "kind": "Endpoint",
+   "label": "POST /keepers/new",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.keeper.KeeperController#processCreationForm",
+    "method": "POST",
+    "path": "/keepers/new",
+    "view": true
+   }
+  },
+  {
+   "id": "endpoint:POST /keepers/{keeperId}/edit",
+   "kind": "Endpoint",
+   "label": "POST /keepers/{keeperId}/edit",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.keeper.KeeperController#processUpdateKeeperForm",
+    "method": "POST",
+    "path": "/keepers/{keeperId}/edit",
+    "view": true
+   }
+  },
+  {
+   "id": "endpoint:POST /keepers/{keeperId}/critters/new",
+   "kind": "Endpoint",
+   "label": "POST /keepers/{keeperId}/critters/new",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.keeper.CritterController#processCreationForm",
+    "method": "POST",
+    "path": "/keepers/{keeperId}/critters/new",
+    "view": true
+   }
+  },
+  {
+   "id": "endpoint:POST /keepers/{keeperId}/critters/{critterId}/edit",
+   "kind": "Endpoint",
+   "label": "POST /keepers/{keeperId}/critters/{critterId}/edit",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.keeper.CritterController#processUpdateForm",
+    "method": "POST",
+    "path": "/keepers/{keeperId}/critters/{critterId}/edit",
+    "view": true
+   }
+  },
+  {
+   "id": "endpoint:POST /keepers/{keeperId}/critters/{critterId}/visits/new",
+   "kind": "Endpoint",
+   "label": "POST /keepers/{keeperId}/critters/{critterId}/visits/new",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.keeper.VisitController#processNewVisitForm",
+    "method": "POST",
+    "path": "/keepers/{keeperId}/critters/{critterId}/visits/new",
+    "view": true
+   }
+  },
+  {
+   "id": "endpoint:PUT /svc/keepers/{keeperId}",
+   "kind": "Endpoint",
+   "label": "PUT /svc/keepers/{keeperId}",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.keeper.KeeperRestController#updateKeeper",
+    "method": "PUT",
+    "path": "/svc/keepers/{keeperId}",
+    "view": false
+   }
+  },
+  {
+   "id": "endpoint:PUT /svc/critters/{critterId}",
+   "kind": "Endpoint",
+   "label": "PUT /svc/critters/{critterId}",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.keeper.CritterRestController#updateCritter",
+    "method": "PUT",
+    "path": "/svc/critters/{critterId}",
+    "view": false
+   }
+  },
+  {
+   "id": "endpoint:PUT /svc/bookings/{id}",
+   "kind": "Endpoint",
+   "label": "PUT /svc/bookings/{id}",
+   "props": {
+    "anyMethod": false,
+    "handler": "org.springframework.samples.zooapp.kennel.BookingApiController#update",
+    "method": "PUT",
+    "path": "/svc/bookings/{id}",
+    "view": false
+   }
+  },
+  {
+   "id": "entity:org.springframework.samples.zooapp.kennel.Booking",
+   "kind": "Entity",
+   "label": "Booking",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.kennel.Booking"
+   }
+  },
+  {
+   "id": "entity:org.springframework.samples.zooapp.keeper.Keeper",
+   "kind": "Entity",
+   "label": "Keeper",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.keeper.Keeper"
+   }
+  },
+  {
+   "id": "entity:org.springframework.samples.zooapp.keeper.Critter",
+   "kind": "Entity",
+   "label": "Critter",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.keeper.Critter"
+   }
+  },
+  {
+   "id": "entity:org.springframework.samples.zooapp.keeper.CritterType",
+   "kind": "Entity",
+   "label": "CritterType",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.keeper.CritterType"
+   }
+  },
+  {
+   "id": "entity:org.springframework.samples.zooapp.keeper.Visit",
+   "kind": "Entity",
+   "label": "Visit",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.keeper.Visit"
+   }
+  },
+  {
+   "id": "entity:org.springframework.samples.zooapp.medic.Specialty",
+   "kind": "Entity",
+   "label": "Specialty",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.medic.Specialty"
+   }
+  },
+  {
+   "id": "entity:org.springframework.samples.zooapp.medic.Medic",
+   "kind": "Entity",
+   "label": "Medic",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.medic.Medic"
+   }
+  },
+  {
+   "id": "exception:org.springframework.samples.zooapp.kennel.BookingErrors$BookingMalformedException",
+   "kind": "Exception",
+   "label": "BookingErrors$BookingMalformedException",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.kennel.BookingErrors$BookingMalformedException",
+    "handlers": [
+     "org.springframework.samples.zooapp.kennel.BookingApiController$BookingErrorAdvice#onBadRequest"
+    ]
+   }
+  },
+  {
+   "id": "exception:org.springframework.samples.zooapp.kennel.BookingErrors$BookingClashException",
+   "kind": "Exception",
+   "label": "BookingErrors$BookingClashException",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.kennel.BookingErrors$BookingClashException",
+    "handlers": [
+     "org.springframework.samples.zooapp.kennel.BookingApiController$BookingErrorAdvice#onConflict"
+    ]
+   }
+  },
+  {
+   "id": "exception:org.springframework.samples.zooapp.kennel.BookingErrors$BookingAbsentException",
+   "kind": "Exception",
+   "label": "BookingErrors$BookingAbsentException",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.kennel.BookingErrors$BookingAbsentException",
+    "handlers": [
+     "org.springframework.samples.zooapp.kennel.BookingApiController$BookingErrorAdvice#onNotFound"
+    ]
+   }
+  },
+  {
+   "id": "exception:org.springframework.samples.zooapp.kennel.BookingErrors$BookingRuleException",
+   "kind": "Exception",
+   "label": "BookingErrors$BookingRuleException",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.kennel.BookingErrors$BookingRuleException",
+    "handlers": [
+     "org.springframework.samples.zooapp.kennel.BookingApiController$BookingErrorAdvice#onValidation"
+    ]
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.kennel.Booking#beastTotal",
+   "kind": "Field",
+   "label": "Booking.beastTotal",
+   "props": {
+    "annotations": [
+     "Column"
+    ],
+    "name": "beastTotal",
+    "type": "int"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.kennel.Booking#arrivalDay",
+   "kind": "Field",
+   "label": "Booking.arrivalDay",
+   "props": {
+    "annotations": [
+     "Column"
+    ],
+    "name": "arrivalDay",
+    "type": "java.time.LocalDate"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.kennel.Booking#createdAt",
+   "kind": "Field",
+   "label": "Booking.createdAt",
+   "props": {
+    "annotations": [
+     "Column"
+    ],
+    "name": "createdAt",
+    "type": "java.time.LocalDateTime"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.kennel.Booking#prepayment",
+   "kind": "Field",
+   "label": "Booking.prepayment",
+   "props": {
+    "annotations": [
+     "Column"
+    ],
+    "name": "prepayment",
+    "type": "double"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.kennel.Booking#id",
+   "kind": "Field",
+   "label": "Booking.id",
+   "props": {
+    "annotations": [
+     "GeneratedValue",
+     "Id"
+    ],
+    "name": "id",
+    "type": "java.lang.Integer"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.kennel.Booking#rewardScore",
+   "kind": "Field",
+   "label": "Booking.rewardScore",
+   "props": {
+    "annotations": [
+     "Column"
+    ],
+    "name": "rewardScore",
+    "type": "int"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.kennel.Booking#stays",
+   "kind": "Field",
+   "label": "Booking.stays",
+   "props": {
+    "annotations": [
+     "Column"
+    ],
+    "name": "stays",
+    "type": "int"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.kennel.Booking#keeperMail",
+   "kind": "Field",
+   "label": "Booking.keeperMail",
+   "props": {
+    "annotations": [
+     "Column"
+    ],
+    "name": "keeperMail",
+    "type": "java.lang.String"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.kennel.Booking#critterTitle",
+   "kind": "Field",
+   "label": "Booking.critterTitle",
+   "props": {
+    "annotations": [
+     "Column"
+    ],
+    "name": "critterTitle",
+    "type": "java.lang.String"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.kennel.Booking#rateBand",
+   "kind": "Field",
+   "label": "Booking.rateBand",
+   "props": {
+    "annotations": [
+     "Column",
+     "Enumerated"
+    ],
+    "name": "rateBand",
+    "type": "org.springframework.samples.zooapp.kennel.RateBand"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.kennel.Booking#discountKey",
+   "kind": "Field",
+   "label": "Booking.discountKey",
+   "props": {
+    "annotations": [
+     "Column"
+    ],
+    "name": "discountKey",
+    "type": "java.lang.String"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.kennel.Booking#kennelSlot",
+   "kind": "Field",
+   "label": "Booking.kennelSlot",
+   "props": {
+    "annotations": [
+     "Column"
+    ],
+    "name": "kennelSlot",
+    "type": "int"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.kennel.Booking#status",
+   "kind": "Field",
+   "label": "Booking.status",
+   "props": {
+    "annotations": [
+     "Column",
+     "Enumerated"
+    ],
+    "name": "status",
+    "type": "org.springframework.samples.zooapp.kennel.BookingState"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.keeper.Keeper#address",
+   "kind": "Field",
+   "label": "Keeper.address",
+   "props": {
+    "annotations": [
+     "Column",
+     "NotBlank"
+    ],
+    "name": "address",
+    "type": "java.lang.String"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.keeper.Keeper#city",
+   "kind": "Field",
+   "label": "Keeper.city",
+   "props": {
+    "annotations": [
+     "Column",
+     "NotBlank"
+    ],
+    "name": "city",
+    "type": "java.lang.String"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.keeper.Keeper#firstName",
+   "kind": "Field",
+   "label": "Keeper.firstName",
+   "props": {
+    "annotations": [
+     "Column",
+     "NotBlank"
+    ],
+    "name": "firstName",
+    "type": "java.lang.String"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.keeper.Keeper#id",
+   "kind": "Field",
+   "label": "Keeper.id",
+   "props": {
+    "annotations": [
+     "GeneratedValue",
+     "Id"
+    ],
+    "name": "id",
+    "type": "java.lang.Integer"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.keeper.Keeper#lastName",
+   "kind": "Field",
+   "label": "Keeper.lastName",
+   "props": {
+    "annotations": [
+     "Column",
+     "NotBlank"
+    ],
+    "name": "lastName",
+    "type": "java.lang.String"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.keeper.Keeper#critters",
+   "kind": "Field",
+   "label": "Keeper.critters",
+   "props": {
+    "annotations": [
+     "JoinColumn",
+     "OneToMany",
+     "OrderBy"
+    ],
+    "name": "critters",
+    "type": "java.util.List"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.keeper.Keeper#telephone",
+   "kind": "Field",
+   "label": "Keeper.telephone",
+   "props": {
+    "annotations": [
+     "Column",
+     "NotBlank",
+     "Pattern"
+    ],
+    "name": "telephone",
+    "type": "java.lang.String"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.keeper.Critter#birthDate",
+   "kind": "Field",
+   "label": "Critter.birthDate",
+   "props": {
+    "annotations": [
+     "Column"
+    ],
+    "name": "birthDate",
+    "type": "java.time.LocalDate"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.keeper.Critter#id",
+   "kind": "Field",
+   "label": "Critter.id",
+   "props": {
+    "annotations": [
+     "GeneratedValue",
+     "Id"
+    ],
+    "name": "id",
+    "type": "java.lang.Integer"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.keeper.Critter#name",
+   "kind": "Field",
+   "label": "Critter.name",
+   "props": {
+    "annotations": [
+     "Column",
+     "NotBlank"
+    ],
+    "name": "name",
+    "type": "java.lang.String"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.keeper.Critter#type",
+   "kind": "Field",
+   "label": "Critter.type",
+   "props": {
+    "annotations": [
+     "JoinColumn",
+     "ManyToOne"
+    ],
+    "name": "type",
+    "type": "org.springframework.samples.zooapp.keeper.CritterType"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.keeper.Critter#visits",
+   "kind": "Field",
+   "label": "Critter.visits",
+   "props": {
+    "annotations": [
+     "JoinColumn",
+     "OneToMany",
+     "OrderBy"
+    ],
+    "name": "visits",
+    "type": "java.util.Set"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.keeper.CritterType#id",
+   "kind": "Field",
+   "label": "CritterType.id",
+   "props": {
+    "annotations": [
+     "GeneratedValue",
+     "Id"
+    ],
+    "name": "id",
+    "type": "java.lang.Integer"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.keeper.CritterType#name",
+   "kind": "Field",
+   "label": "CritterType.name",
+   "props": {
+    "annotations": [
+     "Column",
+     "NotBlank"
+    ],
+    "name": "name",
+    "type": "java.lang.String"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.keeper.Visit#date",
+   "kind": "Field",
+   "label": "Visit.date",
+   "props": {
+    "annotations": [
+     "Column"
+    ],
+    "name": "date",
+    "type": "java.time.LocalDate"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.keeper.Visit#description",
+   "kind": "Field",
+   "label": "Visit.description",
+   "props": {
+    "annotations": [
+     "NotBlank"
+    ],
+    "name": "description",
+    "type": "java.lang.String"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.keeper.Visit#id",
+   "kind": "Field",
+   "label": "Visit.id",
+   "props": {
+    "annotations": [
+     "GeneratedValue",
+     "Id"
+    ],
+    "name": "id",
+    "type": "java.lang.Integer"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.medic.Specialty#id",
+   "kind": "Field",
+   "label": "Specialty.id",
+   "props": {
+    "annotations": [
+     "GeneratedValue",
+     "Id"
+    ],
+    "name": "id",
+    "type": "java.lang.Integer"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.medic.Specialty#name",
+   "kind": "Field",
+   "label": "Specialty.name",
+   "props": {
+    "annotations": [
+     "Column",
+     "NotBlank"
+    ],
+    "name": "name",
+    "type": "java.lang.String"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.medic.Medic#firstName",
+   "kind": "Field",
+   "label": "Medic.firstName",
+   "props": {
+    "annotations": [
+     "Column",
+     "NotBlank"
+    ],
+    "name": "firstName",
+    "type": "java.lang.String"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.medic.Medic#id",
+   "kind": "Field",
+   "label": "Medic.id",
+   "props": {
+    "annotations": [
+     "GeneratedValue",
+     "Id"
+    ],
+    "name": "id",
+    "type": "java.lang.Integer"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.medic.Medic#lastName",
+   "kind": "Field",
+   "label": "Medic.lastName",
+   "props": {
+    "annotations": [
+     "Column",
+     "NotBlank"
+    ],
+    "name": "lastName",
+    "type": "java.lang.String"
+   }
+  },
+  {
+   "id": "field:org.springframework.samples.zooapp.medic.Medic#specialties",
+   "kind": "Field",
+   "label": "Medic.specialties",
+   "props": {
+    "annotations": [
+     "JoinTable",
+     "ManyToMany"
+    ],
+    "name": "specialties",
+    "type": "java.util.Set"
+   }
+  },
+  {
+   "id": "repository:org.springframework.samples.zooapp.kennel.BookingRepository",
+   "kind": "Repository",
+   "label": "BookingRepository",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.kennel.BookingRepository"
+   }
+  },
+  {
+   "id": "repository:org.springframework.samples.zooapp.keeper.KeeperRepository",
+   "kind": "Repository",
+   "label": "KeeperRepository",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.keeper.KeeperRepository"
+   }
+  },
+  {
+   "id": "repository:org.springframework.samples.zooapp.keeper.CritterTypeRepository",
+   "kind": "Repository",
+   "label": "CritterTypeRepository",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.keeper.CritterTypeRepository"
+   }
+  },
+  {
+   "id": "repository:org.springframework.samples.zooapp.medic.MedicRepository",
+   "kind": "Repository",
+   "label": "MedicRepository",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.medic.MedicRepository"
+   }
+  },
+  {
+   "id": "service:org.springframework.samples.zooapp.kennel.BookingService",
+   "kind": "Service",
+   "label": "BookingService",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.kennel.BookingService"
+   }
+  },
+  {
+   "id": "service:org.springframework.samples.zooapp.security.CustomUserDetailsService",
+   "kind": "Service",
+   "label": "CustomUserDetailsService",
+   "props": {
+    "fqn": "org.springframework.samples.zooapp.security.CustomUserDetailsService"
+   }
+  }
+ ]
+}

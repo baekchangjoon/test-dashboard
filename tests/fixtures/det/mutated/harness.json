@@ -1,0 +1,6 @@
+{
+ "apiInclude": "/svc/**",
+ "login": "POST /svc/auth/login",
+ "timezone": "Asia/Seoul",
+ "unauthenticatedStatus": 403
+}

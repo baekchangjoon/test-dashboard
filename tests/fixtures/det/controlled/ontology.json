@@ -1,0 +1,93 @@
+{
+ "edges": [],
+ "meta": {},
+ "nodes": [
+  {
+   "id": "endpoint:GET /home",
+   "kind": "Endpoint",
+   "label": "GET /home",
+   "props": {
+    "anyMethod": false,
+    "handler": "ex.shop.HomeController#home",
+    "method": "GET",
+    "path": "/home",
+    "view": true
+   }
+  },
+  {
+   "id": "endpoint:GET /svc/catalog",
+   "kind": "Endpoint",
+   "label": "GET /svc/catalog",
+   "props": {
+    "anyMethod": false,
+    "handler": "ex.shop.CatalogController#list",
+    "method": "GET",
+    "path": "/svc/catalog",
+    "view": false
+   }
+  },
+  {
+   "id": "endpoint:GET /svc/orders/{orderId}",
+   "kind": "Endpoint",
+   "label": "GET /svc/orders/{orderId}",
+   "props": {
+    "anyMethod": false,
+    "handler": "ex.shop.OrderController#fetch",
+    "method": "GET",
+    "path": "/svc/orders/{orderId}",
+    "view": false
+   }
+  },
+  {
+   "id": "endpoint:POST /svc/orders",
+   "kind": "Endpoint",
+   "label": "POST /svc/orders",
+   "props": {
+    "anyMethod": false,
+    "handler": "ex.shop.OrderController#place",
+    "method": "POST",
+    "path": "/svc/orders",
+    "view": false
+   }
+  },
+  {
+   "id": "endpoint:POST /svc/session",
+   "kind": "Endpoint",
+   "label": "POST /svc/session",
+   "props": {
+    "anyMethod": false,
+    "handler": "ex.shop.SessionController#open",
+    "method": "POST",
+    "path": "/svc/session",
+    "view": false
+   }
+  },
+  {
+   "id": "exception:ex.shop.OrderErrors$OrderInvalidException",
+   "kind": "Exception",
+   "label": "OrderErrors$OrderInvalidException",
+   "props": {
+    "fqn": "ex.shop.OrderErrors$OrderInvalidException",
+    "handlers": []
+   }
+  },
+  {
+   "id": "exception:ex.shop.OrderErrors$OrderClashException",
+   "kind": "Exception",
+   "label": "OrderErrors$OrderClashException",
+   "props": {
+    "fqn": "ex.shop.OrderErrors$OrderClashException",
+    "handlers": []
+   }
+  },
+  {
+   "id": "exception:ex.shop.OrderErrors$OrderMissingException",
+   "kind": "Exception",
+   "label": "OrderErrors$OrderMissingException",
+   "props": {
+    "fqn": "ex.shop.OrderErrors$OrderMissingException",
+    "handlers": []
+   }
+  }
+ ]
+}

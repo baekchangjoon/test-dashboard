@@ -1,0 +1,173 @@
+{
+ "calls": [
+  {
+   "endpoint": "endpoint:GET /svc/orders/{orderId}",
+   "handler": "ex.shop.OrderController#fetch",
+   "method": "fetch",
+   "service": "ex.shop.OrderService"
+  },
+  {
+   "endpoint": "endpoint:POST /svc/orders",
+   "handler": "ex.shop.OrderController#place",
+   "method": "place",
+   "service": "ex.shop.OrderService"
+  },
+  {
+   "endpoint": "endpoint:POST /svc/session",
+   "handler": "ex.shop.SessionController#open",
+   "method": "open",
+   "service": "ex.shop.SessionService"
+  }
+ ],
+ "constants": [
+  {
+   "name": "BAY_LIMIT",
+   "owner": "ex.shop.OrderService",
+   "type": "int",
+   "value": 2
+  }
+ ],
+ "dtos": {
+  "ex.shop.Credentials": {
+   "fields": [
+    {
+     "name": "secret",
+     "type": "java.lang.String"
+    },
+    {
+     "name": "user",
+     "type": "java.lang.String"
+    }
+   ]
+  },
+  "ex.shop.OrderForm": {
+   "fields": [
+    {
+     "name": "bay",
+     "type": "int"
+    },
+    {
+     "name": "credit",
+     "type": "int"
+    },
+    {
+     "name": "label",
+     "type": "java.lang.String"
+    },
+    {
+     "name": "quantity",
+     "type": "int"
+    },
+    {
+     "name": "shipDate",
+     "type": "java.time.LocalDate"
+    },
+    {
+     "name": "tone",
+     "type": "ex.shop.Tone"
+    },
+    {
+     "name": "voucher",
+     "type": "java.lang.String"
+    }
+   ]
+  },
+  "ex.shop.OrderView": {
+   "fields": [
+    {
+     "name": "id",
+     "type": "java.lang.Long"
+    },
+    {
+     "name": "label",
+     "type": "java.lang.String"
+    },
+    {
+     "name": "tone",
+     "type": "ex.shop.Tone"
+    }
+   ]
+  }
+ },
+ "endpoints": {
+  "endpoint:GET /home": {
+   "params": [],
+   "responseDto": null
+  },
+  "endpoint:GET /svc/catalog": {
+   "params": [],
+   "responseDto": null
+  },
+  "endpoint:GET /svc/orders/{orderId}": {
+   "params": [
+    {
+     "defaultValue": null,
+     "index": 0,
+     "kind": "PathVariable",
+     "name": null,
+     "required": null,
+     "type": "java.lang.Long"
+    },
+    {
+     "defaultValue": null,
+     "index": 1,
+     "kind": "RequestParam",
+     "name": null,
+     "required": false,
+     "type": "java.lang.Integer"
+    }
+   ],
+   "responseDto": "ex.shop.OrderView"
+  },
+  "endpoint:POST /svc/orders": {
+   "params": [
+    {
+     "defaultValue": null,
+     "index": 0,
+     "kind": "RequestBody",
+     "name": null,
+     "required": null,
+     "type": "ex.shop.OrderForm"
+    }
+   ],
+   "responseDto": "ex.shop.OrderView"
+  },
+  "endpoint:POST /svc/session": {
+   "params": [
+    {
+     "defaultValue": null,
+     "index": 0,
+     "kind": "RequestBody",
+     "name": null,
+     "required": null,
+     "type": "ex.shop.Credentials"
+    }
+   ],
+   "responseDto": null
+  }
+ },
+ "enums": {
+  "ex.shop.Tone": {
+   "constants": [
+    "MATTE",
+    "GLOSS",
+    "NEON"
+   ]
+  }
+ },
+ "exceptions": {
+  "ex.shop.OrderErrors$OrderClashException": {
+   "handler": "ex.shop.OrderController#onClash",
+   "status": 409
+  },
+  "ex.shop.OrderErrors$OrderInvalidException": {
+   "handler": "ex.shop.OrderController#onInvalid",
+   "status": 422
+  },
+  "ex.shop.OrderErrors$OrderMissingException": {
+   "handler": "ex.shop.OrderController#onMissing",
+   "status": 404
+  }
+ },
+ "schema": 1
+}
