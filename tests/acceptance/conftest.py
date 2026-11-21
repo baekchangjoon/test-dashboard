@@ -26,6 +26,8 @@ from helpers import find_leaked_resources
 REPO_ROOT = Path(__file__).resolve().parents[2]
 # 기준 run 증거(run_baseline.py가 쓴다). 디버깅 세션 파일은 TD_ACCEPTANCE_SESSION_FILE로 바꿔 끼울 수 있다.
 SESSION_FILE = Path(os.environ.get("TD_ACCEPTANCE_SESSION_FILE") or REPO_ROOT / "work" / "acceptance-session.json")
+# det arm E2E 증거(실제 run을 가리키는 세션 파일). TD_DET_SESSION_FILE로 바꿔 끼울 수 있다.
+DET_SESSION_FILE = Path(os.environ.get("TD_DET_SESSION_FILE") or REPO_ROOT / "work" / "det-session.json")
 LOCAL_ENV_PATH = REPO_ROOT / "infra" / "local.env"
 
 _SESSION_ID = os.environ.get("TD_TEST_SESSION_ID") or uuid.uuid4().hex[:8]
@@ -42,13 +44,27 @@ def pytest_configure(config):
         "markers",
         "baseline: 기준 run 증거(work/acceptance-session.json)가 필요한 E2E 테스트. 없으면 실패한다.",
     )
+    config.addinivalue_line(
+        "markers",
+        "det_e2e: det arm 실제 run 증거(work/det-session.json)가 필요한 E2E 테스트. 없으면 실패한다.",
+    )
 
 
 def pytest_runtest_setup(item):
+    _require_det_session(item)
     if item.get_closest_marker("baseline") and not SESSION_FILE.exists():
         pytest.fail(
             "baseline 테스트는 work/acceptance-session.json(기준 run 증거)이 필요하다. "
             "기준 run 전에는 실패가 정상이며 Task 25에서 green이 된다.",
+            pytrace=False,
+        )
+
+
+def _require_det_session(item):  # pragma: no cover - 아래 훅에서 호출
+    if item.get_closest_marker("det_e2e") and not DET_SESSION_FILE.exists():
+        pytest.fail(
+            f"det_e2e 테스트는 {DET_SESSION_FILE}(실제 det run을 가리키는 세션 파일)이 필요하다. "
+            "형식: {\"runDir\": \"<abs>\", \"baselineRunDir\": \"<abs>\"}. skip하지 않고 실패한다.",
             pytrace=False,
         )
 
