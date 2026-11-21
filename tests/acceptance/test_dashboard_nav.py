@@ -181,6 +181,42 @@ def test_req127_render_json_is_not_published(tmp_path):
     assert "render.json" not in manifest.entries
 
 
+def test_req128_own_reports_new_frame(tmp_path):
+    """직접 만드는 리포트(커버리지, Sonar, 방식 비교, 온톨로지, 호스팅 비교)가 v2 스타일을 쓰고 v1 site.css를 불러오지 않는다.
+    run 아래 리포트에는 공통 띠가 정확히 하나 있다(커버리지·Sonar·비교는 템플릿이, 온톨로지는 주입이 그린다)."""
+    from td import hosting
+    out = pages.render_run(make_local_run_with_reports(tmp_path), tmp_path / "out").parent
+    for rel in ("coverage/coverage.html", "sonar/sonar.html", "compare/compare.html"):
+        html = (out / rel).read_text()
+        assert "static/v2/app.css" in html and "static/site.css" not in html, rel
+        assert html.count('<nav class="tdnav"') == 1, rel
+        depth = "../" * (rel.count("/") + 4)
+        assert f'href="{depth}static/v2/app.css"' in html and f'src="{depth}static/v2/app.js"' in html, rel
+        assert re.search(r'<nav class="tdnav".*?<span class="tdnav-here">([^<]+)</span>', html, re.S).group(1) in (
+            "커버리지", "Sonar 품질 결과", "arm 비교 판정"), rel
+        assert not (out / rel).with_name("app.css").exists() and not (out / rel).with_name("site.css").exists(), rel
+    for rel in ("ontology/jqa.html", "ontology/owl.html"):
+        html = (out / rel).read_text()
+        assert "--surface" in html and "static/site.css" not in html and html.count('<nav class="tdnav"') == 1, rel
+        assert "--k-Endpoint" in html and "<link" not in html, rel  # 그래프 규칙까지 인라인(외부 요청 없음)
+    hosting_html = hosting.render_html(None)
+    assert 'href="static/v2/app.css"' in hosting_html and "static/site.css" not in hosting_html
+    assert hosting_html.count('<nav class="tdnav"') == 0 and 'href="index.html"' in hosting_html
+
+
+def test_req128_standalone_reports_copy_app_css(tmp_path):
+    """단독 열람용(copy_css=True)은 리포트 옆에 app.css를 app.css 이름으로 두고 그것을 불러온다. 사이트 조립 때는 복사하지 않는다."""
+    from td import sonar
+    from td.site import layout
+    assert "app.css" in layout.COPY_IGNORE and "site.css" not in layout.COPY_IGNORE
+    run_dir = make_local_run_with_reports(tmp_path)
+    doc = json.loads((run_dir / "S11/sonar/sonar.json").read_text())
+    standalone = tmp_path / "standalone"
+    html = sonar.render(doc, standalone).read_text()
+    assert (standalone / "app.css").read_bytes() == (pages.STATIC_DIR / "v2/app.css").read_bytes()
+    assert 'href="app.css"' in html and not (standalone / "site.css").exists()
+
+
 def test_req127_clean_run_is_passed(tmp_path):
     result = run_fake_publication(make_local_run_with_reports(tmp_path, with_own_reports=False))
     assert result["status"] == "passed", result

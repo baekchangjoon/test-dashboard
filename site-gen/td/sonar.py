@@ -10,7 +10,6 @@ import hashlib
 import json
 import os
 import shlex
-import shutil
 import sys
 import time
 import urllib.error
@@ -19,7 +18,7 @@ import urllib.request
 from pathlib import Path
 from typing import Callable
 
-from td.site.pages import STATIC_DIR, jinja_env
+from td.site.pages import APP_CSS, copy_app_css, jinja_env, static_href_of
 
 CE_TIMEOUT_SECONDS = 600
 CE_POLL_INTERVAL = 3.0
@@ -217,13 +216,15 @@ def export(key: str, *, client: SonarClient | None = None, ce_task_id: str | Non
 
 
 # --- 렌더링 -----------------------------------------------------------------------------------------
-def render(doc: dict, out_dir, css_href: str = "site.css", copy_css: bool = True) -> Path:
-    """`sonar.html`을 쓴다. copy_css=True면 단독 열람용으로 site.css를 같은 디렉터리에 둔다(사이트 조립은 False와 css_href)."""
+def render(doc: dict, out_dir, css_href: str = APP_CSS, copy_css: bool = True, nav_html: str | None = None) -> Path:
+    """`sonar.html`을 쓴다. copy_css=True면 단독 열람용으로 app.css를 같은 디렉터리에 둔다(사이트 조립은 False와
+    `…/static/v2/app.css`, 공통 띠 nav_html)."""
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     if copy_css:
-        shutil.copy2(STATIC_DIR / "site.css", out_dir / "site.css")
-    html = jinja_env().get_template("sonar.html.j2").render(doc=doc, css_href=css_href, rows=HTML_ROWS, max_items=MAX_ITEMS)
+        copy_app_css(out_dir)
+    html = jinja_env().get_template("sonar.html.j2").render(doc=doc, css_href=css_href, static_href=static_href_of(css_href),
+                                                            nav_html=nav_html, rows=HTML_ROWS, max_items=MAX_ITEMS)
     target = out_dir / "sonar.html"
     target.write_text(html)
     return target

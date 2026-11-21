@@ -179,12 +179,10 @@ def test_req015_baseline_schema_and_kinds(baseline_run):
 
 
 @pytest.fixture(scope="module")
-def browser():
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        instance = playwright.chromium.launch()
-        yield instance
-        instance.close()
+def browser(playwright_instance):
+    instance = playwright_instance.chromium.launch()
+    yield instance
+    instance.close()
 
 
 def test_req016_baseline_offline_render(baseline_run, browser):

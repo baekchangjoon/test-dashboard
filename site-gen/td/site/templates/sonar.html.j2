@@ -1,5 +1,6 @@
-{% extends "base.html.j2" %}
+{% extends "base_v2.html.j2" %}
 {% block title %}Sonar 품질 결과{% endblock %}
+{% block crumbs %}<strong>test-dashboard</strong><span class="crumb">run 리포트 › <b>Sonar 품질 결과</b></span>{% endblock %}
 {% macro sev(value) %}{{ value if value else "—" }}{% endmacro %}
 {% block content %}
 <h1>Sonar 품질 결과</h1>

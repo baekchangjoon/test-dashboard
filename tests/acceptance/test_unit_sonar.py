@@ -165,7 +165,7 @@ def test_render_writes_html_with_links_and_gate(fake, tmp_path):
     doc = sonar.export(KEY, client=fake.client, ce_task_id="AZ-task-1")
     html_path = sonar.render(doc, tmp_path)
     text = html_path.read_text()
-    assert html_path.name == "sonar.html" and (tmp_path / "site.css").is_file()
+    assert html_path.name == "sonar.html" and (tmp_path / "app.css").is_file()
     assert "<title>Sonar 품질 결과</title>" in text and "ERROR" in text
     assert doc["issues"]["items"][0]["link"] in text.replace("&amp;", "&") and "ISS-11" in text
     assert "41.7" in text

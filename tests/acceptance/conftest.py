@@ -175,15 +175,22 @@ def claude_call_log():
 
 # --- 브라우저 ---------------------------------------------------------------------------
 @pytest.fixture(scope="session")
-def browser():
-    """세션 공용 chromium(playwright). 세션이 끝나면 닫는다."""
+def playwright_instance():
+    """세션에 하나뿐인 `sync_playwright()`. 한 세션에서 sync_playwright를 두 번 열면 "Sync API inside the asyncio loop"로
+    실패하므로, 브라우저가 필요한 fixture는 모두 이것에서 chromium을 띄운다."""
     from playwright.sync_api import sync_playwright
     with sync_playwright() as playwright:
-        instance = playwright.chromium.launch()
-        try:
-            yield instance
-        finally:
-            instance.close()
+        yield playwright
+
+
+@pytest.fixture(scope="session")
+def browser(playwright_instance):
+    """세션 공용 chromium(playwright). 세션이 끝나면 닫는다."""
+    instance = playwright_instance.chromium.launch()
+    try:
+        yield instance
+    finally:
+        instance.close()
 
 
 # --- docker ----------------------------------------------------------------------------

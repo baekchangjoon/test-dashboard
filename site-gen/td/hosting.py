@@ -203,10 +203,11 @@ def measurement_status(doc: dict) -> tuple[str, str | None]:
     return ("failed", "; ".join(problems)) if problems else ("passed", None)
 
 
-def render_html(doc: dict | None, css_href: str = "static/site.css", reason: str | None = None) -> str:
-    """doc가 None이면 "측정 없음" 안내 페이지(홈의 링크가 항상 열리게 한다)."""
+def render_html(doc: dict | None, css_href: str = "static/v2/app.css", reason: str | None = None) -> str:
+    """doc가 None이면 "측정 없음" 안내 페이지(홈의 링크가 항상 열리게 한다). 접두 루트의 `hosting.html`이라 공통 띠는 없다."""
     from td.site import pages
-    return pages.jinja_env().get_template("hosting.html.j2").render(doc=doc, css_href=css_href, reason=reason)
+    return pages.jinja_env().get_template("hosting.html.j2").render(doc=doc, css_href=css_href,
+                                                                    static_href=pages.static_href_of(css_href), reason=reason)
 
 
 def check_document(doc: dict) -> None:

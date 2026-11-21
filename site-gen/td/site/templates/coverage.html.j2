@@ -1,5 +1,6 @@
-{% extends "base.html.j2" %}
+{% extends "base_v2.html.j2" %}
 {% block title %}커버리지{% endblock %}
+{% block crumbs %}<strong>test-dashboard</strong><span class="crumb">run 리포트 › <b>커버리지</b></span>{% endblock %}
 {% macro pct(value) %}{{ "%.1f"|format(value * 100) }}%{% endmacro %}
 {% block content %}
 <h1>커버리지</h1>

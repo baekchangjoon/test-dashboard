@@ -12,130 +12,14 @@ import jsonschema
 import pytest
 import yaml
 
-from td import bundle, compare, state
+from helpers import COMMIT, SUT_FILE, _handlers, collect, make_compare_run
+from td import bundle, compare
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SUT_FILE = REPO_ROOT / "suts" / "petclinic" / "sut.yaml"
 ORACLE_FILE = REPO_ROOT / "suts" / "petclinic" / "oracle.yaml"
-EXPECTED_ENDPOINTS = REPO_ROOT / "suts" / "petclinic" / "expected-endpoints.yaml"
 SCHEMA = REPO_ROOT / "site-gen" / "td" / "schemas" / "compare.schema.json"
 S12_SCRIPT = REPO_ROOT / "pipeline" / "S12-compare.sh"
-COMMIT = "b6f939355e8790202ddfc71e3f3507252745ed37"
 SERVICE = "org.springframework.samples.petclinic.boarding.ReservationService"
-PKG = "org/springframework/samples/petclinic"
-
-
-# --- 합성 run ----------------------------------------------------------------------------------
-def _handlers() -> list[tuple[str, str, str]]:
-    data = yaml.safe_load(EXPECTED_ENDPOINTS.read_text())
-    return [(item["method"], item["path"], item["handler"]) for item in data["endpoints"]]
-
-
-def _write_xml(path: Path, *, covered_methods: set[str], oracle_lines: set[int], service_line, service_branch, rrc_line,
-               vet_line: bool = True) -> None:
-    by_class: dict[str, list[tuple[str, bool]]] = {}
-    for _, _, handler in _handlers():
-        klass, _, method = handler.partition("#")
-        by_class.setdefault(klass, []).append((method, handler in covered_methods))
-    packages: dict[str, list[str]] = {}
-    for klass, methods in sorted(by_class.items()):
-        package, _, simple = klass.rpartition(".")
-        counters = {"LINE": rrc_line} if simple == "ReservationRestController" else {"LINE": (1, 1)}
-        body = "".join(
-            f'<method name="{m}" desc="()V" line="10"><counter type="LINE" missed="{0 if cov else 1}" covered="{1 if cov else 0}"/></method>'
-            for m, cov in methods)
-        counter_xml = "".join(f'<counter type="{k}" covered="{v[0]}" missed="{v[1]}"/>' for k, v in counters.items())
-        packages.setdefault(package.replace(".", "/"), []).append(
-            f'<class name="{package.replace(".", "/")}/{simple}" sourcefilename="{simple}.java">{body}{counter_xml}</class>')
-    service_lines = "".join(
-        f'<line nr="{nr}" mi="{0 if nr in oracle_lines else 1}" ci="{1 if nr in oracle_lines else 0}" mb="{4 - (2 if nr in oracle_lines else 0)}" cb="{2 if nr in oracle_lines else 0}"/>'
-        for nr in (49, 52, 55, 64, 70, 73, 76, 124, 128, 159))
-    boarding = packages.setdefault(f"{PKG}/boarding", [])
-    boarding.append(
-        f'<class name="{PKG}/boarding/ReservationService" sourcefilename="ReservationService.java">'
-        f'<counter type="LINE" covered="{service_line[0]}" missed="{service_line[1]}"/>'
-        f'<counter type="BRANCH" covered="{service_branch[0]}" missed="{service_branch[1]}"/></class>'
-        f'<sourcefile name="ReservationService.java">{service_lines}</sourcefile>')
-    vet = packages.setdefault(f"{PKG}/vet", [])
-    vet.append('<sourcefile name="VetRestController.java">' +
-               (f'<line nr="36" mi="0" ci="1" mb="0" cb="0"/>' if vet_line else '<line nr="36" mi="1" ci="0" mb="0" cb="0"/>') +
-               "</sourcefile>")
-    package_xml = "".join(f'<package name="{name}">{"".join(items)}</package>' for name, items in sorted(packages.items()))
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(f'<?xml version="1.0"?><report name="r">{package_xml}</report>')
-
-
-BASE_COVERED = {"org.springframework.samples.petclinic.vet.VetRestController#getAllVets",
-                "org.springframework.samples.petclinic.vet.VetRestController#getVet",
-                "org.springframework.samples.petclinic.owner.OwnerRestController#getAllOwners",
-                "org.springframework.samples.petclinic.security.AuthController#login",
-                "org.springframework.samples.petclinic.boarding.ReservationRestController#create"}
-JQA_COVERED = BASE_COVERED | {f"org.springframework.samples.petclinic.boarding.ReservationRestController#{m}"
-                              for m in ("get", "list", "update", "delete")} | {
-    "org.springframework.samples.petclinic.owner.OwnerRestController#createOwner",
-    "org.springframework.samples.petclinic.owner.PetRestController#getPet",
-    "org.springframework.samples.petclinic.owner.PetRestController#createPet"}
-
-
-def make_compare_run(tmp_path: Path, *, with_blackbox: bool = True, started="2026-11-19T01:00:00Z", finished=None, clock_shift=None,
-                     owl_skipped: bool = True) -> Path:
-    run_dir = tmp_path / "20261119-010000Z-b6f9393-manual-aaaaaaaa"
-    run_dir.mkdir()
-    state.write_run_meta(run_dir, runId=run_dir.name, sut="petclinic", commit=COMMIT, trigger="manual", startedAt=started,
-                         **({"finishedAt": finished} if finished else {}), options={"arms": ["base", "jqa", "owl"], "reps": 2, "style": "cucumber"})
-    if clock_shift is not None:
-        state.set_run_field(run_dir, "clockShift", clock_shift)
-    # S03: view=false 17개(+ 화면 2개)
-    nodes = [{"id": f"endpoint:{m} {p}", "kind": "Endpoint", "label": f"{m} {p}",
-              "props": {"method": m, "path": p, "handler": h, "view": False}} for m, p, h in _handlers()]
-    nodes += [{"id": f"endpoint:GET /owners{i}", "kind": "Endpoint", "label": "v",
-               "props": {"method": "GET", "path": f"/owners{i}", "handler": "x.Y#z", "view": True}} for i in range(2)]
-    (run_dir / "S03").mkdir()
-    (run_dir / "S03" / "ontology-jqa.json").write_text(json.dumps({"nodes": nodes, "edges": [], "meta": {}}))
-    # S06
-    generations = [
-        {"genId": "base-aaaaaaaa-r1", "arm": "base", "rep": 1, "tokens": {"in": 1000, "out": 500}, "seconds": 100.0, "status": "passed", "reason": None},
-        {"genId": "jqa-bbbbbbbb-r1", "arm": "jqa", "rep": 1, "tokens": {"in": 2000, "out": 800}, "seconds": 200.0, "status": "passed", "reason": None},
-        {"genId": "jqa-bbbbbbbb-r2", "arm": "jqa", "rep": 2, "tokens": {"in": 2000, "out": 100}, "seconds": 50.0, "status": "failed", "reason": "LLM 출력이 깨졌다"}]
-    (run_dir / "S06").mkdir()
-    (run_dir / "S06" / "bdd-gen.json").write_text(json.dumps({"schema": 1, "reps": 2, "generations": generations}))
-    (run_dir / "stages").mkdir()
-    s06_arms = {"base": {"status": "passed", "generations": ["base-aaaaaaaa-r1"]},
-                "jqa": {"status": "degraded", "reason": "jqa-bbbbbbbb-r2: LLM 출력이 깨졌다", "generations": ["jqa-bbbbbbbb-r1"]}}
-    if owl_skipped:
-        s06_arms["owl"] = {"status": "skipped", "reason": "S05(OWL 온톨로지) 건너뜀"}
-    (run_dir / "stages" / "S06.json").write_text(json.dumps({
-        "id": "S06", "status": "degraded", "reason": None, "outputs": {}, "arms": s06_arms,
-        "generations": {g["genId"]: {"arm": g["arm"], "rep": g["rep"], "status": "failed" if g["status"] == "failed" else "passed"}
-                        for g in generations}}))
-    # S07
-    for gen, counts in (("base-aaaaaaaa-r1", {"passed": 6, "failed": 4, "undefined": 0, "uncompilable": 0}),
-                        ("jqa-bbbbbbbb-r1", {"passed": 16, "failed": 0, "undefined": 2, "uncompilable": 2})):
-        total = sum(counts.values())
-        (run_dir / "S07" / gen).mkdir(parents=True)
-        (run_dir / "S07" / gen / "summary.json").write_text(json.dumps({
-            "scenarios": total, "statusCounts": counts, "undefinedRatio": counts["undefined"] / total}))
-    # S08
-    suites = {}
-
-    def add_suite(name, kpis, **xml_args):
-        _write_xml(run_dir / "S08" / name / "attributed" / "jacoco.xml", **xml_args)
-        suites[name] = {"kpis": kpis, "tcCount": 1, "attributedCount": 1,
-                        "paths": {"attributed": {"xml": f"{name}/attributed/jacoco.xml"}}}
-
-    add_suite("e2e-base-aaaaaaaa-r1", {"line": 0.20, "branch": 0.10}, covered_methods=BASE_COVERED, oracle_lines={49, 52},
-              service_line=(4, 12), service_branch=(2, 22), rrc_line=(1, 7))
-    add_suite("e2e-jqa-bbbbbbbb-r1", {"line": 0.25, "branch": 0.15}, covered_methods=JQA_COVERED,
-              oracle_lines={49, 52, 55, 64, 70, 73, 76, 159}, service_line=(8, 8), service_branch=(6, 18), rrc_line=(4, 4))
-    if with_blackbox:
-        add_suite("blackbox", {"line": 0.30, "branch": 0.20}, covered_methods=set(), oracle_lines={49}, service_line=(1, 15),
-                  service_branch=(1, 23), rrc_line=(0, 8))
-    (run_dir / "S08" / "coverage.json").write_text(json.dumps({"suites": suites, "classes": [], "integrity": {"violations": []}, "merged": {}}))
-    return run_dir
-
-
-def collect(run_dir, **kwargs) -> dict:
-    return compare.collect(run_dir, sut_file=SUT_FILE, **kwargs)
 
 
 def test_req040_compare_json(tmp_path):
@@ -306,7 +190,7 @@ def test_req040_s12_stage_site_and_run_json(tmp_path):
     site = tmp_path / "site"
     index = pages.render_run(run_dir, site)
     html = (site / "compare" / "compare.html").read_text()
-    assert "탐색적 관찰" in html and "static/site.css" in html and not (site / "compare" / "site.css").exists()
+    assert "탐색적 관찰" in html and "static/v2/app.css" in html and not (site / "compare" / "site.css").exists()
     assert 'href="compare/compare.html"' in index.read_text()
 
 
@@ -549,5 +433,5 @@ def test_req067_focus_labels_and_theme_tokens(tmp_path):
     assert "Focus 범위 (org.springframework.samples.petclinic.boarding.*) 라인" in html
     # SVG 색은 사이트 테마 토큰이다(하드코딩 색 없음)
     assert "var(--arm-jqa)" in html and "#0969da" not in html
-    css = (REPO_ROOT / "site-gen" / "td" / "site" / "static" / "site.css").read_text()
+    css = (REPO_ROOT / "site-gen" / "td" / "site" / "static" / "v2" / "app.css").read_text()
     assert css.count("--arm-jqa") >= 3  # 라이트, 어두운 모드(OS), data-theme=dark

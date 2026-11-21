@@ -11,10 +11,13 @@
 from __future__ import annotations
 
 import contextlib
+import functools
+import http.server
 import json
 import os
-import subprocess
+import socketserver
 import sys
+import threading
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -242,30 +245,39 @@ def status_of(site: Path, name: str) -> str:
 
 # --- 로컬 서버와 브라우저 ---------------------------------------------------------------------------
 
+class _LocalHTTPServer(http.server.ThreadingHTTPServer):
+    """127.0.0.1 전용 서버. 표준 `HTTPServer.server_bind`는 `socket.getfqdn`(역방향 DNS)을 불러 수십 초가 걸릴 수 있어
+    이름 조회 없이 주소만 기록한다."""
+    daemon_threads = True
+
+    def server_bind(self):
+        socketserver.TCPServer.server_bind(self)
+        host, port = self.server_address[:2]
+        self.server_name, self.server_port = host, port
+
+
+class _QuietHandler(http.server.SimpleHTTPRequestHandler):
+    def log_message(self, format, *args):  # noqa: A002 - 표준 서명
+        pass
+
+
 @contextlib.contextmanager
 def serve(directory: Path) -> Iterator[str]:
-    """`directory`를 로컬 http.server 자식 프로세스로 띄운다. URL은 `/`로 끝난다. 모든 종료 경로에서 PID를 정리한다."""
-    process = subprocess.Popen(
-        [sys.executable, "-u", "-m", "http.server", "0", "--bind", "127.0.0.1", "--directory", str(directory)],
-        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    """`directory`를 127.0.0.1의 로컬 HTTP 서버(같은 프로세스의 스레드)로 띄운다. URL은 `/`로 끝난다.
+    모든 종료 경로에서 서버를 멈추고 소켓을 닫고 스레드가 끝났는지 확인한다."""
+    handler = functools.partial(_QuietHandler, directory=str(directory))
+    server = _LocalHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, name=f"serve:{directory}", daemon=True)
+    thread.start()
     try:
-        line = process.stdout.readline()        # "Serving HTTP on 127.0.0.1 port 54321 (http://127.0.0.1:54321/) ..."
-        if " port " not in line:
-            raise RuntimeError(f"http.server가 시작되지 않았다: {line!r}")
-        port = int(line.split(" port ")[1].split()[0])
-        url = f"http://127.0.0.1:{port}/"
+        url = f"http://127.0.0.1:{server.server_address[1]}/"
         urllib.request.urlopen(url, timeout=10).close()
         yield url
     finally:
-        process.terminate()
-        try:
-            process.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait(timeout=10)
-        if process.stdout:
-            process.stdout.close()
-        assert process.poll() is not None, f"http.server(pid {process.pid})가 남았다"
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=10)
+        assert not thread.is_alive(), f"로컬 HTTP 서버 스레드({thread.name})가 남았다"
 
 
 def open_page(browser, url: str, *, javascript: bool = True, scheme: str = "light", width: int = 1280):
@@ -614,9 +626,9 @@ def _own_sonar(run_dir: Path) -> Path:
 
 
 def _own_compare(run_dir: Path, scratch: Path) -> Path:
-    """test_compare의 합성 run으로 compare.collect를 돌려 실제 compare.render_page로 compare.json·compare.html을 만든다."""
+    """helpers의 합성 방식 비교 run으로 compare.collect를 돌려 실제 compare.render_page로 compare.json·compare.html을 만든다."""
     from td import compare
-    from test_compare import collect, make_compare_run
+    from helpers import collect, make_compare_run
     scratch.mkdir(parents=True, exist_ok=True)
     document = collect(make_compare_run(scratch))
     target = run_dir / "S12" / "compare"

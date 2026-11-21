@@ -36,6 +36,22 @@ def json_for_script(data) -> str:
     return json.dumps(data, ensure_ascii=False).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
 
 
+V2_DIR = STATIC_DIR / "v2"
+APP_CSS = "app.css"  # 새 디자인 스타일 파일 이름(단독 열람용 사본도 같은 이름)
+
+
+def static_href_of(css_href: str) -> str:
+    """스타일 파일 주소(`…/static/v2/app.css`, 단독 열람은 `app.css`)에서 그 디렉터리 주소(`…/static/v2/`, 빈 문자열).
+    `base_v2.html.j2`는 이 디렉터리에서 `app.js`를 불러온다."""
+    head, separator, _ = css_href.rpartition("/")
+    return f"{head}{separator}"
+
+
+def copy_app_css(out_dir: Path) -> None:
+    """단독 열람용: `static/v2/app.css`를 리포트 옆에 `app.css`로 둔다(사이트 조립은 COPY_IGNORE로 빼고 v2 주소를 넘긴다)."""
+    shutil.copy2(V2_DIR / APP_CSS, Path(out_dir) / APP_CSS)
+
+
 def read_json(path: Path, default=None):
     return json.loads(path.read_text()) if path.exists() else default
 
@@ -204,6 +220,19 @@ def inject_nav(out_dir: Path, links: list[dict], *, sut_name: str | None, run_id
     return missing
 
 
+def rerender_own_reports(targets: list[tuple[str, Path]], links: list[dict], *, sut_name: str | None,
+                         run_id: str | None) -> None:
+    """복사된 직접 만드는 리포트(RERENDER)를 v2 스타일 주소와 템플릿이 그리는 공통 띠로 다시 렌더한다."""
+    labels = {link["href"]: link["label"] for link in links}
+    for site_rel, target in targets:
+        entry = REPORTS[site_rel][1]
+        report_rel = f"{site_rel}{entry}"
+        css_href = f"{RUN_DEPTH_TO_ROOT}{'../' * (site_rel.strip('/').count('/') + 1)}static/v2/{APP_CSS}"
+        nav_html = nav.render(nav.links_for(report_rel, links, sut_name=sut_name, run_id=run_id),
+                              labels.get(report_rel) or REPORTS[site_rel][0])
+        RERENDER[site_rel](target, css_href, nav_html)
+
+
 def report_cards(links: list[dict], nav_missing: list[dict]) -> tuple[list[dict], list[dict]]:
     """리포트 카드와, 어느 카드에도 붙지 않은 띠 누락 항목. 누락은 같은 파일의 카드, 없으면 같은 디렉터리의 첫 카드에 붙인다."""
     cards = [{**link, "missing": []} for link in links]
@@ -219,7 +248,7 @@ def report_cards(links: list[dict], nav_missing: list[dict]) -> tuple[list[dict]
 def render_run(run_dir, out_dir) -> Path:
     """run 디렉터리의 정적 파일(index.html, run.json, stages/, 리포트)을 out_dir에 만든다. index.html 경로를 돌려준다.
     SITE_LAYOUT에 매핑된 산출물만 복사하고(매핑 밖 단계 디렉터리는 복사하지 않는다) 링크도 산출물이 있는 것만 단다.
-    순서: 복사 -> RERENDER -> 외부 HTML에 공통 띠 주입 -> run 페이지 렌더 -> sanitize_site.
+    순서: 복사 -> RERENDER(새 틀과 템플릿이 그리는 띠) -> 외부 HTML에 공통 띠 주입 -> run 페이지 렌더 -> sanitize_site.
     띠를 넣지 못한 파일이 있으면 out_dir/render.json에 navMissing으로 적는다(없으면 이 파일을 만들지 않는다).
     out_dir이 run_dir과 같으면 run_dir/site에 만든다. dashboard.yaml은 읽지 않는다."""
     run_dir, out_dir = Path(run_dir), Path(out_dir)
@@ -231,6 +260,7 @@ def render_run(run_dir, out_dir) -> Path:
     for stage_id in sorted(run.get("stages", {})):
         stages[stage_id] = read_json(run_dir / "stages" / f"{stage_id}.json", {"status": run["stages"][stage_id], "reason": None})
     links = []
+    rerender_targets = []  # (사이트 경로, 복사된 디렉터리): 띠에 같은 run의 모든 리포트가 들어가도록 링크를 다 모은 뒤 렌더한다
     for stage_id, stage in stages.items():
         if stage.get("status") not in PUBLISHABLE_STATUSES:  # 실패·건너뜀 단계의 부분 산출물은 게시하지 않는다
             continue
@@ -242,13 +272,14 @@ def render_run(run_dir, out_dir) -> Path:
             target = out_dir / site_rel.rstrip("/")
             shutil.copytree(src, target, dirs_exist_ok=True, ignore=shutil.ignore_patterns(*COPY_IGNORE))
             if site_rel in RERENDER:
-                RERENDER[site_rel](target, f"{RUN_DEPTH_TO_ROOT}{'../' * (site_rel.strip('/').count('/') + 1)}static/site.css")
+                rerender_targets.append((site_rel, target))
             label, entry = REPORTS[report_key]
             for label, entry in [(label, entry), *REPORTS_EXTRA.get(site_rel, [])]:
                 if site_rel in LINK_ONLY_IF_PRESENT and not (target / entry).exists():
                     continue
                 links.append({"label": label.replace("{}", site_rel.strip("/").split("/")[-1]), "href": f"{site_rel}{entry}",
                               "note": REPORT_NOTES.get(f"{report_key}{entry}") or REPORT_NOTES.get(report_key, "")})
+    rerender_own_reports(rerender_targets, links, sut_name=run.get("sut"), run_id=run.get("runId"))
     nav_missing = inject_nav(out_dir, links, sut_name=run.get("sut"), run_id=run.get("runId"))
     record = out_dir / RENDER_RECORD
     if nav_missing:

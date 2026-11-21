@@ -174,12 +174,10 @@ def coverage_url(s08_run):
 
 
 @pytest.fixture(scope="module")
-def browser():
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        instance = playwright.chromium.launch()
-        yield instance
-        instance.close()
+def browser(playwright_instance):
+    instance = playwright_instance.chromium.launch()
+    yield instance
+    instance.close()
 
 
 def test_req033_per_tc_view(s08_run, coverage_url, browser):

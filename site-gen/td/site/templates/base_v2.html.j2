@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>{% block title %}test-dashboard{% endblock %}</title>
-<link rel="stylesheet" href="{{ static_href }}app.css">
+<link rel="stylesheet" href="{{ css_href if css_href is defined and css_href else static_href ~ 'app.css' }}">
 </head>
 <body>
 {% if nav_html %}
