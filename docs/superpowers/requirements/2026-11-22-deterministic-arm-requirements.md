@@ -114,7 +114,7 @@
 | REQ-113 | 규칙 단위 | test_unit_detgen.py::test_req113_* | Unit | ⚪ |
 | REQ-114 | 기대 상태 | test_unit_detgen.py::test_req114_expect | Unit | ⚪ |
 | REQ-115 | baseline 점검 | test_unit_detgen.py::test_req115_baseline<br>test_det.py::test_req115_baseline_real | Unit/E2E | ⚪ |
-| REQ-116 | glue 규약 | test_det.py::test_req116_glue_layout | Int | ⚪ |
+| REQ-116 | glue 규약 | test_det_glue.py::test_req116_glue_layout | Int | ⚪ |
 | REQ-117 | 문서 갱신 | 검토 | – | ⚪ |
 
 커버리지 대상: REQ-101~117(17건). 제외: 없음.
