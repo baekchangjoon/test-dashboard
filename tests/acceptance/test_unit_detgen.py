@@ -196,3 +196,195 @@ def test_condition_not_rewritten_and_leak_is_fatal(tmp_path):
     assert item["condition"] == data["test_cases"][0]["condition"]
     import hashlib
     assert item["conditionSha"] == hashlib.sha256(item["condition"].encode("utf-8")).hexdigest()
+
+
+# ---------------------------------------------------------------------------
+# Task 3: 조건식 파서(REQ-113). 아래 조건 문자열은 SUT fixture에서 온 테스트 데이터다(생성기 소스에는 없다).
+# ---------------------------------------------------------------------------
+from td.detgen import parse as detparse  # noqa: E402
+from td.detgen.parse import Atom, Operand  # noqa: E402
+
+PETCLINIC_PLANS = PETCLINIC_RUN / "S02" / "bbtg" / "raw" / "stdout"
+
+
+def _request(name):
+    return Operand("request", name)
+
+
+def _number(text):
+    return Operand("literal", text, "number")
+
+
+def _single(parsed):
+    assert parsed.reason is None and parsed.disjuncts is not None
+    return parsed.disjuncts
+
+
+def test_req113_range():
+    disjuncts = _single(detparse.parse("req.nights() < 1 || req.nights() > 30", "req"))
+    assert disjuncts == ((Atom("<", _request("nights"), _number("1")),),
+                         (Atom(">", _request("nights"), _number("30")),))
+
+
+def test_req113_length():
+    condition = "req.petName() == null || req.petName().length() < 2 || req.petName().length() > 50"
+    disjuncts = _single(detparse.parse(condition, "req"))
+    assert disjuncts == ((Atom("==null", _request("petName"), None),),
+                         (Atom("<", _request("petName"), _number("2"), length=True),),
+                         (Atom(">", _request("petName"), _number("50"), length=True),))
+
+
+def test_req113_enum_and():
+    disjuncts = _single(detparse.parse("req.priceTier() == PriceTier.VIP && req.loyaltyPoints() < 500", "req"))
+    assert len(disjuncts) == 1 and len(disjuncts[0]) == 2
+    first, second = disjuncts[0]
+    assert first.op == "==" and first.left == _request("priceTier")
+    assert first.right == Operand("enum", "VIP", "PriceTier")
+    assert second == Atom("<", _request("loyaltyPoints"), _number("500"))
+
+
+def test_req113_date():
+    disjuncts = _single(detparse.parse("req.checkInDate() == null || !req.checkInDate().isAfter(LocalDate.now())", "req"))
+    assert disjuncts[0] == (Atom("==null", _request("checkInDate"), None),)
+    (atom,) = disjuncts[1]
+    assert atom.op == "isAfterNot" and atom.left == _request("checkInDate")
+    assert atom.right.kind == "clock" and atom.right.name == "LocalDate.now()"
+
+
+def test_req113_stored():
+    # !now.isBefore(x) == !x.isAfter(now): 시계를 오른쪽으로 정규화한다
+    (conjunct,) = _single(detparse.parse("!LocalDate.now().isBefore(existing.getCheckInDate())", None))
+    (atom,) = conjunct
+    assert atom.op == "isAfterNot"
+    assert atom.left == Operand("stored", "checkInDate")
+    assert atom.right.kind == "clock"
+
+
+def test_req113_count_const():
+    condition = "repository.countByRoomNumberAndStatus(req.roomNumber(), ReservationStatus.CONFIRMED) >= ROOM_CAPACITY"
+    ((atom,),) = _single(detparse.parse(condition, "req"))
+    assert atom.op == "countGe"
+    assert atom.right == Operand("constant", "ROOM_CAPACITY")
+    assert atom.left.kind == "request" and atom.left.name == "roomNumber"
+    assert "ReservationStatus.CONFIRMED" in atom.left.detail
+
+
+def test_req113_count_without_request_arg_is_unresolved():
+    condition = ("req.nights() != existing.getNights() && repository.countByRoomNumberAndStatus(existing.getRoomNumber(),"
+                 "\n\t\t\t\t\tReservationStatus.CONFIRMED) >= ROOM_CAPACITY")
+    ((first, second),) = _single(detparse.parse(condition, "req"))
+    assert first == Atom("!=", _request("nights"), Operand("stored", "nights"))
+    assert second.op == "countGe" and second.left.kind == "unresolved"
+    assert "\n" not in second.left.name and "ReservationStatus.CONFIRMED" in second.left.detail
+
+
+def test_req113_equals_literal():
+    ((atom,),) = _single(detparse.parse('"WELCOME10".equals(req.promoCode())', "req"))
+    assert atom == Atom("equalsLit", _request("promoCode"), Operand("literal", "WELCOME10", "string"))
+
+
+def test_req113_equals_literal_bare_request_variable():
+    ((atom,),) = _single(detparse.parse('"user".equals(username)', "username"))
+    assert atom == Atom("equalsLit", _request("username"), Operand("literal", "user", "string"))
+
+
+def test_req113_local_variable_unresolved():
+    ((atom,),) = _single(detparse.parse("checkIn.isBefore(LocalDateTime.now().plusHours(48))", "req"))
+    assert atom.op == "isBefore"
+    assert atom.left == Operand("unresolved", "checkIn")
+    assert atom.right.kind == "clock" and atom.right.detail == ".plusHours(48)"
+
+
+def test_req113_multiline_condition_is_unparsed_not_crash():
+    condition = "req.status() != null && req.status() != existing.getStatus()\n\t\t\t\t&& !existing.getStatus().canTransitionTo(req."
+    parsed = detparse.parse(condition, "req")
+    assert parsed.disjuncts is None and parsed.reason == "unparsed"
+
+
+def test_req113_operand_reversed():
+    ((atom,),) = _single(detparse.parse("30 < req.nights()", "req"))
+    assert atom == Atom(">", _request("nights"), _number("30"))
+
+
+def test_req113_matcher_not():
+    disjuncts = _single(detparse.parse("req.ownerEmail() == null || !EMAIL.matcher(req.ownerEmail()).matches()", "req"))
+    assert disjuncts == ((Atom("==null", _request("ownerEmail"), None),),
+                         (Atom("matchesNot", _request("ownerEmail"), Operand("constant", "EMAIL")),))
+
+
+def test_req113_arithmetic_relation_has_unresolved_operands():
+    condition = "req.depositAmount() * 1.1 < req.nights() * req.priceTier().getNightlyRate()"
+    ((atom,),) = _single(detparse.parse(condition, "req"))
+    assert atom == Atom("<", Operand("unresolved", "req.depositAmount() * 1.1"),
+                        Operand("unresolved", "req.nights() * req.priceTier().getNightlyRate()"))
+
+
+def test_req113_not_null():
+    assert _single(detparse.parse("req.nights() != null", "req")) == ((Atom("!=null", _request("nights"), None),),)
+
+
+def test_req113_unknown_boolean_call_full_multiline():
+    condition = ("req.status() != null && req.status() != existing.getStatus()\n\t\t\t\t"
+                 "&& !existing.getStatus().canTransitionTo(req.status())")
+    ((first, second, third),) = _single(detparse.parse(condition, "req"))
+    assert first == Atom("!=null", _request("status"), None)
+    assert second == Atom("!=", _request("status"), Operand("stored", "status"))
+    assert third == Atom("==", Operand("unresolved", "existing.getStatus().canTransitionTo(req.status())"),
+                         Operand("literal", "false", "boolean"))
+
+
+def test_req113_foreign_receiver_and_boolean_local():
+    ((first, second),) = _single(detparse.parse("!includeStale && r.getCheckInDate().isBefore(LocalDate.now())", "req"))
+    assert first == Atom("==", Operand("unresolved", "includeStale"), Operand("literal", "false", "boolean"))
+    assert second.op == "isBefore" and second.left == Operand("unresolved", "r.getCheckInDate()")
+    assert second.right.kind == "clock"
+
+
+def test_req113_stored_enum_conjunction():
+    condition = "existing.getStatus() != ReservationStatus.PENDING && existing.getStatus() != ReservationStatus.CANCELLED"
+    ((first, second),) = _single(detparse.parse(condition, None))
+    assert first == Atom("!=", Operand("stored", "status"), Operand("enum", "PENDING", "ReservationStatus"))
+    assert second.right == Operand("enum", "CANCELLED", "ReservationStatus")
+
+
+def test_req113_negated_group_uses_de_morgan():
+    disjuncts = _single(detparse.parse("!(req.a() >= 1 && req.b() == null)", "req"))
+    assert disjuncts == ((Atom("<", _request("a"), _number("1")),), (Atom("!=null", _request("b"), None),))
+
+
+def test_req113_request_var_unknown_makes_accessor_unresolved():
+    ((atom,),) = _single(detparse.parse("req.nights() < 1", None))
+    assert atom.left == Operand("unresolved", "req.nights()")
+
+
+@pytest.mark.parametrize("condition", [
+    "username = admin", "username ≠ admin, user", "req = null/empty", "Happy Path (POST — x)",
+    "DB에 id 조건에 맞는 데이터 없음 (repository.findById)", "General Bad Request (400)", "", "   ",
+    "a <", "(a < 1", "a < 1)", "x -> x > 1", "!", "a < b < c", "1", '"x"', None,
+])
+def test_req113_garbage_is_unparsed(condition):
+    parsed = detparse.parse(condition, "req")
+    assert parsed.disjuncts is None and parsed.reason == "unparsed"
+
+
+def _real_conditions():
+    found = []
+    for path in sorted(PETCLINIC_PLANS.glob("plan-tests-*.json")):
+        plan = json.loads(path.read_text(encoding="utf-8"))
+        for case in plan["test_cases"]:
+            found.append(case.get("condition"))
+    return found
+
+
+def test_req113_all_real_fixture_conditions_never_raise():
+    conditions = _real_conditions()
+    assert len(conditions) > 30
+    parsed_count = 0
+    for condition in conditions:
+        for request_var in ("req", None):
+            parsed = detparse.parse(condition, request_var)
+            assert (parsed.disjuncts is None) == (parsed.reason == "unparsed")
+            if request_var == "req" and parsed.disjuncts is not None:
+                parsed_count += 1
+    # 실제 조건 중 Java 식인 것(자연어 설명 제외)은 모두 파싱된다
+    assert parsed_count >= 20
