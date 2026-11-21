@@ -1017,3 +1017,45 @@ def test_glue_checksum_and_copy(tmp_path):
     assert render_module.glue_checksum(out / "glue") == checksum
     (out / "glue" / glue[0]).write_text("// 변조\n", encoding="utf-8")
     assert render_module.glue_checksum(out / "glue") != checksum
+
+
+def test_render_rejects_null_path_variable(tmp_path):
+    derivation = derive_module.derive(_controlled(tmp_path / "b"))
+    case = copy.deepcopy(next(case for case in derivation.cases if case.path))
+    name = next(iter(case.path))
+    case.path[name] = derive_module.Value(None, "generic-sentinel")
+    with pytest.raises(render_module.RenderError):
+        render_module.render(derive_module.Derivation([case], [], {}), tmp_path / "out")
+
+
+def test_observed_codes_from_cucumber_json():
+    from td.detgen import observed
+
+    def step(name, status, message=None):
+        result = {"status": status}
+        if message is not None:
+            result["error_message"] = message
+        return {"name": name, "keyword": "And ", "result": result}
+
+    report = [{"uri": "classpath:features/x.feature", "elements": [
+        {"type": "background", "steps": [step("ignored", "passed")]},
+        {"type": "scenario", "tags": [{"name": "@case:ok-1"}],
+         "steps": [step('the case "ok-1"', "passed"), step("the request is sent", "passed"),
+                   step("the response status is 201", "passed")]},
+        {"type": "scenario", "tags": [{"name": "@case:bad-1"}],
+         "steps": [step('the case "bad-1"', "passed"), step("the request is sent", "passed"),
+                   step("the response status is 422", "failed",
+                        "java.lang.AssertionError: [DET-STATUS bad-1 400] \nexpected: 422\n but was: 400")]},
+        {"type": "scenario", "tags": [],
+         "steps": [step('the case "notag-1"', "passed"),
+                   step('the response status is in class "2xx"', "failed",
+                        "org.opentest4j.AssertionFailedError: [DET-STATUS notag-1 500] expected: 2 but was: 5")]},
+        {"type": "scenario", "tags": [{"name": "@case:prior-1"}],
+         "steps": [step('the case "prior-1"', "passed"),
+                   step("a prior request", "failed", "[prior-1: 선행 요청 실패(상태 409)]"),
+                   step("the request is sent", "skipped")]},
+        {"type": "scenario", "tags": [{"name": "@case:other-1"}],
+         "steps": [step("x", "failed", "[DET-STATUS someone-else 418]")]},
+    ]}]
+    assert observed.observed_codes(json.dumps(report)) == {
+        "ok-1": None, "bad-1": 400, "notag-1": 500, "prior-1": None, "other-1": None}
