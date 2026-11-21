@@ -82,6 +82,7 @@ class _Draft:
     pair_key: tuple | None = None
     case: Case | None = None
     merged: bool = False
+    survivor: "_Draft | None" = None  # 병합되어 대신 남은 초안
 
 
 def _sha12(text: str) -> str:
@@ -105,7 +106,7 @@ class _Deriver:
         self.drafts: list[_Draft] = []
         self.unresolved: list[dict] = []
         self.nodata: dict[str, _Draft] = {}
-        self.races: list[tuple] = []  # (엔드포인트 라벨, 항목 주소): count 조건의 동시 요청 경쟁(범위 밖)
+        self.races: list[tuple] = []  # (엔드포인트 라벨, 항목 주소, 원자식 위치): count 조건의 동시 요청 경쟁(범위 밖)
 
     # --- 계획 항목 -------------------------------------------------------------------------------
 
@@ -170,8 +171,9 @@ class _Deriver:
                     self._skip(addr, "unparsed", ep)
                     continue
                 expect = self.catalog.expect(item["expected"])
-                parsed_items.append((item, expect, [self._disjunct(ep, addr, expect, atoms, var, scalars, plan["class"], no_keyparams)
-                                                    for atoms in parsed.disjuncts]))
+                disjuncts = [self._disjunct(ep, addr, expect, atoms, var, scalars, plan["class"], no_keyparams, d_index)
+                             for d_index, atoms in enumerate(parsed.disjuncts)]
+                parsed_items.append((item, expect, disjuncts))
         contradicted = self._contradictions(ep, parsed_items)
         for addr, cons in ep.error_disjuncts:  # 모순 항목은 제약에서 빼되 이론 모수(상한)에는 남긴다
             if addr.rstrip("~") in contradicted:
@@ -181,12 +183,12 @@ class _Deriver:
             for d_index, (cons, reason) in enumerate(disjuncts):
                 self._expand(ep, item, expect, d_index, cons, "input-contradiction" if item["addr"] in contradicted else reason)
 
-    def _disjunct(self, ep, addr, expect, atoms, var, scalars, owner, no_keyparams):
+    def _disjunct(self, ep, addr, expect, atoms, var, scalars, owner, no_keyparams, d_index=0):
         """논리곱 하나 → (원자식별 Con|사유 목록, 슬롯 사유|None). 엔드포인트 제약 목록도 갱신한다."""
         cons = [self.cons.con(atom, ep, var, scalars, owner) for atom in atoms]
-        for atom, con in zip(atoms, cons, strict=True):
-            if atom.op == "countGe" and (ep.label, addr) not in self.races:
-                self.races.append((ep.label, addr))
+        for a_index, (atom, con) in enumerate(zip(atoms, cons, strict=True)):
+            if atom.op == "countGe":  # count 원자식마다 하나(논리곱 위치.원자식 위치)
+                self.races.append((ep.label, addr, f"{d_index}.{a_index}"))
             left = self.cons.remap(atom.left, scalars)
             if isinstance(con, str) and atom.op != "countGe" and left.kind == "request" and self.catalog.lookup(ep, left.name):
                 right = self.cons.remap(atom.right, scalars)
@@ -226,6 +228,8 @@ class _Deriver:
                         sides = self.cons.sides(ep, cons[0], other["addr"])
                         if not isinstance(sides, str) and isinstance(sides[1], Value):
                             boundaries.append(sides[1])
+                            if cons[0].op == "==" and isinstance(sides[1].value, (int, float)):  # `f == a`의 유효 쪽은 a±step 둘 다
+                                boundaries.append(Value(2 * cons[0].value - sides[1].value, "derived"))
                 if boundaries and all(self.cons.holds(x, b) is True for b in boundaries):
                     flagged.add(item["addr"])
                     break
@@ -441,7 +445,7 @@ class _Deriver:
             first = seen.get(signature) if signature else None
             if first is not None and first.rule != draft.rule:
                 first.case.sources += [s for s in draft.sources if s not in first.case.sources]
-                draft.merged = True
+                draft.merged, draft.survivor = True, first
                 continue
             if signature:
                 seen.setdefault(signature, draft)
@@ -488,6 +492,9 @@ class _Deriver:
             counters[group] = counters.get(group, 0) + 1
             self._finalize(draft, f"{draft.ep.slug}-{draft.rule}-{counters[group]}")
             by_key[(draft.ep.id, draft.key)] = draft.case.id
+        for draft in self.drafts:  # 병합된 초안의 주소는 남은 case를 가리킨다(위반의 pair가 끊기지 않게)
+            if draft.merged:
+                by_key[(draft.ep.id, draft.key)] = draft.survivor.case.id
         for draft in made:
             if draft.rule == "violation" and draft.pair_key is not None:
                 draft.case.pair = by_key.get((draft.ep.id, draft.pair_key))
@@ -525,8 +532,8 @@ class _Deriver:
             factors.append({"endpoint": ep.label, "fields": fields, "product": product})
             terms.append("*".join(str(v) for v in fields.values()) or "1")
         # 동시 요청 경쟁은 범위 밖 항목으로만 기록한다(value에 넣지 않는다)
-        factors += [{"endpoint": label, "item": addr, "kind": "concurrency-race", "outOfScope": True}
-                    for label, addr in sorted(self.races)]
+        factors += [{"endpoint": label, "item": addr, "atom": atom, "kind": "concurrency-race", "outOfScope": True}
+                    for label, addr, atom in sorted(self.races)]
         return {"bySlot": {"total": len(cases) + len(self.unresolved), "generated": len(cases),
                            "unresolved": len(self.unresolved), "deduplicated": merged, "byReason": by_reason},
                 "byRule": dict(sorted(by_rule.items())),

@@ -579,7 +579,9 @@ def test_req115_baseline(tmp_path):
         if case.rule != "violation":
             continue
         pair = by_id[case.pair]
-        assert pair.rule == "valid-boundary" and pair.sources == case.sources and pair.endpoint == case.endpoint
+        # 유효 경계가 baseline-valid와 같은 요청이면 병합되어 pair가 baseline-valid를 가리킬 수 있다
+        assert pair.expect["class"] == "2xx" and pair.endpoint == case.endpoint
+        assert set(case.sources) <= set(pair.sources)
 
 
 def test_req107_universe(tmp_path):
@@ -714,7 +716,7 @@ def test_input_contradiction_keeps_other_boundaries(tmp_path):
     by_id = {case.id: case for case in derivation.cases}
     for case in derivation.cases:
         if case.rule == "violation" and any(place in s for s in case.sources):
-            assert by_id[case.pair].rule == "valid-boundary"
+            assert by_id[case.pair].expect["class"] == "2xx"
             assert not [a for a in case.assumes if a.startswith("also-violates")]
 
 
@@ -782,3 +784,46 @@ def test_real_fixture_regression(tmp_path):
     rows = [_case_row(case) for case in derivation.cases]
     assert len(rows) == len(set(rows))
     assert any(case.rule == "enum-value" and any(s.startswith("plan-tests-") for s in case.sources) for case in derivation.cases)
+
+
+# --- Task 4 fix round 2 ---------------------------------------------------------------------------
+
+def test_merged_boundary_keeps_violation_pair(tmp_path):
+    """문자열·분산 필드가 없으면 유효 경계가 baseline-valid와 같은 요청이 되어 병합된다. 위반의 pair는 끊기지 않아야 한다."""
+    def concrete_only(docs):
+        form = docs["ext.json"]["dtos"]["ex.shop.OrderForm"]
+        form["fields"] = [f for f in form["fields"] if f["type"] != "java.lang.String"]
+        plan = _plan(docs, "place")
+        plan["items"] = [i for i in plan["items"] if "count" not in i["condition"]]
+
+    derivation = derive_module.derive(_controlled(tmp_path, concrete_only))
+    assert derivation.universe["bySlot"]["deduplicated"] > 0
+    by_id = {case.id: case for case in derivation.cases}
+    violations = [case for case in derivation.cases if case.rule == "violation"]
+    assert violations and all(case.pair is not None for case in violations)
+    for case in violations:  # 병합 시 남는 case는 같은 요청의 유효 계열(baseline-valid·enum-value 등)일 수 있다
+        assert by_id[case.pair].expect["class"] == "2xx"
+        assert set(case.sources) <= set(by_id[case.pair].sources)
+
+
+def test_baseline_equality_avoidance_moves_down_under_upper_bound(tmp_path):
+    def upper_only(docs):
+        items = _plan(docs, "place")["items"]
+        items[3]["condition"] = "form.credit() > 80"
+        # 단일 원자식이면 입력 모순(`> 80`의 유효 경계 80을 막음)으로 빠지므로 논리곱으로 둔다
+        items.append({"index": len(items), "condition": "form.credit() == 80 && form.quantity() > 0", "expected": "OrderInvalidException code=400",
+                      "branch_value": "400", "param": "(from scenarios)", "prefix": "errorPath"})
+
+    derivation = derive_module.derive(_controlled(tmp_path, upper_only))
+    baseline = next(case for case in derivation.cases if case.rule == "baseline-valid" and case.endpoint == "POST /svc/orders")
+    assert _plain(baseline.values["credit"]) == 79
+
+
+def test_race_factor_per_count_atom(tmp_path):
+    def two_counts(docs):
+        _plan(docs, "place")["items"][6]["condition"] = (
+            "repository.countByBay(form.bay()) >= BAY_LIMIT || repository.countByBay(form.bay()) >= BAY_LIMIT")
+
+    universe = derive_module.derive(_controlled(tmp_path, two_counts)).universe
+    races = [f for f in universe["theoretical"]["factors"] if f.get("kind") == "concurrency-race"]
+    assert sorted(f["atom"] for f in races) == ["0.0", "1.0"]

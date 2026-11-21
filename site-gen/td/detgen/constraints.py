@@ -331,9 +331,22 @@ class Constraints:
             value = banned[0][0] + banned[0][1]
         if value is None:
             return None
-        while any(value == a for a, _ in banned):  # `f == a`가 위반이면 a를 피해 a+step
-            value += next(step for a, step in banned if a == value)
+        value = self._avoid(value, lo, hi, banned)
         return self.render(fld, numeric[0], value, "input" if value in [c.value for c in numeric] else "derived", None, None)
+
+    @staticmethod
+    def _avoid(value, lo, hi, banned):
+        """`f == a` 위반값을 피해 [lo, hi] 안에서 가장 가까운 값(같은 거리면 위쪽). 범위 안에 없으면 원래 값."""
+        if not banned:
+            return value
+        step = min(s for _, s in banned)
+        bad = {a for a, _ in banned}
+        for distance in range(len(bad) + 1):
+            for candidate in (value + distance * step, value - distance * step):
+                inside = (lo is None or candidate >= lo) and (hi is None or candidate <= hi)
+                if inside and not any(abs(candidate - a) < step / 2 for a in bad):
+                    return round(candidate, 2) if isinstance(step, float) else candidate
+        return value
 
     def spread(self, ep: Endpoint, fld: Field, lo, hi) -> Spread | None:
         """count 조건 인자로 쓰이는 정수 필드만 분산한다. 경계 케이스가 쓰는 값은 뺀다."""
