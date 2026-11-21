@@ -105,11 +105,14 @@ def own_html_files(site: Path) -> list[Path]:
     return found
 
 
+LONG_NAME = "x" * 60
+LONG_DESCRIPTION = ("긴 설명 " * 40).strip()[:200].strip()
+
+
 def long_names_site(tmp_path: Path) -> Path:
     """이름 60자(끊을 곳 없음), 설명 200자인 과제가 있는 홈 사이트."""
-    long_name = "x" * 60
-    site = make_site(tmp_path / "long", config=cfg_with(plain=[long_name]),
-                     snapshots={long_name: [snap(description=("긴 설명 " * 40)[:200])]})
+    site = make_site(tmp_path / "long", config=cfg_with(plain=[LONG_NAME]),
+                     snapshots={LONG_NAME: [snap(description=LONG_DESCRIPTION)]})
     rebuild_site(site)
     return site
 
@@ -122,22 +125,49 @@ def body_bg(browser, url: str, scheme: str) -> str:
         page.context.close()
 
 
-def contrast(page, selector: str) -> float:
+def contrast(page, selector: str, index: int = 0) -> float:
     """요소의 computed color와 투명이 아닌 가장 가까운 조상의 background-color의 WCAG 명암비."""
-    pair = page.evaluate("""(sel) => {
-        const el = document.querySelector(sel);
+    pair = page.evaluate("""([sel, idx]) => {
+        const el = document.querySelectorAll(sel)[idx];
         const parse = (c) => c.match(/[\\d.]+/g).map(Number);
         let bg = [255, 255, 255, 1], node = el;
         while (node) { const c = parse(getComputedStyle(node).backgroundColor);
             if ((c.length < 4 ? 1 : c[3]) > 0) { bg = c; break; } node = node.parentElement; }
         return [parse(getComputedStyle(el).color), bg];
-    }""", selector)
+    }""", [selector, index])
 
     def luminance(rgb):
         lin = [(v / 255) / 12.92 if v / 255 <= 0.03928 else ((v / 255 + 0.055) / 1.055) ** 2.4 for v in rgb[:3]]
         return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
     lighter, darker = sorted((luminance(pair[0]), luminance(pair[1])), reverse=True)
     return (lighter + 0.05) / (darker + 0.05)
+
+
+KNOWN_SAME_ORIGIN_404 = "suts/pet/publish-log/20261120-131022Z-b6f9393-manual-0000007a.json"  # run 페이지가 부르는 게시 기록(픽스처에 없음)
+
+
+def load_page(page, url: str):
+    """페이지를 열고 200이며 본문이 그려졌는지 확인한다(goto는 404에서도 예외를 내지 않는다)."""
+    response = page.goto(url)
+    try:
+        body = response.text()  # 안내 페이지는 곧 이동하므로 이동 전에 응답 본문을 읽는다
+    except Exception:
+        body = None
+    page.wait_for_load_state("load")
+    assert response is not None and response.status == 200, (url, response and response.status)
+    assert body is None or ("<title>" in body and "</body>" in body), url
+    return response
+
+
+def assert_tab_visible(context, url: str, tab: str) -> None:
+    """새 문서로 `#<tab>`을 열어 app.js가 해시를 읽게 하고, 보이는 탭 구역이 `panel-<tab>` 하나인지 확인한다."""
+    page = context.new_page()
+    try:
+        load_page(page, url + "#" + tab)
+        visible = page.locator('[role="tabpanel"]:visible')
+        assert visible.count() == 1 and visible.first.get_attribute("id") == "panel-" + tab, (url, tab)
+    finally:
+        page.close()
 
 
 def test_req132_no_external_requests(proj, proj_dir, browser):
@@ -149,13 +179,12 @@ def test_req132_no_external_requests(proj, proj_dir, browser):
     page.on("response", lambda resp: not_found.append(resp.url) if resp.status == 404 and resp.url.startswith(proj) else None)
     visited = ["", "projects/pet/index.html", "projects/plain/index.html", "hosting.html", "suts/pet/index.html"]
     for rel in visited + report_pages(proj_dir):
-        page.goto(proj + rel)
-        page.wait_for_load_state("load")
+        load_page(page, proj + rel)
     for tab in TABS:
-        page.goto(proj + "projects/pet/index.html#" + tab)
-        page.wait_for_load_state("load")
+        assert_tab_visible(context, proj + "projects/pet/index.html", tab)
     context.close()
-    assert outside == [], (outside, not_found)
+    assert outside == [], outside
+    assert [url for url in not_found if not url.endswith(KNOWN_SAME_ORIGIN_404)] == [], not_found
     assert not re.search(r"@import|url\(\s*['\"]?https?:", (STATIC_DIR / "v2/app.css").read_text())
     html_files = own_html_files(proj_dir)
     assert html_files
@@ -169,14 +198,27 @@ def test_req133_responsive_360(proj, proj_dir, browser, tmp_path):
     page = context.new_page()
     own = [rel for rel in report_pages(proj_dir)
            if rel.endswith(("index.html", "sonar.html", "compare.html")) and "cucumber" not in rel]
-    with serve(long_names_site(tmp_path)) as long_url:
-        urls = [proj, proj + "projects/plain/index.html", proj + "hosting.html", long_url]
-        urls += [proj + rel for rel in own] + [proj + "projects/pet/index.html#" + tab for tab in TABS]
+    long_site = long_names_site(tmp_path)
+    with serve(long_site) as long_url:
+        urls = [proj, proj + "projects/plain/index.html", proj + "projects/pet/index.html", proj + "hosting.html",
+                long_url] + [proj + rel for rel in own]
         for url in urls:
-            page.goto(url)
-            page.wait_for_load_state("load")
+            load_page(page, url)
             width = page.evaluate("[document.documentElement.scrollWidth, window.innerWidth]")
             assert width[0] <= width[1], (url, width)
+            if url == long_url:  # 이름 60자와 설명 200자가 실제로 이 페이지에 있다
+                text = page.inner_text("body")
+                assert LONG_NAME in text and LONG_DESCRIPTION in text
+        for tab in TABS:
+            tab_page = context.new_page()
+            try:
+                load_page(tab_page, proj + "projects/pet/index.html#" + tab)
+                visible = tab_page.locator('[role="tabpanel"]:visible')
+                assert visible.count() == 1 and visible.first.get_attribute("id") == "panel-" + tab, tab
+                width = tab_page.evaluate("[document.documentElement.scrollWidth, window.innerWidth]")
+                assert width[0] <= width[1], (tab, width)
+            finally:
+                tab_page.close()
     context.close()
 
 
@@ -190,8 +232,11 @@ def test_req134_dark_theme(proj, proj_dir, browser, tmp_path):
         for scheme in ("light", "dark"):
             page = open_page(browser, home_url, scheme=scheme)
             for selector in (".st.s-crit", ".st.s-warn", ".st.s-good", ".st.s-none"):
-                ratio = contrast(page, selector)
-                assert ratio >= 4.5, (scheme, selector, ratio)
+                count = page.locator(selector).count()
+                assert count > 0, (scheme, selector)
+                for index in range(count):
+                    ratio = contrast(page, selector, index)
+                    assert ratio >= 4.5, (scheme, selector, index, ratio)
             page.context.close()
 
 
@@ -206,15 +251,25 @@ def test_req135_status_not_color_only(tmp_path, browser):
         assert crit[0] == "50%" and crit[1] != "rgba(0, 0, 0, 0)"
         assert warn[0] != crit[0]
         assert none[1] == "rgba(0, 0, 0, 0)" and none[2] != "0px"
-        assert all(page.locator(f".st.s-{state}").first.inner_text().strip() for state in ("crit", "warn", "none", "good"))
+        for state in ("crit", "warn", "none", "good"):
+            labels = page.locator(f".st.s-{state}")
+            assert labels.count() > 0, state
+            assert all(labels.nth(index).inner_text().strip() for index in range(labels.count())), state
         page.context.close()
 
 
 def test_req138_reduced_motion(tmp_path, browser):
     home = home_site(tmp_path)
     with serve(home) as url:
+        read_duration = "getComputedStyle(document.querySelector('.caret')).transitionDuration"
+        normal_context = browser.new_context(reduced_motion="no-preference")
+        normal_page = normal_context.new_page()
+        normal_page.goto(url)
+        normal_duration = normal_page.evaluate(read_duration)
+        normal_context.close()
+        assert normal_duration != "0s", normal_duration  # 기본값이 0s가 아니어야 줄임 문맥의 0s가 규칙에서 온 것이다
         context = browser.new_context(reduced_motion="reduce")
         page = context.new_page()
         page.goto(url)
-        assert page.evaluate("getComputedStyle(document.querySelector('.caret')).transitionDuration") == "0s"
+        assert page.evaluate(read_duration) == "0s"
         context.close()
