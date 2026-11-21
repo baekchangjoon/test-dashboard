@@ -172,11 +172,13 @@ S00은 `tools.pin.yaml`에 고정한 커밋의 bbtg를 `gh`로 받는다. 이 �
 ### 주요 옵션
 
 ```
-pipeline/run-all.sh <sut> [--sut-file F] [--only IDS] [--arms base,jqa,owl] [--reps 1..9] [--regenerate]
+pipeline/run-all.sh <sut> [--sut-file F] [--only IDS] [--arms base,jqa,owl[,det]] [--reps 1..9] [--regenerate]
 ```
 
+- `--arms`: 실행할 arm 목록(기본 `base,jqa,owl`). `det`를 더하면 LLM 없이 bbtg 조건식과 jQA 그래프(보강 질의 `S03/ontology-jqa-ext.json` 포함)만으로 케이스를 펼치는 결정적 arm이 함께 돈다. det는 `--reps`와 무관하게 1회만 생성하고, 비교 화면에는 참고 열(입력 체제: LLM 없음, 조건식 포함)로 나오며 판정 계산에서는 빠진다. 설계: `docs/superpowers/specs/2026-11-22-deterministic-arm-design.md`.
+
 - `--reps`: arm별 생성 반복 횟수(기본 3). 줄이면 `compare.html`에 실제 횟수가 표시된다.
-- `--regenerate`: 같은 입력이어도 새 generation(`-g<n>`)을 추가한다. 기존 스냅샷은 바꾸지 않는다.
+- `--regenerate`: 같은 입력이어도 새 generation(`-g<n>`)을 추가한다. 기존 스냅샷은 바꾸지 않는다. det arm은 같은 genId로 다시 만들고, 내용이 달라졌으면 `checksum-changed` 경고를 남긴다.
 - 생성 결과는 입력 해시(번들, 프롬프트, 모델)로 스냅샷해 커밋한다. 입력이 같으면 다음 run은 `claude`를 부르지 않고 스냅샷을 재사용한다.
 
 ### 다른 SUT 추가
