@@ -1,0 +1,106 @@
+[
+ {
+  "class": "OrderService",
+  "file": "plan-tests-OrderService.fetch.json",
+  "items": [
+   {
+    "branch_value": "no_data",
+    "condition": "DB에 orderId 조건에 맞는 데이터 없음 (repository.findById)",
+    "conditionSha": "bdeb2625a81ce0383f8bbcd70b1cfd2f45bfd1c02c614dc645f1c59d8d7bc0bd",
+    "expected": "데이터 미존재 시 예외 또는 빈 응답",
+    "index": 0,
+    "param": "orderId",
+    "prefix": "errorPath"
+   },
+   {
+    "branch_value": "400",
+    "condition": "limit > 100",
+    "conditionSha": "a83167b04ab5924fa325c82de6739e0841e8f4702f1dd7eed815b2419504cd2f",
+    "expected": "OrderInvalidException code=400",
+    "index": 1,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   }
+  ],
+  "method": "fetch"
+ },
+ {
+  "class": "OrderService",
+  "file": "plan-tests-OrderService.place.json",
+  "items": [
+   {
+    "branch_value": "null/empty",
+    "condition": "form = null/empty",
+    "conditionSha": "406686288e200423236b376c85647fe6fa59c2fdb76e2b4c83fc67cc06077f55",
+    "expected": "OrderInvalidException code=400",
+    "index": 0,
+    "param": "form",
+    "prefix": "invalidInput"
+   },
+   {
+    "branch_value": "400",
+    "condition": "form.quantity() < 1 || form.quantity() > 9",
+    "conditionSha": "8ee7b83c4bab1e51f24b2762edd09acd9b88f91245bf2737966326990ab61b52",
+    "expected": "OrderInvalidException code=400",
+    "index": 1,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   },
+   {
+    "branch_value": "400",
+    "condition": "form.label() == null || form.label().length() > 12",
+    "conditionSha": "7b6827426a1f3d52e92d32486d80b16e01f24d3ea1e5441757bca7dd7d3a40b5",
+    "expected": "OrderInvalidException code=400",
+    "index": 2,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   },
+   {
+    "branch_value": "400",
+    "condition": "form.tone() == Tone.NEON && form.credit() < 50",
+    "conditionSha": "036ada071d3896c8c2904ce2095421aea0c6e9fc7dea707d156efe22311cd9fa",
+    "expected": "OrderInvalidException code=400",
+    "index": 3,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   },
+   {
+    "branch_value": "400",
+    "condition": "form.shipDate() == null || !form.shipDate().isAfter(LocalDate.now())",
+    "conditionSha": "389c220c34adb66fb10640c6ea2d50361780a99ab87c5028b527ecaf8df8ddde",
+    "expected": "OrderInvalidException code=400",
+    "index": 4,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   },
+   {
+    "branch_value": "business_branch",
+    "condition": "\"FREESHIP\".equals(form.voucher())",
+    "conditionSha": "f71ea72f6ea13f6b8f7a9afd055ae17dd2f861d7a7be6bf26d454095c87f8a11",
+    "expected": "분기 진입: voucher=FREESHIP 경로",
+    "index": 5,
+    "param": "(from scenarios)",
+    "prefix": "happyPath"
+   },
+   {
+    "branch_value": "409",
+    "condition": "repository.countByBay(form.bay()) >= BAY_LIMIT",
+    "conditionSha": "98311cfd109b1bf4901a6a0414074f3dada7df3b3ca765c3aa01a97c9c11e52c",
+    "expected": "OrderClashException code=409",
+    "index": 6,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   },
+   {
+    "branch_value": "400",
+    "condition": "form.bay() < 10 || form.bay() > 20",
+    "conditionSha": "04ee369395f9ae61da54951bad93425f3568a81e954603e4cd5eb9138f1a0c3c",
+    "expected": "OrderInvalidException code=400",
+    "index": 7,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   }
+  ],
+  "method": "place"
+ }
+]

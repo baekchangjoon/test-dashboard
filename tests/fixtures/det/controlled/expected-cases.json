@@ -1,0 +1,472 @@
+{
+ "note": "case id는 참고용(테스트는 rule·endpoint·values·strict만 비교). 분산값은 11 + sha256(caseId) mod 9, 길이 문자열은 sha256('<field>:<len>') 16진 앞부분.",
+ "cases": [
+  {
+   "id": "fetch-auth-1",
+   "rule": "auth",
+   "endpoint": "GET /svc/orders/{orderId}",
+   "values": {
+    "path.orderId": 1000000
+   },
+   "strict": 403
+  },
+  {
+   "id": "fetch-baseline-valid-1",
+   "rule": "baseline-valid",
+   "endpoint": "GET /svc/orders/{orderId}",
+   "values": {
+    "path.orderId": "ref:orderId",
+    "query.limit": 100
+   },
+   "strict": "2xx"
+  },
+  {
+   "id": "fetch-no-data-1",
+   "rule": "no-data",
+   "endpoint": "GET /svc/orders/{orderId}",
+   "values": {
+    "path.orderId": 1000000,
+    "query.limit": 100
+   },
+   "strict": 404
+  },
+  {
+   "id": "fetch-valid-boundary-1",
+   "rule": "valid-boundary",
+   "endpoint": "GET /svc/orders/{orderId}",
+   "values": {
+    "path.orderId": "ref:orderId",
+    "query.limit": 100
+   },
+   "strict": "2xx"
+  },
+  {
+   "id": "fetch-violation-1",
+   "rule": "violation",
+   "endpoint": "GET /svc/orders/{orderId}",
+   "values": {
+    "path.orderId": "ref:orderId",
+    "query.limit": 101
+   },
+   "strict": 422
+  },
+  {
+   "id": "get-svc-catalog-auth-1",
+   "rule": "auth",
+   "endpoint": "GET /svc/catalog",
+   "values": {},
+   "strict": 403
+  },
+  {
+   "id": "get-svc-catalog-happy-1",
+   "rule": "happy",
+   "endpoint": "GET /svc/catalog",
+   "values": {},
+   "strict": "2xx"
+  },
+  {
+   "id": "place-auth-1",
+   "rule": "auth",
+   "endpoint": "POST /svc/orders",
+   "values": {},
+   "strict": 403
+  },
+  {
+   "id": "place-baseline-valid-1",
+   "rule": "baseline-valid",
+   "endpoint": "POST /svc/orders",
+   "values": {
+    "body.bay": 12,
+    "body.credit": 50,
+    "body.label": "2f7debca6c02",
+    "body.quantity": 1,
+    "body.shipDate": "today+1",
+    "body.tone": "MATTE",
+    "body.voucher": "uniq:place-baseline-valid-1"
+   },
+   "strict": "2xx"
+  },
+  {
+   "id": "place-branch-entry-1",
+   "rule": "branch-entry",
+   "endpoint": "POST /svc/orders",
+   "values": {
+    "body.bay": 15,
+    "body.credit": 50,
+    "body.label": "2f7debca6c02",
+    "body.quantity": 1,
+    "body.shipDate": "today+1",
+    "body.tone": "MATTE",
+    "body.voucher": "FREESHIP"
+   },
+   "strict": "2xx"
+  },
+  {
+   "id": "place-empty-body-1",
+   "rule": "empty-body",
+   "endpoint": "POST /svc/orders",
+   "values": {},
+   "strict": "4xx"
+  },
+  {
+   "id": "place-enum-value-1",
+   "rule": "enum-value",
+   "endpoint": "POST /svc/orders",
+   "values": {
+    "body.bay": 11,
+    "body.credit": 50,
+    "body.label": "2f7debca6c02",
+    "body.quantity": 1,
+    "body.shipDate": "today+1",
+    "body.tone": "GLOSS",
+    "body.voucher": "uniq:place-enum-value-1"
+   },
+   "strict": "2xx"
+  },
+  {
+   "id": "place-enum-value-2",
+   "rule": "enum-value",
+   "endpoint": "POST /svc/orders",
+   "values": {
+    "body.bay": 14,
+    "body.credit": 50,
+    "body.label": "2f7debca6c02",
+    "body.quantity": 1,
+    "body.shipDate": "today+1",
+    "body.tone": "NEON",
+    "body.voucher": "uniq:place-enum-value-2"
+   },
+   "strict": "2xx"
+  },
+  {
+   "id": "place-valid-boundary-1",
+   "rule": "valid-boundary",
+   "endpoint": "POST /svc/orders",
+   "values": {
+    "body.bay": 13,
+    "body.credit": 50,
+    "body.label": "2f7debca6c02",
+    "body.quantity": 1,
+    "body.shipDate": "today+1",
+    "body.tone": "MATTE",
+    "body.voucher": "uniq:place-valid-boundary-1"
+   },
+   "strict": "2xx"
+  },
+  {
+   "id": "place-valid-boundary-2",
+   "rule": "valid-boundary",
+   "endpoint": "POST /svc/orders",
+   "values": {
+    "body.bay": 14,
+    "body.credit": 50,
+    "body.label": "2f7debca6c02",
+    "body.quantity": 9,
+    "body.shipDate": "today+1",
+    "body.tone": "MATTE",
+    "body.voucher": "uniq:place-valid-boundary-2"
+   },
+   "strict": "2xx"
+  },
+  {
+   "id": "place-valid-boundary-3",
+   "rule": "valid-boundary",
+   "endpoint": "POST /svc/orders",
+   "values": {
+    "body.bay": 18,
+    "body.credit": 50,
+    "body.label": "2f7debca6c02",
+    "body.quantity": 1,
+    "body.shipDate": "today+1",
+    "body.tone": "MATTE",
+    "body.voucher": "uniq:place-valid-boundary-3"
+   },
+   "strict": "2xx"
+  },
+  {
+   "id": "place-valid-boundary-4",
+   "rule": "valid-boundary",
+   "endpoint": "POST /svc/orders",
+   "values": {
+    "body.bay": 13,
+    "body.credit": 50,
+    "body.label": "2f7debca6c02",
+    "body.quantity": 1,
+    "body.shipDate": "today+1",
+    "body.tone": "MATTE",
+    "body.voucher": "uniq:place-valid-boundary-4"
+   },
+   "strict": "2xx"
+  },
+  {
+   "id": "place-valid-boundary-5",
+   "rule": "valid-boundary",
+   "endpoint": "POST /svc/orders",
+   "values": {
+    "body.bay": 18,
+    "body.credit": 49,
+    "body.label": "2f7debca6c02",
+    "body.quantity": 1,
+    "body.shipDate": "today+1",
+    "body.tone": "MATTE",
+    "body.voucher": "uniq:place-valid-boundary-5"
+   },
+   "strict": "2xx"
+  },
+  {
+   "id": "place-valid-boundary-6",
+   "rule": "valid-boundary",
+   "endpoint": "POST /svc/orders",
+   "values": {
+    "body.bay": 15,
+    "body.credit": 50,
+    "body.label": "2f7debca6c02",
+    "body.quantity": 1,
+    "body.shipDate": "today+1",
+    "body.tone": "NEON",
+    "body.voucher": "uniq:place-valid-boundary-6"
+   },
+   "strict": "2xx"
+  },
+  {
+   "id": "place-valid-boundary-7",
+   "rule": "valid-boundary",
+   "endpoint": "POST /svc/orders",
+   "values": {
+    "body.bay": 17,
+    "body.credit": 50,
+    "body.label": "2f7debca6c02",
+    "body.quantity": 1,
+    "body.shipDate": "today+1",
+    "body.tone": "MATTE",
+    "body.voucher": "uniq:place-valid-boundary-7"
+   },
+   "strict": "2xx"
+  },
+  {
+   "id": "place-valid-boundary-8",
+   "rule": "valid-boundary",
+   "endpoint": "POST /svc/orders",
+   "values": {
+    "body.bay": 14,
+    "body.credit": 50,
+    "body.label": "2f7debca6c02",
+    "body.quantity": 1,
+    "body.shipDate": "today+1",
+    "body.tone": "MATTE",
+    "body.voucher": "uniq:place-valid-boundary-8"
+   },
+   "strict": "2xx"
+  },
+  {
+   "id": "place-valid-boundary-9",
+   "rule": "valid-boundary",
+   "endpoint": "POST /svc/orders",
+   "values": {
+    "body.bay": 17,
+    "body.credit": 50,
+    "body.label": "2f7debca6c02",
+    "body.quantity": 1,
+    "body.shipDate": "today+1",
+    "body.tone": "MATTE",
+    "body.voucher": "uniq:place-valid-boundary-9"
+   },
+   "strict": "2xx"
+  },
+  {
+   "id": "place-valid-boundary-10",
+   "rule": "valid-boundary",
+   "endpoint": "POST /svc/orders",
+   "values": {
+    "body.bay": 10,
+    "body.credit": 50,
+    "body.label": "2f7debca6c02",
+    "body.quantity": 1,
+    "body.shipDate": "today+1",
+    "body.tone": "MATTE",
+    "body.voucher": "uniq:place-valid-boundary-10"
+   },
+   "strict": "2xx"
+  },
+  {
+   "id": "place-valid-boundary-11",
+   "rule": "valid-boundary",
+   "endpoint": "POST /svc/orders",
+   "values": {
+    "body.bay": 20,
+    "body.credit": 50,
+    "body.label": "2f7debca6c02",
+    "body.quantity": 1,
+    "body.shipDate": "today+1",
+    "body.tone": "MATTE",
+    "body.voucher": "uniq:place-valid-boundary-11"
+   },
+   "strict": "2xx"
+  },
+  {
+   "id": "place-violation-1",
+   "rule": "violation",
+   "endpoint": "POST /svc/orders",
+   "values": {
+    "body.bay": 12,
+    "body.credit": 50,
+    "body.label": "2f7debca6c02",
+    "body.quantity": 0,
+    "body.shipDate": "today+1",
+    "body.tone": "MATTE",
+    "body.voucher": "uniq:place-violation-1"
+   },
+   "strict": 422
+  },
+  {
+   "id": "place-violation-2",
+   "rule": "violation",
+   "endpoint": "POST /svc/orders",
+   "values": {
+    "body.bay": 11,
+    "body.credit": 50,
+    "body.label": "2f7debca6c02",
+    "body.quantity": 10,
+    "body.shipDate": "today+1",
+    "body.tone": "MATTE",
+    "body.voucher": "uniq:place-violation-2"
+   },
+   "strict": 422
+  },
+  {
+   "id": "place-violation-3",
+   "rule": "violation",
+   "endpoint": "POST /svc/orders",
+   "values": {
+    "body.bay": 14,
+    "body.credit": 50,
+    "body.label": null,
+    "body.quantity": 1,
+    "body.shipDate": "today+1",
+    "body.tone": "MATTE",
+    "body.voucher": "uniq:place-violation-3"
+   },
+   "strict": 422
+  },
+  {
+   "id": "place-violation-4",
+   "rule": "violation",
+   "endpoint": "POST /svc/orders",
+   "values": {
+    "body.bay": 15,
+    "body.credit": 50,
+    "body.label": "7eddef7cff931",
+    "body.quantity": 1,
+    "body.shipDate": "today+1",
+    "body.tone": "MATTE",
+    "body.voucher": "uniq:place-violation-4"
+   },
+   "strict": 422
+  },
+  {
+   "id": "place-violation-5",
+   "rule": "violation",
+   "endpoint": "POST /svc/orders",
+   "values": {
+    "body.bay": 19,
+    "body.credit": 49,
+    "body.label": "2f7debca6c02",
+    "body.quantity": 1,
+    "body.shipDate": "today+1",
+    "body.tone": "NEON",
+    "body.voucher": "uniq:place-violation-5"
+   },
+   "strict": 422
+  },
+  {
+   "id": "place-violation-6",
+   "rule": "violation",
+   "endpoint": "POST /svc/orders",
+   "values": {
+    "body.bay": 17,
+    "body.credit": 50,
+    "body.label": "2f7debca6c02",
+    "body.quantity": 1,
+    "body.shipDate": null,
+    "body.tone": "MATTE",
+    "body.voucher": "uniq:place-violation-6"
+   },
+   "strict": 422
+  },
+  {
+   "id": "place-violation-7",
+   "rule": "violation",
+   "endpoint": "POST /svc/orders",
+   "values": {
+    "body.bay": 13,
+    "body.credit": 50,
+    "body.label": "2f7debca6c02",
+    "body.quantity": 1,
+    "body.shipDate": "today",
+    "body.tone": "MATTE",
+    "body.voucher": "uniq:place-violation-7"
+   },
+   "strict": 422
+  },
+  {
+   "id": "place-violation-8",
+   "rule": "violation",
+   "endpoint": "POST /svc/orders",
+   "values": {
+    "body.bay": 16,
+    "body.credit": 50,
+    "body.label": "2f7debca6c02",
+    "body.quantity": 1,
+    "body.shipDate": "today-1",
+    "body.tone": "MATTE",
+    "body.voucher": "uniq:place-violation-8"
+   },
+   "strict": 422
+  },
+  {
+   "id": "place-violation-9",
+   "rule": "violation",
+   "endpoint": "POST /svc/orders",
+   "values": {
+    "body.bay": 12,
+    "body.credit": 50,
+    "body.label": "2f7debca6c02",
+    "body.quantity": 1,
+    "body.shipDate": "today+1",
+    "body.tone": "MATTE",
+    "body.voucher": "uniq:place-violation-9"
+   },
+   "strict": 409
+  },
+  {
+   "id": "place-violation-10",
+   "rule": "violation",
+   "endpoint": "POST /svc/orders",
+   "values": {
+    "body.bay": 9,
+    "body.credit": 50,
+    "body.label": "2f7debca6c02",
+    "body.quantity": 1,
+    "body.shipDate": "today+1",
+    "body.tone": "MATTE",
+    "body.voucher": "uniq:place-violation-10"
+   },
+   "strict": 422
+  },
+  {
+   "id": "place-violation-11",
+   "rule": "violation",
+   "endpoint": "POST /svc/orders",
+   "values": {
+    "body.bay": 21,
+    "body.credit": 50,
+    "body.label": "2f7debca6c02",
+    "body.quantity": 1,
+    "body.shipDate": "today+1",
+    "body.tone": "MATTE",
+    "body.voucher": "uniq:place-violation-11"
+   },
+   "strict": 422
+  }
+ ]
+}

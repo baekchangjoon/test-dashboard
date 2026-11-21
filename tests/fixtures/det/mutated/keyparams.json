@@ -1,0 +1,264 @@
+[
+ {
+  "class": "CustomUserDetailsService",
+  "file": "CustomUserDetailsService_loadUserByHandle.json",
+  "method": "loadUserByHandle",
+  "parameters": [
+   {
+    "accessor": "handle",
+    "http_name": "",
+    "java_type": "String",
+    "name": "handle",
+    "reasons": [
+     {
+      "detail": "\"admin\".equals(handle)",
+      "type": "BRANCH_CONDITION"
+     },
+     {
+      "detail": "\"user\".equals(handle)",
+      "type": "BRANCH_CONDITION"
+     },
+     {
+      "detail": "",
+      "type": "ERROR_TRIGGER"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "class": "BookingService",
+  "file": "BookingService_create.json",
+  "method": "create",
+  "parameters": [
+   {
+    "accessor": "req",
+    "http_name": "",
+    "java_type": "OpenBookingForm",
+    "name": "req",
+    "reasons": [
+     {
+      "detail": "req.stays() < 2 || req.stays() > 45",
+      "type": "BRANCH_CONDITION"
+     },
+     {
+      "detail": "",
+      "type": "ERROR_TRIGGER"
+     },
+     {
+      "detail": "req.kennelSlot() < 200 || req.kennelSlot() > 777",
+      "type": "BRANCH_CONDITION"
+     },
+     {
+      "detail": "req.beastTotal() < 2 || req.beastTotal() > 6",
+      "type": "BRANCH_CONDITION"
+     },
+     {
+      "detail": "req.critterTitle() == null || req.critterTitle().length() < 3 || req.critterTitle().length() > 60",
+      "type": "BRANCH_CONDITION"
+     },
+     {
+      "detail": "req.rateBand() == null",
+      "type": "BRANCH_CONDITION"
+     },
+     {
+      "detail": "req.rateBand() == RateBand.GOLD && req.rewardScore() < 650",
+      "type": "BRANCH_CONDITION"
+     },
+     {
+      "detail": "req.keeperMail() == null || !CONTACT_EMAIL.matcher(req.keeperMail()).matches()",
+      "type": "BRANCH_CONDITION"
+     },
+     {
+      "detail": "req.arrivalDay() == null || !req.arrivalDay().isAfter(LocalDate.now())",
+      "type": "BRANCH_CONDITION"
+     },
+     {
+      "detail": "req.prepayment() * 1.3 < req.stays() * req.rateBand().getDailyFee()",
+      "type": "BRANCH_CONDITION"
+     },
+     {
+      "detail": "repository.countByKennelSlotAndStatus(req.kennelSlot(), BookingState.LOCKED) >= SLOT_LIMIT",
+      "type": "BRANCH_CONDITION"
+     },
+     {
+      "detail": "\"HELLO42\".equals(req.discountKey())",
+      "type": "BRANCH_CONDITION"
+     },
+     {
+      "detail": "req.discountKey() != null && Math.floorMod(req.discountKey().hashCode(), 7) == 3",
+      "type": "BRANCH_CONDITION"
+     },
+     {
+      "detail": "repository.countByKennelSlotAndStatus(...)",
+      "type": "DB_WHERE"
+     },
+     {
+      "detail": "r.setBeastTotal(...)",
+      "type": "DB_WHERE"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "class": "BookingService",
+  "file": "BookingService_delete.json",
+  "method": "delete",
+  "parameters": [
+   {
+    "accessor": "id",
+    "http_name": "id",
+    "java_type": "int",
+    "name": "id",
+    "reasons": [
+     {
+      "detail": "repository.findById(id).orElseThrow(...)",
+      "type": "DB_WHERE"
+     },
+     {
+      "detail": "repository.findById(...)",
+      "type": "DB_WHERE"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "class": "BookingService",
+  "file": "BookingService_getById.json",
+  "method": "getById",
+  "parameters": [
+   {
+    "accessor": "id",
+    "http_name": "id",
+    "java_type": "int",
+    "name": "id",
+    "reasons": [
+     {
+      "detail": "repository.findById(id).orElseThrow(...)",
+      "type": "DB_WHERE"
+     },
+     {
+      "detail": "repository.findById(...)",
+      "type": "DB_WHERE"
+     }
+    ]
+   },
+   {
+    "accessor": "withExpired",
+    "http_name": "withExpired",
+    "java_type": "boolean",
+    "name": "withExpired",
+    "reasons": [
+     {
+      "detail": "!withExpired && r.getArrivalDay().isBefore(LocalDate.now())",
+      "type": "BRANCH_CONDITION"
+     },
+     {
+      "detail": "",
+      "type": "ERROR_TRIGGER"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "class": "BookingService",
+  "file": "BookingService_list.json",
+  "method": "list",
+  "parameters": [
+   {
+    "accessor": "minStays",
+    "http_name": "minStays",
+    "java_type": "Integer",
+    "name": "minStays",
+    "reasons": [
+     {
+      "detail": "repository.findAll().stream().filter(...)",
+      "type": "DB_WHERE"
+     }
+    ]
+   },
+   {
+    "accessor": "latestOnly",
+    "http_name": "latestOnly",
+    "java_type": "boolean",
+    "name": "latestOnly",
+    "reasons": [
+     {
+      "detail": "repository.findAll().stream().filter(r -> minStays == null || r.getStays() >= minStays).filter(r -> {\n\t\t\treturn band == null || r.getRateBand() == band;\n\t\t}).filter(...)",
+      "type": "DB_WHERE"
+     }
+    ]
+   },
+   {
+    "accessor": "band",
+    "http_name": "band",
+    "java_type": "RateBand",
+    "name": "band",
+    "reasons": [
+     {
+      "detail": "repository.findAll().stream().filter(r -> minStays == null || r.getStays() >= minStays).filter(...)",
+      "type": "DB_WHERE"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "class": "BookingService",
+  "file": "BookingService_update.json",
+  "method": "update",
+  "parameters": [
+   {
+    "accessor": "id",
+    "http_name": "id",
+    "java_type": "int",
+    "name": "id",
+    "reasons": [
+     {
+      "detail": "repository.findById(id).orElseThrow(...)",
+      "type": "DB_WHERE"
+     },
+     {
+      "detail": "repository.findById(...)",
+      "type": "DB_WHERE"
+     }
+    ]
+   },
+   {
+    "accessor": "req",
+    "http_name": "",
+    "java_type": "AmendBookingForm",
+    "name": "req",
+    "reasons": [
+     {
+      "detail": "req.status() != null && req.status() != existing.getStatus()\n\t\t\t\t&& !existing.getStatus().mayMoveTo(req.status())",
+      "type": "BRANCH_CONDITION"
+     },
+     {
+      "detail": "",
+      "type": "ERROR_TRIGGER"
+     },
+     {
+      "detail": "req.stays() != null",
+      "type": "BRANCH_CONDITION"
+     },
+     {
+      "detail": "req.stays() < 2 || req.stays() > 45",
+      "type": "BRANCH_CONDITION"
+     },
+     {
+      "detail": "req.stays() != existing.getStays() && repository.countByKennelSlotAndStatus(existing.getKennelSlot(),\n\t\t\t\t\tBooking",
+      "type": "BRANCH_CONDITION"
+     },
+     {
+      "detail": "req.status() != null",
+      "type": "BRANCH_CONDITION"
+     }
+    ]
+   }
+  ]
+ }
+]
