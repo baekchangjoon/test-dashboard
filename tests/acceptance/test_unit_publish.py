@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 import stat
+import sys
 import time
 from pathlib import Path
 
@@ -383,7 +384,7 @@ def exec_env(tmp_path, monkeypatch):
     state.begin(run_dir, "S13")
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    for name, body in (("ssh", "echo 99999999999"), ("rsync", "exit 0")):
+    for name, body in (("ssh", 'case "${@: -1}" in *find*) exit 0;; esac\necho 99999999999'), ("rsync", "exit 0")):
         (bin_dir / name).write_text(f"#!/usr/bin/env bash\n{body}\n")
         (bin_dir / name).chmod(0o755)
     monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
@@ -680,6 +681,8 @@ from td import dashboard_config
 
 INDEX_PREFIX = "_test/u/"
 INDEX_LOG_KEY = f"{INDEX_PREFIX}publish-log/index.json"
+# 기본 가짜 ssh: 과제 목록 조회(find)는 빈 목록, 그 밖(서버 사전 점검의 df·free)은 큰 수
+EMPTY_REMOTE_SSH = 'case "${@: -1}" in *find*) exit 0;; esac\necho 99999999999'
 
 
 def write_fake_collect(root: Path, body: str) -> Path:
@@ -699,7 +702,7 @@ def write_dashboard_cfg(root: Path, data: dict) -> Path:
     return path
 
 
-def index_env(tmp_path: Path, monkeypatch, *, ssh_body: str = "echo 99999999999", rsync_body: str = "exit 0", **extra) -> dict:
+def index_env(tmp_path: Path, monkeypatch, *, ssh_body: str = EMPTY_REMOTE_SSH, rsync_body: str = "exit 0", **extra) -> dict:
     """인덱스 전용 게시를 가짜 실행 파일로 돌리는 환경. ssh의 인자는 ssh.log에 줄마다(마지막 인자 = 원격 명령).
     게시기는 ssh·rsync를 프로세스 PATH에서 찾으므로 monkeypatch로 PATH 앞에 가짜를 둔다(실제 서버에 닿지 않게)."""
     work = tmp_path / "work"
@@ -728,16 +731,87 @@ def restore_signals():
         _signal.signal(sig, handler)
 
 
-def run_fake_index_publication(tmp_path: Path, monkeypatch, *, deleted=(), ssh_fails: bool = False, s3=None, cf=None, **extra) -> dict:
+_FAKE_REMOTE_SSH = r'''
+import json, re, sys
+from pathlib import Path
+STATE = Path(__file__).resolve().parent.parent
+command = sys.argv[-1]
+with open(STATE / "ssh.log", "a") as log:
+    log.write(command.replace("\n", " ") + "\n")
+state = json.loads((STATE / "remote.json").read_text())
+if state.get("unreachable"):
+    print("ssh: connect to host port 22: Operation timed out", file=sys.stderr)
+    sys.exit(255)
+removal = re.fullmatch(r"rm -rf -- '/srv/dashboard/(.*)projects/([^']*)'", command)
+if removal:
+    name = removal.group(2)
+    if name in state.get("fail_rm", []):
+        print(f"rm: cannot remove '/srv/dashboard/{removal.group(1)}projects/{name}': Permission denied", file=sys.stderr)
+        sys.exit(1)
+    state["names"] = [item for item in state["names"] if item != name]
+    (STATE / "remote.json").write_text(json.dumps(state))
+    sys.exit(0)
+if "find " in command:
+    if state.get("fail_list"):
+        print("find: Permission denied", file=sys.stderr)
+        sys.exit(1)
+    directory = re.search(r"d='([^']*)'", command).group(1)
+    if state.get("exists", True):
+        sys.stdout.write("".join(f"{directory}/{name}\0" for name in state["names"]))
+    sys.exit(0)
+print(99999999999)
+'''
+
+
+class FakeRemote:
+    """Lightsail 쪽 `/srv/dashboard/<접두>projects/` 아래 디렉터리 이름을 상태 파일로 흉내 내는 가짜 ssh."""
+
+    def __init__(self, tmp_path: Path):
+        self.state_file = tmp_path / "remote.json"
+        self.log_file = tmp_path / "ssh.log"
+
+    def set(self, **fields) -> None:
+        state = json.loads(self.state_file.read_text()) if self.state_file.exists() else {}
+        state.update(fields)
+        self.state_file.write_text(json.dumps(state))
+
+    @property
+    def names(self) -> list[str]:
+        return json.loads(self.state_file.read_text())["names"]
+
+    def commands(self) -> list[str]:
+        return self.log_file.read_text().splitlines() if self.log_file.exists() else []
+
+    def removals(self) -> list[str]:
+        return [command for command in self.commands() if command.startswith("rm ")]
+
+    def listings(self) -> list[str]:
+        return [command for command in self.commands() if "find " in command]
+
+    def clear_log(self) -> None:
+        self.log_file.unlink(missing_ok=True)
+
+
+def fake_remote(tmp_path: Path, monkeypatch, names=(), **fields) -> FakeRemote:
+    """index_env의 bin/ssh를 상태를 가진 가짜로 바꾼다(index_env를 먼저 부른다)."""
+    script = tmp_path / "bin" / "ssh"
+    script.write_text(f"#!{sys.executable}\n{_FAKE_REMOTE_SSH}")
+    script.chmod(0o755)
+    remote = FakeRemote(tmp_path)
+    remote.set(**{"names": list(names), "fail_rm": [], "exists": True, "fail_list": False, "unreachable": False, **fields})
+    return remote
+
+
+def run_fake_index_publication(tmp_path: Path, monkeypatch, *, deleted=(), remote_names=None, s3=None, cf=None,
+                               remote_fields: dict | None = None, **extra) -> dict:
     """미러에 `deleted`의 과제 디렉터리가 있는(설정에는 없는) 접두로 IndexPublication을 돌린다.
-    ssh_fails면 `rm -rf` 원격 명령만 실패한다(서버 사전 점검은 성공)."""
+    Lightsail 쪽은 FakeRemote(이름은 remote_names, 기본은 deleted와 같다)."""
     s3 = s3 if s3 is not None else FakeS3()
     for name in deleted:
         s3.put(f"{INDEX_PREFIX}projects/{name}/latest.json", b"{}")
         s3.put(f"{INDEX_PREFIX}projects/{name}/index.html", b"<html></html>")
-    ssh_body = ('case "${@: -1}" in rm\\ *) echo "rm: cannot remove" >&2; exit 255;; esac\necho 99999999999' if ssh_fails
-                else "echo 99999999999")
-    env = index_env(tmp_path, monkeypatch, ssh_body=ssh_body, **extra)
+    env = index_env(tmp_path, monkeypatch, **extra)
+    fake_remote(tmp_path, monkeypatch, list(deleted) if remote_names is None else remote_names, **(remote_fields or {}))
     return publish.IndexPublication(env, s3, cf or OkCloudFront()).execute()
 
 
@@ -745,13 +819,14 @@ def test_req100_delete_prefix_guard_and_lightsail_degraded(tmp_path, monkeypatch
     s3 = FakeS3()
     s3.put(f"{INDEX_PREFIX}projects/ab/latest.json")    # 이름이 접두로 겹치는 다른 과제
     s3.put(f"{INDEX_PREFIX}suts/x/runs.json")
-    result = run_fake_index_publication(tmp_path, monkeypatch, deleted=["a"], ssh_fails=True, s3=s3)
+    result = run_fake_index_publication(tmp_path, monkeypatch, deleted=["a"], remote_names=["a", "ab"], s3=s3,
+                                        remote_fields={"fail_rm": ["a", "ab"]})
     assert result["status"] == "degraded" and result["hosts"]["s3"]["status"] == "passed", result
     assert result["hosts"]["lightsail"]["status"] == "failed"
     assert not [key for key in s3.keys() if key.startswith(f"{INDEX_PREFIX}projects/a/")]
     assert f"{INDEX_PREFIX}suts/x/runs.json" in s3.keys()
     assert not (tmp_path / "work/site-mirror" / INDEX_PREFIX / "projects/a").exists()
-    remote = (tmp_path / "ssh.log").read_text().splitlines()
+    remote = FakeRemote(tmp_path).removals()
     assert "rm -rf -- '/srv/dashboard/_test/u/projects/a'" in remote and "rm -rf -- '/srv/dashboard/_test/u/projects/ab'" in remote
     log_text = s3.objects[INDEX_LOG_KEY]["data"].decode()
     log = json.loads(log_text)
@@ -856,8 +931,10 @@ def test_run_collect_interrupt_terminates_child_and_reraises(tmp_path, restore_s
     pid_file = tmp_path / "child.pid"
     write_fake_collect(tmp_path, f"""\
         echo $$ > "{pid_file}"
-        trap 'echo term > "{marker}"; exit 143' TERM
-        sleep 30 & wait
+        trap 'kill "$sleeper" 2>/dev/null; echo term > "{marker}"; exit 143' TERM
+        sleep 30 & sleeper=$!
+        echo "$sleeper" > "{pid_file}.sleep"
+        wait
         """)
     cfg = _collect_cfg(tmp_path, cfg_with(plain="alpha"))
     _signal.signal(_signal.SIGALRM, publish._raise_interrupted)
@@ -866,8 +943,16 @@ def test_run_collect_interrupt_terminates_child_and_reraises(tmp_path, restore_s
     with pytest.raises(publish.PublishInterrupted):
         publish.run_collect({"TD_ROOT": str(tmp_path), "PATH": os.environ["PATH"]}, cfg, tmp_path / "site")
     assert time.monotonic() - started < 20 and marker.read_text().strip() == "term"
-    with pytest.raises(ProcessLookupError):
-        os.kill(int(pid_file.read_text()), 0)
+    for leftover in (pid_file, Path(f"{pid_file}.sleep")):     # collect.sh도 그 sleep 자식도 남지 않는다
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            try:
+                os.kill(int(leftover.read_text()), 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.1)
+        with pytest.raises(ProcessLookupError):
+            os.kill(int(leftover.read_text()), 0)
 
 
 # --- publish_index: 수집 파일도 업로드 게이트를 지난다(규칙 1), 수집 결과가 게시 상태에 준다 -------------------------
@@ -924,3 +1009,110 @@ def test_publish_index_deletes_excluded_and_unconfigured_but_keeps_implicit(tmp_
     assert not (mirror / INDEX_PREFIX / "projects/old").exists() and (mirror / INDEX_PREFIX / "projects/alpha").exists()
     for name in ("hush", "old"):
         assert name not in s3.objects[f"{INDEX_PREFIX}projects.json"]["data"].decode()
+
+
+# --- 수정 1차: Lightsail 과제 정리는 매 게시 원격 목록에서 정한다 -----------------------------------------
+OK_COLLECT = json.dumps({"status": "ok", "reasons": [], "written": [], "excluded": [], "unverified": []})
+
+
+def test_req100_lightsail_list_command_guard():
+    assert publish.lightsail_list_command("_test/u/") == (
+        "d='/srv/dashboard/_test/u/projects'; if [ -d \"$d\" ]; then find \"$d\" -mindepth 1 -maxdepth 1 -type d -print0; fi")
+    assert publish.lightsail_list_command("").startswith("d='/srv/dashboard/projects';")
+    for bad in ("../", "_test/../", "_test//u/", "/_test/u/", "_test/u", "_test/u x/", "_test/u'/", "_test/$(id)/"):
+        with pytest.raises(publish.PublishError):
+            publish.lightsail_list_command(bad)
+
+
+def _alpha_env(tmp_path: Path, monkeypatch, collect_output: str = OK_COLLECT) -> dict:
+    write_fake_collect(tmp_path, f"echo '{collect_output}'\n")
+    return index_env(tmp_path, monkeypatch, TD_DASHBOARD_CONFIG=str(write_dashboard_cfg(tmp_path, cfg_with(plain="alpha"))))
+
+
+def _publish(env: dict, s3: FakeS3) -> dict:
+    return publish.IndexPublication(env, s3, OkCloudFront()).execute()
+
+
+def test_req100_remote_prune_retries_failed_removal_on_next_publish(tmp_path, monkeypatch, restore_signals):
+    env, s3 = _alpha_env(tmp_path, monkeypatch), FakeS3()
+    remote = fake_remote(tmp_path, monkeypatch, ["alpha", "old"], fail_rm=["old"])
+    first = _publish(env, s3)
+    assert first["status"] == "degraded" and first["hosts"]["lightsail"]["status"] == "failed", first
+    assert remote.removals() == ["rm -rf -- '/srv/dashboard/_test/u/projects/old'"], "keep 집합의 alpha는 지우지 않는다"
+    assert "old" not in s3.objects[INDEX_LOG_KEY]["data"].decode()
+    remote.set(fail_rm=[])
+    remote.clear_log()
+    second = _publish(env, s3)                                   # 같은 설정, 다음 게시가 따라잡는다
+    assert second["status"] == "passed", second
+    assert remote.removals() == ["rm -rf -- '/srv/dashboard/_test/u/projects/old'"] and remote.names == ["alpha"]
+
+
+def test_req100_remote_prune_keeps_excluded_out_of_keep_set(tmp_path, monkeypatch, restore_signals):
+    excluded = json.dumps({"status": "degraded", "reasons": ["비공개 과제 1개 제외"], "written": [], "excluded": ["alpha"],
+                           "unverified": []})
+    env = _alpha_env(tmp_path, monkeypatch, excluded)
+    remote = fake_remote(tmp_path, monkeypatch, ["alpha"])
+    result = _publish(env, FakeS3())
+    assert remote.removals() == ["rm -rf -- '/srv/dashboard/_test/u/projects/alpha'"] and remote.names == []
+    assert result["status"] == "degraded" and result["hosts"]["lightsail"]["status"] == "passed"
+
+
+def test_req100_remote_prune_never_passes_unsafe_names_to_rm(tmp_path, monkeypatch, restore_signals):
+    env, s3 = _alpha_env(tmp_path, monkeypatch), FakeS3()
+    remote = fake_remote(tmp_path, monkeypatch, ["..", "a b", "-rf", ".hidden", "alpha", "old"])
+    result = _publish(env, s3)
+    assert remote.removals() == ["rm -rf -- '/srv/dashboard/_test/u/projects/old'"]
+    assert result["status"] == "passed" and "4개" in result["hosts"]["lightsail"]["warning"], result
+    log_text = s3.objects[INDEX_LOG_KEY]["data"].decode()
+    assert all(name not in log_text for name in ("a b", "-rf", ".hidden", "projects/old"))
+
+
+def test_req100_preflight_error_skips_prune_and_next_publish_catches_up(tmp_path, monkeypatch, restore_signals):
+    env, s3 = _alpha_env(tmp_path, monkeypatch), FakeS3()
+    remote = fake_remote(tmp_path, monkeypatch, ["alpha", "old"], unreachable=True)
+    first = _publish(env, s3)
+    assert first["status"] == "degraded" and first["hosts"]["lightsail"]["status"] == "failed"
+    assert remote.listings() == [] and remote.removals() == []
+    remote.set(unreachable=False)
+    second = _publish(env, s3)
+    assert second["status"] == "passed" and remote.names == ["alpha"]
+    assert remote.removals() == ["rm -rf -- '/srv/dashboard/_test/u/projects/old'"]
+
+
+def test_req100_missing_remote_projects_dir_is_not_an_error(tmp_path, monkeypatch, restore_signals):
+    env = _alpha_env(tmp_path, monkeypatch)
+    remote = fake_remote(tmp_path, monkeypatch, [], exists=False)
+    result = _publish(env, FakeS3())
+    assert result["status"] == "passed" and len(remote.listings()) == 1 and remote.removals() == []
+
+
+def test_req100_failed_listing_is_degraded_without_removals(tmp_path, monkeypatch, restore_signals):
+    env = _alpha_env(tmp_path, monkeypatch)
+    remote = fake_remote(tmp_path, monkeypatch, ["old"], fail_list=True)
+    result = _publish(env, FakeS3())
+    assert result["status"] == "degraded" and result["hosts"]["lightsail"]["status"] == "failed"
+    assert remote.removals() == [] and remote.names == ["old"]
+
+
+def test_req100_no_prune_when_keep_set_cannot_be_computed(tmp_path, monkeypatch, restore_signals):
+    env = index_env(tmp_path, monkeypatch, TD_DASHBOARD_CONFIG=str(tmp_path / "missing.yaml"))   # 설정 오류
+    remote = fake_remote(tmp_path, monkeypatch, ["old"])
+    result = _publish(env, FakeS3())
+    assert result["status"] == "failed"
+    assert remote.listings() == [] and remote.removals() == [] and remote.names == ["old"]
+
+
+def test_s13_publication_prunes_from_remote_listing_too(exec_env):
+    run_id, run_dir, env, tmp_path = exec_env
+    remote = fake_remote(tmp_path, None, ["old"])          # exec_env의 bin/ssh를 바꾼다(PATH는 이미 앞에 있다)
+    result = execute(run_id, run_dir, env, FakeS3(), OkCloudFront())
+    assert result["status"] == "passed", result
+    assert remote.removals() == ["rm -rf -- '/srv/dashboard/_test/u/projects/old'"]
+
+
+def test_write_index_log_refuses_local_absolute_path(tmp_path):
+    s3 = FakeS3()
+    result = publish.build_result("degraded", "failed at /Users/someone/checkout/x.txt", {"s3": {"status": "passed"}}, {}, 0)
+    with pytest.raises(publish.PublishError, match="게이트"):
+        publish.write_index_log(s3, BUCKET, tmp_path / "mirror", INDEX_PREFIX, result)
+    assert [call for call in s3.calls if call[0] == "put"] == [] and not (tmp_path / "mirror").exists()

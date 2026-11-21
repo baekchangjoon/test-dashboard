@@ -150,6 +150,18 @@ class Site:
         domain = self.local_env["TD_DOMAIN"]
         return helpers.https_get(f"reports.{domain}", domain, path)
 
+    def _lightsail(self, remote: str) -> subprocess.CompletedProcess:
+        env = self.local_env
+        return subprocess.run(["ssh", "-i", env["TD_SSH_KEY_PATH"], "-o", "BatchMode=yes", "-o", "ConnectTimeout=20",
+                               "-o", "LogLevel=ERROR", f"ubuntu@{env['TD_LIGHTSAIL_IP']}", remote],
+                              capture_output=True, text=True, timeout=60)
+
+    def lightsail_make_dir(self, rel: str) -> None:
+        """이 테스트의 하위 접두 안에만 디렉터리를 만든다(앞선 게시가 지우지 못한 과제 디렉터리를 흉내 낸다)."""
+        assert self.prefix.startswith("_test/") and re.fullmatch(r"[A-Za-z0-9_./-]+", self.prefix + rel) and ".." not in rel
+        done = self._lightsail(f"mkdir -p '/srv/dashboard/{self.prefix}{rel}' && touch '/srv/dashboard/{self.prefix}{rel}/index.html'")
+        assert done.returncode == 0, done.stderr
+
     def lightsail_exists(self, rel: str) -> bool:
         """`/srv/dashboard/<접두><rel>`이 Lightsail에 있는가(읽기 전용 `test -e`)."""
         assert re.fullmatch(r"[A-Za-z0-9_./-]+", self.prefix + rel) and ".." not in rel
@@ -309,6 +321,12 @@ def test_req100_removed_or_private_project_deleted(seeded_prefix, site_of, tmp_p
     assert gone(), "비공개가 된 과제가 남았다"
     assert all(site.count(rel) >= count for rel, count in counts.items()), counts
     assert "alpha" not in json.dumps(site.json("publish-log/index.json"), ensure_ascii=False)
+    # 따라잡기: S3·미러에는 없고 Lightsail에만 남은 과제 디렉터리(앞선 게시의 원격 삭제 실패)를 다음 게시가 원격 목록에서 지운다
+    site.lightsail_make_dir("projects/stray")
+    assert site.lightsail_exists("projects/stray") and site.count("projects/stray/") == 0
+    index_publish(seeded_prefix, both, fakes, tmp_path)
+    assert not site.lightsail_exists("projects/stray") and site.lightsail_exists("projects/beta")
+    assert "stray" not in json.dumps(site.json("publish-log/index.json"), ensure_ascii=False)
 
 
 # --- REQ-107 ---------------------------------------------------------------------------------

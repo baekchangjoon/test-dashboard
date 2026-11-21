@@ -944,7 +944,7 @@ def run_fake_publication(run_dir: Path) -> dict:
         {"outputs": {"bucket": {"value": "td-reports-test"}, "distribution_id": {"value": "DIST"}}}))
     bin_dir = scratch / "bin"
     bin_dir.mkdir()
-    for name, body in (("ssh", "echo 99999999999"), ("rsync", "exit 0")):
+    for name, body in (("ssh", 'case "${@: -1}" in *find*) exit 0;; esac\necho 99999999999'), ("rsync", "exit 0")):
         (bin_dir / name).write_text(f"#!/usr/bin/env bash\n{body}\n")
         (bin_dir / name).chmod(0o755)
     saved_signals = {sig: signal.getsignal(sig) for sig in (signal.SIGINT, signal.SIGTERM)}
