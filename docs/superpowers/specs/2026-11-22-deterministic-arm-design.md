@@ -36,7 +36,7 @@
 
 1. 현재 run의 bbtg raw
    - `S02/bbtg/raw/stdout/plan-tests-*.json`: `test_cases[]`의 `condition`, `expected`, `branch_value`, `param`, `prefix` (주 원천)
-   - `S02/bbtg/raw/artifacts/key-params/*.json`: `parameters[].reasons[].detail`(plan-tests에 없는 조건 보충), `http_name`, `java_type`
+   - `S02/bbtg/raw/artifacts/key-params/*.json`: `parameters[]`의 `name`, `accessor`, `http_name`, `java_type`, `reasons[].{type,detail}`(plan-tests에 없는 조건 보충. `type`으로 `BRANCH_CONDITION`과 잡음(`DB_WHERE`, `ERROR_TRIGGER`)을 가른다)
    - `S02/bbtg/raw/artifacts/inspect-auth/result.json`: `required_headers`만
    - 읽지 않음: `derive-test-data.json`(columns의 `is_nullable`이 전부 true라 정보 없음, 절대경로 포함), `interceptor_sources`(소스 원문)
 2. `S03/ontology-jqa.json`(기존) + `S03/ontology-jqa-ext.json`(신규, §5.1)
