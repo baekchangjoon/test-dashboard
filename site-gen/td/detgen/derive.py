@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from td.detgen.constraints import BASE, LARGE_NUMBER, OMIT, UNIQ, Con, Constraints, Spread, Uniq, Value
-from td.detgen.endpoints import Catalog, Endpoint, simple, slug
+from td.detgen.endpoints import Catalog, Endpoint, simple, slug, status_class
 from td.detgen.inputs import Bundle
 from td.detgen.parse import parse
 
@@ -62,6 +62,7 @@ class Derivation:
     cases: list[Case]
     unresolved: list[dict]
     universe: dict
+    timezone: str = ""   # SUT 타임존(번들 harness.json). 렌더러가 feature Background로 실어 glue가 today±N을 푼다
 
 
 @dataclass
@@ -317,7 +318,8 @@ class _Deriver:
             if protected and ep.label != self.catalog.login:
                 self.drafts.append(_Draft(ep, "auth", ["harness:unauthenticatedStatus", source], (source, 0, 0, 0),
                                           path_mode="missing", assumes=["보호됨"],
-                                          expect={"strict": self.harness.get("unauthenticatedStatus"), "class": "4xx",
+                                          expect={"strict": self.harness.get("unauthenticatedStatus"),
+                                                  "class": status_class(self.harness.get("unauthenticatedStatus")),
                                                   "source": "harness-config"}))
             if ep.body_type is not None and ep.body is None and not ep.mapped and ep.method != "GET":
                 self._skip(source, "no-body-schema", ep, "happy")
@@ -504,7 +506,9 @@ class _Deriver:
         self.unresolved.sort(key=lambda e: (e["source"], e["rule"], e["reason"], e["endpoint"] or ""))
         cases = [d.case for d in made]
         merged = sum(1 for d in self.drafts if d.merged)
-        return Derivation(cases, self.unresolved, self._universe(cases, merged))
+        timezone = self.harness.get("timezone")
+        return Derivation(cases, self.unresolved, self._universe(cases, merged),
+                          timezone if isinstance(timezone, str) else "")
 
     def _universe(self, cases, merged: int) -> dict:
         by_reason = dict.fromkeys(REASONS, 0)

@@ -2,7 +2,8 @@
 # S03 jqa: jQAssistant로 SUT classes를 scan -> analyze(Spring 개념) 하고, 루프백 server를 백그라운드로 띄워 고정 Cypher
 # 묶음(ontology/jqa/queries)을 Bolt로 질의해 S03/ontology-jqa.json을 만든다.
 # 입력: S00(tools/jqassistant, tools/jqa-repo), SUT classes 디렉터리(sut.yaml classes). 산출물: S03/{ontology-jqa.json, store/, *.log}.
-# 보강: 같은 server에 ontology/jqa/queries/ext를 질의해 S03/ontology-jqa-ext.json(det arm 입력)을 쓴다. 실패하면 S03은 degraded다.
+# 보강: 같은 server에 ontology/jqa/queries/ext를 질의해 S03/ontology-jqa-ext.json(det arm 입력)을 쓴다. 실패하면 det를 요청한
+# run에서만 S03을 degraded로 둔다(det를 요청하지 않은 run은 로그만 남기고 ext 파일을 지운 채 원래 상태를 유지한다).
 # 모든 jQA 호출은 같은 전용 로컬 저장소(-Djqassistant.repositories.local=tools/jqa-repo)를 쓰고, 시작 전에 그 안의
 # Spring 플러그인 jar가 tools.pin.yaml의 sha256과 같은지 확인한다. 외부 명령은 td_run으로 시간 제한을 건다(jQA 900초).
 # server는 stdin이 열려 있는 동안만 산다(jQA 2.9.1은 Enter를 기다린다). fifo를 읽기/쓰기로 열어 stdin을 붙들고, 종료 시
@@ -87,7 +88,7 @@ EXPORT_OUT="$(td_py -m td.ontology_jqa export --bolt-port "$BOLT_PORT" --run-dir
   --out "$OUT_DIR/ontology-jqa.json" 2>&1)" || s03_fail "$EXPORT_OUT"
 
 # 보강 그래프(ontology/jqa/queries/ext -> ontology-jqa-ext.json, det arm 입력). 기존 산출물과 별도 파일이며, 실패해도 S03을
-# 실패시키지 않고 degraded로 둔다(기존 ontology-jqa.json은 그대로 쓴다).
+# 실패시키지 않는다. det를 요청한 run이면 degraded로 두고, 아니면 로그만 남긴다(기존 ontology-jqa.json은 그대로 쓴다).
 EXT_FILE="$OUT_DIR/ontology-jqa-ext.json"
 EXT_REASON=""
 rm -f "$EXT_FILE"
@@ -127,7 +128,15 @@ else
   OUTPUTS="$(jq -cn --arg ontology "$OUT_DIR/ontology-jqa.json" '{ontology: $ontology}')"
 fi
 REASONS=()   # ext 실패 사유가 있으면 맨 앞에 둔다(사유 접두사 `ext export 실패:`로 판별할 수 있게)
-[[ -z "$EXT_REASON" ]] || { td_log "S03 $EXT_REASON"; REASONS+=("$EXT_REASON"); }
+if [[ -n "$EXT_REASON" ]]; then
+  td_log "S03 $EXT_REASON"
+  rm -f "$EXT_FILE"
+  if td_arm_requested det; then
+    REASONS+=("$EXT_REASON")
+  else
+    td_log "S03 det를 요청하지 않은 run이라 ext 실패로 degraded 처리하지 않는다"
+  fi
+fi
 [[ "$FALLBACKS" == "[]" ]] || REASONS+=("Spring 개념이 비어 :Annotation 쿼리로 대체: $FALLBACKS")
 if [[ ${#REASONS[@]} -eq 0 ]]; then
   td_stage_end S03 passed --outputs-json "$OUTPUTS" --extra-json "$EXTRA"

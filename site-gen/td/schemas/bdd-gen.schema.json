@@ -100,14 +100,13 @@
       "properties": {
         "genId": {
           "type": "string",
-          "pattern": "^(base|jqa|owl|det)-[0-9a-f]{8}-r[1-9](-g[0-9]+)?$"
+          "pattern": "^(base|jqa|owl)-[0-9a-f]{8}-r[1-9](-g[0-9]+)?$"
         },
         "arm": {
           "enum": [
             "base",
             "jqa",
-            "owl",
-            "det"
+            "owl"
           ]
         },
         "rep": {
@@ -245,7 +244,7 @@
       "description": "LLM arm(base/jqa/owl) generation 항목."
     },
     "detGeneration": {
-      "description": "det arm generation 항목(설계 §5.4). LLM을 부르지 않으므로 모델·토큰·수리 필드가 없고, rep은 항상 1이다. inputHash = sha256(bundleHash + generator.version + generator.glueChecksum).",
+      "description": "det arm generation 항목(설계 §5.4). LLM을 부르지 않으므로 모델·토큰·수리 필드가 없고, rep은 항상 1이다. inputHash = sha256(bundleHash + generator.version + generator.sourceChecksum + generator.glueChecksum).",
       "type": "object",
       "required": [
         "genId",
@@ -301,7 +300,8 @@
           "required": [
             "name",
             "version",
-            "glueChecksum"
+            "glueChecksum",
+            "sourceChecksum"
           ],
           "additionalProperties": false,
           "properties": {
@@ -313,6 +313,9 @@
               "minLength": 1
             },
             "glueChecksum": {
+              "$ref": "#/$defs/sha256"
+            },
+            "sourceChecksum": {
               "$ref": "#/$defs/sha256"
             }
           }

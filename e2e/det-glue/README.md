@@ -5,3 +5,4 @@
 - `e2e/harness/CONTRACT.md`의 "feature마다 Steps 클래스" 규약에 대한 det 전용 예외다. det는 feature별 Steps 클래스를 만들지 않고 모든 step을 `glue/support/`에 둔다. `td.scenarios.layout_violations`는 `glue/support/` 아래 배치를 허용하므로 그대로 통과한다.
 - 이 예외를 CONTRACT.md에 적지 않는 이유: CONTRACT.md는 LLM arm(base/jqa/owl)의 생성 입력 번들에 들어간다. 내용을 바꾸면 기존 arm의 번들 해시가 바뀌어 스냅샷을 재사용할 수 없다(REQ-102).
 - 하네스 API(`Harness.baseUrl/authed/anonymous`)와 허용 의존성(Cucumber 8.1.0, REST Assured 5.5.1, AssertJ)만 쓰고 `@Before`/`@After` 훅은 두지 않는다.
+- SUT 타임존: 렌더러가 모든 feature의 `Background:`에 `Given the SUT timezone is "<tz>"`(번들 harness.json 값)를 싣고, glue는 그 값으로 `today±N`을 푼다. glue에는 기본 타임존이 없다(이 step 없이 날짜 기호를 풀면 시나리오가 실패한다).

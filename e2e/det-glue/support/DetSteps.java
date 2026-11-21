@@ -7,6 +7,7 @@ import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
 import io.restassured.response.Response;
 import io.restassured.specification.RequestSpecification;
+import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -33,6 +34,7 @@ public class DetSteps {
     private static final String JSON_TYPE = "application/json";
 
     private String caseId = "unknown";
+    private ZoneId sutZone;
     private String method;
     private String pathTemplate;
     private final Map<String, Object> pathVariables = new LinkedHashMap<>();
@@ -44,6 +46,12 @@ public class DetSteps {
     private Response priorResponse;
     private int priorCount;
     private Response response;
+
+    /** feature Background step. 시나리오마다 새 인스턴스라 Background가 매번 다시 정한다. */
+    @Given("^the SUT timezone is \"([^\"]+)\"$")
+    public void sutTimezone(String name) {
+        sutZone = DetValues.zone(name);
+    }
 
     @Given("^the case \"([^\"]+)\"$")
     public void theCase(String id) {
@@ -105,10 +113,10 @@ public class DetSteps {
         assertThat(method).as("%s: 요청 대상이 정해지지 않았다", caseId).isNotNull();
         RequestSpecification spec = anonymous ? Harness.anonymous() : Harness.authed();
         for (Map.Entry<String, Object> entry : pathVariables.entrySet()) {
-            spec = spec.pathParam(entry.getKey(), DetValues.text(DetValues.resolve(entry.getValue(), variables)));
+            spec = spec.pathParam(entry.getKey(), DetValues.text(DetValues.resolve(entry.getValue(), variables, sutZone)));
         }
         for (Map.Entry<String, Object> entry : queryParameters.entrySet()) {
-            Object value = DetValues.resolve(entry.getValue(), variables);
+            Object value = DetValues.resolve(entry.getValue(), variables, sutZone);
             if (value != null) {  // null 쿼리 값은 파라미터를 보내지 않는다는 뜻이다
                 spec = spec.queryParam(entry.getKey(), DetValues.text(value));
             }
@@ -116,7 +124,7 @@ public class DetSteps {
         if (noBody) {
             spec = spec.contentType(JSON_TYPE);
         } else if (!bodyFields.isEmpty() || BODY_METHODS.contains(method)) {
-            spec = spec.contentType(JSON_TYPE).body(DetValues.toJson(DetValues.resolve(bodyFields, variables)));
+            spec = spec.contentType(JSON_TYPE).body(DetValues.toJson(DetValues.resolve(bodyFields, variables, sutZone)));
         }
         response = spec.request(method, pathTemplate);
         System.out.println("DET-STATUS " + caseId + " " + response.statusCode());
@@ -143,9 +151,9 @@ public class DetSteps {
         Matcher matcher = PATH_VARIABLE.matcher(priorPath);
         while (matcher.find()) {
             String name = matcher.group(1);
-            spec = spec.pathParam(name, DetValues.text(DetValues.resolve("ref:" + name, variables)));
+            spec = spec.pathParam(name, DetValues.text(DetValues.resolve("ref:" + name, variables, sutZone)));
         }
-        Object body = DetValues.resolve(DetValues.parse(bodyJson), variables, "#prior" + priorCount++);
+        Object body = DetValues.resolve(DetValues.parse(bodyJson), variables, "#prior" + priorCount++, sutZone);
         priorResponse = spec.contentType(JSON_TYPE).body(DetValues.toJson(body)).request(priorMethod, priorPath);
         assertThat(priorResponse.statusCode() / 100).as("%s: 선행 요청 %s %s 실패(상태 %d)", caseId, priorMethod, priorPath,
                 priorResponse.statusCode()).isEqualTo(2);

@@ -10,7 +10,9 @@
 - 첫 step 뒤의 Given 계열 step은 모두 `And`로 쓴다(Cucumber에서 같은 뜻이다).
 - 선행 요청: `And a prior request to "<METHOD> <path>" with body <json-object>[ capturing "<jsonField>" as "<var>"]`.
   capture가 둘 이상이면 변수 이름 순으로 첫째를 같은 줄에, 나머지를 `And the prior response field "<f>" is captured as "<v>"`로 쓴다.
-- 단정: `expect.strict`가 정수면 `Then the response status is <n>`, `"2xx"`/`"4xx"`면 `Then the response status is in class "<c>"`.
+- 단정: `expect.strict`가 정수면 `Then the response status is <n>`, `"[1-5]xx"`면 `Then the response status is in class "<c>"`.
+- 모든 feature는 `Background:`에 `Given the SUT timezone is "<tz>"` 한 step을 둔다(tz는 번들 harness.json, `Derivation.timezone`).
+  glue는 이 값으로 `today±N`을 푼다. Background는 pickle이 아니므로 testId·`@case:` 매핑은 시나리오 줄만 본다.
 - `empty-body` 규칙은 본문 없이 보낸다(`And the request has no body`). 그 밖의 POST/PUT/PATCH는 본문 필드가 없어도 `{}`를 보낸다(glue).
 - `cases.json`: 키 정렬·들여쓰기 2·끝 줄바꿈. values는 `body.<f>`/`query.<f>`/`path.<f>` 키(통제 fixture의 기대 목록과 같은 표기)로
   모으고, 재현에 필요한 `auth`와 `setup`을 덧붙인다.
@@ -38,7 +40,8 @@ CASES_FILE = "cases.json"
 _CASE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")
 _FIELD_NAME = re.compile(r'^[^"\s]+$')
 _PATH_VARIABLE = re.compile(r"\{([^}/]+)}")
-_STATUS_CLASSES = ("2xx", "4xx")
+_STATUS_CLASS = re.compile(r"^[1-5]xx$")
+_TIMEZONE = re.compile(r"^[A-Za-z][A-Za-z0-9_+\-]*(?:/[A-Za-z0-9_+\-]+)*$")
 _NO_BODY_RULE = "empty-body"
 
 
@@ -119,9 +122,9 @@ def _assert_step(case: Case) -> str:
     strict = case.expect.get("strict")
     if isinstance(strict, int) and not isinstance(strict, bool) and 100 <= strict <= 599:
         return f"Then the response status is {strict}"
-    if strict in _STATUS_CLASSES:
+    if isinstance(strict, str) and _STATUS_CLASS.match(strict):
         return f'Then the response status is in class "{strict}"'
-    raise RenderError(f"{case.id}: expect.strict는 상태 코드 정수 또는 {_STATUS_CLASSES} 중 하나여야 한다({strict!r})")
+    raise RenderError(f"{case.id}: expect.strict는 상태 코드 정수 또는 \"[1-5]xx\" 클래스여야 한다({strict!r})")
 
 
 def _scenario(case: Case) -> list[str]:
@@ -170,8 +173,16 @@ def _feature_names(endpoints: list[str]) -> dict[str, str]:
     return names
 
 
-def _feature_text(label: str, cases: list[Case]) -> str:
-    lines = [f"Feature: {label}", "  Deterministic cases derived from the analysis inputs for one endpoint.", ""]
+def _timezone_step(timezone: object) -> str:
+    """Background step. 타임존이 없거나 IANA 이름 꼴이 아니면 RenderError(glue가 기본값으로 대신하지 않는다)."""
+    if not isinstance(timezone, str) or not _TIMEZONE.match(timezone):
+        raise RenderError(f"SUT 타임존이 없거나 형식이 맞지 않는다: {timezone!r}")
+    return f'Given the SUT timezone is "{timezone}"'
+
+
+def _feature_text(label: str, cases: list[Case], timezone_step: str) -> str:
+    lines = [f"Feature: {label}", "  Deterministic cases derived from the analysis inputs for one endpoint.", "",
+             "  Background:", f"    {timezone_step}", ""]
     for case in cases:
         lines += _scenario(case) + [""]
     return "\n".join(lines).rstrip("\n") + "\n"
@@ -224,9 +235,10 @@ def render(derivation: Derivation, out_dir: Path) -> list[str]:
     for case in derivation.cases:
         by_endpoint.setdefault(case.endpoint, []).append(case)
     names = _feature_names(list(by_endpoint))
+    timezone_step = _timezone_step(derivation.timezone)
     contents: dict[str, bytes] = {}
     for label in sorted(by_endpoint):
-        contents[f"{FEATURES_DIR}/{names[label]}"] = _feature_text(label, by_endpoint[label]).encode("utf-8")
+        contents[f"{FEATURES_DIR}/{names[label]}"] = _feature_text(label, by_endpoint[label], timezone_step).encode("utf-8")
     contents[CASES_FILE] = _cases_text(derivation).encode("utf-8")
     glue = _glue_files(GLUE_DIR)
     if not glue:

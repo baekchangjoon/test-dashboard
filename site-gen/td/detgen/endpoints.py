@@ -64,6 +64,13 @@ def simple(fqn: str) -> str:
     return re.split(r"[.$]", fqn or "")[-1]
 
 
+def status_class(code) -> str:
+    """상태 코드 → 클래스(`<백의 자리>xx`). 100~599 정수가 아니면(설정 누락 등) 규칙 기본값 `4xx`."""
+    if isinstance(code, int) and not isinstance(code, bool) and 100 <= code <= 599:
+        return f"{code // 100}xx"
+    return "4xx"
+
+
 def slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
 
@@ -181,7 +188,7 @@ class Catalog:
         if match is None:
             return None
         code = int(match.group(2))
-        result = {"strict": code, "class": "2xx" if code < 300 else "4xx", "source": "bbtg", "bbtgCode": code}
+        result = {"strict": code, "class": status_class(code), "source": "bbtg", "bbtgCode": code}
         if match.group(1):
             name = simple(match.group(1))
             exceptions = self.ext.get("exceptions", {})
@@ -189,7 +196,7 @@ class Catalog:
             if len(hits) == 1 and isinstance(exceptions[hits[0]].get("status"), int):
                 status = exceptions[hits[0]]["status"]
                 result.update({"strict": status, "graphStatus": status, "source": "graph",
-                               "class": "2xx" if status < 300 else "4xx"})
+                               "class": status_class(status)})
         return result
 
     def not_found(self, ep: Endpoint) -> dict:
@@ -198,5 +205,5 @@ class Catalog:
         for info in self.ext.get("exceptions", {}).values():
             handler = info.get("handler") or ""
             if info.get("status") == status and ep.controller and handler.startswith((ep.controller + "$", ep.controller + "#")):
-                return {"strict": status, "class": "4xx", "source": "graph", "graphStatus": status}
+                return {"strict": status, "class": status_class(status), "source": "graph", "graphStatus": status}
         return {"strict": "4xx", "class": "4xx", "source": "rule"}

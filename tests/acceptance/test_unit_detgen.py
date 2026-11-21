@@ -129,6 +129,18 @@ def test_projection_hash_changes_with_input(tmp_path):
     assert inputs.project(run, SUT_FILE, tmp_path / "o2").input_hash != before
 
 
+def test_projection_hash_includes_missing_list(tmp_path):
+    # 깨진 선택 파일(missing에 남음)과 아예 없는 파일: 번들 파일 내용은 같지만 누락 목록이 달라 해시도 달라야 한다(M2)
+    absent = inputs.project(_copy(RAW_MIN, tmp_path / "a"), SUT_FILE, tmp_path / "o1")
+    broken_run = _copy(RAW_MIN, tmp_path / "b")
+    (broken_run / "S02" / "bbtg" / "raw" / "stdout" / "plan-tests-Zed.q.json").write_text("{not json", encoding="utf-8")
+    broken = inputs.project(broken_run, SUT_FILE, tmp_path / "o2")
+    assert absent.missing == [] and broken.missing == ["plan:plan-tests-Zed.q.json"]
+    files = lambda p: json.loads((p.dir / "STAMP.json").read_text(encoding="utf-8"))["files"]  # noqa: E731
+    assert files(absent) == files(broken)
+    assert absent.input_hash != broken.input_hash
+
+
 def test_timezone_from_compose_env(tmp_path):
     root = tmp_path / "repo"
     sut_dir = root / "suts" / "x"
@@ -954,9 +966,14 @@ def test_render_gherkin_steps(tmp_path):
     features = [name for name in written if name.startswith("features/")]
     assert len(features) == len({case.endpoint for case in derivation.cases})
     steps = {}
+    assert derivation.timezone == "UTC"  # 통제 fixture의 harness.json
     for name in features:
         text = (out / name).read_text(encoding="utf-8")
         assert text.startswith("Feature: ")
+        # I1: 모든 feature가 Background로 번들의 SUT 타임존을 싣는다(첫 시나리오보다 앞)
+        background = text.index("  Background:\n    Given the SUT timezone is \"UTC\"\n")
+        assert background < text.index("  @case:")
+        assert text.count("Background:") == 1
         steps.update(_scenarios(text))
     by_id = {case.id: case for case in derivation.cases}
     for case_id, lines in steps.items():
@@ -996,13 +1013,33 @@ def test_render_feature_slug_collision_and_errors(tmp_path):
     collided = render_module._feature_names([base.endpoint, twin.endpoint])
     assert len(set(collided.values())) == 2
     bad = copy.deepcopy(base)
-    bad.expect = dict(bad.expect, strict="3xx")
-    with pytest.raises(render_module.RenderError):
-        render_module.render(derive_module.Derivation([bad], [], {}), tmp_path / "bad")
+    bad.expect = dict(bad.expect, strict="6xx")
+    with pytest.raises(render_module.RenderError, match="strict"):
+        render_module.render(derive_module.Derivation([bad], [], {}, "UTC"), tmp_path / "bad")
     spaced = copy.deepcopy(base)
     spaced.id = "has space"
     with pytest.raises(render_module.RenderError):
-        render_module.render(derive_module.Derivation([spaced], [], {}), tmp_path / "bad2")
+        render_module.render(derive_module.Derivation([spaced], [], {}, "UTC"), tmp_path / "bad2")
+
+
+@pytest.mark.parametrize("klass", ["1xx", "2xx", "3xx", "4xx", "5xx"])
+def test_render_accepts_any_status_class(tmp_path, klass):
+    # M3: strict 클래스는 [1-5]xx 모두 렌더된다(3xx/5xx를 4xx로 바꾸지 않는다)
+    base = copy.deepcopy(derive_module.derive(_controlled(tmp_path / "b")).cases[0])
+    base.expect = dict(base.expect, strict=klass, **{"class": klass})
+    render_module.render(derive_module.Derivation([base], [], {}, "UTC"), tmp_path / "out")
+    text = next((tmp_path / "out" / "features").glob("*.feature")).read_text(encoding="utf-8")
+    assert f'Then the response status is in class "{klass}"' in text
+
+
+@pytest.mark.parametrize("timezone", ["", None, "Not A Zone", 'Asia/"x"'])
+def test_render_requires_sut_timezone(tmp_path, timezone):
+    # I1: 타임존이 없거나 형식이 맞지 않으면 기본값으로 대신하지 않고 RenderError
+    derivation = derive_module.derive(_controlled(tmp_path / "b"))
+    derivation.timezone = timezone
+    with pytest.raises(render_module.RenderError, match="타임존"):
+        render_module.render(derivation, tmp_path / "out")
+    assert not (tmp_path / "out").exists()
 
 
 def test_glue_checksum_and_copy(tmp_path):
@@ -1025,7 +1062,7 @@ def test_render_rejects_null_path_variable(tmp_path):
     name = next(iter(case.path))
     case.path[name] = derive_module.Value(None, "generic-sentinel")
     with pytest.raises(render_module.RenderError):
-        render_module.render(derive_module.Derivation([case], [], {}), tmp_path / "out")
+        render_module.render(derive_module.Derivation([case], [], {}, "UTC"), tmp_path / "out")
 
 
 def test_observed_codes_from_cucumber_json():
@@ -1091,9 +1128,10 @@ def test_det_gen_id_and_record_shape(tmp_path):
     assert len(key) == 64 and result.gen_id == f"det-{key[:8]}-r1"
     assert result.dir == out_root / "det" / result.gen_id and (result.dir / "_COMPLETE").is_file()
     assert result.record["generator"] == {"name": "td.detgen", "version": det_stage.GENERATOR_VERSION,
-                                          "glueChecksum": render_mod.glue_checksum()}
+                                          "glueChecksum": render_mod.glue_checksum(),
+                                          "sourceChecksum": det_stage.source_checksum()}
     assert result.record["rep"] == 1 and result.record["arm"] == "det" and result.record["cases"] > 0
-    expected_key = hashlib.sha256((result.record["bundleHash"] + det_stage.GENERATOR_VERSION
+    expected_key = hashlib.sha256((result.record["bundleHash"] + det_stage.GENERATOR_VERSION + det_stage.source_checksum()
                                    + render_mod.glue_checksum()).encode("utf-8")).hexdigest()
     assert key == expected_key
     assert redact.find_leaks("".join(p.read_text(encoding="utf-8") for p in result.dir.rglob("*") if p.is_file())) == []
@@ -1295,3 +1333,101 @@ def test_results_summarize_without_s07_outputs(tmp_path):
     assert summary["passStrict"] == {"passed": 0, "total": 10} and summary["notRun"] == 10
     assert summary["verifiedViolations"] == 0 and summary["blockedByBaseline"] == 0
     assert summary["baselineValid"] == {"POST /a": "notRun", "PUT /b": "notRun"}
+
+
+# --- 최종 리뷰 수정(I1, M3, M4, M5) ------------------------------------------------------------------
+def test_status_class_follows_code():
+    # M3: 엄격 코드의 클래스는 백의 자리를 따른다(3xx/5xx를 4xx로 바꾸지 않는다)
+    from td.detgen.endpoints import Catalog, status_class
+    assert [status_class(code) for code in (200, 201, 302, 404, 422, 503)] == ["2xx", "2xx", "3xx", "4xx", "4xx", "5xx"]
+    assert status_class(None) == "4xx" and status_class(True) == "4xx" and status_class(700) == "4xx"
+    catalog = Catalog({"nodes": []}, {"exceptions": {"x.Svc$Unavailable": {"status": 503, "handler": None}}}, {})
+    assert catalog.expect("code=302") == {"strict": 302, "class": "3xx", "source": "bbtg", "bbtgCode": 302}
+    graph = catalog.expect("Unavailable code=400")
+    assert graph["strict"] == 503 and graph["class"] == "5xx" and graph["source"] == "graph"
+
+
+def test_background_keeps_pickle_and_case_mapping(tmp_path):
+    # I1: Background는 pickle이 아니다. testId·@case 매핑과 결과 집계가 Background가 있어도 시나리오 줄로 맞아야 한다
+    from td import scenarios
+    from td.detgen import results
+    derivation = derive_module.derive(_controlled(tmp_path / "b"))
+    gen_dir = tmp_path / "det-0123abcd-r1"
+    render_module.render(derivation, gen_dir)
+    ident = scenarios.GenIdent.from_gen_id(gen_dir.name)
+    refs = scenarios.pickle_refs(gen_dir, ident)
+    assert len(refs) == len(derivation.cases)
+    for ref in refs:
+        lines = (gen_dir / ref.feature).read_text(encoding="utf-8").splitlines()
+        assert lines[ref.line - 1].strip() == f"Scenario: {ref.name}"
+        assert results._case_by_line("\n".join(lines))[ref.line] == ref.name
+    failed_case = derivation.cases[0].id
+    s07_dir = tmp_path / "S07"
+    s07_dir.mkdir()
+    with (s07_dir / "scenario-results.json").open("w", encoding="utf-8") as handle:
+        for ref in refs:
+            status = "failed" if ref.name == failed_case else "passed"
+            handle.write(json.dumps({"testId": ref.test_id, "status": status, "requests": 1, "exec": None}) + "\n")
+    summary = results.summarize(gen_dir, s07_dir)
+    total = len(derivation.cases)
+    assert summary["passStrict"] == {"passed": total - 1, "total": total}
+    assert summary["notRun"] == 0
+    assert [item["case"] for item in summary["classUnknownCases"]] == [failed_case]
+
+
+def test_det_key_includes_generator_source_checksum(tmp_path, monkeypatch):
+    # M5: 생성기 소스(td/detgen/*.py) 한 바이트가 바뀌면 키(genId)가 바뀐다
+    source_copy = tmp_path / "detgen"
+    shutil.copytree(det_stage.SOURCE_DIR, source_copy, ignore=shutil.ignore_patterns("__pycache__"))
+    monkeypatch.setattr(det_stage, "SOURCE_DIR", source_copy)
+    input_hash = "0" * 64
+    before_checksum, before_key = det_stage.source_checksum(), det_stage.det_key(input_hash)
+    assert before_checksum == det_stage.source_checksum(Path(det_stage.__file__).parent)
+    target = source_copy / "render.py"
+    target.write_bytes(target.read_bytes() + b"#")
+    assert det_stage.source_checksum() != before_checksum
+    changed_key = det_stage.det_key(input_hash)
+    assert changed_key != before_key
+    (source_copy / "notes.txt").write_text("x", encoding="utf-8")  # *.py가 아닌 파일은 키에 들어가지 않는다
+    assert det_stage.det_key(input_hash) == changed_key
+
+
+def test_bdd_gen_schema_separates_llm_and_det_records(tmp_path):
+    # M4: det 기록은 detGeneration 분기로만 통과하고, LLM 모양의 det 기록은 거부된다
+    import jsonschema
+    schema = json.loads((REPO_ROOT / "site-gen" / "td" / "schemas" / "bdd-gen.schema.json").read_text(encoding="utf-8"))
+    result = det_stage.generate_det(_det_run(tmp_path), SUT_FILE, tmp_path / "generated" / "petclinic", False,
+                                    validator=_clean_validator)
+    document = {"schema": 1, "runId": None, "sut": "petclinic", "reps": 1, "regenerate": False, "maxRepairs": 0,
+                "strippedFields": [], "generations": [result.record]}
+    jsonschema.validate(document, schema)
+    llm_record = {"genId": "base-0123abcd-r1", "arm": "base", "rep": 1, "gen": 1, "status": "passed", "reason": None,
+                  "reused": False, "inputHash": "a" * 64, "bundleHash": "b" * 64, "promptHash": "c" * 64,
+                  "repairPromptHash": "d" * 64, "model": "m", "cliVersion": "1", "flags": ["-p"], "repairs": 0,
+                  "tokens": {"in": 1, "out": 1}, "seconds": 1.0, "strippedFields": [], "dir": None}
+    jsonschema.validate({**document, "generations": [llm_record]}, schema)
+    det_shaped_llm = {**llm_record, "genId": "det-0123abcd-r1", "arm": "det"}
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate({**document, "generations": [det_shaped_llm]}, schema)
+    for key, value in (("genId", "det-0123abcd-r1"), ("arm", "det")):
+        with pytest.raises(jsonschema.ValidationError):
+            jsonschema.validate({**document, "generations": [{**llm_record, key: value}]}, schema)
+
+
+def test_det_leak_check_joins_files_with_newline(tmp_path, monkeypatch):
+    # L1: 누출 검사는 파일 내용을 줄바꿈으로 이어 붙인다(파일 경계에서 토큰이 붙어 생기는 오탐·미탐 방지)
+    seen = []
+    original = det_stage.redact.find_leaks
+
+    def spy(text, *args, **kwargs):
+        seen.append(text)
+        return original(text, *args, **kwargs)
+
+    monkeypatch.setattr(det_stage.redact, "find_leaks", spy)
+    result = det_stage.generate_det(_det_run(tmp_path), SUT_FILE, tmp_path / "generated" / "petclinic", False,
+                                    validator=_clean_validator)
+    assert result.status == "passed", result.reason
+    joined = seen[-1]
+    texts = [(result.dir / rel).read_text(encoding="utf-8") for rel in det_stage.snapshot.tree_files(result.dir)
+             if rel != "_COMPLETE"]
+    assert joined == "\n".join(texts)

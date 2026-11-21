@@ -55,7 +55,7 @@ A1과의 관계: 상위 설계의 A1은 "LLM 호출의 생성 입력"에 대한 
 
 ### 3.2 결정성
 
-- 해시: 생성기가 실제로 읽는 필드만 뽑아 키 정렬 JSON으로 정규화한 뒤 sha256. 절대경로 필드는 읽지도 해시하지도 않는다. hash8 = 정규화 입력 + 생성기 버전 + glue 체크섬.
+- 해시: 생성기가 실제로 읽는 필드만 뽑아 키 정렬 JSON으로 정규화한 뒤 sha256(누락 슬롯 목록 `missing`도 포함한다). 절대경로 필드는 읽지도 해시하지도 않는다. hash8 = 정규화 입력 + 생성기 버전 + 생성기 소스 체크섬(`site-gen/td/detgen/*.py`, `generator.sourceChecksum`) + glue 체크섬.
 - 실행 시점에 풀리는 값은 기호로 내보낸다. 닫힌 기호 목록: `today±N`(SUT 타임존), `ref:<var>`(선행 요청의 `capture`가 응답 JSON 필드를 담아 둔 변수), `uniq:<caseId>`(케이스 id에서 파생한 고유 문자열, 도메인 제약이 없는 자유 문자열 필드 전용). 범위 제약이 있는 수치 고유값(방 번호 등)은 생성기가 생성 시점에 구체 리터럴로 확정한다(§5.3).
 - 정렬은 입력 주소 기준.
 
@@ -161,7 +161,7 @@ A1과의 관계: 상위 설계의 A1은 "LLM 호출의 생성 입력"에 대한 
 ### 5.4 산출물과 실행 규약
 
 - 위치: `e2e/generated/<sut>/det/det-<hash8>-r1/{features/, glue/support/, cases.json, _COMPLETE}`.
-- `features/`: 엔드포인트별 feature 파일. 시나리오 태그 `@case:<id>`.
+- `features/`: 엔드포인트별 feature 파일. 시나리오 태그 `@case:<id>`. 모든 feature는 `Background:`에 `Given the SUT timezone is "<tz>"`를 둔다(tz는 번들 harness.json). glue는 이 값으로 `today±N`을 풀고 기본 타임존은 두지 않는다(없으면 step 실패).
 - `glue/support/`: 저장소 고정 소스 `e2e/det-glue/`를 복사하고 체크섬을 기록한다. feature별 Steps 클래스는 만들지 않는다(중복 step 방지). 이는 `e2e/harness/CONTRACT.md`의 "feature마다 Steps 클래스" 규약에 대한 det 전용 예외이며, `glue/support/` 아래 배치만 허용하는 `td.scenarios.layout_violations`는 그대로 통과한다. 이 예외는 `e2e/det-glue/README.md`에 적는다(CONTRACT.md는 LLM arm 번들에 들어가므로 바꾸지 않는다, REQ-102). 하네스 API(`baseUrl/authed/anonymous`)와 허용 의존성(Cucumber 8.1.0, REST Assured 5.5.1, AssertJ)만 쓴다. `@Before`/`@After`는 쓰지 않는다. 기호 해석(`today±N`은 SUT 타임존, `ref:`, `uniq:`)은 glue가 맡는다.
 - S06 det 경로: `td.detgen`이 생성한 뒤 기존 `td.scenarios` 컴파일 확인과 dry-run을 돌린다. undefined step 0과 컴파일 성공일 때만 `_COMPLETE`를 기록한다. 입력 누락, 스키마 불일치, 파서 예외가 나면 det arm은 failed이고 사유를 기록한다. 다른 arm에는 영향이 없다.
 - 시나리오 첫 step은 `Given the case "<id>"`이다(Scenario 객체는 훅 없이 얻을 수 없어서 케이스 id를 step으로 넘긴다). glue는 주 요청마다 `DET-STATUS <caseId> <code>`를 표준 출력에 남긴다. 선행 요청의 `uniq:`에는 `#prior<k>` 접미를 붙여 본 요청과 충돌하지 않게 한다.
@@ -174,7 +174,7 @@ A1과의 관계: 상위 설계의 A1은 "LLM 호출의 생성 입력"에 대한 
 
 ### 5.5 통합 변경 목록
 
-- arm 목록·패턴: `site-gen/td/bundle.py`(ARMS — det 번들 없음, det는 번들 조립 대상에서 제외), `testid.py`, `compare.py`(ARMS_ORDER, DOT_COLORS, 입력 체제 표기; `verdict.judge`에는 base·jqa·owl만 명시적으로 넘기고, det는 별도 `deterministic` 결과 블록으로 보고), `state.py`(ARMS_DEFAULT=base,jqa,owl 기본 유지 / ARMS_KNOWN=+det, `ARM_DEPENDENCIES["det"]=("S03",)` — S02는 모든 arm 공통으로 앞에 붙는다), `scenarios.py`·`tia.py`(genId 정규식), `pipeline/run-all.sh`(arms 검증), `site-gen/td/schemas/bdd-gen.schema.json`(genId 패턴, arm enum, det 분기: LLM 필드 대신 `generator{name,version,glueChecksum}`), `site-gen/td/schemas/compare.schema.json`, `e2e/harness/.../TestIds.java`와 `TestIdsTest`, `site.css`(`--arm-det` 토큰).
+- arm 목록·패턴: `site-gen/td/bundle.py`(ARMS — det 번들 없음, det는 번들 조립 대상에서 제외), `testid.py`, `compare.py`(ARMS_ORDER, DOT_COLORS, 입력 체제 표기; `verdict.judge`에는 base·jqa·owl만 명시적으로 넘기고, det는 별도 `deterministic` 결과 블록으로 보고), `state.py`(ARMS_DEFAULT=base,jqa,owl 기본 유지 / ARMS_KNOWN=+det, `ARM_DEPENDENCIES["det"]=("S03",)` — S02는 모든 arm 공통으로 앞에 붙는다), `scenarios.py`·`tia.py`(genId 정규식), `pipeline/run-all.sh`(arms 검증), `site-gen/td/schemas/bdd-gen.schema.json`(genId 패턴, arm enum, det 분기: LLM 필드 대신 `generator{name,version,glueChecksum,sourceChecksum}`), `site-gen/td/schemas/compare.schema.json`, `e2e/harness/.../TestIds.java`와 `TestIdsTest`, `site.css`(`--arm-det` 토큰).
 - 기본 arms는 `base,jqa,owl` 그대로 두고, det는 `--arms`로 명시할 때만 돈다.
 - S03: ext 질의 실행과 ext 파일 기록. S04, S05는 변경 없음.
 - 문서: 상위 설계(§5, §6.6, §6.12, §13.5의 arm 목록·reps 서술), 요구사항명세(det REQ 추가), README(`--arms det`), 백서 §5.3(DTO 필드 정정)과 det 결과 절.
