@@ -18,7 +18,9 @@ import java.util.regex.Pattern;
  *
  * <p>기호 문법(설계 §3.2 닫힌 목록)은 문자열 값 전체가 아래 중 하나일 때만 기호로 본다.
  * <ul>
- *   <li>{@code today}, {@code today+N}, {@code today-N}: SUT 타임존(환경변수 TD_SUT_TZ, 없으면 Asia/Seoul)의 오늘 ± N일, ISO 날짜</li>
+ *   <li>{@code today}, {@code today+N}, {@code today-N}: SUT 타임존의 오늘 ± N일, ISO 날짜. 타임존은 feature Background의
+ *       {@code Given the SUT timezone is "<tz>"}(렌더러가 번들 harness.json에서 싣는다)로 받는다. 기본값은 없다:
+ *       타임존 없이 {@code today} 기호를 풀면 IllegalStateException</li>
  *   <li>{@code ref:<var>}: 같은 시나리오의 선행 요청이 응답에서 담아 둔 변수 값. 없으면 IllegalStateException</li>
  *   <li>{@code uniq:<caseId>}: {@code "u" + sha1(caseId + salt) 앞 10자리}. 같은 케이스는 항상 같은 값(결정적)이고 서버는 generation마다 새로 뜬다.
  *       본 요청의 salt는 빈 문자열이고, 선행 요청은 {@code "#prior<k>"}(k는 0부터)다. 선행 요청과 본 요청이 같은 {@code uniq:} 값을
@@ -35,29 +37,36 @@ public final class DetValues {
     private DetValues() {
     }
 
-    /** SUT 타임존. */
-    public static ZoneId zone() {
-        return ZoneId.of(System.getenv().getOrDefault("TD_SUT_TZ", "Asia/Seoul"));
+    /** SUT 타임존 이름 → ZoneId. 비었거나 알 수 없는 이름이면 IllegalStateException(기본값으로 대신하지 않는다). */
+    public static ZoneId zone(String name) {
+        if (name == null || name.trim().isEmpty()) {
+            throw new IllegalStateException("SUT 타임존이 정해지지 않았다(Background step 'the SUT timezone is' 필요)");
+        }
+        try {
+            return ZoneId.of(name);
+        } catch (java.time.DateTimeException bad) {
+            throw new IllegalStateException("알 수 없는 SUT 타임존: " + name, bad);
+        }
     }
 
     /** 본 요청용 기호 해석(uniq salt 없음). */
-    public static Object resolve(Object value, Map<String, Object> vars) {
-        return resolve(value, vars, "");
+    public static Object resolve(Object value, Map<String, Object> vars, ZoneId sutZone) {
+        return resolve(value, vars, "", sutZone);
     }
 
-    /** 기호를 푼다. Map과 List는 안쪽 값까지 푼다. 기호가 아닌 값은 그대로 돌려준다. */
-    public static Object resolve(Object value, Map<String, Object> vars, String uniqSalt) {
+    /** 기호를 푼다. Map과 List는 안쪽 값까지 푼다. 기호가 아닌 값은 그대로 돌려준다. sutZone은 today 기호에만 쓴다(null이면 today에서 실패). */
+    public static Object resolve(Object value, Map<String, Object> vars, String uniqSalt, ZoneId sutZone) {
         if (value instanceof Map) {
             Map<String, Object> resolved = new LinkedHashMap<>();
             for (Map.Entry<?, ?> entry : ((Map<?, ?>) value).entrySet()) {
-                resolved.put(String.valueOf(entry.getKey()), resolve(entry.getValue(), vars, uniqSalt));
+                resolved.put(String.valueOf(entry.getKey()), resolve(entry.getValue(), vars, uniqSalt, sutZone));
             }
             return resolved;
         }
         if (value instanceof List) {
             List<Object> resolved = new ArrayList<>();
             for (Object item : (List<?>) value) {
-                resolved.add(resolve(item, vars, uniqSalt));
+                resolved.add(resolve(item, vars, uniqSalt, sutZone));
             }
             return resolved;
         }
@@ -71,7 +80,10 @@ public final class DetValues {
             if ("-".equals(today.group(1))) {
                 offsetDays = -offsetDays;
             }
-            return LocalDate.now(zone()).plusDays(offsetDays).toString();
+            if (sutZone == null) {
+                throw new IllegalStateException("SUT 타임존 없이 날짜 기호를 풀 수 없다: " + text);
+            }
+            return LocalDate.now(sutZone).plusDays(offsetDays).toString();
         }
         if (text.startsWith(REF_PREFIX)) {
             String name = text.substring(REF_PREFIX.length());

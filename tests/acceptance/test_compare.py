@@ -520,3 +520,28 @@ def test_det_reference_column(tmp_path, monkeypatch):
     assert 'id="deterministic"' in html
     css = (REPO_ROOT / "site-gen" / "td" / "site" / "static" / "site.css").read_text()
     assert css.count("--arm-det:") == 3
+
+
+def test_det_summarize_unexpected_error_is_contained(tmp_path, monkeypatch):
+    """det 집계가 예상 밖 예외(KeyError)를 던져도 deterministic 블록만 failed이고 다른 arm과 판정은 그대로다(M1)."""
+    from td.detgen import results as det_results
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    healthy_run = make_compare_run(tmp_path / "a")
+    add_det_arm(healthy_run, tmp_path / "a", monkeypatch)
+    healthy = collect(healthy_run)
+    run_dir = make_compare_run(tmp_path / "b")
+    add_det_arm(run_dir, tmp_path / "b", monkeypatch)
+
+    def broken(gen_dir, s07_dir):
+        raise KeyError(f"expect at {Path.home()}/secret/cases.json")
+
+    monkeypatch.setattr(det_results, "summarize", broken)
+    document = collect(run_dir)
+    jsonschema.validate(document, json.loads(SCHEMA.read_text()))
+    det = document["deterministic"]
+    assert det["status"] == "failed" and det["summary"] is None and det["genId"] == DET_GEN
+    assert "KeyError" in det["reason"] and str(Path.home()) not in det["reason"]
+    assert document["verdict"] == healthy["verdict"]
+    assert {arm: entry["status"] for arm, entry in document["arms"].items()} == \
+        {arm: entry["status"] for arm, entry in healthy["arms"].items()}

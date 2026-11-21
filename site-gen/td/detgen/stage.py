@@ -3,7 +3,9 @@
 - LLM을 부르지 않는다. `claude`나 `llm.sh`를 실행하는 코드가 이 모듈에는 없다.
 - 번들: `<run>/S06/bundles/det/`(`inputs.project`). 필수 입력이 없거나 깨지면(fatal) failed이고 genId도 없다.
   선택 입력이 빠지면(missing) generation은 만들되 degraded이고 사유에 빠진 슬롯을 적는다.
-- 키: `sha256(projection.input_hash + GENERATOR_VERSION + glue_checksum())`, genId `det-<key8>-r1`(rep는 항상 1).
+- 키: `sha256(projection.input_hash + GENERATOR_VERSION + source_checksum() + glue_checksum())`, genId `det-<key8>-r1`(rep는 항상 1).
+  `source_checksum`은 생성기 소스(`td/detgen/*.py`)의 체크섬이다. GENERATOR_VERSION을 올리지 않고 생성 규칙을 바꿔도
+  키가 바뀌어 낡은 스냅샷을 재사용하지 않는다.
 - 스냅샷: `td.snapshot`의 예약(`.reserve`), 임시 디렉터리, `_COMPLETE`, rename을 LLM 경로(`bddgen._produce`)와 같은 순서로 쓴다.
   재사용은 `_COMPLETE`의 입력 해시와 파일 체크섬이 모두 맞을 때만 한다. 맞지 않으면(변조) 재사용도 덮어쓰기도 하지 않고 failed다.
 - 검증: `bddgen.validate`(`td.scenarios.validate_generation`: 배치 규약, javac 컴파일, dry-run). 문제가 하나라도 있으면 failed다.
@@ -47,8 +49,21 @@ class DetResult:
     reused: bool = False
 
 
+SOURCE_DIR = Path(__file__).resolve().parent   # 생성기 소스(td/detgen). 체크섬 대상은 이 디렉터리의 *.py
+
+
+def source_checksum(root: Path | None = None) -> str:
+    """생성기 소스 체크섬: 파일 이름순으로 `이름 NUL 바이트 NUL`을 이어 sha256(경로는 디렉터리 기준 상대 이름만)."""
+    digest = hashlib.sha256()
+    for path in sorted(Path(root if root is not None else SOURCE_DIR).glob("*.py"), key=lambda item: item.name):
+        digest.update(path.name.encode("utf-8") + b"\0")
+        digest.update(path.read_bytes() + b"\0")
+    return digest.hexdigest()
+
+
 def det_key(input_hash: str) -> str:
-    return hashlib.sha256((input_hash + GENERATOR_VERSION + render_mod.glue_checksum()).encode("utf-8")).hexdigest()
+    return hashlib.sha256((input_hash + GENERATOR_VERSION + source_checksum()
+                           + render_mod.glue_checksum()).encode("utf-8")).hexdigest()
 
 
 def det_gen_id(key: str) -> str:
@@ -59,7 +74,7 @@ def _base_record(gen_id: str, key: str, bundle_hash: str) -> dict:
     return {"genId": gen_id, "arm": ARM, "rep": REP, "status": "passed", "reason": None, "reused": False,
             "inputHash": key, "bundleHash": bundle_hash,
             "generator": {"name": GENERATOR_NAME, "version": GENERATOR_VERSION,
-                          "glueChecksum": render_mod.glue_checksum()},
+                          "glueChecksum": render_mod.glue_checksum(), "sourceChecksum": source_checksum()},
             "cases": 0, "unresolved": 0, "seconds": 0.0, "dir": None}
 
 
@@ -104,7 +119,7 @@ def _produce(projection: inputs.Projection, gen_id: str, key: str, arm_dir: Path
             render_mod.render(derivation, tmp)
         except Exception as exc:  # noqa: BLE001 - 입력·파서·렌더 예외는 det arm의 실패 사유다(다른 arm에 번지지 않는다)
             return _failed(record, f"det 생성 실패: {type(exc).__name__}: {str(exc)[:1000]}", started)
-        leaks = redact.find_leaks("".join((tmp / rel).read_text(encoding="utf-8", errors="replace")
+        leaks = redact.find_leaks("\n".join((tmp / rel).read_text(encoding="utf-8", errors="replace")
                                           for rel in snapshot.tree_files(tmp)))
         if leaks:
             return _failed(record, f"산출물에 누출이 남았다: {','.join(sorted(set(leaks)))[:300]}", started)

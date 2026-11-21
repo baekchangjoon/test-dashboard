@@ -42,23 +42,40 @@ def test_req116_glue_layout(tmp_path, runner_classpath):
 
 _PROBE = r"""
 import glue.support.DetValues;
+import java.time.ZoneId;
 import java.util.*;
 
 public class Probe {
     public static void main(String[] args) {
         Map<String, Object> vars = new HashMap<>();
         vars.put("orderId", 42);
-        System.out.println(DetValues.resolve(DetValues.parse("\"today+3\""), vars));
-        System.out.println(DetValues.resolve(DetValues.parse("\"today-2\""), vars));
-        System.out.println(DetValues.resolve(DetValues.parse("\"today\""), vars));
-        System.out.println(DetValues.resolve(DetValues.parse("\"ref:orderId\""), vars));
-        System.out.println(DetValues.resolve(DetValues.parse("\"uniq:case-1\""), vars));
+        ZoneId zone = DetValues.zone(args[0]);
+        System.out.println(DetValues.resolve(DetValues.parse("\"today+3\""), vars, zone));
+        System.out.println(DetValues.resolve(DetValues.parse("\"today-2\""), vars, zone));
+        System.out.println(DetValues.resolve(DetValues.parse("\"today\""), vars, zone));
+        System.out.println(DetValues.resolve(DetValues.parse("\"ref:orderId\""), vars, zone));
+        System.out.println(DetValues.resolve(DetValues.parse("\"uniq:case-1\""), vars, zone));
         System.out.println(DetValues.toJson(DetValues.resolve(
-            DetValues.parse("{\"a\": 1000000, \"b\": null, \"c\": true, \"d\": \"x\\\"y\\u00e9\", \"e\": 0.01, \"f\": \"ref:orderId\", \"g\": [1, \"today+0\"]}"), vars)));
+            DetValues.parse("{\"a\": 1000000, \"b\": null, \"c\": true, \"d\": \"x\\\"y\\u00e9\", \"e\": 0.01, \"f\": \"ref:orderId\", \"g\": [1, \"today+0\"]}"), vars, zone)));
         System.out.println(DetValues.text(DetValues.parse("-12")));
-        System.out.println(DetValues.resolve("uniq:case-1", vars, "#prior0"));
+        System.out.println(DetValues.resolve("uniq:case-1", vars, "#prior0", zone));
         try {
-            DetValues.resolve("ref:missing", vars);
+            DetValues.resolve("today+1", vars, null);
+            System.out.println("NO-ERROR");
+        } catch (IllegalStateException expected) {
+            System.out.println("NO-ZONE");
+        }
+        for (String bad : new String[] {"", "Not/AZone"}) {
+            try {
+                DetValues.zone(bad);
+                System.out.println("NO-ERROR");
+            } catch (IllegalStateException expected) {
+                System.out.println("BAD-ZONE");
+            }
+        }
+        System.out.println(DetValues.resolve("uniq:case-1", vars, null));
+        try {
+            DetValues.resolve("ref:missing", vars, zone);
             System.out.println("NO-ERROR");
         } catch (IllegalStateException expected) {
             System.out.println("MISSING-REF");
@@ -85,8 +102,9 @@ def test_det_values_runtime(tmp_path):
     assert compiled.returncode == 0, compiled.stderr
     zone = "America/New_York"
     before = datetime.now(ZoneInfo(zone)).date()
-    ran = subprocess.run([str(java_home / "bin" / "java"), "-cp", str(classes), "Probe"], capture_output=True,
-                         text=True, timeout=120, env={"TD_SUT_TZ": zone, "PATH": "/usr/bin:/bin"})
+    # 타임존은 인자(=feature Background 값)로만 받는다. 환경변수 기본값은 없다(TZ를 다른 값으로 두어 섞이지 않음을 본다)
+    ran = subprocess.run([str(java_home / "bin" / "java"), "-cp", str(classes), "Probe", zone], capture_output=True,
+                         text=True, timeout=120, env={"TZ": "Asia/Tokyo", "PATH": "/usr/bin:/bin"})
     assert ran.returncode == 0, ran.stderr
     lines = ran.stdout.splitlines()
     after = datetime.now(ZoneInfo(zone)).date()
@@ -102,4 +120,12 @@ def test_det_values_runtime(tmp_path):
     assert re.search(r'"e":\s*0\.01', lines[5])
     assert lines[6] == "-12"
     assert lines[7] == "u" + hashlib.sha1(b"case-1#prior0").hexdigest()[:10]
-    assert lines[8:] == ["MISSING-REF", "BAD-JSON"]
+    assert lines[8:12] == ["NO-ZONE", "BAD-ZONE", "BAD-ZONE", "u" + hashlib.sha1(b"case-1").hexdigest()[:10]]
+    assert lines[12:] == ["MISSING-REF", "BAD-JSON"]
+
+
+def test_det_glue_has_no_default_timezone():
+    # I1: glue에 하드코딩 기본 타임존이나 환경변수 경로가 없다(Background step으로만 정한다)
+    sources = "".join(path.read_text(encoding="utf-8") for path in render_module.GLUE_DIR.rglob("*.java"))
+    assert "Asia/Seoul" not in sources and "TD_SUT_TZ" not in sources and "getenv" not in sources
+    assert '@Given("^the SUT timezone is' in sources

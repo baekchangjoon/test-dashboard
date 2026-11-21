@@ -46,6 +46,13 @@ td_tail_chars() {
   td_py -c 'import sys; n = int(sys.argv[1]); text = sys.stdin.buffer.read().decode("utf-8", "replace"); sys.stdout.write(text[-n:] if n > 0 else "")' "${1:?n}"
 }
 
+# td_arm_requested <arm> — 이 run(run.json options.arms, 없으면 td.state 기본 arm 목록)이 그 arm을 요청했으면 0, 아니면 1.
+td_arm_requested() {
+  td_py -c 'import sys
+from td import state
+sys.exit(0 if sys.argv[2] in state.requested_arms(sys.argv[1]) else 1)' "${TD_RUN_DIR:?TD_RUN_DIR가 필요하다}" "${1:?arm}"
+}
+
 # --- 단계 수명주기 ------------------------------------------------------------------
 td_stage_begin() { td_py -m td.state begin "${TD_RUN_DIR:?TD_RUN_DIR가 필요하다}" "$1"; }
 

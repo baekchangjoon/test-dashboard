@@ -231,3 +231,27 @@ def test_unit_tail_chars_reason_records_in_stage_state(tmp_path):
                  'td_stage_end S03 degraded "$REASON"', tmp_path)
     assert done.returncode == 0, done.stderr.decode("utf-8", "replace")
     assert json.loads((tmp_path / "stages" / "S03.json").read_text(encoding="utf-8"))["reason"] == "ext export 실패: 다 error"
+
+
+# --- S03 ext 실패의 degraded 여부(td_arm_requested, M6) ---------------------------------------------------------
+@pytest.mark.parametrize("run_json, expected", [
+    ({"options": {"arms": ["base", "jqa", "owl", "det"]}}, 0),
+    ({"options": {"arms": ["base", "jqa"]}}, 1),
+    ({"options": {}}, 1),        # 기본 arm 목록에는 det가 없다
+    (None, 1),                   # run.json이 없으면 기본 arm 목록(det 없음)
+])
+def test_unit_arm_requested_reads_run_options(tmp_path, run_json, expected):
+    if run_json is not None:
+        (tmp_path / "run.json").write_text(json.dumps(run_json), encoding="utf-8")
+    done = _bash("td_arm_requested det", tmp_path)
+    assert done.returncode == expected, done.stderr.decode("utf-8", "replace")
+
+
+def test_unit_s03_ext_failure_degrades_only_when_det_requested():
+    """S03 스크립트: ext 실패 사유는 td_arm_requested det가 참일 때만 REASONS(degraded)에 들어가고, 실패하면 ext 파일을 지운다."""
+    script = (REPO_ROOT / "pipeline" / "S03-jqa.sh").read_text(encoding="utf-8")
+    block = script[script.index('if [[ -n "$EXT_REASON" ]]; then'):script.index('[[ "$FALLBACKS" == "[]" ]]')]
+    assert 'rm -f "$EXT_FILE"' in block
+    guarded = block[block.index("if td_arm_requested det; then"):block.index("else")]
+    assert 'REASONS+=("$EXT_REASON")' in guarded
+    assert block.count('REASONS+=("$EXT_REASON")') == 1

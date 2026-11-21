@@ -358,8 +358,11 @@ def _deterministic(run_dir: Path, run: dict, det_entry: dict | None) -> dict | N
     try:
         gen_dir = scenarios.generation_dir(run.get("sut") or "", gen_id)
         summary = results.summarize(gen_dir, run_dir / "S07" / gen_id)
-    except (OSError, ValueError, scenarios.ScenariosError) as exc:
-        return {**block, "reason": f"det 결과 집계 실패: {str(exc).splitlines()[0][:300] if str(exc) else type(exc).__name__}"}
+    except Exception as exc:  # noqa: BLE001 - det 집계의 어떤 실패도 다른 arm·판정에 번지지 않게 이 블록의 failed로 가둔다
+        from td import redact
+        first_line = str(exc).splitlines()[0][:300] if str(exc) else ""
+        detail = f"{type(exc).__name__}: {first_line}" if first_line else type(exc).__name__
+        return {**block, "reason": redact.redact_text(f"det 결과 집계 실패: {detail}")}
     return {**block, "status": "measured", "summary": summary}
 
 

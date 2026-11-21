@@ -218,8 +218,10 @@ def project(run_dir: Path, sut_file: Path, out_dir: Path) -> Projection:
     digests = {name: _sha256(texts[name].encode("utf-8")) for name in BUNDLE_FILES}
     for name, text in texts.items():
         (out_dir / name).write_text(text, encoding="utf-8")
-    # 입력 해시: 파일 이름순 (이름, sha256) 나열. 경로·시각은 들어가지 않는다.
-    input_hash = _sha256("".join(f"{name}\0{digests[name]}\n" for name in sorted(digests)).encode("utf-8"))
+    # 입력 해시: 파일 이름순 (이름, sha256) 나열 + 정렬한 누락 슬롯 목록. 경로·시각은 들어가지 않는다.
+    # 누락 목록을 넣는 이유: 깨진 선택 파일(missing)과 아예 없는 파일은 번들 내용이 같아도 degraded 사유가 다르다.
+    input_hash = _sha256(("".join(f"{name}\0{digests[name]}\n" for name in sorted(digests))
+                          + "missing\0" + "\0".join(sorted(missing)) + "\n").encode("utf-8"))
     stamp = {"files": digests, "input_hash": input_hash, "missing": sorted(missing), "schema": 1}
     (out_dir / STAMP_NAME).write_text(_dumps(stamp), encoding="utf-8")
     return Projection(out_dir, input_hash, sorted(missing), None)
