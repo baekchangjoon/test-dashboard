@@ -471,6 +471,28 @@ def test_sync_mirror_symlinked_dir_keeps_files(tmp_path):
     assert stats.pruned == 0 and (real / "suts.json").exists() and (real / "suts/s/runs/r1/index.html").exists()
 
 
+def test_mirror_lock_serializes_work_dirs_sharing_a_symlinked_mirror(tmp_path):
+    """테스트 run은 TD_WORK_DIR을 따로 쓰고 site-mirror만 심볼릭 링크로 공유한다. 미러 잠금이 TD_WORK_DIR마다 따로 잡히면
+    두 게시의 sync_mirror가 같은 키를 같은 `.part` 이름으로 받다가 한쪽 os.replace가 FileNotFoundError로 실패한다."""
+    import threading
+    shared_work, other_work = tmp_path / "work", tmp_path / "other-work"
+    (shared_work / "site-mirror").mkdir(parents=True)
+    other_work.mkdir()
+    (other_work / "site-mirror").symlink_to(shared_work / "site-mirror")
+    entered = threading.Event()
+
+    def second_publication():
+        with publish.mirror_lock(other_work):
+            entered.set()
+
+    with publish.mirror_lock(shared_work):
+        worker = threading.Thread(target=second_publication, daemon=True)
+        worker.start()
+        assert not entered.wait(0.5), "같은 미러를 쓰는 다른 TD_WORK_DIR의 게시가 미러 잠금 안으로 들어왔다"
+    worker.join(timeout=5)
+    assert entered.is_set()
+
+
 # --- release()가 False일 때와 publish-log 재기록 후 후속 동기화 ---------------------------------------------------
 def test_release_returns_false_when_lock_object_is_gone():
     s3 = FakeS3()
@@ -577,3 +599,328 @@ def test_identifier_cut_at_truncation_boundary_is_still_masked(exec_env):
     result = execute(run_id, run_dir, env, s3, BoundaryCloudFront())
     log_text = s3.objects[f"_test/u/suts/sutx/publish-log/{run_id}.json"]["data"].decode()
     assert "999988" not in log_text and "999988" not in json.dumps(result)
+
+
+# =====================================================================================
+# Task 11: 인덱스 단계의 수집, 과제 삭제, 인덱스 전용 게시(REQ-079, 098~101, 144, 145 보조)
+# =====================================================================================
+# --- 삭제 가드(실제 삭제 경로보다 먼저 확인한다) -------------------------------------------------
+def test_req100_delete_prefix_guard(tmp_path):
+    s3 = FakeS3()
+    for key in ("p/projects/a/index.html", "p/projects/a/snapshots/20261122.json", "p/projects/ab/index.html",
+                "p/suts/x", "projects/a/index.html"):
+        s3.put(key)
+    assert publish.delete_prefix(s3, "b", "p/projects/a/") == 2
+    assert s3.keys() == ["p/projects/ab/index.html", "p/suts/x", "projects/a/index.html"]
+    assert publish.delete_prefix(s3, "b", "projects/a/") == 1          # 운영 루트(빈 접두)도 같은 꼴이다
+    for bad in ("p/projects/", "p/suts/x/", "p/", "", "projects/", "p/projects/a/../", "p/projects/a", "p/projects/a/b/",
+                "../projects/a/", "p/../projects/a/", "/p/projects/a/", "p//projects/a/", "p/projects/../a/",
+                "p/projects/.a/", "p/projects/a b/", "p/projects/-rf/", "p q/projects/a/", "p/projects/a\n/"):
+        with pytest.raises(publish.PublishError):
+            publish.delete_prefix(s3, "b", bad)
+    assert s3.keys() == ["p/projects/ab/index.html", "p/suts/x"], "거부된 요청은 아무것도 지우지 않는다"
+
+
+def test_req100_delete_prefix_batches_and_reports_errors_without_names():
+    s3 = FakeS3()
+    for index in range(2345):
+        s3.put(f"p/projects/many/f{index:05d}.json")
+    assert publish.delete_prefix(s3, "b", "p/projects/many/") == 2345
+    batches = [call for call in s3.calls if call[0] == "delete_objects"]
+    assert [len(call[1].split(",")) for call in batches] == [1000, 1000, 345] and s3.keys() == []
+
+    class PartlyFails(FakeS3):
+        def delete_objects(self, Bucket, Delete):
+            return {"Errors": [{"Key": Delete["Objects"][0]["Key"], "Code": "AccessDenied", "Message": "denied"}]}
+
+    failing = PartlyFails()
+    failing.put("p/projects/hush/latest.json")
+    with pytest.raises(publish.PublishError) as raised:
+        publish.delete_prefix(failing, "b", "p/projects/hush/")
+    assert "hush" not in str(raised.value) and "AccessDenied" in str(raised.value)
+
+
+def test_req100_lightsail_remove_command_guard():
+    assert publish.lightsail_remove_command("_test/u/", "alpha") == "rm -rf -- '/srv/dashboard/_test/u/projects/alpha'"
+    assert publish.lightsail_remove_command("", "spring-petclinic.v2_x") == \
+        "rm -rf -- '/srv/dashboard/projects/spring-petclinic.v2_x'"
+    for prefix, name in (("_test/u/", ""), ("_test/u/", ".."), ("_test/u/", "../x"), ("_test/u/", "a/b"),
+                         ("_test/u/", "a b"), ("_test/u/", "-rf"), ("_test/u/", "a'b"), ("_test/u/", "a;rm"),
+                         ("_test/u/", "*"), ("../", "a"), ("_test/../", "a"), ("_test//u/", "a"), ("/_test/u/", "a"),
+                         ("_test/u", "a"), ("_test/u x/", "a"), ("_test/u'/", "a"), ("_test/$(id)/", "a"),
+                         ("_test/./", "a")):
+        with pytest.raises(publish.PublishError):
+            publish.lightsail_remove_command(prefix, name)
+
+
+# --- 무효화 경로 묶기 ------------------------------------------------------------------------
+def test_req101_projects_invalidation_wildcard(tmp_path):
+    written = [tmp_path / "p" / f"projects/n{i}/{f}" for i in range(20) for f in ("index.html", "series.json", "latest.json")]
+    written += [tmp_path / "p/index.html", tmp_path / "p/projects.json"]
+    paths = publish.invalidation_paths(tmp_path, written, "p/", "", "", include_log=False)
+    assert [x for x in paths if "/projects/" in x] == ["/p/projects/*"]
+    assert "/p/projects.json" in paths and "/p/index.html" in paths and "/p/" in paths
+    root = publish.invalidation_paths(tmp_path, [tmp_path / "projects/a/index.html"], "", "", "", include_log=False)
+    assert root == ["/projects/*"]
+
+
+def test_overall_status_counts_collect_as_degraded():
+    hosts = {"s3": {"status": "passed"}, "cloudfront": {"status": "passed"}, "lightsail": {"status": "passed"},
+             "collect": {"status": "failed", "reason": "수집 실행 실패"}}
+    assert publish.overall_status(hosts) == ("degraded", "collect: 수집 실행 실패")
+    hosts["s3"] = {"status": "failed", "reason": "x"}
+    assert publish.overall_status(hosts)[0] == "failed"
+
+
+# --- 인덱스 단계의 수집(run_collect)과 인덱스 전용 게시(가짜 collect.sh·ssh·rsync, FakeS3) --------------------------
+import textwrap
+
+from dashboard_fixtures import cfg_with, write_snapshot
+from td import dashboard_config
+
+INDEX_PREFIX = "_test/u/"
+INDEX_LOG_KEY = f"{INDEX_PREFIX}publish-log/index.json"
+
+
+def write_fake_collect(root: Path, body: str) -> Path:
+    """`<root>/pipeline/collect.sh` 자리에 가짜 수집 스크립트를 둔다(TD_ROOT=root로 게시기가 부른다). 받은 인자는 args.log에."""
+    script = root / "pipeline" / "collect.sh"
+    script.parent.mkdir(parents=True, exist_ok=True)
+    script.write_text("#!/usr/bin/env bash\n" f'echo "$@" >> "{root}/collect-args.log"\n' + textwrap.dedent(body))
+    script.chmod(0o755)
+    return script
+
+
+def write_dashboard_cfg(root: Path, data: dict) -> Path:
+    import yaml
+    path = root / "dashboard.yaml"
+    path.write_text(yaml.safe_dump(data, allow_unicode=True))
+    (root / "suts").mkdir(exist_ok=True)
+    return path
+
+
+def index_env(tmp_path: Path, monkeypatch, *, ssh_body: str = "echo 99999999999", rsync_body: str = "exit 0", **extra) -> dict:
+    """인덱스 전용 게시를 가짜 실행 파일로 돌리는 환경. ssh의 인자는 ssh.log에 줄마다(마지막 인자 = 원격 명령).
+    게시기는 ssh·rsync를 프로세스 PATH에서 찾으므로 monkeypatch로 PATH 앞에 가짜를 둔다(실제 서버에 닿지 않게)."""
+    work = tmp_path / "work"
+    (work / "infra").mkdir(parents=True, exist_ok=True)
+    (work / "infra" / "terraform.tfstate").write_text(json.dumps(
+        {"outputs": {"bucket": {"value": BUCKET}, "distribution_id": {"value": "DIST"}}}))
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    ssh_log = tmp_path / "ssh.log"
+    (bin_dir / "ssh").write_text(f'#!/usr/bin/env bash\nprintf "%s\\n" "${{@: -1}}" >> "{ssh_log}"\n{ssh_body}\n')
+    (bin_dir / "rsync").write_text(f"#!/usr/bin/env bash\n{rsync_body}\n")
+    for name in ("ssh", "rsync"):
+        (bin_dir / name).chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
+    return {"TD_WORK_DIR": str(work), "TD_ROOT": str(tmp_path), "TD_SITE_PREFIX": INDEX_PREFIX,
+            "TD_LIGHTSAIL_IP": "203.0.113.9", "TD_SSH_KEY_PATH": "/key",
+            "PATH": f"{bin_dir}:{os.environ['PATH']}", **extra}
+
+
+@pytest.fixture
+def restore_signals():
+    saved = {sig: _signal.getsignal(sig) for sig in (_signal.SIGINT, _signal.SIGTERM, _signal.SIGALRM)}
+    yield
+    _signal.setitimer(_signal.ITIMER_REAL, 0)
+    for sig, handler in saved.items():
+        _signal.signal(sig, handler)
+
+
+def run_fake_index_publication(tmp_path: Path, monkeypatch, *, deleted=(), ssh_fails: bool = False, s3=None, cf=None, **extra) -> dict:
+    """미러에 `deleted`의 과제 디렉터리가 있는(설정에는 없는) 접두로 IndexPublication을 돌린다.
+    ssh_fails면 `rm -rf` 원격 명령만 실패한다(서버 사전 점검은 성공)."""
+    s3 = s3 if s3 is not None else FakeS3()
+    for name in deleted:
+        s3.put(f"{INDEX_PREFIX}projects/{name}/latest.json", b"{}")
+        s3.put(f"{INDEX_PREFIX}projects/{name}/index.html", b"<html></html>")
+    ssh_body = ('case "${@: -1}" in rm\\ *) echo "rm: cannot remove" >&2; exit 255;; esac\necho 99999999999' if ssh_fails
+                else "echo 99999999999")
+    env = index_env(tmp_path, monkeypatch, ssh_body=ssh_body, **extra)
+    return publish.IndexPublication(env, s3, cf or OkCloudFront()).execute()
+
+
+def test_req100_delete_prefix_guard_and_lightsail_degraded(tmp_path, monkeypatch, restore_signals):
+    s3 = FakeS3()
+    s3.put(f"{INDEX_PREFIX}projects/ab/latest.json")    # 이름이 접두로 겹치는 다른 과제
+    s3.put(f"{INDEX_PREFIX}suts/x/runs.json")
+    result = run_fake_index_publication(tmp_path, monkeypatch, deleted=["a"], ssh_fails=True, s3=s3)
+    assert result["status"] == "degraded" and result["hosts"]["s3"]["status"] == "passed", result
+    assert result["hosts"]["lightsail"]["status"] == "failed"
+    assert not [key for key in s3.keys() if key.startswith(f"{INDEX_PREFIX}projects/a/")]
+    assert f"{INDEX_PREFIX}suts/x/runs.json" in s3.keys()
+    assert not (tmp_path / "work/site-mirror" / INDEX_PREFIX / "projects/a").exists()
+    remote = (tmp_path / "ssh.log").read_text().splitlines()
+    assert "rm -rf -- '/srv/dashboard/_test/u/projects/a'" in remote and "rm -rf -- '/srv/dashboard/_test/u/projects/ab'" in remote
+    log_text = s3.objects[INDEX_LOG_KEY]["data"].decode()
+    log = json.loads(log_text)
+    assert log["status"] == "degraded" and log["hosts"]["lightsail"]["status"] == "failed"
+    assert "projects/a" not in log_text and "cannot remove" not in log_text, "삭제한 과제 이름과 원격 오류 문구를 쓰지 않는다"
+    assert f"{INDEX_PREFIX}locks/publish" not in s3.objects
+
+
+def test_index_publication_passes_invalidates_and_logs(tmp_path, monkeypatch, restore_signals):
+    s3, cf = FakeS3(), OkCloudFront()
+    s3.put(f"{INDEX_PREFIX}projects/gone/latest.json")
+    calls: list = []
+
+    class RecordingCloudFront(OkCloudFront):
+        def create_invalidation(self, DistributionId, InvalidationBatch):
+            calls.append(InvalidationBatch["CallerReference"])
+            return super().create_invalidation(DistributionId, InvalidationBatch)
+
+    cf = RecordingCloudFront()
+    result = run_fake_index_publication(tmp_path, monkeypatch, s3=s3, cf=cf)
+    assert result["status"] == "passed", result
+    assert set(result["hosts"]) == {"s3", "cloudfront", "lightsail"}
+    assert f"/{INDEX_PREFIX}projects/*" in cf.paths[0] and f"/{INDEX_PREFIX}index.html" in cf.paths[0]
+    assert cf.paths[-1] == [f"/{INDEX_LOG_KEY}"]
+    assert all(reference.startswith("index-") for reference in calls)
+    log = json.loads(s3.objects[INDEX_LOG_KEY]["data"])
+    assert {"status", "reason", "hosts", "timings"} <= set(log) and log["status"] == "passed"
+    assert s3.objects[INDEX_LOG_KEY]["CacheControl"] == publish.CACHE_NO_CACHE
+    assert (tmp_path / "work/site-mirror" / INDEX_LOG_KEY).exists()
+    assert s3.objects[f"{INDEX_PREFIX}index.html"]["CacheControl"] == publish.CACHE_NO_CACHE
+    assert not [key for key in s3.keys() if "/runs/" in key], "인덱스 전용 게시는 run을 만들지 않는다"
+    assert f"{INDEX_PREFIX}locks/publish" not in s3.objects
+
+
+def test_run_index_only_lock_held_fails_without_touching_lock(tmp_path, monkeypatch, restore_signals, capsys):
+    s3 = FakeS3()
+    other = publish.acquire_lock(s3, BUCKET, INDEX_PREFIX, "att-other")
+    code = publish.run_index_only(index_env(tmp_path, monkeypatch), s3, OkCloudFront())
+    assert code == 1
+    assert "--force-unlock att-other" in capsys.readouterr().err
+    assert s3.objects[other.key]["etag"] == other.etag and INDEX_LOG_KEY not in s3.objects
+
+
+def test_run_index_only_exit_codes(tmp_path, monkeypatch, restore_signals, capsys):
+    assert publish.run_index_only(index_env(tmp_path / "ok", monkeypatch), FakeS3(), OkCloudFront()) == 0
+    assert "index-only passed" in capsys.readouterr().err
+    assert publish.run_index_only(index_env(tmp_path / "cf", monkeypatch), FakeS3(), FailingCloudFront()) == 0   # degraded
+
+    class S3Down(FakeS3):
+        def put_object(self, Bucket, Key, Body=b"", IfNoneMatch=None, **kwargs):
+            if not Key.endswith("locks/publish"):
+                raise RuntimeError("s3 down")
+            return super().put_object(Bucket, Key, Body, IfNoneMatch, **kwargs)
+
+    s3 = S3Down()
+    assert publish.run_index_only(index_env(tmp_path / "s3", monkeypatch), s3, OkCloudFront()) == 1
+    assert f"{INDEX_PREFIX}locks/publish" not in s3.objects
+
+
+def test_index_log_key():
+    assert publish.index_log_key("") == "publish-log/index.json"
+    assert publish.index_log_key(INDEX_PREFIX) == INDEX_LOG_KEY
+
+
+# --- run_collect ----------------------------------------------------------------------------
+def _collect_cfg(tmp_path: Path, data: dict):
+    path = write_dashboard_cfg(tmp_path, data)
+    return dashboard_config.load(path, tmp_path / "suts")
+
+
+def test_run_collect_skips_without_repo_projects(tmp_path):
+    write_fake_collect(tmp_path, "echo '{}'\n")
+    env = {"TD_ROOT": str(tmp_path), "PATH": os.environ["PATH"]}
+    empty = {"status": "ok", "reasons": [], "written": [], "excluded": [], "unverified": []}
+    assert publish.run_collect(env, dashboard_config.empty(), tmp_path / "site") == empty
+    assert publish.run_collect(env, _collect_cfg(tmp_path, cfg_with(pipeline=[])), tmp_path / "site") == empty
+    assert not (tmp_path / "collect-args.log").exists(), "repo가 있는 과제가 없으면 수집을 띄우지 않는다"
+
+
+@pytest.mark.parametrize("body", ["exit 1\n", "echo 'not json'\nexit 0\n", "echo '[1, 2]'\n", "echo '{\"status\": \"weird\"}'\n"])
+def test_run_collect_failures_are_degraded(tmp_path, body):
+    write_fake_collect(tmp_path, body)
+    cfg = _collect_cfg(tmp_path, cfg_with(plain="alpha"))
+    out = publish.run_collect({"TD_ROOT": str(tmp_path), "PATH": os.environ["PATH"]}, cfg, tmp_path / "site")
+    assert out == {"status": "degraded", "reasons": ["수집 실행 실패"], "written": [], "excluded": [], "unverified": []}
+
+
+def test_run_collect_passes_config_site_and_suts_and_returns_result(tmp_path):
+    result = {"status": "degraded", "reasons": ["비공개 과제 1개 제외"], "written": ["projects/alpha/latest.json"],
+              "excluded": ["hush"], "unverified": []}
+    write_fake_collect(tmp_path, f"echo 'names go to stderr: hush' >&2\necho '{json.dumps(result)}'\n")
+    cfg = _collect_cfg(tmp_path, cfg_with(plain=["alpha", "hush"]))
+    out = publish.run_collect({"TD_ROOT": str(tmp_path), "PATH": os.environ["PATH"]}, cfg, tmp_path / "site")
+    assert out == result
+    args = (tmp_path / "collect-args.log").read_text().split()
+    assert args == ["--config", str(tmp_path / "dashboard.yaml"), "--site", str(tmp_path / "site"),
+                    "--suts-dir", str(tmp_path / "suts")]
+
+
+def test_run_collect_interrupt_terminates_child_and_reraises(tmp_path, restore_signals):
+    marker = tmp_path / "child-got-term"
+    pid_file = tmp_path / "child.pid"
+    write_fake_collect(tmp_path, f"""\
+        echo $$ > "{pid_file}"
+        trap 'echo term > "{marker}"; exit 143' TERM
+        sleep 30 & wait
+        """)
+    cfg = _collect_cfg(tmp_path, cfg_with(plain="alpha"))
+    _signal.signal(_signal.SIGALRM, publish._raise_interrupted)
+    _signal.setitimer(_signal.ITIMER_REAL, 1.5)
+    started = time.monotonic()
+    with pytest.raises(publish.PublishInterrupted):
+        publish.run_collect({"TD_ROOT": str(tmp_path), "PATH": os.environ["PATH"]}, cfg, tmp_path / "site")
+    assert time.monotonic() - started < 20 and marker.read_text().strip() == "term"
+    with pytest.raises(ProcessLookupError):
+        os.kill(int(pid_file.read_text()), 0)
+
+
+# --- publish_index: 수집 파일도 업로드 게이트를 지난다(규칙 1), 수집 결과가 게시 상태에 준다 -------------------------
+def test_publish_index_gate_stops_leaked_path_in_collected_description(tmp_path, monkeypatch, restore_signals):
+    staged = tmp_path / "staged"
+    write_snapshot(staged, "alpha", "20261122", description=f"built in {Path.home()}/secret-checkout")
+    leaked = staged / "projects/alpha/snapshots/20261122.json"
+    (staged / "projects/alpha/latest.json").write_text(leaked.read_text())
+    written = ["projects/alpha/snapshots/20261122.json", "projects/alpha/latest.json"]
+    write_fake_collect(tmp_path, f"""\
+        while (($#)); do [[ "$1" == --site ]] && site="$2"; shift; done
+        cp -R "{staged}/projects" "$site/"
+        echo '{json.dumps({"status": "ok", "reasons": [], "written": written, "excluded": [], "unverified": []})}'
+        """)
+    cfg_path = write_dashboard_cfg(tmp_path, cfg_with(plain="alpha"))
+    env = index_env(tmp_path, monkeypatch, TD_DASHBOARD_CONFIG=str(cfg_path))
+    s3 = FakeS3()
+    with pytest.raises(publish.PublishError, match="게이트"):
+        publish.publish_index(s3, BUCKET, tmp_path / "work/site-mirror", INDEX_PREFIX, env)
+    assert not [key for key in s3.keys() if "projects" in key], "게이트에 걸리면 아무것도 올리지 않는다"
+
+
+def test_publication_degraded_collect_is_recorded(exec_env):
+    run_id, run_dir, env, tmp_path = exec_env
+    write_fake_collect(tmp_path, "exit 1\n")
+    env = {**env, "TD_DASHBOARD_CONFIG": str(write_dashboard_cfg(tmp_path, cfg_with(plain="alpha")))}
+    s3 = FakeS3()
+    result = execute(run_id, run_dir, env, s3, OkCloudFront())
+    assert result["status"] == "degraded" and result["hosts"]["collect"] == {"status": "failed", "reason": "수집 실행 실패"}
+    log = json.loads(s3.objects[f"_test/u/suts/sutx/publish-log/{run_id}.json"]["data"])
+    assert "수집 실행 실패" in log["reason"] and log["status"] == "degraded"
+
+
+def test_publish_index_deletes_excluded_and_unconfigured_but_keeps_implicit(tmp_path, monkeypatch, restore_signals):
+    s3 = FakeS3()
+    for key, body in ((f"{INDEX_PREFIX}suts/s1/runs/r1/_COMPLETE", b"{}"),
+                      (f"{INDEX_PREFIX}suts/s1/runs/r1/run.json", json.dumps({"runId": "r1", "sut": "s1"}).encode()),
+                      (f"{INDEX_PREFIX}projects/s1/series.json", b"{}"),       # 암묵 과제: 지우지 않는다
+                      (f"{INDEX_PREFIX}projects/alpha/latest.json", b"{}"),     # 설정의 과제: 지우지 않는다
+                      (f"{INDEX_PREFIX}projects/hush/latest.json", b"{}"),      # 수집이 제외: 지운다
+                      (f"{INDEX_PREFIX}projects/old/latest.json", b"{}"),       # 설정에서 빠짐: 지운다
+                      (f"{INDEX_PREFIX}projects/_collect.json", b"{}")):
+        s3.put(key, body)
+    result = {"status": "degraded", "reasons": ["비공개 과제 1개 제외"], "written": [], "excluded": ["hush"], "unverified": []}
+    write_fake_collect(tmp_path, f"echo '{json.dumps(result)}'\n")
+    env = index_env(tmp_path, monkeypatch, TD_DASHBOARD_CONFIG=str(write_dashboard_cfg(tmp_path, cfg_with(plain=["alpha", "hush"]))))
+    mirror = tmp_path / "work/site-mirror"
+    outcome = publish.publish_index(s3, BUCKET, mirror, INDEX_PREFIX, env)
+    assert outcome.deleted == ["hush", "old"] and outcome.collect_status == "degraded"
+    assert outcome.collect_reasons == ["비공개 과제 1개 제외"]
+    keys = s3.keys()
+    assert not [k for k in keys if "/projects/hush/" in k or "/projects/old/" in k]
+    assert f"{INDEX_PREFIX}projects/alpha/latest.json" in keys and f"{INDEX_PREFIX}projects/s1/index.html" in keys
+    assert not (mirror / INDEX_PREFIX / "projects/old").exists() and (mirror / INDEX_PREFIX / "projects/alpha").exists()
+    for name in ("hush", "old"):
+        assert name not in s3.objects[f"{INDEX_PREFIX}projects.json"]["data"].decode()

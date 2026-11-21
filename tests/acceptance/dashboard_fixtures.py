@@ -19,6 +19,7 @@ import socketserver
 import sys
 import threading
 import urllib.request
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable, Iterator
@@ -639,6 +640,52 @@ def fake_gh(tmp_path: Path, repos: dict[str, dict]) -> FakeGh:
     script.write_text(f"#!{sys.executable}\n{_FAKE_GH_SCRIPT}")
     script.chmod(0o755)
     return FakeGh(state_dir)
+
+
+# --- 게시용 가짜 묶음(Task 11) -------------------------------------------------------------------------------
+
+@dataclass
+class Fakes:
+    """가짜 gh·가짜 Sonar(로컬 HTTP)·가짜 ssh 묶음. `.env`를 게시 실행의 환경에 더한다."""
+    gh: FakeGh
+    sonar: object          # fake_sonar.FakeSonar
+    ssh: FakeSsh
+    env: dict
+    stop: object           # 가짜 Sonar 서버를 멈추는 함수
+
+
+_STARTED_FAKES: list[Fakes] = []
+
+
+def publish_fakes(tmp_path: Path, repos: dict[str, dict], *, sonar: dict | None = None) -> Fakes:
+    """게시(S13·인덱스 전용)의 수집을 가짜로 돌리는 묶음. `repos`는 fake_gh의 저장소 응답, `sonar`의 `delay`(초)는 모든
+    저장소의 Sonar 게이트·측정값 응답을 늦춘다(수집이 도는 중에 신호·잠금을 끼우는 테스트용).
+
+    `.env`: `TD_GH_BIN`(가짜 gh), `TD_SONAR_URL_OVERRIDE`(가짜 Sonar, 접두 실행에서만 먹는다), `PATH`(가짜 ssh를 앞에).
+    가짜 ssh는 `psql` 명령(Sonar 토큰 DB)만 흉내 내고 나머지는 실제 ssh로 넘기므로 Lightsail rsync와 삭제는 실제로 돈다.
+    가짜 Sonar 서버는 stop_publish_fakes()가 멈춘다(테스트 모듈의 autouse fixture가 부른다)."""
+    from fake_sonar import start_fake_sonar
+    tmp_path = Path(tmp_path)
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    gh = fake_gh(tmp_path, repos)
+    ssh = fake_ssh(tmp_path)
+    sonar_state, stop = start_fake_sonar()
+    for repo in repos:
+        sonar_state.set_project(repo.split("/", 1)[1], gate="OK", coverage="80.0", bugs="0", vulnerabilities="0",
+                                code_smells="3")
+        if sonar and sonar.get("delay"):
+            sonar_state.delays[repo.split("/", 1)[1]] = float(sonar["delay"])
+    env = {"TD_GH_BIN": str(gh.path), "TD_SONAR_URL_OVERRIDE": sonar_state.url,
+           "PATH": f"{ssh.bin_dir}{os.pathsep}{os.environ['PATH']}"}
+    fakes = Fakes(gh, sonar_state, ssh, env, stop)
+    _STARTED_FAKES.append(fakes)
+    return fakes
+
+
+def stop_publish_fakes() -> None:
+    """publish_fakes가 띄운 가짜 Sonar 서버를 모두 멈춘다."""
+    while _STARTED_FAKES:
+        _STARTED_FAKES.pop().stop()
 
 
 # --- 표본 리포트를 가진 로컬 run과 렌더된 사이트(Task 7) ---------------------------------------------------

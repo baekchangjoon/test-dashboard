@@ -255,3 +255,26 @@ def test_schema_violating_snapshot_is_dropped_with_reason(tmp_path):
 def test_chart_single_point_and_all_missing():
     one = charts.trend_svg(CATALOG["tests.passRate"], pts([0.9])); assert one.count("<circle") == 1 and "<polyline" not in one
     none = charts.trend_svg(CATALOG["tests.passRate"], pts([None, None])); assert "<circle" not in none and "<svg" in none
+
+
+# --- REQ-106 ---------------------------------------------------------------------------------
+
+def snapshot_tree(site) -> dict[str, bytes]:
+    """사이트 아래 모든 파일(사이트 상대 경로 -> 바이트)."""
+    return {path.relative_to(site).as_posix(): path.read_bytes() for path in sorted(site.rglob("*")) if path.is_file()}
+
+
+def test_req106_idempotent_all_outputs(tmp_path):
+    from dashboard_fixtures import proj_site
+    site = proj_site(tmp_path)
+    cfg = load_cfg(site)
+    first_written = rebuild_site(site, cfg)
+    first = snapshot_tree(site)
+    second_written = rebuild_site(site, cfg)
+    assert snapshot_tree(site) == first
+    assert sorted(map(str, first_written)) == sorted(map(str, second_written))
+    rel = {path.relative_to(site).as_posix() for path in first_written}
+    assert {"index.html", "projects.json", "static/v2/app.css", "static/v2/app.js"} <= rel
+    for kind in ("projects/pet/index.html", "projects/pet/series.json", "projects/plain/index.html", "suts/pet/index.html"):
+        assert kind in rel, kind
+    assert any(path.startswith("projects/") for path in first) and "static/v2/app.css" in first

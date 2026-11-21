@@ -288,6 +288,22 @@ class FakeS3:
         self.objects.pop(Key, None)
         return {}
 
+    def delete_objects(self, Bucket, Delete):
+        """S3 DeleteObjects처럼 한 번에 1000개까지 지운다. 없는 키도 지운 것으로 답한다."""
+        keys = [item["Key"] for item in Delete["Objects"]]
+        assert 1 <= len(keys) <= 1000, "DeleteObjects는 한 번에 1~1000개다"
+        self.calls.append(("delete_objects", ",".join(keys), {"Quiet": Delete.get("Quiet")}))
+        for key in keys:
+            self.objects.pop(key, None)
+        return {} if Delete.get("Quiet") else {"Deleted": [{"Key": key} for key in keys]}
+
+    def put(self, key: str, body: bytes = b"x") -> None:
+        """테스트 준비용: 조건 없이 객체 하나를 둔다."""
+        self.put_object(Bucket="b", Key=key, Body=body)
+
+    def keys(self) -> list[str]:
+        return sorted(self.objects)
+
     def get_paginator(self, name):
         assert name == "list_objects_v2"
         fake = self

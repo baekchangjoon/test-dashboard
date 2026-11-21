@@ -2,6 +2,7 @@
 # S13 publish: run 사이트를 S3(원본)에 올리고 인덱스를 재생성한 뒤 CloudFront 무효화와 Lightsail 미러를 한다.
 #   S13-publish.sh <sut> <runId> [--force-unlock <attemptId>]
 # 접두: TD_SITE_PREFIX(운영은 비움, 테스트는 _test/<sessionId>/). 잠금·업로드·인덱스·무효화가 모두 이 접두로 한정된다.
+# 수집: 인덱스 단계가 collect.sh로 과제를 수집하고 빠진·비공개 과제를 지운 뒤 재생성한다(publish-index.sh와 같음, 수집 문제는 degraded).
 # 상태: S3나 인덱스 실패 failed, CloudFront나 Lightsail만 실패하면 degraded. 최종 결과는 stages/S13.json과
 #       suts/<sut>/publish-log/<runId>.json(둘이 같다). 게시된 run.json은 로컬과 같고 S13은 publishing이다.
 # 시간 제한: S3 1800초, rsync 1800초, SSH 120초(td.publish 내부). SIGINT/SIGTERM은 잠금을 풀고 failed로 마감한다.
