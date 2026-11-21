@@ -62,6 +62,11 @@ def _scrub(obj):
     return obj
 
 
+def _text(value) -> str:
+    """JSON 값 -> 문자열. 문자열이 아니면(null, 숫자 등) 빈 문자열(str(None)=="None"이 되는 것을 막는다)."""
+    return value if isinstance(value, str) else ""
+
+
 def _load_json(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -92,12 +97,13 @@ def _plan_entry(path: Path) -> dict | None:
     for index, case in enumerate(cases):
         if not isinstance(case, dict):
             return None
-        item = {name: _scrub(str(case.get(name, ""))) for name in PLAN_ITEM_FIELDS}
+        # 조건식 등은 원문 그대로 둔다(redaction으로 고쳐 쓰지 않는다). 누출은 project 끝의 find_leaks 게이트가 fatal로 막는다.
+        item = {name: _text(case.get(name)) for name in PLAN_ITEM_FIELDS}
         item["index"] = index
         item["conditionSha"] = _sha256(item["condition"].encode("utf-8"))
         items.append(item)
-    return {"file": path.name, "class": _scrub(str(data.get("class") or class_name)),
-            "method": _scrub(str(data.get("method") or method_name)), "items": items}
+    return {"file": path.name, "class": _text(data.get("class")) or class_name,
+            "method": _text(data.get("method")) or method_name, "items": items}
 
 
 def _keyparams_entry(path: Path) -> dict | None:
@@ -107,21 +113,23 @@ def _keyparams_entry(path: Path) -> dict | None:
         parameters = []
         for param in raw_params:
             parameters.append({
-                "name": _scrub(str(param.get("name", ""))),
-                "http_name": _scrub(str(param.get("http_name") or "")),
-                "java_type": _scrub(str(param.get("java_type") or "")),
-                "reasons": [{"detail": _scrub(str(reason.get("detail", "")))} for reason in param.get("reasons") or []],
+                "name": _text(param.get("name")),
+                "accessor": _text(param.get("accessor")),
+                "http_name": _text(param.get("http_name")),
+                "java_type": _text(param.get("java_type")),
+                "reasons": [{"type": _text(reason.get("type")), "detail": _text(reason.get("detail"))}
+                            for reason in param.get("reasons") or []],
             })
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return None
-    return {"file": path.name, "class": _scrub(str(data.get("class", ""))),
-            "method": _scrub(str(data.get("method", ""))), "parameters": parameters}
+    return {"file": path.name, "class": _text(data.get("class")),
+            "method": _text(data.get("method")), "parameters": parameters}
 
 
 def _auth(path: Path) -> dict | None:
     try:
         headers = _load_json(path)["required_headers"]
-        return {"required_headers": [{"name": _scrub(str(h["name"])), "required": bool(h.get("required", False))}
+        return {"required_headers": [{"name": _text(h["name"]), "required": bool(h.get("required", False))}
                                      for h in headers]}
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return None
@@ -182,7 +190,10 @@ def project(run_dir: Path, sut_file: Path, out_dir: Path) -> Projection:
         missing.append("auth")
         auth = {"required_headers": []}
 
-    config = sut_config.load(sut_file)
+    try:
+        config = sut_config.load(sut_file)
+    except sut_config.SutConfigError as exc:
+        return Projection(out_dir, "", sorted(missing), f"sut.yaml 오류: {exc}")
     harness = {"login": config.auth_login, "unauthenticatedStatus": config.auth_unauthenticated_status,
                "apiInclude": config.api_include, "timezone": _timezone(sut_file)}
     documents = {"plans.json": plans, "keyparams.json": keyparams, "auth.json": auth,
