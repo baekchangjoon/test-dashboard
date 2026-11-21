@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import os
 import subprocess
 import sys
 import urllib.request
@@ -275,3 +276,142 @@ def open_page(browser, url: str, *, javascript: bool = True, scheme: str = "ligh
     page.goto(url)
     page.wait_for_load_state("load")
     return page
+
+
+# --- 가짜 ssh(Sonar 토큰 DB) ------------------------------------------------------------------------
+
+# `psql -tA -c '\d user_tokens'`가 실제 서버에서 내는 모양(열|형식|정렬|널 허용|기본값).
+_USER_TOKENS_SCHEMA = "\n".join([
+    "uuid|character varying(40)||not null|",
+    "user_uuid|character varying(255)||not null|",
+    "name|character varying(100)||not null|",
+    "token_hash|character varying(255)||not null|",
+    "last_connection_date|bigint|||",
+    "created_at|bigint||not null|",
+    "project_uuid|character varying(40)|||",
+    "type|character varying(100)||not null|",
+    "expiration_date|bigint|||",
+])
+
+# 가짜 ssh 본체. 원격 명령에 psql이 있으면 user_tokens를 상태 파일로 흉내 내고, 없으면 PATH에서 실제 ssh를 찾아 exec한다.
+_FAKE_SSH_SCRIPT = r'''
+import json, os, re, sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+STATE = HERE.parent
+CONFIG = json.loads((STATE / "config.json").read_text())
+
+
+def real_ssh():
+    own_dir = os.path.realpath(HERE)
+    for entry in os.environ.get("PATH", "").split(os.pathsep):
+        if not entry or os.path.realpath(entry) == own_dir:
+            continue
+        candidate = os.path.join(entry, "ssh")
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            os.execv(candidate, [candidate] + sys.argv[1:])
+    print("fake ssh: 실제 ssh를 PATH에서 찾지 못했다", file=sys.stderr)
+    sys.exit(127)
+
+
+remote = sys.argv[-1] if len(sys.argv) > 1 else ""
+if "psql" not in remote:
+    real_ssh()
+match = re.search(r'-c "(.*)"\s*$', remote, re.S)
+if not match:
+    print("fake ssh: SQL을 찾지 못했다", file=sys.stderr)
+    sys.exit(2)
+sql = match.group(1)
+with open(STATE / "sql.log", "a") as log:
+    log.write(sql + "\n")
+rows_file = STATE / "rows.json"
+rows = json.loads(rows_file.read_text())
+
+
+def save():
+    rows_file.write_text(json.dumps(rows))
+
+
+if sql.strip() == r"\d user_tokens":
+    print(CONFIG["schema"])
+elif sql.strip() == "select 1":
+    print(1)
+elif sql.startswith("with gone as (delete from user_tokens where name like 'td-%'"):
+    kept = [row for row in rows if not (row["name"].startswith("td-") and row["expired"])]
+    print(len(rows) - len(kept))
+    rows[:] = kept
+    save()
+elif sql.startswith("insert into user_tokens"):
+    name = re.search(r"select '[^']*', u\.uuid, '([^']*)'", sql).group(1)
+    rows.append({"name": name, "expired": False})
+    save()
+    if CONFIG["lose_insert_reply"]:
+        print("Connection reset by peer", file=sys.stderr)
+        sys.exit(255)
+    print("INSERT 0 1")
+elif (found := re.fullmatch(r"select count\(\*\) from user_tokens where name='([^']*)'", sql.strip())):
+    print(sum(1 for row in rows if row["name"] == found.group(1)))
+elif (found := re.fullmatch(r"delete from user_tokens where name='([^']*)'", sql.strip())):
+    if CONFIG["fail_delete"]:
+        print("Connection closed by remote host", file=sys.stderr)
+        sys.exit(255)
+    kept = [row for row in rows if row["name"] != found.group(1)]
+    print(f"DELETE {len(rows) - len(kept)}")
+    rows[:] = kept
+    save()
+else:
+    print(f"fake ssh: 모르는 SQL: {sql[:200]}", file=sys.stderr)
+    sys.exit(1)
+'''
+
+
+class FakeSsh:
+    """상태를 가진 가짜 ssh. `bin_dir`을 PATH 앞에 둔다."""
+
+    def __init__(self, state_dir: Path):
+        self.state_dir = state_dir
+        self.bin_dir = state_dir / "bin"
+
+    def _rows(self) -> list[dict]:
+        return json.loads((self.state_dir / "rows.json").read_text())
+
+    def rows(self) -> list[str]:
+        """남아 있는 토큰 행의 이름(삽입 순서)."""
+        return [row["name"] for row in self._rows()]
+
+    def log(self) -> str:
+        """받은 SQL 전부(한 줄에 하나)."""
+        log_file = self.state_dir / "sql.log"
+        return log_file.read_text() if log_file.exists() else ""
+
+    def seed(self, name: str, *, expired: bool = False) -> None:
+        """토큰 행 하나를 미리 넣는다(`expired`면 사전 청소 대상)."""
+        current = self._rows()
+        current.append({"name": name, "expired": expired})
+        (self.state_dir / "rows.json").write_text(json.dumps(current))
+
+
+def fake_ssh(tmp_path: Path, *, fail_delete: bool = False, lose_insert_reply: bool = False) -> FakeSsh:
+    """`fail_delete`: DELETE가 SSH 오류(255)로 실패한다. `lose_insert_reply`: INSERT는 적용되지만 응답이 유실된다(255)."""
+    state_dir = tmp_path / "fake-ssh"
+    bin_dir = state_dir / "bin"
+    bin_dir.mkdir(parents=True)
+    (state_dir / "config.json").write_text(json.dumps(
+        {"fail_delete": fail_delete, "lose_insert_reply": lose_insert_reply, "schema": _USER_TOKENS_SCHEMA}))
+    (state_dir / "rows.json").write_text("[]")
+    script = bin_dir / "ssh"
+    script.write_text(f"#!{sys.executable}\n{_FAKE_SSH_SCRIPT}")
+    script.chmod(0o755)
+    return FakeSsh(state_dir)
+
+
+def token_env(tmp_path: Path, ssh: FakeSsh, sonar_url: str) -> dict:
+    """가짜 ssh와 가짜 Sonar로 토큰 함수를 돌리는 환경 변수(테스트 접두사가 있어야 URL 덮어쓰기가 먹는다)."""
+    return {
+        "TD_SITE_PREFIX": f"_test/token-{tmp_path.name}/",
+        "TD_SONAR_URL_OVERRIDE": sonar_url,
+        "TD_LIGHTSAIL_IP": "203.0.113.1",
+        "TD_SSH_KEY_PATH": "/nonexistent",
+        "PATH": f"{ssh.bin_dir}{os.pathsep}{os.environ['PATH']}",
+    }

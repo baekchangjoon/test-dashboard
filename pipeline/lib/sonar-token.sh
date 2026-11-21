@@ -5,8 +5,12 @@
 #   td_sonar_psql <sql>               SSH로 Sonar Postgres에 SQL 하나를 실행(-tA). TD_SSH_PORT_OVERRIDE는 테스트 실행에서만 쓴다
 #   td_sonar_verify_schema            `\d user_tokens`로 필요한 열과 bigint 만료 열을 확인(해시 방식은 발급 직후 validate가 검증)
 #   td_sonar_preclean                 만료된 `td-%` 행만 지운다(다른 run의 활성 토큰과 td-가 아닌 토큰은 건드리지 않는다)
-#   td_sonar_token_issue <runId>      무작위 토큰의 SHA-384 해시를 admin으로 INSERT(만료 = 지금 + 2시간), SONAR_TOKEN export, validate
-#   td_sonar_token_revoke             자기 행(td-<runId>)만 DELETE하고 0행을 확인한다. 정리 SSH 실패는 return 1
+#   td_sonar_token_issue_named <name> 무작위 토큰의 SHA-384 해시를 admin으로 INSERT(만료 = 지금 + 2시간), SONAR_TOKEN export, validate.
+#                                     단계에 묶이지 않는다(TD_RUN_DIR 불필요). 정리 trap은 호출자가 건다
+#   td_sonar_token_revoke_named       기억한 이름의 행만 DELETE하고 0행을 확인, SONAR_TOKEN unset. 실패는 경고 1회 + return 1.
+#                                     장애 주입 지점은 TD_SONAR_HOOK_STAGE(기본 S11)의 cleanup-ssh
+#   td_sonar_token_issue <runId>      S11 래퍼: 정리 trap(_td_sonar_revoke_on_exit)을 등록하고 td-<runId>로 issue_named
+#   td_sonar_token_revoke             S11 래퍼: 자기 행(td-<runId>)만 revoke_named. 정리 SSH 실패는 return 1
 #
 # 토큰 평문은 환경 변수 SONAR_TOKEN으로만 다룬다(명령줄·로그·산출물에 쓰지 않는다). DB에는 해시만 간다.
 # 실패 사유는 TD_SONAR_FAIL_REASON에 둔다. 정리는 td_on_exit로 모든 종료 경로(실패, 시그널)에 등록된다.
@@ -14,7 +18,8 @@
 TD_SONAR_DB_CONTAINER="${TD_SONAR_DB_CONTAINER:-sonarqube-db-1}"
 TD_SONAR_TOKEN_LIFETIME_MS=7200000
 TD_SONAR_FAIL_REASON=""
-_TD_SONAR_ISSUED_RUN=""
+_TD_SONAR_ISSUED_RUN=""    # S11 래퍼가 발급한 runId
+_TD_SONAR_TOKEN_NAME=""    # issue_named가 기억한 토큰 행 이름(revoke_named가 지운다)
 _TD_SONAR_REVOKE_STATE=""   # ""(미시도) | done | failed
 
 td_sonar_load_env() {
@@ -74,16 +79,15 @@ td_sonar_revoke_redact() { # <reason>
   return $rc
 }
 
-td_sonar_token_issue() { # <runId>
-  local run_id="${1:?runId}" name token hash row_uuid inserted
-  name="td-$run_id"
+# 이름 그대로 발급한다. 발급 도중 실패해도 td_sonar_token_revoke_named가 지울 수 있게 이름을 먼저 기억한다.
+td_sonar_token_issue_named() { # <name>
+  local name="${1:?name}" token hash row_uuid inserted
+  _TD_SONAR_TOKEN_NAME="$name"
+  _TD_SONAR_REVOKE_STATE=""
   token="squ_$(openssl rand -hex 20)" || { TD_SONAR_FAIL_REASON="난수 생성 실패"; return 1; }
   hash="$(printf '%s' "$token" | openssl dgst -sha384 | awk '{print $NF}')"
   row_uuid="$(openssl rand -hex 10)"
   [[ ${#hash} -eq 96 && -n "$row_uuid" ]] || { TD_SONAR_FAIL_REASON="토큰 해시 계산 실패"; return 1; }
-  # INSERT가 일부만 적용돼도(응답 유실 등) 정리되도록 먼저 등록한다.
-  _TD_SONAR_ISSUED_RUN="$run_id"
-  td_on_exit '_td_sonar_revoke_on_exit'
   td_sonar_psql "insert into user_tokens (uuid, user_uuid, name, token_hash, created_at, type, expiration_date) select '$row_uuid', u.uuid, '$name', '$hash', t.ms, 'USER_TOKEN', t.ms + $TD_SONAR_TOKEN_LIFETIME_MS from users u, (select (extract(epoch from now())*1000)::bigint as ms) t where u.login='admin'" >/dev/null \
     || { TD_SONAR_FAIL_REASON="ssh로 토큰 행을 INSERT하지 못했다"; return 1; }
   inserted="$(td_sonar_psql "select count(*) from user_tokens where name='$name'")" || inserted=""
@@ -93,20 +97,21 @@ td_sonar_token_issue() { # <runId>
   if [[ -n "${TD_SONAR_TOKEN_OBSERVE:-}" && -n "${TD_SITE_PREFIX:-}" ]]; then
     (umask 077; printf '%s' "$token" > "$TD_SONAR_TOKEN_OBSERVE")
   fi
-  # 해시 방식(SHA-384)은 실제 validate로 검증한다. 맞지 않으면 S11 failed(행은 정리 trap이 지운다).
+  # 해시 방식(SHA-384)은 실제 validate로 검증한다. 맞지 않으면 실패(행은 호출자의 정리가 지운다).
   if ! td_py -m td.sonar validate --url "$TD_SONAR_URL"; then
     TD_SONAR_FAIL_REASON="발급한 토큰이 api/authentication/validate를 통과하지 못했다(해시 방식 불일치?)"
     return 1
   fi
 }
 
-td_sonar_token_revoke() {
-  [[ -n "$_TD_SONAR_ISSUED_RUN" ]] || return 0
+# 기억한 이름의 행만 지운다. 이미 지웠으면 아무것도 하지 않는다. 실패하면 경고는 한 번만 크게 내고 return 1.
+td_sonar_token_revoke_named() {
+  [[ -n "$_TD_SONAR_TOKEN_NAME" ]] || return 0
   [[ "$_TD_SONAR_REVOKE_STATE" == "done" ]] && return 0
-  local name="td-$_TD_SONAR_ISSUED_RUN" left rc=0
-  td_py -m td.hooks should-fail S11 cleanup-ssh || rc=$?
+  local name="$_TD_SONAR_TOKEN_NAME" hook_stage="${TD_SONAR_HOOK_STAGE:-S11}" left rc=0
+  td_py -m td.hooks should-fail "$hook_stage" cleanup-ssh || rc=$?
   if [[ $rc -eq 10 ]]; then
-    TD_SONAR_FAIL_REASON="정리 SSH 실패(injected, TD_FAIL_STAGE=S11:cleanup-ssh)"
+    TD_SONAR_FAIL_REASON="정리 SSH 실패(injected, TD_FAIL_STAGE=$hook_stage:cleanup-ssh)"
   elif td_sonar_psql "delete from user_tokens where name='$name'" >/dev/null \
       && left="$(td_sonar_psql "select count(*) from user_tokens where name='$name'")" && [[ "${left//[^0-9]/}" == "0" ]]; then
     _TD_SONAR_REVOKE_STATE="done"
@@ -125,4 +130,20 @@ td_sonar_token_revoke() {
     } >&2
   fi
   return 1
+}
+
+# S11 래퍼. INSERT가 일부만 적용돼도(응답 유실 등) 정리되도록 발급 전에 정리 trap을 먼저 등록한다.
+td_sonar_token_issue() { # <runId>
+  local run_id="${1:?runId}"
+  _TD_SONAR_ISSUED_RUN="$run_id"
+  td_on_exit '_td_sonar_revoke_on_exit'
+  td_sonar_token_issue_named "td-$run_id"
+}
+
+# S11 래퍼. 장애 주입 지점은 S11:cleanup-ssh로 고정한다.
+td_sonar_token_revoke() {
+  [[ -n "$_TD_SONAR_ISSUED_RUN" ]] || return 0
+  _TD_SONAR_TOKEN_NAME="td-$_TD_SONAR_ISSUED_RUN"
+  local TD_SONAR_HOOK_STAGE=S11
+  td_sonar_token_revoke_named
 }
