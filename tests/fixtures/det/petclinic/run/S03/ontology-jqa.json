@@ -1,0 +1,1647 @@
+{
+  "edges": [
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.boarding.ReservationRestController",
+      "target": "endpoint:DELETE /api/reservations/{id}"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.boarding.ReservationRestController",
+      "target": "endpoint:GET /api/reservations"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.boarding.ReservationRestController",
+      "target": "endpoint:GET /api/reservations/{id}"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.boarding.ReservationRestController",
+      "target": "endpoint:POST /api/reservations"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.boarding.ReservationRestController",
+      "target": "endpoint:PUT /api/reservations/{id}"
+    },
+    {
+      "kind": "throws",
+      "source": "controller:org.springframework.samples.petclinic.boarding.ReservationRestController",
+      "target": "exception:org.springframework.samples.petclinic.boarding.ReservationExceptions$ReservationBadRequestException"
+    },
+    {
+      "kind": "dependsOn",
+      "source": "controller:org.springframework.samples.petclinic.boarding.ReservationRestController",
+      "target": "service:org.springframework.samples.petclinic.boarding.ReservationService"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.owner.OwnerController",
+      "target": "endpoint:GET /owners"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.owner.OwnerController",
+      "target": "endpoint:GET /owners/find"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.owner.OwnerController",
+      "target": "endpoint:GET /owners/new"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.owner.OwnerController",
+      "target": "endpoint:GET /owners/{ownerId}"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.owner.OwnerController",
+      "target": "endpoint:GET /owners/{ownerId}/edit"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.owner.OwnerController",
+      "target": "endpoint:POST /owners/new"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.owner.OwnerController",
+      "target": "endpoint:POST /owners/{ownerId}/edit"
+    },
+    {
+      "kind": "dependsOn",
+      "source": "controller:org.springframework.samples.petclinic.owner.OwnerController",
+      "target": "repository:org.springframework.samples.petclinic.owner.OwnerRepository"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.owner.OwnerRestController",
+      "target": "endpoint:GET /api/owners"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.owner.OwnerRestController",
+      "target": "endpoint:GET /api/owners/{ownerId}"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.owner.OwnerRestController",
+      "target": "endpoint:POST /api/owners"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.owner.OwnerRestController",
+      "target": "endpoint:PUT /api/owners/{ownerId}"
+    },
+    {
+      "kind": "dependsOn",
+      "source": "controller:org.springframework.samples.petclinic.owner.OwnerRestController",
+      "target": "repository:org.springframework.samples.petclinic.owner.OwnerRepository"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.owner.PetController",
+      "target": "endpoint:GET /owners/{ownerId}/pets/new"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.owner.PetController",
+      "target": "endpoint:GET /owners/{ownerId}/pets/{petId}/edit"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.owner.PetController",
+      "target": "endpoint:POST /owners/{ownerId}/pets/new"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.owner.PetController",
+      "target": "endpoint:POST /owners/{ownerId}/pets/{petId}/edit"
+    },
+    {
+      "kind": "dependsOn",
+      "source": "controller:org.springframework.samples.petclinic.owner.PetController",
+      "target": "repository:org.springframework.samples.petclinic.owner.OwnerRepository"
+    },
+    {
+      "kind": "dependsOn",
+      "source": "controller:org.springframework.samples.petclinic.owner.PetController",
+      "target": "repository:org.springframework.samples.petclinic.owner.PetTypeRepository"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.owner.PetRestController",
+      "target": "endpoint:GET /api/pets/types"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.owner.PetRestController",
+      "target": "endpoint:GET /api/pets/{petId}"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.owner.PetRestController",
+      "target": "endpoint:POST /api/pets"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.owner.PetRestController",
+      "target": "endpoint:PUT /api/pets/{petId}"
+    },
+    {
+      "kind": "dependsOn",
+      "source": "controller:org.springframework.samples.petclinic.owner.PetRestController",
+      "target": "repository:org.springframework.samples.petclinic.owner.OwnerRepository"
+    },
+    {
+      "kind": "dependsOn",
+      "source": "controller:org.springframework.samples.petclinic.owner.PetRestController",
+      "target": "repository:org.springframework.samples.petclinic.owner.PetTypeRepository"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.owner.VisitController",
+      "target": "endpoint:GET /owners/{ownerId}/pets/{petId}/visits/new"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.owner.VisitController",
+      "target": "endpoint:POST /owners/{ownerId}/pets/{petId}/visits/new"
+    },
+    {
+      "kind": "dependsOn",
+      "source": "controller:org.springframework.samples.petclinic.owner.VisitController",
+      "target": "repository:org.springframework.samples.petclinic.owner.OwnerRepository"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.security.AuthController",
+      "target": "endpoint:POST /api/auth/login"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.security.AuthController",
+      "target": "endpoint:POST /api/auth/validate"
+    },
+    {
+      "kind": "dependsOn",
+      "source": "controller:org.springframework.samples.petclinic.security.AuthController",
+      "target": "service:org.springframework.samples.petclinic.security.CustomUserDetailsService"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.system.CrashController",
+      "target": "endpoint:GET /oups"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.system.WelcomeController",
+      "target": "endpoint:GET /"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.vet.VetController",
+      "target": "endpoint:GET /vets"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.vet.VetController",
+      "target": "endpoint:GET /vets.html"
+    },
+    {
+      "kind": "dependsOn",
+      "source": "controller:org.springframework.samples.petclinic.vet.VetController",
+      "target": "repository:org.springframework.samples.petclinic.vet.VetRepository"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.vet.VetRestController",
+      "target": "endpoint:GET /api/vets"
+    },
+    {
+      "kind": "declares",
+      "source": "controller:org.springframework.samples.petclinic.vet.VetRestController",
+      "target": "endpoint:GET /api/vets/{vetId}"
+    },
+    {
+      "kind": "dependsOn",
+      "source": "controller:org.springframework.samples.petclinic.vet.VetRestController",
+      "target": "repository:org.springframework.samples.petclinic.vet.VetRepository"
+    },
+    {
+      "kind": "uses",
+      "source": "endpoint:POST /api/auth/login",
+      "target": "dto:org.springframework.samples.petclinic.security.AuthController$LoginRequest"
+    },
+    {
+      "kind": "uses",
+      "source": "endpoint:POST /api/reservations",
+      "target": "dto:org.springframework.samples.petclinic.boarding.ReservationDtos$CreateReservationRequest"
+    },
+    {
+      "kind": "uses",
+      "source": "endpoint:PUT /api/reservations/{id}",
+      "target": "dto:org.springframework.samples.petclinic.boarding.ReservationDtos$UpdateReservationRequest"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.boarding.Reservation",
+      "target": "field:org.springframework.samples.petclinic.boarding.Reservation#animalCount"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.boarding.Reservation",
+      "target": "field:org.springframework.samples.petclinic.boarding.Reservation#checkInDate"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.boarding.Reservation",
+      "target": "field:org.springframework.samples.petclinic.boarding.Reservation#createdAt"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.boarding.Reservation",
+      "target": "field:org.springframework.samples.petclinic.boarding.Reservation#depositAmount"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.boarding.Reservation",
+      "target": "field:org.springframework.samples.petclinic.boarding.Reservation#id"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.boarding.Reservation",
+      "target": "field:org.springframework.samples.petclinic.boarding.Reservation#loyaltyPoints"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.boarding.Reservation",
+      "target": "field:org.springframework.samples.petclinic.boarding.Reservation#nights"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.boarding.Reservation",
+      "target": "field:org.springframework.samples.petclinic.boarding.Reservation#ownerEmail"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.boarding.Reservation",
+      "target": "field:org.springframework.samples.petclinic.boarding.Reservation#petName"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.boarding.Reservation",
+      "target": "field:org.springframework.samples.petclinic.boarding.Reservation#priceTier"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.boarding.Reservation",
+      "target": "field:org.springframework.samples.petclinic.boarding.Reservation#promoCode"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.boarding.Reservation",
+      "target": "field:org.springframework.samples.petclinic.boarding.Reservation#roomNumber"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.boarding.Reservation",
+      "target": "field:org.springframework.samples.petclinic.boarding.Reservation#status"
+    },
+    {
+      "kind": "references",
+      "source": "entity:org.springframework.samples.petclinic.owner.Owner",
+      "target": "entity:org.springframework.samples.petclinic.owner.Pet"
+    },
+    {
+      "kind": "references",
+      "source": "entity:org.springframework.samples.petclinic.owner.Owner",
+      "target": "entity:org.springframework.samples.petclinic.owner.Visit"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.owner.Owner",
+      "target": "field:org.springframework.samples.petclinic.owner.Owner#address"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.owner.Owner",
+      "target": "field:org.springframework.samples.petclinic.owner.Owner#city"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.owner.Owner",
+      "target": "field:org.springframework.samples.petclinic.owner.Owner#firstName"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.owner.Owner",
+      "target": "field:org.springframework.samples.petclinic.owner.Owner#id"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.owner.Owner",
+      "target": "field:org.springframework.samples.petclinic.owner.Owner#lastName"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.owner.Owner",
+      "target": "field:org.springframework.samples.petclinic.owner.Owner#pets"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.owner.Owner",
+      "target": "field:org.springframework.samples.petclinic.owner.Owner#telephone"
+    },
+    {
+      "kind": "references",
+      "source": "entity:org.springframework.samples.petclinic.owner.Pet",
+      "target": "entity:org.springframework.samples.petclinic.owner.PetType"
+    },
+    {
+      "kind": "references",
+      "source": "entity:org.springframework.samples.petclinic.owner.Pet",
+      "target": "entity:org.springframework.samples.petclinic.owner.Visit"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.owner.Pet",
+      "target": "field:org.springframework.samples.petclinic.owner.Pet#birthDate"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.owner.Pet",
+      "target": "field:org.springframework.samples.petclinic.owner.Pet#id"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.owner.Pet",
+      "target": "field:org.springframework.samples.petclinic.owner.Pet#name"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.owner.Pet",
+      "target": "field:org.springframework.samples.petclinic.owner.Pet#type"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.owner.Pet",
+      "target": "field:org.springframework.samples.petclinic.owner.Pet#visits"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.owner.PetType",
+      "target": "field:org.springframework.samples.petclinic.owner.PetType#id"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.owner.PetType",
+      "target": "field:org.springframework.samples.petclinic.owner.PetType#name"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.owner.Visit",
+      "target": "field:org.springframework.samples.petclinic.owner.Visit#date"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.owner.Visit",
+      "target": "field:org.springframework.samples.petclinic.owner.Visit#description"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.owner.Visit",
+      "target": "field:org.springframework.samples.petclinic.owner.Visit#id"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.vet.Specialty",
+      "target": "field:org.springframework.samples.petclinic.vet.Specialty#id"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.vet.Specialty",
+      "target": "field:org.springframework.samples.petclinic.vet.Specialty#name"
+    },
+    {
+      "kind": "references",
+      "source": "entity:org.springframework.samples.petclinic.vet.Vet",
+      "target": "entity:org.springframework.samples.petclinic.vet.Specialty"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.vet.Vet",
+      "target": "field:org.springframework.samples.petclinic.vet.Vet#firstName"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.vet.Vet",
+      "target": "field:org.springframework.samples.petclinic.vet.Vet#id"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.vet.Vet",
+      "target": "field:org.springframework.samples.petclinic.vet.Vet#lastName"
+    },
+    {
+      "kind": "hasField",
+      "source": "entity:org.springframework.samples.petclinic.vet.Vet",
+      "target": "field:org.springframework.samples.petclinic.vet.Vet#specialties"
+    },
+    {
+      "kind": "manages",
+      "source": "repository:org.springframework.samples.petclinic.boarding.ReservationRepository",
+      "target": "entity:org.springframework.samples.petclinic.boarding.Reservation"
+    },
+    {
+      "kind": "manages",
+      "source": "repository:org.springframework.samples.petclinic.owner.OwnerRepository",
+      "target": "entity:org.springframework.samples.petclinic.owner.Owner"
+    },
+    {
+      "kind": "manages",
+      "source": "repository:org.springframework.samples.petclinic.owner.PetTypeRepository",
+      "target": "entity:org.springframework.samples.petclinic.owner.PetType"
+    },
+    {
+      "kind": "manages",
+      "source": "repository:org.springframework.samples.petclinic.vet.VetRepository",
+      "target": "entity:org.springframework.samples.petclinic.vet.Vet"
+    },
+    {
+      "kind": "throws",
+      "source": "service:org.springframework.samples.petclinic.boarding.ReservationService",
+      "target": "exception:org.springframework.samples.petclinic.boarding.ReservationExceptions$ReservationConflictException"
+    },
+    {
+      "kind": "throws",
+      "source": "service:org.springframework.samples.petclinic.boarding.ReservationService",
+      "target": "exception:org.springframework.samples.petclinic.boarding.ReservationExceptions$ReservationNotFoundException"
+    },
+    {
+      "kind": "throws",
+      "source": "service:org.springframework.samples.petclinic.boarding.ReservationService",
+      "target": "exception:org.springframework.samples.petclinic.boarding.ReservationExceptions$ReservationValidationException"
+    },
+    {
+      "kind": "dependsOn",
+      "source": "service:org.springframework.samples.petclinic.boarding.ReservationService",
+      "target": "repository:org.springframework.samples.petclinic.boarding.ReservationRepository"
+    }
+  ],
+  "meta": {
+    "commit": "b6f939355e8790202ddfc71e3f3507252745ed37",
+    "fallbacks": [],
+    "tool": "jqassistant",
+    "version": "2.9.1"
+  },
+  "nodes": [
+    {
+      "id": "controller:org.springframework.samples.petclinic.boarding.ReservationRestController",
+      "kind": "Controller",
+      "label": "ReservationRestController",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.boarding.ReservationRestController",
+        "rest": true
+      }
+    },
+    {
+      "id": "controller:org.springframework.samples.petclinic.owner.OwnerController",
+      "kind": "Controller",
+      "label": "OwnerController",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.owner.OwnerController",
+        "rest": false
+      }
+    },
+    {
+      "id": "controller:org.springframework.samples.petclinic.owner.OwnerRestController",
+      "kind": "Controller",
+      "label": "OwnerRestController",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.owner.OwnerRestController",
+        "rest": true
+      }
+    },
+    {
+      "id": "controller:org.springframework.samples.petclinic.owner.PetController",
+      "kind": "Controller",
+      "label": "PetController",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.owner.PetController",
+        "rest": false
+      }
+    },
+    {
+      "id": "controller:org.springframework.samples.petclinic.owner.PetRestController",
+      "kind": "Controller",
+      "label": "PetRestController",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.owner.PetRestController",
+        "rest": true
+      }
+    },
+    {
+      "id": "controller:org.springframework.samples.petclinic.owner.VisitController",
+      "kind": "Controller",
+      "label": "VisitController",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.owner.VisitController",
+        "rest": false
+      }
+    },
+    {
+      "id": "controller:org.springframework.samples.petclinic.security.AuthController",
+      "kind": "Controller",
+      "label": "AuthController",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.security.AuthController",
+        "rest": true
+      }
+    },
+    {
+      "id": "controller:org.springframework.samples.petclinic.system.CrashController",
+      "kind": "Controller",
+      "label": "CrashController",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.system.CrashController",
+        "rest": false
+      }
+    },
+    {
+      "id": "controller:org.springframework.samples.petclinic.system.WelcomeController",
+      "kind": "Controller",
+      "label": "WelcomeController",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.system.WelcomeController",
+        "rest": false
+      }
+    },
+    {
+      "id": "controller:org.springframework.samples.petclinic.vet.VetController",
+      "kind": "Controller",
+      "label": "VetController",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.vet.VetController",
+        "rest": false
+      }
+    },
+    {
+      "id": "controller:org.springframework.samples.petclinic.vet.VetRestController",
+      "kind": "Controller",
+      "label": "VetRestController",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.vet.VetRestController",
+        "rest": true
+      }
+    },
+    {
+      "id": "dto:org.springframework.samples.petclinic.boarding.ReservationDtos$CreateReservationRequest",
+      "kind": "DTO",
+      "label": "ReservationDtos$CreateReservationRequest",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.boarding.ReservationDtos$CreateReservationRequest"
+      }
+    },
+    {
+      "id": "dto:org.springframework.samples.petclinic.boarding.ReservationDtos$ReservationResponse",
+      "kind": "DTO",
+      "label": "ReservationDtos$ReservationResponse",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.boarding.ReservationDtos$ReservationResponse"
+      }
+    },
+    {
+      "id": "dto:org.springframework.samples.petclinic.boarding.ReservationDtos$UpdateReservationRequest",
+      "kind": "DTO",
+      "label": "ReservationDtos$UpdateReservationRequest",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.boarding.ReservationDtos$UpdateReservationRequest"
+      }
+    },
+    {
+      "id": "dto:org.springframework.samples.petclinic.security.AuthController$LoginRequest",
+      "kind": "DTO",
+      "label": "AuthController$LoginRequest",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.security.AuthController$LoginRequest"
+      }
+    },
+    {
+      "id": "endpoint:DELETE /api/reservations/{id}",
+      "kind": "Endpoint",
+      "label": "DELETE /api/reservations/{id}",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.boarding.ReservationRestController#delete",
+        "method": "DELETE",
+        "path": "/api/reservations/{id}",
+        "view": false
+      }
+    },
+    {
+      "id": "endpoint:GET /",
+      "kind": "Endpoint",
+      "label": "GET /",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.system.WelcomeController#welcome",
+        "method": "GET",
+        "path": "/",
+        "view": true
+      }
+    },
+    {
+      "id": "endpoint:GET /api/owners",
+      "kind": "Endpoint",
+      "label": "GET /api/owners",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.owner.OwnerRestController#getAllOwners",
+        "method": "GET",
+        "path": "/api/owners",
+        "view": false
+      }
+    },
+    {
+      "id": "endpoint:GET /api/owners/{ownerId}",
+      "kind": "Endpoint",
+      "label": "GET /api/owners/{ownerId}",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.owner.OwnerRestController#getOwner",
+        "method": "GET",
+        "path": "/api/owners/{ownerId}",
+        "view": false
+      }
+    },
+    {
+      "id": "endpoint:GET /api/pets/types",
+      "kind": "Endpoint",
+      "label": "GET /api/pets/types",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.owner.PetRestController#getPetTypes",
+        "method": "GET",
+        "path": "/api/pets/types",
+        "view": false
+      }
+    },
+    {
+      "id": "endpoint:GET /api/pets/{petId}",
+      "kind": "Endpoint",
+      "label": "GET /api/pets/{petId}",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.owner.PetRestController#getPet",
+        "method": "GET",
+        "path": "/api/pets/{petId}",
+        "view": false
+      }
+    },
+    {
+      "id": "endpoint:GET /api/reservations",
+      "kind": "Endpoint",
+      "label": "GET /api/reservations",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.boarding.ReservationRestController#list",
+        "method": "GET",
+        "path": "/api/reservations",
+        "view": false
+      }
+    },
+    {
+      "id": "endpoint:GET /api/reservations/{id}",
+      "kind": "Endpoint",
+      "label": "GET /api/reservations/{id}",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.boarding.ReservationRestController#get",
+        "method": "GET",
+        "path": "/api/reservations/{id}",
+        "view": false
+      }
+    },
+    {
+      "id": "endpoint:GET /api/vets",
+      "kind": "Endpoint",
+      "label": "GET /api/vets",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.vet.VetRestController#getAllVets",
+        "method": "GET",
+        "path": "/api/vets",
+        "view": false
+      }
+    },
+    {
+      "id": "endpoint:GET /api/vets/{vetId}",
+      "kind": "Endpoint",
+      "label": "GET /api/vets/{vetId}",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.vet.VetRestController#getVet",
+        "method": "GET",
+        "path": "/api/vets/{vetId}",
+        "view": false
+      }
+    },
+    {
+      "id": "endpoint:GET /oups",
+      "kind": "Endpoint",
+      "label": "GET /oups",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.system.CrashController#triggerException",
+        "method": "GET",
+        "path": "/oups",
+        "view": true
+      }
+    },
+    {
+      "id": "endpoint:GET /owners",
+      "kind": "Endpoint",
+      "label": "GET /owners",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.owner.OwnerController#processFindForm",
+        "method": "GET",
+        "path": "/owners",
+        "view": true
+      }
+    },
+    {
+      "id": "endpoint:GET /owners/find",
+      "kind": "Endpoint",
+      "label": "GET /owners/find",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.owner.OwnerController#initFindForm",
+        "method": "GET",
+        "path": "/owners/find",
+        "view": true
+      }
+    },
+    {
+      "id": "endpoint:GET /owners/new",
+      "kind": "Endpoint",
+      "label": "GET /owners/new",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.owner.OwnerController#initCreationForm",
+        "method": "GET",
+        "path": "/owners/new",
+        "view": true
+      }
+    },
+    {
+      "id": "endpoint:GET /owners/{ownerId}",
+      "kind": "Endpoint",
+      "label": "GET /owners/{ownerId}",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.owner.OwnerController#showOwner",
+        "method": "GET",
+        "path": "/owners/{ownerId}",
+        "view": true
+      }
+    },
+    {
+      "id": "endpoint:GET /owners/{ownerId}/edit",
+      "kind": "Endpoint",
+      "label": "GET /owners/{ownerId}/edit",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.owner.OwnerController#initUpdateOwnerForm",
+        "method": "GET",
+        "path": "/owners/{ownerId}/edit",
+        "view": true
+      }
+    },
+    {
+      "id": "endpoint:GET /owners/{ownerId}/pets/new",
+      "kind": "Endpoint",
+      "label": "GET /owners/{ownerId}/pets/new",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.owner.PetController#initCreationForm",
+        "method": "GET",
+        "path": "/owners/{ownerId}/pets/new",
+        "view": true
+      }
+    },
+    {
+      "id": "endpoint:GET /owners/{ownerId}/pets/{petId}/edit",
+      "kind": "Endpoint",
+      "label": "GET /owners/{ownerId}/pets/{petId}/edit",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.owner.PetController#initUpdateForm",
+        "method": "GET",
+        "path": "/owners/{ownerId}/pets/{petId}/edit",
+        "view": true
+      }
+    },
+    {
+      "id": "endpoint:GET /owners/{ownerId}/pets/{petId}/visits/new",
+      "kind": "Endpoint",
+      "label": "GET /owners/{ownerId}/pets/{petId}/visits/new",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.owner.VisitController#initNewVisitForm",
+        "method": "GET",
+        "path": "/owners/{ownerId}/pets/{petId}/visits/new",
+        "view": true
+      }
+    },
+    {
+      "id": "endpoint:GET /vets",
+      "kind": "Endpoint",
+      "label": "GET /vets",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.vet.VetController#showResourcesVetList",
+        "method": "GET",
+        "path": "/vets",
+        "view": true
+      }
+    },
+    {
+      "id": "endpoint:GET /vets.html",
+      "kind": "Endpoint",
+      "label": "GET /vets.html",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.vet.VetController#showVetList",
+        "method": "GET",
+        "path": "/vets.html",
+        "view": true
+      }
+    },
+    {
+      "id": "endpoint:POST /api/auth/login",
+      "kind": "Endpoint",
+      "label": "POST /api/auth/login",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.security.AuthController#login",
+        "method": "POST",
+        "path": "/api/auth/login",
+        "view": false
+      }
+    },
+    {
+      "id": "endpoint:POST /api/auth/validate",
+      "kind": "Endpoint",
+      "label": "POST /api/auth/validate",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.security.AuthController#validateToken",
+        "method": "POST",
+        "path": "/api/auth/validate",
+        "view": false
+      }
+    },
+    {
+      "id": "endpoint:POST /api/owners",
+      "kind": "Endpoint",
+      "label": "POST /api/owners",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.owner.OwnerRestController#createOwner",
+        "method": "POST",
+        "path": "/api/owners",
+        "view": false
+      }
+    },
+    {
+      "id": "endpoint:POST /api/pets",
+      "kind": "Endpoint",
+      "label": "POST /api/pets",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.owner.PetRestController#createPet",
+        "method": "POST",
+        "path": "/api/pets",
+        "view": false
+      }
+    },
+    {
+      "id": "endpoint:POST /api/reservations",
+      "kind": "Endpoint",
+      "label": "POST /api/reservations",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.boarding.ReservationRestController#create",
+        "method": "POST",
+        "path": "/api/reservations",
+        "view": false
+      }
+    },
+    {
+      "id": "endpoint:POST /owners/new",
+      "kind": "Endpoint",
+      "label": "POST /owners/new",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.owner.OwnerController#processCreationForm",
+        "method": "POST",
+        "path": "/owners/new",
+        "view": true
+      }
+    },
+    {
+      "id": "endpoint:POST /owners/{ownerId}/edit",
+      "kind": "Endpoint",
+      "label": "POST /owners/{ownerId}/edit",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.owner.OwnerController#processUpdateOwnerForm",
+        "method": "POST",
+        "path": "/owners/{ownerId}/edit",
+        "view": true
+      }
+    },
+    {
+      "id": "endpoint:POST /owners/{ownerId}/pets/new",
+      "kind": "Endpoint",
+      "label": "POST /owners/{ownerId}/pets/new",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.owner.PetController#processCreationForm",
+        "method": "POST",
+        "path": "/owners/{ownerId}/pets/new",
+        "view": true
+      }
+    },
+    {
+      "id": "endpoint:POST /owners/{ownerId}/pets/{petId}/edit",
+      "kind": "Endpoint",
+      "label": "POST /owners/{ownerId}/pets/{petId}/edit",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.owner.PetController#processUpdateForm",
+        "method": "POST",
+        "path": "/owners/{ownerId}/pets/{petId}/edit",
+        "view": true
+      }
+    },
+    {
+      "id": "endpoint:POST /owners/{ownerId}/pets/{petId}/visits/new",
+      "kind": "Endpoint",
+      "label": "POST /owners/{ownerId}/pets/{petId}/visits/new",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.owner.VisitController#processNewVisitForm",
+        "method": "POST",
+        "path": "/owners/{ownerId}/pets/{petId}/visits/new",
+        "view": true
+      }
+    },
+    {
+      "id": "endpoint:PUT /api/owners/{ownerId}",
+      "kind": "Endpoint",
+      "label": "PUT /api/owners/{ownerId}",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.owner.OwnerRestController#updateOwner",
+        "method": "PUT",
+        "path": "/api/owners/{ownerId}",
+        "view": false
+      }
+    },
+    {
+      "id": "endpoint:PUT /api/pets/{petId}",
+      "kind": "Endpoint",
+      "label": "PUT /api/pets/{petId}",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.owner.PetRestController#updatePet",
+        "method": "PUT",
+        "path": "/api/pets/{petId}",
+        "view": false
+      }
+    },
+    {
+      "id": "endpoint:PUT /api/reservations/{id}",
+      "kind": "Endpoint",
+      "label": "PUT /api/reservations/{id}",
+      "props": {
+        "anyMethod": false,
+        "handler": "org.springframework.samples.petclinic.boarding.ReservationRestController#update",
+        "method": "PUT",
+        "path": "/api/reservations/{id}",
+        "view": false
+      }
+    },
+    {
+      "id": "entity:org.springframework.samples.petclinic.boarding.Reservation",
+      "kind": "Entity",
+      "label": "Reservation",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.boarding.Reservation"
+      }
+    },
+    {
+      "id": "entity:org.springframework.samples.petclinic.owner.Owner",
+      "kind": "Entity",
+      "label": "Owner",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.owner.Owner"
+      }
+    },
+    {
+      "id": "entity:org.springframework.samples.petclinic.owner.Pet",
+      "kind": "Entity",
+      "label": "Pet",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.owner.Pet"
+      }
+    },
+    {
+      "id": "entity:org.springframework.samples.petclinic.owner.PetType",
+      "kind": "Entity",
+      "label": "PetType",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.owner.PetType"
+      }
+    },
+    {
+      "id": "entity:org.springframework.samples.petclinic.owner.Visit",
+      "kind": "Entity",
+      "label": "Visit",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.owner.Visit"
+      }
+    },
+    {
+      "id": "entity:org.springframework.samples.petclinic.vet.Specialty",
+      "kind": "Entity",
+      "label": "Specialty",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.vet.Specialty"
+      }
+    },
+    {
+      "id": "entity:org.springframework.samples.petclinic.vet.Vet",
+      "kind": "Entity",
+      "label": "Vet",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.vet.Vet"
+      }
+    },
+    {
+      "id": "exception:org.springframework.samples.petclinic.boarding.ReservationExceptions$ReservationBadRequestException",
+      "kind": "Exception",
+      "label": "ReservationExceptions$ReservationBadRequestException",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.boarding.ReservationExceptions$ReservationBadRequestException",
+        "handlers": [
+          "org.springframework.samples.petclinic.boarding.ReservationRestController$ReservationExceptionHandler#onBadRequest"
+        ]
+      }
+    },
+    {
+      "id": "exception:org.springframework.samples.petclinic.boarding.ReservationExceptions$ReservationConflictException",
+      "kind": "Exception",
+      "label": "ReservationExceptions$ReservationConflictException",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.boarding.ReservationExceptions$ReservationConflictException",
+        "handlers": [
+          "org.springframework.samples.petclinic.boarding.ReservationRestController$ReservationExceptionHandler#onConflict"
+        ]
+      }
+    },
+    {
+      "id": "exception:org.springframework.samples.petclinic.boarding.ReservationExceptions$ReservationNotFoundException",
+      "kind": "Exception",
+      "label": "ReservationExceptions$ReservationNotFoundException",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.boarding.ReservationExceptions$ReservationNotFoundException",
+        "handlers": [
+          "org.springframework.samples.petclinic.boarding.ReservationRestController$ReservationExceptionHandler#onNotFound"
+        ]
+      }
+    },
+    {
+      "id": "exception:org.springframework.samples.petclinic.boarding.ReservationExceptions$ReservationValidationException",
+      "kind": "Exception",
+      "label": "ReservationExceptions$ReservationValidationException",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.boarding.ReservationExceptions$ReservationValidationException",
+        "handlers": [
+          "org.springframework.samples.petclinic.boarding.ReservationRestController$ReservationExceptionHandler#onValidation"
+        ]
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.boarding.Reservation#animalCount",
+      "kind": "Field",
+      "label": "Reservation.animalCount",
+      "props": {
+        "annotations": [
+          "Column"
+        ],
+        "name": "animalCount",
+        "type": "int"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.boarding.Reservation#checkInDate",
+      "kind": "Field",
+      "label": "Reservation.checkInDate",
+      "props": {
+        "annotations": [
+          "Column"
+        ],
+        "name": "checkInDate",
+        "type": "java.time.LocalDate"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.boarding.Reservation#createdAt",
+      "kind": "Field",
+      "label": "Reservation.createdAt",
+      "props": {
+        "annotations": [
+          "Column"
+        ],
+        "name": "createdAt",
+        "type": "java.time.LocalDateTime"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.boarding.Reservation#depositAmount",
+      "kind": "Field",
+      "label": "Reservation.depositAmount",
+      "props": {
+        "annotations": [
+          "Column"
+        ],
+        "name": "depositAmount",
+        "type": "double"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.boarding.Reservation#id",
+      "kind": "Field",
+      "label": "Reservation.id",
+      "props": {
+        "annotations": [
+          "GeneratedValue",
+          "Id"
+        ],
+        "name": "id",
+        "type": "java.lang.Integer"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.boarding.Reservation#loyaltyPoints",
+      "kind": "Field",
+      "label": "Reservation.loyaltyPoints",
+      "props": {
+        "annotations": [
+          "Column"
+        ],
+        "name": "loyaltyPoints",
+        "type": "int"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.boarding.Reservation#nights",
+      "kind": "Field",
+      "label": "Reservation.nights",
+      "props": {
+        "annotations": [
+          "Column"
+        ],
+        "name": "nights",
+        "type": "int"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.boarding.Reservation#ownerEmail",
+      "kind": "Field",
+      "label": "Reservation.ownerEmail",
+      "props": {
+        "annotations": [
+          "Column"
+        ],
+        "name": "ownerEmail",
+        "type": "java.lang.String"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.boarding.Reservation#petName",
+      "kind": "Field",
+      "label": "Reservation.petName",
+      "props": {
+        "annotations": [
+          "Column"
+        ],
+        "name": "petName",
+        "type": "java.lang.String"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.boarding.Reservation#priceTier",
+      "kind": "Field",
+      "label": "Reservation.priceTier",
+      "props": {
+        "annotations": [
+          "Column",
+          "Enumerated"
+        ],
+        "name": "priceTier",
+        "type": "org.springframework.samples.petclinic.boarding.PriceTier"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.boarding.Reservation#promoCode",
+      "kind": "Field",
+      "label": "Reservation.promoCode",
+      "props": {
+        "annotations": [
+          "Column"
+        ],
+        "name": "promoCode",
+        "type": "java.lang.String"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.boarding.Reservation#roomNumber",
+      "kind": "Field",
+      "label": "Reservation.roomNumber",
+      "props": {
+        "annotations": [
+          "Column"
+        ],
+        "name": "roomNumber",
+        "type": "int"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.boarding.Reservation#status",
+      "kind": "Field",
+      "label": "Reservation.status",
+      "props": {
+        "annotations": [
+          "Column",
+          "Enumerated"
+        ],
+        "name": "status",
+        "type": "org.springframework.samples.petclinic.boarding.ReservationStatus"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.owner.Owner#address",
+      "kind": "Field",
+      "label": "Owner.address",
+      "props": {
+        "annotations": [
+          "Column",
+          "NotBlank"
+        ],
+        "name": "address",
+        "type": "java.lang.String"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.owner.Owner#city",
+      "kind": "Field",
+      "label": "Owner.city",
+      "props": {
+        "annotations": [
+          "Column",
+          "NotBlank"
+        ],
+        "name": "city",
+        "type": "java.lang.String"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.owner.Owner#firstName",
+      "kind": "Field",
+      "label": "Owner.firstName",
+      "props": {
+        "annotations": [
+          "Column",
+          "NotBlank"
+        ],
+        "name": "firstName",
+        "type": "java.lang.String"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.owner.Owner#id",
+      "kind": "Field",
+      "label": "Owner.id",
+      "props": {
+        "annotations": [
+          "GeneratedValue",
+          "Id"
+        ],
+        "name": "id",
+        "type": "java.lang.Integer"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.owner.Owner#lastName",
+      "kind": "Field",
+      "label": "Owner.lastName",
+      "props": {
+        "annotations": [
+          "Column",
+          "NotBlank"
+        ],
+        "name": "lastName",
+        "type": "java.lang.String"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.owner.Owner#pets",
+      "kind": "Field",
+      "label": "Owner.pets",
+      "props": {
+        "annotations": [
+          "JoinColumn",
+          "OneToMany",
+          "OrderBy"
+        ],
+        "name": "pets",
+        "type": "java.util.List"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.owner.Owner#telephone",
+      "kind": "Field",
+      "label": "Owner.telephone",
+      "props": {
+        "annotations": [
+          "Column",
+          "NotBlank",
+          "Pattern"
+        ],
+        "name": "telephone",
+        "type": "java.lang.String"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.owner.Pet#birthDate",
+      "kind": "Field",
+      "label": "Pet.birthDate",
+      "props": {
+        "annotations": [
+          "Column"
+        ],
+        "name": "birthDate",
+        "type": "java.time.LocalDate"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.owner.Pet#id",
+      "kind": "Field",
+      "label": "Pet.id",
+      "props": {
+        "annotations": [
+          "GeneratedValue",
+          "Id"
+        ],
+        "name": "id",
+        "type": "java.lang.Integer"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.owner.Pet#name",
+      "kind": "Field",
+      "label": "Pet.name",
+      "props": {
+        "annotations": [
+          "Column",
+          "NotBlank"
+        ],
+        "name": "name",
+        "type": "java.lang.String"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.owner.Pet#type",
+      "kind": "Field",
+      "label": "Pet.type",
+      "props": {
+        "annotations": [
+          "JoinColumn",
+          "ManyToOne"
+        ],
+        "name": "type",
+        "type": "org.springframework.samples.petclinic.owner.PetType"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.owner.Pet#visits",
+      "kind": "Field",
+      "label": "Pet.visits",
+      "props": {
+        "annotations": [
+          "JoinColumn",
+          "OneToMany",
+          "OrderBy"
+        ],
+        "name": "visits",
+        "type": "java.util.Set"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.owner.PetType#id",
+      "kind": "Field",
+      "label": "PetType.id",
+      "props": {
+        "annotations": [
+          "GeneratedValue",
+          "Id"
+        ],
+        "name": "id",
+        "type": "java.lang.Integer"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.owner.PetType#name",
+      "kind": "Field",
+      "label": "PetType.name",
+      "props": {
+        "annotations": [
+          "Column",
+          "NotBlank"
+        ],
+        "name": "name",
+        "type": "java.lang.String"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.owner.Visit#date",
+      "kind": "Field",
+      "label": "Visit.date",
+      "props": {
+        "annotations": [
+          "Column"
+        ],
+        "name": "date",
+        "type": "java.time.LocalDate"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.owner.Visit#description",
+      "kind": "Field",
+      "label": "Visit.description",
+      "props": {
+        "annotations": [
+          "NotBlank"
+        ],
+        "name": "description",
+        "type": "java.lang.String"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.owner.Visit#id",
+      "kind": "Field",
+      "label": "Visit.id",
+      "props": {
+        "annotations": [
+          "GeneratedValue",
+          "Id"
+        ],
+        "name": "id",
+        "type": "java.lang.Integer"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.vet.Specialty#id",
+      "kind": "Field",
+      "label": "Specialty.id",
+      "props": {
+        "annotations": [
+          "GeneratedValue",
+          "Id"
+        ],
+        "name": "id",
+        "type": "java.lang.Integer"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.vet.Specialty#name",
+      "kind": "Field",
+      "label": "Specialty.name",
+      "props": {
+        "annotations": [
+          "Column",
+          "NotBlank"
+        ],
+        "name": "name",
+        "type": "java.lang.String"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.vet.Vet#firstName",
+      "kind": "Field",
+      "label": "Vet.firstName",
+      "props": {
+        "annotations": [
+          "Column",
+          "NotBlank"
+        ],
+        "name": "firstName",
+        "type": "java.lang.String"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.vet.Vet#id",
+      "kind": "Field",
+      "label": "Vet.id",
+      "props": {
+        "annotations": [
+          "GeneratedValue",
+          "Id"
+        ],
+        "name": "id",
+        "type": "java.lang.Integer"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.vet.Vet#lastName",
+      "kind": "Field",
+      "label": "Vet.lastName",
+      "props": {
+        "annotations": [
+          "Column",
+          "NotBlank"
+        ],
+        "name": "lastName",
+        "type": "java.lang.String"
+      }
+    },
+    {
+      "id": "field:org.springframework.samples.petclinic.vet.Vet#specialties",
+      "kind": "Field",
+      "label": "Vet.specialties",
+      "props": {
+        "annotations": [
+          "JoinTable",
+          "ManyToMany"
+        ],
+        "name": "specialties",
+        "type": "java.util.Set"
+      }
+    },
+    {
+      "id": "repository:org.springframework.samples.petclinic.boarding.ReservationRepository",
+      "kind": "Repository",
+      "label": "ReservationRepository",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.boarding.ReservationRepository"
+      }
+    },
+    {
+      "id": "repository:org.springframework.samples.petclinic.owner.OwnerRepository",
+      "kind": "Repository",
+      "label": "OwnerRepository",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.owner.OwnerRepository"
+      }
+    },
+    {
+      "id": "repository:org.springframework.samples.petclinic.owner.PetTypeRepository",
+      "kind": "Repository",
+      "label": "PetTypeRepository",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.owner.PetTypeRepository"
+      }
+    },
+    {
+      "id": "repository:org.springframework.samples.petclinic.vet.VetRepository",
+      "kind": "Repository",
+      "label": "VetRepository",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.vet.VetRepository"
+      }
+    },
+    {
+      "id": "service:org.springframework.samples.petclinic.boarding.ReservationService",
+      "kind": "Service",
+      "label": "ReservationService",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.boarding.ReservationService"
+      }
+    },
+    {
+      "id": "service:org.springframework.samples.petclinic.security.CustomUserDetailsService",
+      "kind": "Service",
+      "label": "CustomUserDetailsService",
+      "props": {
+        "fqn": "org.springframework.samples.petclinic.security.CustomUserDetailsService"
+      }
+    }
+  ]
+}

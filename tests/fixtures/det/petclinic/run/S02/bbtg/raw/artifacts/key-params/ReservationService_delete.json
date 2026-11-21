@@ -1,0 +1,56 @@
+{
+  "class": "ReservationService",
+  "method": "delete",
+  "input_params": [
+    "id"
+  ],
+  "parameters": [
+    {
+      "name": "id",
+      "accessor": "id",
+      "dto": "id",
+      "impact": "RED",
+      "reasons": [
+        {
+          "type": "DB_WHERE",
+          "location": "delete",
+          "depth": 1,
+          "detail": "repository.findById(id).orElseThrow(...)"
+        },
+        {
+          "type": "DB_WHERE",
+          "location": "delete",
+          "depth": 1,
+          "detail": "repository.findById(...)"
+        }
+      ],
+      "depth_used": [
+        1
+      ],
+      "test_suggestion": "DB 조회 조건 → 존재/미존재 데이터 케이스",
+      "java_type": "int",
+      "ddl_max_length": null,
+      "has_format_constraint": true,
+      "http_name": "id"
+    }
+  ],
+  "methods_analyzed": [
+    "delete"
+  ],
+  "summary": {
+    "direct_input": {
+      "RED": 1,
+      "YELLOW": 0,
+      "WHITE": 0,
+      "total": 1
+    },
+    "via_internal_transform": {
+      "RED": 0,
+      "YELLOW": 0,
+      "WHITE": 0,
+      "total": 0
+    },
+    "total": 1
+  },
+  "http_method": "DELETE"
+}

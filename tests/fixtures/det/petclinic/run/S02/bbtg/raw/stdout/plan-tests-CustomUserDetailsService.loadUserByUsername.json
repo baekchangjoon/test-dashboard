@@ -1,0 +1,70 @@
+{
+  "artifact_path": ".bbtg/artifacts/test-plan/CustomUserDetailsService_loadUserByUsername.md",
+  "class": "CustomUserDetailsService",
+  "cross_check_warnings": [],
+  "key_params_path": ".bbtg/artifacts/key-params/CustomUserDetailsService_loadUserByUsername.json",
+  "method": "loadUserByUsername",
+  "summary": {
+    "errorPath": 1,
+    "happyPath": 5,
+    "invalidInput": 0,
+    "total": 6
+  },
+  "test_cases": [
+    {
+      "branch_value": "admin",
+      "condition": "username = admin",
+      "expected": "분기 진입: username=admin 경로",
+      "id": "happyPath_username_admin",
+      "param": "username",
+      "prefix": "happyPath",
+      "source": "collect-key-params (BRANCH_CONDITION/EQUALITY_CHECK)"
+    },
+    {
+      "branch_value": "user",
+      "condition": "username = user",
+      "expected": "분기 진입: username=user 경로",
+      "id": "happyPath_username_user",
+      "param": "username",
+      "prefix": "happyPath",
+      "source": "collect-key-params (BRANCH_CONDITION/EQUALITY_CHECK)"
+    },
+    {
+      "branch_value": "other",
+      "condition": "username ≠ admin, user",
+      "expected": "else 분기 경로 (username이 admin, user 어디에도 해당하지 않을 때)",
+      "id": "happyPath_username_other",
+      "param": "username",
+      "prefix": "happyPath",
+      "source": "collect-key-params (complement branch)"
+    },
+    {
+      "branch_value": "404",
+      "condition": "\"user\".equals(username)",
+      "description": "UsernameNotFoundException (code=unknown)",
+      "expected": "UsernameNotFoundException code=404",
+      "id": "errorPath_code404",
+      "param": "(from scenarios)",
+      "prefix": "errorPath",
+      "source": "collect-test-scenarios (exception_paths)"
+    },
+    {
+      "branch_value": "business_branch",
+      "condition": "Happy Path (POST — 상태코드 실측 필요, 코드에서 확정 불가)",
+      "expected": "분기 진입: Happy Path (POST — 상태코드 실측 필요, 코드에서 확정 불가)",
+      "id": "happyPath_branch_loadUserByUsername_4",
+      "param": "(from scenarios)",
+      "prefix": "happyPath",
+      "source": "collect-test-scenarios (business_branch in loadUserByUsername)"
+    },
+    {
+      "branch_value": "business_branch",
+      "condition": "\"admin\".equals(username)",
+      "expected": "분기 진입: 조기 return 분기: username == \"admin\"",
+      "id": "happyPath_branch_loadUserByUsername_5",
+      "param": "(from scenarios)",
+      "prefix": "happyPath",
+      "source": "collect-test-scenarios (business_branch in loadUserByUsername)"
+    }
+  ]
+}

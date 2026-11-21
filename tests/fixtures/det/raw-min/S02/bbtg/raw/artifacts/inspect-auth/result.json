@@ -1,0 +1,6 @@
+{
+  "auth_type": "jwt_or_bearer",
+  "interceptors": [{"class_name": "F", "file": "/Users/example/sut/F.java"}],
+  "required_headers": [{"name": "Authorization", "required": true}],
+  "interceptor_sources": [{"class_name": "F", "file": "/Users/example/sut/F.java", "source": "class F {}"}]
+}

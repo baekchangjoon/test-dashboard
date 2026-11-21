@@ -1,0 +1,61 @@
+{
+  "artifact_path": ".bbtg/artifacts/test-plan/ReservationService_list.md",
+  "class": "ReservationService",
+  "cross_check_warnings": [],
+  "key_params_path": ".bbtg/artifacts/key-params/ReservationService_list.json",
+  "method": "list",
+  "summary": {
+    "errorPath": 4,
+    "happyPath": 1,
+    "invalidInput": 0,
+    "total": 5
+  },
+  "test_cases": [
+    {
+      "branch_value": "no_data",
+      "condition": "DB에 minNights 조건에 맞는 데이터 없음 (repository.findAll)",
+      "expected": "데이터 미존재 시 예외 또는 빈 응답",
+      "id": "errorPath_minNights_noData",
+      "param": "minNights",
+      "prefix": "errorPath",
+      "source": "collect-key-params (DB_WHERE)"
+    },
+    {
+      "branch_value": "no_data",
+      "condition": "DB에 recentOnly 조건에 맞는 데이터 없음 (repository.findAll)",
+      "expected": "데이터 미존재 시 예외 또는 빈 응답",
+      "id": "errorPath_recentOnly_noData",
+      "param": "recentOnly",
+      "prefix": "errorPath",
+      "source": "collect-key-params (DB_WHERE)"
+    },
+    {
+      "branch_value": "no_data",
+      "condition": "DB에 tier 조건에 맞는 데이터 없음 (repository.findAll)",
+      "expected": "데이터 미존재 시 예외 또는 빈 응답",
+      "id": "errorPath_tier_noData",
+      "param": "tier",
+      "prefix": "errorPath",
+      "source": "collect-key-params (DB_WHERE)"
+    },
+    {
+      "branch_value": "400",
+      "condition": "General Bad Request (400)",
+      "description": "General Bad Request (400)",
+      "expected": " code=400",
+      "id": "errorPath_code400",
+      "param": "(from scenarios)",
+      "prefix": "errorPath",
+      "source": "collect-test-scenarios (exception_paths)"
+    },
+    {
+      "branch_value": "business_branch",
+      "condition": "Happy Path (GET — 상태코드 실측 필요, 코드에서 확정 불가)",
+      "expected": "분기 진입: Happy Path (GET — 상태코드 실측 필요, 코드에서 확정 불가)",
+      "id": "happyPath_branch_list_4",
+      "param": "(from scenarios)",
+      "prefix": "happyPath",
+      "source": "collect-test-scenarios (business_branch in list)"
+    }
+  ]
+}

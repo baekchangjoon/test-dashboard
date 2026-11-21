@@ -1,0 +1,53 @@
+{
+  "artifact_path": ".bbtg/artifacts/test-plan/ReservationService_delete.md",
+  "class": "ReservationService",
+  "cross_check_warnings": [],
+  "key_params_path": ".bbtg/artifacts/key-params/ReservationService_delete.json",
+  "method": "delete",
+  "summary": {
+    "errorPath": 3,
+    "happyPath": 1,
+    "invalidInput": 0,
+    "total": 4
+  },
+  "test_cases": [
+    {
+      "branch_value": "no_data",
+      "condition": "DB에 id 조건에 맞는 데이터 없음 (repository.findById)",
+      "expected": "데이터 미존재 시 예외 또는 빈 응답",
+      "id": "errorPath_id_noData",
+      "param": "id",
+      "prefix": "errorPath",
+      "source": "collect-key-params (DB_WHERE)"
+    },
+    {
+      "branch_value": "409",
+      "condition": "existing.getStatus() != ReservationStatus.PENDING && existing.getStatus() != ReservationStatus.CANCELLED",
+      "description": "ReservationConflictException (code=unknown)",
+      "expected": "ReservationConflictException code=409",
+      "id": "errorPath_code409",
+      "param": "(from scenarios)",
+      "prefix": "errorPath",
+      "source": "collect-test-scenarios (exception_paths)"
+    },
+    {
+      "branch_value": "409",
+      "condition": "checkIn.isBefore(LocalDateTime.now().plusHours(48))",
+      "description": "ReservationConflictException (code=unknown)",
+      "expected": "ReservationConflictException code=409",
+      "id": "errorPath_code409",
+      "param": "(from scenarios)",
+      "prefix": "errorPath",
+      "source": "collect-test-scenarios (exception_paths)"
+    },
+    {
+      "branch_value": "business_branch",
+      "condition": "Happy Path (DELETE — 상태코드 실측 필요, 코드에서 확정 불가)",
+      "expected": "분기 진입: Happy Path (DELETE — 상태코드 실측 필요, 코드에서 확정 불가)",
+      "id": "happyPath_branch_delete_3",
+      "param": "(from scenarios)",
+      "prefix": "happyPath",
+      "source": "collect-test-scenarios (business_branch in delete)"
+    }
+  ]
+}

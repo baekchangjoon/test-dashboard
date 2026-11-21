@@ -1,0 +1,70 @@
+{
+  "auth_type": "jwt_or_bearer",
+  "interceptors": [
+    {
+      "class_name": "SecurityConfig",
+      "class_type": "SecurityFilterChain",
+      "file": "src/main/java/org/springframework/samples/petclinic/security/SecurityConfig.java",
+      "headers_extracted": 0,
+      "throw_branches": 0,
+      "state_value_checks": 0
+    },
+    {
+      "class_name": "JwtAuthenticationFilter",
+      "class_type": "OncePerRequestFilter",
+      "file": "src/main/java/org/springframework/samples/petclinic/security/JwtAuthenticationFilter.java",
+      "headers_extracted": 1,
+      "throw_branches": 0,
+      "state_value_checks": 0
+    }
+  ],
+  "registrations": [
+    {
+      "config_file": "src/main/java/org/springframework/samples/petclinic/system/WebConfiguration.java",
+      "url_patterns": [],
+      "interceptor_refs": [
+        "localeChangeInterceptor"
+      ]
+    }
+  ],
+  "required_headers": [
+    {
+      "name": "Authorization",
+      "required": true
+    }
+  ],
+  "throw_branches": [],
+  "target_endpoint": null,
+  "state_value_checks": [],
+  "state_value_warnings": [],
+  "interceptor_sources": [
+    {
+      "class_name": "SecurityConfig",
+      "file": "src/main/java/org/springframework/samples/petclinic/security/SecurityConfig.java",
+      "source": "package org.springframework.samples.petclinic.security;\n\nimport org.springframework.beans.factory.annotation.Autowired;\nimport org.springframework.context.annotation.Bean;\nimport org.springframework.context.annotation.Configuration;\nimport org.springframework.security.authentication.AuthenticationManager;\nimport org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;\nimport org.springframework.security.config.annotation.web.builders.HttpSecurity;\nimport org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;\nimport org.springframework.security.config.http.SessionCreationPolicy;\nimport org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;\nimport org.springframework.security.crypto.password.PasswordEncoder;\nimport org.springframework.security.web.SecurityFilterChain;\nimport org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;\nimport org.springframework.web.cors.CorsConfiguration;\nimport org.springframework.web.cors.CorsConfigurationSource;\nimport org.springframework.web.cors.UrlBasedCorsConfigurationSource;\n\nimport java.util.Arrays;\n\n@Configuration\n@EnableWebSecurity\npublic class SecurityConfig {\n\n\t@Autowired\n\tprivate JwtUtil jwtUtil;\n\n\t@Autowired\n\tprivate CustomUserDetailsService userDetailsService;\n\n\t@Bean\n\tpublic SecurityFilterChain filterChain(HttpSecurity http) throws Exception {\n\t\thttp.cors(cors -> cors.configurationSource(corsConfigurationSource()))\n\t\t\t.csrf(csrf -> csrf.disable())\n\t\t\t.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))\n\t\t\t.authorizeHttpRequests(authz -> authz.requestMatchers(\"/api/auth/**\")\n\t\t\t\t.permitAll()\n\t\t\t\t.requestMatchers(\"/swagger-ui/**\")\n\t\t\t\t.permitAll()\n\t\t\t\t.requestMatchers(\"/v3/api-docs/**\")\n\t\t\t\t.permitAll()\n\t\t\t\t.requestMatchers(\"/swagger-resources/**\")\n\t\t\t\t.permitAll()\n\t\t\t\t.requestMatchers(\"/webjars/**\")\n\t\t\t\t.permitAll()\n\t\t\t\t.requestMatchers(\"/actuator/**\")\n\t\t\t\t.permitAll()\n\t\t\t\t.requestMatchers(\"/api/**\")\n\t\t\t\t.authenticated()\n\t\t\t\t.anyRequest()\n\t\t\t\t.permitAll())\n\t\t\t.addFilterBefore(new JwtAuthenticationFilter(jwtUtil, userDetailsService),\n\t\t\t\t\tUsernamePasswordAuthenticationFilter.class);\n\n\t\treturn http.build();\n\t}\n\n\t@Bean\n\tpublic PasswordEncoder passwordEncoder() {\n\t\treturn new BCryptPasswordEncoder();\n\t}\n\n\t@Bean\n\tpublic AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {\n\t\treturn config.getAuthenticationManager();\n\t}\n\n\t@Bean\n\tpublic CorsConfigurationSource corsConfigurationSource() {\n\t\tCorsConfiguration configuration = new CorsConfiguration();\n\t\tconfiguration.setAllowedOriginPatterns(Arrays.asList(\"*\"));\n\t\tconfiguration.setAllowedMethods(Arrays.asList(\"GET\", \"POST\", \"PUT\", \"DELETE\", \"OPTIONS\"));\n\t\tconfiguration.setAllowedHeaders(Arrays.asList(\"*\"));\n\t\tconfiguration.setAllowCredentials(true);\n\n\t\tUrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();\n\t\tsource.registerCorsConfiguration(\"/**\", configuration);\n\t\treturn source;\n\t}\n\n}\n"
+    },
+    {
+      "class_name": "JwtAuthenticationFilter",
+      "file": "src/main/java/org/springframework/samples/petclinic/security/JwtAuthenticationFilter.java",
+      "source": "package org.springframework.samples.petclinic.security;\n\nimport jakarta.servlet.FilterChain;\nimport jakarta.servlet.ServletException;\nimport jakarta.servlet.http.HttpServletRequest;\nimport jakarta.servlet.http.HttpServletResponse;\nimport org.springframework.beans.factory.annotation.Autowired;\nimport org.springframework.security.authentication.UsernamePasswordAuthenticationToken;\nimport org.springframework.security.core.context.SecurityContextHolder;\nimport org.springframework.security.core.userdetails.UserDetails;\nimport org.springframework.security.core.userdetails.UserDetailsService;\nimport org.springframework.security.web.authentication.WebAuthenticationDetailsSource;\nimport org.springframework.stereotype.Component;\nimport org.springframework.web.filter.OncePerRequestFilter;\n\nimport java.io.IOException;\n\npublic class JwtAuthenticationFilter extends OncePerRequestFilter {\n\n\tprivate final JwtUtil jwtUtil;\n\n\tprivate final UserDetailsService userDetailsService;\n\n\tpublic JwtAuthenticationFilter(JwtUtil jwtUtil, UserDetailsService userDetailsService) {\n\t\tthis.jwtUtil = jwtUtil;\n\t\tthis.userDetailsService = userDetailsService;\n\t}\n\n\t@Override\n\tprotected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)\n\t\t\tthrows ServletException, IOException {\n\n\t\tfinal String authorizationHeader = request.getHeader(\"Authorization\");\n\n\t\tString username = null;\n\t\tString jwt = null;\n\n\t\tif (authorizationHeader != null && authorizationHeader.startsWith(\"Bearer \")) {\n\t\t\tjwt = authorizationHeader.substring(7);\n\t\t\ttry {\n\t\t\t\tusername = jwtUtil.extractUsername(jwt);\n\t\t\t}\n\t\t\tcatch (Exception e) {\n\t\t\t\tlogger.error(\"JWT token parsing error: \" + e.getMessage());\n\t\t\t}\n\t\t}\n\n\t\tif (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {\n\t\t\tUserDetails userDetails = this.userDetailsService.loadUserByUsername(username);\n\n\t\t\tif (jwtUtil.validateToken(jwt, username)) {\n\t\t\t\tUsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(userDetails,\n\t\t\t\t\t\tnull, userDetails.getAuthorities());\n\t\t\t\tauthToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));\n\t\t\t\tSecurityContextHolder.getContext().setAuthentication(authToken);\n\t\t\t}\n\t\t}\n\t\tfilterChain.doFilter(request, response);\n\t}\n\n}\n"
+    }
+  ],
+  "auth_db_dependencies": [
+    {
+      "interceptor_class": "JwtAuthenticationFilter",
+      "service_type": "UserDetailsService",
+      "service_method": "loadUserByUsername",
+      "caller_method": "doFilterInternal",
+      "tables": [],
+      "columns": [],
+      "resolution": "service_file_not_found"
+    }
+  ],
+  "ddl_missing_tables": [],
+  "ddl_missing_columns": [],
+  "llm_analysis_required": true,
+  "llm_analysis_hints": [
+    "AUTH_SERVICE_CALL"
+  ],
+  "llm_delegation_guide": "이 인터셉터 소스에서 다음을 분석하세요:\n1. URL 세그먼트 검증 규칙 (split 후 length 체크 등)\n2. DB 인증 조회 패턴 (어떤 테이블/컬럼으로 인증하는지)\n3. 인증 통과 조건 (어떤 값이 일치해야 하는지)\n4. 테스트 데이터 INSERT에 필요한 테이블과 필수 컬럼\n5. auth_db_dependencies의 테이블/컬럼이 DDL에 모두 존재하는지 확인\n6. ddl_missing_tables/ddl_missing_columns가 있으면 DDL 보강 필요"
+}

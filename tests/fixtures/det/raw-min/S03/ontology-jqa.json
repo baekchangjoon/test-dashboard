@@ -1,0 +1,8 @@
+{
+  "nodes": [
+    {"id": "controller:a.C", "kind": "Controller", "label": "C", "props": {"fqn": "a.C", "file_path": "/Users/example/sut/C.java"}},
+    {"id": "endpoint:GET /api/x", "kind": "Endpoint", "label": "GET /api/x", "props": {"method": "GET", "path": "/api/x", "handler": "a.C#x", "view": false}}
+  ],
+  "edges": [{"source": "controller:a.C", "target": "endpoint:GET /api/x", "kind": "declares"}],
+  "meta": {"tool": "jqassistant", "version": "2.9.1", "commit": "abc", "fallbacks": []}
+}

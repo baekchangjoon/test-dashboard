@@ -1,0 +1,9 @@
+{
+  "class": "Foo",
+  "method": "bar",
+  "file_path": "/Users/example/sut/Foo.java",
+  "parameters": [
+    {"name": "req", "http_name": "req", "java_type": "CreateRequest", "impact": "RED", "ddl_max_length": null,
+     "reasons": [{"type": "BRANCH_CONDITION", "location": "bar", "depth": 1, "detail": "req.nights() < 1 || req.nights() > 30"}]}
+  ]
+}

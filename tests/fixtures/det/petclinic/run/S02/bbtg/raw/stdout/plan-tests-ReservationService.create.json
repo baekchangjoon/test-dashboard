@@ -1,0 +1,142 @@
+{
+  "artifact_path": ".bbtg/artifacts/test-plan/ReservationService_create.md",
+  "class": "ReservationService",
+  "cross_check_warnings": [],
+  "key_params_path": ".bbtg/artifacts/key-params/ReservationService_create.json",
+  "method": "create",
+  "summary": {
+    "errorPath": 8,
+    "happyPath": 2,
+    "invalidInput": 3,
+    "total": 13
+  },
+  "test_cases": [
+    {
+      "branch_value": "null/empty",
+      "condition": "req = null/empty",
+      "expected": "ReservationValidationException code=400",
+      "id": "invalidInput_missing_req",
+      "param": "req",
+      "prefix": "invalidInput",
+      "source": "collect-key-params (BRANCH_CONDITION + ERROR_TRIGGER)"
+    },
+    {
+      "branch_value": "WELCOME10",
+      "condition": "req = WELCOME10",
+      "expected": "분기 진입: req=WELCOME10 경로",
+      "id": "happyPath_req_WELCOME10",
+      "param": "req",
+      "prefix": "happyPath",
+      "source": "collect-key-params (BRANCH_CONDITION/EQUALITY_CHECK)"
+    },
+    {
+      "branch_value": "400",
+      "condition": "req.nights() < 1 || req.nights() > 30",
+      "description": "ReservationValidationException (code=unknown)",
+      "expected": "ReservationValidationException code=400",
+      "id": "errorPath_code400",
+      "param": "(from scenarios)",
+      "prefix": "errorPath",
+      "source": "collect-test-scenarios (exception_paths)"
+    },
+    {
+      "branch_value": "400",
+      "condition": "req.roomNumber() < 100 || req.roomNumber() > 499",
+      "description": "ReservationValidationException (code=unknown)",
+      "expected": "ReservationValidationException code=400",
+      "id": "errorPath_code400",
+      "param": "(from scenarios)",
+      "prefix": "errorPath",
+      "source": "collect-test-scenarios (exception_paths)"
+    },
+    {
+      "branch_value": "400",
+      "condition": "req.animalCount() < 1 || req.animalCount() > 4",
+      "description": "ReservationValidationException (code=unknown)",
+      "expected": "ReservationValidationException code=400",
+      "id": "errorPath_code400",
+      "param": "(from scenarios)",
+      "prefix": "errorPath",
+      "source": "collect-test-scenarios (exception_paths)"
+    },
+    {
+      "branch_value": "400",
+      "condition": "req.petName() == null || req.petName().length() < 2 || req.petName().length() > 50",
+      "description": "ReservationValidationException (code=unknown)",
+      "expected": "ReservationValidationException code=400",
+      "id": "invalidInput_code400",
+      "param": "(from scenarios)",
+      "prefix": "invalidInput",
+      "source": "collect-test-scenarios (exception_paths)"
+    },
+    {
+      "branch_value": "400",
+      "condition": "req.priceTier() == null",
+      "description": "ReservationValidationException (code=unknown)",
+      "expected": "ReservationValidationException code=400",
+      "id": "errorPath_code400",
+      "param": "(from scenarios)",
+      "prefix": "errorPath",
+      "source": "collect-test-scenarios (exception_paths)"
+    },
+    {
+      "branch_value": "400",
+      "condition": "req.priceTier() == PriceTier.VIP && req.loyaltyPoints() < 500",
+      "description": "ReservationValidationException (code=unknown)",
+      "expected": "ReservationValidationException code=400",
+      "id": "errorPath_code400",
+      "param": "(from scenarios)",
+      "prefix": "errorPath",
+      "source": "collect-test-scenarios (exception_paths)"
+    },
+    {
+      "branch_value": "400",
+      "condition": "req.ownerEmail() == null || !EMAIL.matcher(req.ownerEmail()).matches()",
+      "description": "ReservationValidationException (code=unknown)",
+      "expected": "ReservationValidationException code=400",
+      "id": "invalidInput_code400",
+      "param": "(from scenarios)",
+      "prefix": "invalidInput",
+      "source": "collect-test-scenarios (exception_paths)"
+    },
+    {
+      "branch_value": "400",
+      "condition": "req.checkInDate() == null || !req.checkInDate().isAfter(LocalDate.now())",
+      "description": "ReservationValidationException (code=unknown)",
+      "expected": "ReservationValidationException code=400",
+      "id": "errorPath_code400",
+      "param": "(from scenarios)",
+      "prefix": "errorPath",
+      "source": "collect-test-scenarios (exception_paths)"
+    },
+    {
+      "branch_value": "400",
+      "condition": "req.depositAmount() * 1.1 < req.nights() * req.priceTier().getNightlyRate()",
+      "description": "ReservationValidationException (code=unknown)",
+      "expected": "ReservationValidationException code=400",
+      "id": "errorPath_code400",
+      "param": "(from scenarios)",
+      "prefix": "errorPath",
+      "source": "collect-test-scenarios (exception_paths)"
+    },
+    {
+      "branch_value": "409",
+      "condition": "repository.countByRoomNumberAndStatus(req.roomNumber(), ReservationStatus.CONFIRMED) >= ROOM_CAPACITY",
+      "description": "ReservationConflictException (code=unknown)",
+      "expected": "ReservationConflictException code=409",
+      "id": "errorPath_code409",
+      "param": "(from scenarios)",
+      "prefix": "errorPath",
+      "source": "collect-test-scenarios (exception_paths)"
+    },
+    {
+      "branch_value": "business_branch",
+      "condition": "Happy Path (POST — 상태코드 실측 필요, 코드에서 확정 불가)",
+      "expected": "분기 진입: Happy Path (POST — 상태코드 실측 필요, 코드에서 확정 불가)",
+      "id": "happyPath_branch_create_12",
+      "param": "(from scenarios)",
+      "prefix": "happyPath",
+      "source": "collect-test-scenarios (business_branch in create)"
+    }
+  ]
+}
