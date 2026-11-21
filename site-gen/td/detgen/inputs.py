@@ -67,6 +67,17 @@ def _text(value) -> str:
     return value if isinstance(value, str) else ""
 
 
+def _string_leaks(obj) -> list[str]:
+    """문서를 순회하며 모든 문자열 값과 키에 find_leaks를 적용한 누출 종류 목록."""
+    if isinstance(obj, str):
+        return redact.find_leaks(obj)
+    if isinstance(obj, dict):
+        return [kind for key, value in obj.items() for kind in _string_leaks(key) + _string_leaks(value)]
+    if isinstance(obj, list):
+        return [kind for value in obj for kind in _string_leaks(value)]
+    return []
+
+
 def _load_json(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -199,7 +210,8 @@ def project(run_dir: Path, sut_file: Path, out_dir: Path) -> Projection:
     documents = {"plans.json": plans, "keyparams.json": keyparams, "auth.json": auth,
                  "ontology.json": _scrub(ontology), "ext.json": _scrub(ext), "harness.json": harness}
     texts = {name: _dumps(documents[name]) for name in BUNDLE_FILES}
-    leaks = redact.find_leaks("".join(texts.values()))
+    # 직렬화 텍스트만 검사하면 `\\n/Users/...`처럼 이스케이프 뒤의 경로가 lookbehind를 피할 수 있다. 원시 문자열(키 포함)을 직접 검사한다.
+    leaks = sorted(set(_string_leaks(documents)) | set(redact.find_leaks("".join(texts.values()))))
     if leaks:
         return Projection(out_dir, "", sorted(missing), f"redaction 누출 남음: {','.join(leaks)}")
 
