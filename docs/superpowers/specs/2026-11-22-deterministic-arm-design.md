@@ -56,7 +56,7 @@ A1과의 관계: 상위 설계의 A1은 "LLM 호출의 생성 입력"에 대한 
 ### 3.2 결정성
 
 - 해시: 생성기가 실제로 읽는 필드만 뽑아 키 정렬 JSON으로 정규화한 뒤 sha256. 절대경로 필드는 읽지도 해시하지도 않는다. hash8 = 정규화 입력 + 생성기 버전 + glue 체크섬.
-- 실행 시점에 풀리는 값은 기호로 내보낸다. 닫힌 기호 목록: `today±N`(SUT 타임존), `ref:<step>.<jsonField>`(선행 응답 필드), `uniq:<caseId>`(케이스 id에서 파생한 고유 문자열, 도메인 제약이 없는 자유 문자열 필드 전용). 범위 제약이 있는 수치 고유값(방 번호 등)은 생성기가 생성 시점에 구체 리터럴로 확정한다(§5.3).
+- 실행 시점에 풀리는 값은 기호로 내보낸다. 닫힌 기호 목록: `today±N`(SUT 타임존), `ref:<var>`(선행 요청의 `capture`가 응답 JSON 필드를 담아 둔 변수), `uniq:<caseId>`(케이스 id에서 파생한 고유 문자열, 도메인 제약이 없는 자유 문자열 필드 전용). 범위 제약이 있는 수치 고유값(방 번호 등)은 생성기가 생성 시점에 구체 리터럴로 확정한다(§5.3).
 - 정렬은 입력 주소 기준.
 
 ## 4. 접근 방식(검토한 안)
@@ -131,6 +131,8 @@ A1과의 관계: 상위 설계의 A1은 "LLM 호출의 생성 입력"에 대한 
 - list의 `no_data`(필터 파라미터): 결과가 비게 되는 필터값 1건, 기대 2xx, `oracle: status-only`.
 - `no_data`(id): 존재하지 않는 id 1건, 기대 = 그래프의 NotFound 예외 상태, 없으면 4xx.
 - 조건 없는 항목(`General Bad Request` 등): `no-condition`.
+- 입력 모순: 단독 오류 항목의 위반값이 같은 필드의 다른 항목 유효 경계를 도달 불가로 만들면(예: `f != null`→오류 대 `f < a || f > b`) 단독 항목 슬롯을 `input-contradiction`으로 둔다.
+- 로그인 엔드포인트(`harness.login`)의 유효 계열(2xx 기대) 케이스는 자격 증명이 입력에 없으므로 `input-missing`(원인 credentials)이다.
 - 상태코드로 분기 진입을 구별할 수 없는 케이스(예: promo 분기)는 `oracle: status-only`로 표시한다.
 
 **R-AUTH**: `required_headers`에 `Authorization`이 있으면 sut.yaml `api.include`에 드는 REST 엔드포인트 전체에서 `auth.login` 엔드포인트를 뺀 나머지마다, 토큰 없이 호출하는 케이스 1건씩 만든다. 기대는 `auth.unauthenticated_status`이고 근거는 `harness-config`다. 엔드포인트별 보호 범위는 입력에 없다. Security matcher 문자열은 jQA 그래프에 남지 않기 때문이다. 그래서 각 케이스에 `assumes: "보호됨"`을 기록한다. 공개 엔드포인트(예: 로그인 외의 `/api/auth/*`)가 실패하면 "보호 범위 정보 부족"으로 분류한다.
@@ -179,6 +181,10 @@ A1과의 관계: 상위 설계의 A1은 "LLM 호출의 생성 입력"에 대한 
 
 ### 5.6 생성기 허용 리터럴(닫힌 목록)
 
+- HTTP 표준: 헤더 이름 `Authorization`, 메서드 이름(GET/POST/PUT/DELETE).
+- bbtg 표지: `null/empty`, `no_data`, `code=`, `BRANCH_CONDITION`.
+- Java 타입 기본값 표(String/int/long/double/boolean/LocalDate/LocalDateTime, 박싱 타입).
+- REST 관례: `POST <parent>`가 `<parent>/{v}` 자원을 만든다(선행 생성 엔드포인트 탐색).
 - Spring 문법: `ResponseEntity`/`HttpStatus` 빌더→코드 표, 매핑 애노테이션 이름.
 - Java 문법: 비교 연산자, `length()`, `equals`, `isAfter`/`isBefore`, `LocalDate`/`LocalDateTime`의 `now()`와 `plus*`/`minus*`/`atStartOfDay` 연쇄, `matcher().matches()`, `== null`, Spring Data 파생 질의 접두사 `count`.
 - bbtg 관례: 저장 상태 수신자 이름 `existing`(bbtg 조건식이 쓰는 이름, §5.2 피연산자 분류).

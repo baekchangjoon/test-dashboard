@@ -187,7 +187,8 @@
   class Derivation: cases: list[Case]; unresolved: list[dict]; universe: dict
   def derive(bundle: Bundle) -> Derivation
   REASONS = ("no-endpoint-mapping","unparsed","unresolved-operand","unreachable-state","needs-state-transition",
-             "param-name-unknown","no-id-ref","no-condition","no-body-schema","format-unknown","input-missing")
+             "param-name-unknown","no-id-ref","no-condition","no-body-schema","format-unknown","input-missing",
+             "input-contradiction")
   ```
   - source 주소 문자열은 `"<file>#<index>@<conditionSha[:12]>"`이고, 그래프 출처는 `"graph:<node id>"`, 하네스는 `"harness:<key>"`다.
   - case id는 `<method-or-endpoint-slug>-<rule>-<n>`이다. n은 정렬 후 순번이고 중복이 없다.
