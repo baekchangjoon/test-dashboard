@@ -224,7 +224,7 @@
 **Files:**
 - Create: `site-gen/td/detgen/render.py`
 - Create: `e2e/det-glue/support/DetSteps.java`, `e2e/det-glue/support/DetValues.java`(package `glue.support`)
-- Modify: `e2e/harness/CONTRACT.md`(det 전용 예외 한 줄: 모든 step을 `glue/support/`에 둔다)
+- Create: `e2e/det-glue/README.md`(det 전용 예외 설명. CONTRACT.md는 LLM arm 번들 입력이라 바꾸지 않는다)
 - Test: `tests/acceptance/test_unit_detgen.py`, `tests/acceptance/test_det_glue.py`(Int: 컴파일 + dry-run)
 
 **Interfaces:**
