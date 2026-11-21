@@ -83,7 +83,7 @@
 - 결과 보고에서 통과율은 strict와 class 두 기준으로 따로 계산된다.
 
 ### REQ-115 baseline 점검 (Must, Unit+E2E)
-- 본문이 있는 엔드포인트마다 `baseline-valid` case가 1건 있다.
+- 위반 case가 있는 엔드포인트마다(GET 포함) `baseline-valid` case가 1건 있다.
 - 결과 집계는 `blocked-by-baseline`과 "검증된 위반"(위반 통과 + 짝 유효 경계 통과 + baseline 통과)을 따로 낸다.
 
 ### REQ-116 glue 배치 규약 (Must, Int)

@@ -196,7 +196,7 @@
   - `test_req109_controlled_fixture`: `derive(controlled)` → `unresolved == []`. 각 case의 `(rule, endpoint, sorted values, expect.strict)` 목록이 `expected-cases.json`과 같다.
   - `test_req111_mapping`: controlled에서 계획 메서드마다 대응 엔드포인트가 정확히 1개다. 대응 calls를 지운 fixture 변형에서는 그 항목의 reason이 `no-endpoint-mapping`이다.
   - `test_req114_expect`: 그래프 예외 상태가 422이고 bbtg 코드가 400인 항목 → `expect.strict == 422`, `source == "graph"`, `bbtgCode == 400`, `graphStatus == 422`. ext에서 exceptions를 지우면 `strict == 400`, `source == "bbtg"`다.
-  - `test_req115_baseline`: 본문 엔드포인트마다 `rule == "baseline-valid"` case가 정확히 1개다. 각 위반 case의 `pair`는 같은 원자식의 유효 경계 case id다.
+  - `test_req115_baseline`: 위반 case가 있는 엔드포인트마다(GET 포함) `rule == "baseline-valid"` case가 정확히 1개다. 각 위반 case의 `pair`는 같은 원자식의 유효 경계 case id다.
   - `test_req107_universe`: controlled에서 `universe["bySlot"]["generated"] + universe["bySlot"]["unresolved"] == universe["bySlot"]["total"]`이다. `universe["theoretical"]["value"]`는 손으로 계산한 상수(fixture README에 계산식)와 같다.
   - `test_req106_mutated_fixture`: `derive(mutated)`의 모든 case 값·경로·필드명에 원본 이름 집합(`nights`, `roomNumber`, `PriceTier`, `VIP`, `/api/reservations` 등. fixture 파일 `original-names.txt`)이 하나도 없다. 변조 임계값에서 파생한 경계값이 있다.
   - `test_req106_no_sut_literals`: `site-gen/td/detgen/*.py`와 `e2e/det-glue/**/*.java`의 텍스트에 `original-names.txt`의 이름과 `/api/`가 없다.
@@ -210,6 +210,7 @@
   - baseline 필드 값 선택 순서: (1) 해당 필드 원자식들의 유효 경계 중 최솟값 쪽, (2) enum은 결합 제약이 가장 적은 상수(동률이면 선언 순서), (3) 형식 휴리스틱, (4) 타입 기본(`String`→`uniq:<caseId>`, `int`→1, `double`→`LARGE_NUMBER`, `LocalDate`→`today+7`, `boolean`→false)
   - 미해결 관계식은 만족 방향 극단값과 assumes, 위반 0과 assumes로 처리한다.
   - 고유 분산 대상은 "유효 범위가 있는 정수 필드 중 count 조건 인자로 쓰이는 필드"다. 범위 안에서 `sha256(caseId)` mod 폭으로 분산하고, 경계값 집합은 건너뛴다.
+  - 선행 응답 id: 같은 이름 응답 필드, 없으면 `{<x>Id}` → 응답 `id`(관례), 없으면 `no-id-ref`.
   - 그래프 전용 케이스(R-NODATA, R-HAPPY GET)는 ext/ontology의 api 엔드포인트 전체에 적용한다.
   - 모수 `bySlot`: `{"total","generated","unresolved","byReason":{...}}`. `byRule`: 규칙별 생성 수. `theoretical`: 엔드포인트별 Π(1 + 필드 위반 클래스 수)의 합, `formula`와 `factors`.
 - [ ] **Step 4: 통과 확인** → PASS
@@ -222,6 +223,7 @@
 **Files:**
 - Create: `site-gen/td/detgen/render.py`
 - Create: `e2e/det-glue/support/DetSteps.java`, `e2e/det-glue/support/DetValues.java`(package `glue.support`)
+- Modify: `e2e/harness/CONTRACT.md`(det 전용 예외 한 줄: 모든 step을 `glue/support/`에 둔다)
 - Test: `tests/acceptance/test_unit_detgen.py`, `tests/acceptance/test_det_glue.py`(Int: 컴파일 + dry-run)
 
 **Interfaces:**
@@ -289,7 +291,7 @@
 
 **Files:**
 - Modify:
-  - `site-gen/td/state.py` — `ARMS_ALL`에 `"det"`, `ARM_DEPENDENCIES["det"] = ("S02","S03")`, `requested_reps_by_arm(run_dir) -> dict[str,int]`
+  - `site-gen/td/state.py` — `ARMS_ALL`에 `"det"`, `ARM_DEPENDENCIES["det"] = ("S03",)`, `requested_reps_by_arm(run_dir) -> dict[str,int]`
   - `site-gen/td/testid.py` — `ARMS`
   - `site-gen/td/scenarios.py:37`, `site-gen/td/tia.py:107` — genId 정규식 `(base|jqa|owl|det)`
   - `site-gen/td/bundle.py` — `ARMS`는 그대로 둔다. det는 bundle 조립을 쓰지 않으므로 `build_bundle`은 det에서 호출되지 않아야 한다. 단정만 추가한다.
@@ -303,7 +305,7 @@
 - Produces: `state.requested_reps_by_arm(run_dir) -> dict[str, int]`. run.json 값이 없으면 `{arm: requested_reps}`이고 det는 1이다.
 
 - [ ] **Step 1: 실패 테스트 추가**
-  - `test_unit_state.py::test_det_arm_dependencies`: `ARM_DEPENDENCIES["det"] == ("S02","S03")`. S03 failed run에서 `arm_plan(run_dir, ["det"])["det"]`에 `S03`이 들어 있다.
+  - `test_unit_state.py::test_det_arm_dependencies`: `ARM_DEPENDENCIES["det"] == ("S03",)`. S03 failed run에서 `arm_plan(run_dir, ["det"])["det"]`에 `S03`이 들어 있다.
   - `test_e2e.py::test_testid_det`: `testid.make("det", HASH, 1, None, "a/x.feature", 3, set())`가 `E2E_det_` 접두로 시작한다.
   - `test_unit_tia.py::test_rep1_det`: `det-0123abcd-r1`이 rep1로 선택된다.
   - `test_run.py::test_arms_det_accepted`: 스텁 단계로 `run-all --arms det`가 검증을 통과한다.
