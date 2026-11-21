@@ -101,15 +101,6 @@ def publish_log_server(tmp_path):
     thread.join(timeout=10)
 
 
-@pytest.fixture(scope="module")
-def browser():
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        instance = playwright.chromium.launch()
-        yield instance
-        instance.close()
-
-
 def test_site_js_shows_publish_log_or_graceful_absence(publish_log_server, browser):
     root, url = publish_log_server
     page = browser.new_page()

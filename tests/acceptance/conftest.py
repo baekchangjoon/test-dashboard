@@ -173,6 +173,19 @@ def claude_call_log():
     return _claude_call_log
 
 
+# --- 브라우저 ---------------------------------------------------------------------------
+@pytest.fixture(scope="session")
+def browser():
+    """세션 공용 chromium(playwright). 세션이 끝나면 닫는다."""
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as playwright:
+        instance = playwright.chromium.launch()
+        try:
+            yield instance
+        finally:
+            instance.close()
+
+
 # --- docker ----------------------------------------------------------------------------
 @dataclass(frozen=True)
 class DockerSnap:

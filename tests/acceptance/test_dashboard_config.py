@@ -1,6 +1,8 @@
-"""dashboard.yaml 수용 테스트(Unit): REQ-076(스키마), REQ-077(과제 등록), REQ-078(카탈로그 대조)."""
+"""dashboard.yaml 수용 테스트(Unit): REQ-076(스키마, 재생성 CLI), REQ-077(과제 등록), REQ-078(카탈로그 대조)."""
 import copy
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -11,6 +13,7 @@ from td.dashboard_config import ConfigError
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SUTS_DIR = REPO_ROOT / "suts"
+SITE_GEN = REPO_ROOT / "site-gen"
 
 
 def base_config() -> dict:
@@ -171,3 +174,20 @@ def test_empty_resolve_and_implicit(tmp_path):
     added = dashboard_config.with_implicit(linked, ["petclinic", "mini-sut"])
     assert added.projects[-1] == dashboard_config.Project("mini-sut", None, None, "mini-sut", True)
     assert len(added.projects) == 21
+
+
+@pytest.mark.parametrize("body, where", [
+    ("schema: 1\nprojects: []\nstatus: {rules: nope}\n", "status.rules"),     # 타입 오류
+    ("schema: 1\n", "projects"),                                               # 필수 키 없음
+    ("schema: 2\nprojects: []\n", "schema"),                                  # schema가 1이 아님
+])
+def test_req076_cli_fails_before_writing(tmp_path, body, where):
+    from dashboard_fixtures import RUN_A, make_site
+    site = make_site(tmp_path, runs={"pet": [RUN_A]})
+    before = sorted(path.relative_to(site) for path in site.rglob("*"))
+    bad = tmp_path / "bad.yaml"; bad.write_text(body)
+    proc = subprocess.run([sys.executable, "-m", "td.site.index", str(site), "--config", str(bad)],
+                          capture_output=True, text=True, cwd=SITE_GEN)
+    message = proc.stderr.replace(str(bad), "<config>")    # 임시 경로 이름에 영향받지 않게 한다
+    assert proc.returncode == 2 and where in message and not (site / "index.html").exists()
+    assert sorted(path.relative_to(site) for path in site.rglob("*")) == before

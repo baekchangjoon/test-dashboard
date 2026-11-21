@@ -4,12 +4,18 @@
 """
 from __future__ import annotations
 
+import argparse
 import json
+import os
 import shutil
 import sys
 from pathlib import Path
 
+from td import dashboard_config
+from td.dashboard_config import Config, ConfigError
 from td.site.pages import STATIC_DIR, jinja_env, read_json as _read
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 CHART_W, CHART_H = 520, 190
 PAD_L, PAD_R, PAD_T, PAD_B = 44, 12, 12, 34
@@ -119,13 +125,22 @@ def _esc(text: str) -> str:
 
 
 # --- 재생성 ---------------------------------------------------------------------------------
-def rebuild(site_root, prefix: str = "") -> list[Path]:
-    """site_root/prefix 아래 인덱스를 다시 쓰고, 쓴 파일 목록을 돌려준다. _test 접두 목록은 site_root/_test에 쓴다."""
+def rebuild(site_root, prefix: str = "", config: Config | None = None, *,
+            exclude: frozenset[str] = frozenset()) -> list[Path]:
+    """site_root/prefix 아래 인덱스를 다시 쓰고, 쓴 파일 목록을 돌려준다. _test 접두 목록은 site_root/_test에 쓴다.
+
+    config가 없으면 `dashboard_config.resolve(os.environ, 저장소 루트)`로 고른다. 설정 검증과 암묵 과제 추가는
+    파일을 하나라도 쓰기 전에 하고, 실패하면 `ConfigError`를 그대로 올려 아무것도 쓰지 않는다.
+    exclude(제외 과제 이름)와 확정된 설정은 홈·과제 페이지(Task 9·10)에서 쓴다. 지금 쓰는 파일은 PoC와 같다.
+    """
     site_root = Path(site_root)
     base = site_root / prefix if prefix else site_root
+    suts = _collect(base)
+    if config is None:
+        config = dashboard_config.resolve(os.environ, REPO_ROOT)
+    dashboard_config.with_implicit(config, suts.keys())
     written: list[Path] = []
     env = jinja_env()
-    suts = _collect(base)
     depth = len([part for part in Path(prefix).parts if part]) if prefix else 0
     test_index_href = "../" * depth + "_test/index.html"
 
@@ -161,11 +176,25 @@ def rebuild(site_root, prefix: str = "") -> list[Path]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """`python -m td.site.index <site_root> [prefix] [--config <파일>]`. 설정 오류는 표준 오류에 내고 종료 코드 2."""
     args = list(sys.argv[1:] if argv is None else argv)
     if not args:
-        print("usage: python -m td.site.index <site_root> [prefix]", file=sys.stderr)
+        print("usage: python -m td.site.index <site_root> [prefix] [--config <file>]", file=sys.stderr)
         return 1
-    rebuild(args[0], args[1] if len(args) > 1 else "")
+    parser = argparse.ArgumentParser(prog="python -m td.site.index")
+    parser.add_argument("site_root")
+    parser.add_argument("prefix", nargs="?", default="")
+    parser.add_argument("--config", help="dashboard.yaml 경로(없으면 환경 변수와 저장소 루트로 고른다)")
+    options = parser.parse_args(args)
+    try:
+        if options.config:
+            config = dashboard_config.resolve({**os.environ, "TD_DASHBOARD_CONFIG": options.config}, REPO_ROOT)
+        else:
+            config = dashboard_config.resolve(os.environ, REPO_ROOT)
+        rebuild(options.site_root, options.prefix, config)
+    except ConfigError as exc:
+        print(f"dashboard config error: {exc}", file=sys.stderr)
+        return 2
     return 0
 
 
