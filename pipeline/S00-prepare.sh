@@ -92,6 +92,8 @@ HOTSPOT_COMMIT="$(fetch_git_tool "$HOTSPOT_SRC" https "$HOTSPOT_REPO" "$HOTSPOT_
   || s00_fail "hotspot 소스 확보 실패($HOTSPOT_REPO@$HOTSPOT_PIN)"
 [[ "$HOTSPOT_COMMIT" == "$HOTSPOT_PIN" ]] || s00_fail "hotspot 체크아웃 커밋 ${HOTSPOT_COMMIT}이 pin ${HOTSPOT_PIN}과 다르다"
 if [[ "$(cat "$TOOLS_DIR/hotspot.commit" 2>/dev/null)" != "$HOTSPOT_COMMIT" || ! -f "$HOTSPOT_JAR" ]]; then
+  # 재사용 clone의 build/libs에 이전 커밋의 jar(다른 버전 이름)가 남으면 glob이 2개를 잡으므로 빌드 전에 비운다.
+  rm -rf "$HOTSPOT_SRC/build/libs"
   td_run 1800 -- env JAVA_HOME="$HOTSPOT_JAVA" "$HOTSPOT_SRC/gradlew" -p "$HOTSPOT_SRC" --no-daemon -q "$HOTSPOT_TASK" >&2 \
     || s00_fail "hotspot 빌드 실패($HOTSPOT_TASK, JDK $HOTSPOT_JDK)"
   hotspot_jars=()
