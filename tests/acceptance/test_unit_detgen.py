@@ -53,7 +53,7 @@ def test_projection_keeps_only_allowed_fields(tmp_path):
     assert keyparams[0]["parameters"][0]["accessor"] == "req"
     assert set(keyparams[0]["parameters"][0]) == {"name", "accessor", "http_name", "java_type", "reasons"}
     assert bundle.read("harness.json") == {"login": "POST /api/auth/login", "unauthenticatedStatus": 403,
-                                           "apiInclude": "/api/**", "timezone": "Asia/Seoul"}
+                                           "apiInclude": "/api/**", "timezone": "Asia/Seoul", "pairwiseOrder": 2}
 
 
 def test_req112_bundle_rejects_unlisted_file(tmp_path):
@@ -1111,8 +1111,28 @@ def _clean_validator(gen_dir, out_dir):
     return bddgen.Issues()
 
 
-def _det_run(tmp_path, name="run"):
-    return _copy(PETCLINIC_RUN, tmp_path / name)
+_ABSENT = object()  # tools.lock에 pict 키를 쓰지 않는다
+
+
+def write_tools_lock(run_dir: Path, pict=_ABSENT, failure: str | None = None) -> Path:
+    """run 디렉터리에 tools.lock(YAML)을 쓴다. pict: dict(available) | None(`pict: null`) | _ABSENT(키 없음)."""
+    import yaml
+    lock = {"schema": 1, "claude": {"version": "9.9.9-test", "model": "claude-opus-5-5"}}
+    if pict is not _ABSENT:
+        lock["pict"] = None if pict is None else {k: pict[k] for k in ("commit", "binarySha256", "path")}
+        if pict is None:
+            lock["pictFailureReason"] = failure or "build-failed"
+    path = Path(run_dir) / "tools.lock"
+    path.write_text(yaml.safe_dump(lock, sort_keys=False), encoding="utf-8")
+    return path
+
+
+def _det_run(tmp_path, name="run", pict=_ABSENT):
+    """petclinic det fixture run 사본. pict를 주면(세션 `pict_tool` 값) tools.lock에 available pict 항목을 쓴다."""
+    run = _copy(PETCLINIC_RUN, tmp_path / name)
+    if pict is not _ABSENT:
+        write_tools_lock(run, pict)
+    return run
 
 
 def _snapshot_files(directory: Path) -> dict:
@@ -1120,25 +1140,30 @@ def _snapshot_files(directory: Path) -> dict:
             for p in sorted(directory.rglob("*")) if p.is_file()}
 
 
-def test_det_gen_id_and_record_shape(tmp_path):
+def test_det_gen_id_and_record_shape(tmp_path, pict_tool):
     out_root = tmp_path / "generated" / "petclinic"
-    result = det_stage.generate_det(_det_run(tmp_path), SUT_FILE, out_root, False, validator=_clean_validator)
+    result = det_stage.generate_det(_det_run(tmp_path, pict=pict_tool), SUT_FILE, out_root, False,
+                                    validator=_clean_validator)
     assert result.status == "passed", result.reason
     key = result.record["inputHash"]
     assert len(key) == 64 and result.gen_id == f"det-{key[:8]}-r1"
     assert result.dir == out_root / "det" / result.gen_id and (result.dir / "_COMPLETE").is_file()
     assert result.record["generator"] == {"name": "td.detgen", "version": det_stage.GENERATOR_VERSION,
                                           "glueChecksum": render_mod.glue_checksum(),
-                                          "sourceChecksum": det_stage.source_checksum()}
+                                          "sourceChecksum": det_stage.source_checksum(),
+                                          "pict": {"commit": pict_tool["commit"],
+                                                   "binarySha256": pict_tool["binarySha256"]}}
     assert result.record["rep"] == 1 and result.record["arm"] == "det" and result.record["cases"] > 0
+    pict_tag = f"{pict_tool['commit']}:{pict_tool['binarySha256']}"
     expected_key = hashlib.sha256((result.record["bundleHash"] + det_stage.GENERATOR_VERSION + det_stage.source_checksum()
-                                   + render_mod.glue_checksum()).encode("utf-8")).hexdigest()
+                                   + render_mod.glue_checksum() + pict_tag).encode("utf-8")).hexdigest()
+    assert key == det_stage.det_key(result.record["bundleHash"], pict_tag)
     assert key == expected_key
     assert redact.find_leaks("".join(p.read_text(encoding="utf-8") for p in result.dir.rglob("*") if p.is_file())) == []
     assert not list((out_root / "det").glob(".tmp-*"))
 
 
-def test_det_reuse_snapshot(tmp_path):
+def test_det_reuse_snapshot(tmp_path, pict_tool):
     out_root = tmp_path / "generated" / "petclinic"
     calls = []
 
@@ -1146,30 +1171,30 @@ def test_det_reuse_snapshot(tmp_path):
         calls.append(gen_dir)
         return bddgen.Issues()
 
-    first = det_stage.generate_det(_det_run(tmp_path, "a"), SUT_FILE, out_root, False, validator=counting)
+    first = det_stage.generate_det(_det_run(tmp_path, "a", pict=pict_tool), SUT_FILE, out_root, False, validator=counting)
     before = _snapshot_files(first.dir)
-    second = det_stage.generate_det(_det_run(tmp_path, "b"), SUT_FILE, out_root, False, validator=counting)
+    second = det_stage.generate_det(_det_run(tmp_path, "b", pict=pict_tool), SUT_FILE, out_root, False, validator=counting)
     assert first.reused is False and second.reused is True
     assert second.gen_id == first.gen_id and second.status == "passed"
     assert len(calls) == 1
     assert _snapshot_files(second.dir) == before
 
 
-def test_det_tampered_snapshot_is_failed_not_overwritten(tmp_path):
+def test_det_tampered_snapshot_is_failed_not_overwritten(tmp_path, pict_tool):
     out_root = tmp_path / "generated" / "petclinic"
-    first = det_stage.generate_det(_det_run(tmp_path, "a"), SUT_FILE, out_root, False, validator=_clean_validator)
+    first = det_stage.generate_det(_det_run(tmp_path, "a", pict=pict_tool), SUT_FILE, out_root, False, validator=_clean_validator)
     target = first.dir / "cases.json"
     target.write_text(target.read_text(encoding="utf-8") + " ", encoding="utf-8")
-    second = det_stage.generate_det(_det_run(tmp_path, "b"), SUT_FILE, out_root, False, validator=_clean_validator)
+    second = det_stage.generate_det(_det_run(tmp_path, "b", pict=pict_tool), SUT_FILE, out_root, False, validator=_clean_validator)
     assert second.status == "failed" and "_COMPLETE" in second.reason
     assert target.read_text(encoding="utf-8").endswith(" ")
 
 
-def test_det_regenerate_checksum_warning(tmp_path, monkeypatch):
+def test_det_regenerate_checksum_warning(tmp_path, monkeypatch, pict_tool):
     out_root = tmp_path / "generated" / "petclinic"
-    first = det_stage.generate_det(_det_run(tmp_path, "a"), SUT_FILE, out_root, False, validator=_clean_validator)
+    first = det_stage.generate_det(_det_run(tmp_path, "a", pict=pict_tool), SUT_FILE, out_root, False, validator=_clean_validator)
     # 같은 입력 재생성: 체크섬이 같으면 경고가 없다
-    same = det_stage.generate_det(_det_run(tmp_path, "b"), SUT_FILE, out_root, True, validator=_clean_validator)
+    same = det_stage.generate_det(_det_run(tmp_path, "b", pict=pict_tool), SUT_FILE, out_root, True, validator=_clean_validator)
     assert same.status == "passed" and same.reused is False and same.gen_id == first.gen_id
     assert "warnings" not in same.record or same.record["warnings"] == []
     # 키를 고정한 채(glue_checksum 고정) 렌더 결과를 바꾸면 checksum-changed 경고를 남기고 교체한다
@@ -1180,7 +1205,7 @@ def test_det_regenerate_checksum_warning(tmp_path, monkeypatch):
     java.write_text(java.read_text(encoding="utf-8") + "\n// changed\n", encoding="utf-8")
     monkeypatch.setattr(render_mod, "GLUE_DIR", glue_copy)
     monkeypatch.setattr(render_mod, "glue_checksum", lambda root=None: fixed)
-    changed = det_stage.generate_det(_det_run(tmp_path, "c"), SUT_FILE, out_root, True, validator=_clean_validator)
+    changed = det_stage.generate_det(_det_run(tmp_path, "c", pict=pict_tool), SUT_FILE, out_root, True, validator=_clean_validator)
     assert changed.gen_id == first.gen_id and changed.status == "passed"
     assert "checksum-changed" in changed.record["warnings"]
     assert java.read_bytes() in {p.read_bytes() for p in changed.dir.rglob("*.java")}
@@ -1188,8 +1213,8 @@ def test_det_regenerate_checksum_warning(tmp_path, monkeypatch):
     assert not list((out_root / "det").glob(".tmp-*")) and not list((out_root / "det").glob("*.old-*"))
 
 
-def test_det_missing_optional_is_degraded(tmp_path):
-    run = _det_run(tmp_path)
+def test_det_missing_optional_is_degraded(tmp_path, pict_tool):
+    run = _det_run(tmp_path, pict=pict_tool)
     shutil.rmtree(run / "S02" / "bbtg" / "raw" / "artifacts" / "inspect-auth")
     result = det_stage.generate_det(run, SUT_FILE, tmp_path / "generated" / "petclinic", False,
                                     validator=_clean_validator)
@@ -1321,6 +1346,7 @@ def test_results_summarize(tmp_path):
                                          {"case": "b-v1", "bbtgCode": 400, "graphStatus": 422, "observed": 400}]
     reasons = {item["case"]: item["reason"] for item in summary["classUnknownCases"]}
     assert set(reasons) == {"b-v2", "c-h"} and "undefined" in reasons["c-h"]
+    assert summary["pairwise"] is None  # universe.pairwise 없음(disabled) → null
 
 
 def test_results_summarize_without_s07_outputs(tmp_path):
@@ -1381,22 +1407,22 @@ def test_det_key_includes_generator_source_checksum(tmp_path, monkeypatch):
     shutil.copytree(det_stage.SOURCE_DIR, source_copy, ignore=shutil.ignore_patterns("__pycache__"))
     monkeypatch.setattr(det_stage, "SOURCE_DIR", source_copy)
     input_hash = "0" * 64
-    before_checksum, before_key = det_stage.source_checksum(), det_stage.det_key(input_hash)
+    before_checksum, before_key = det_stage.source_checksum(), det_stage.det_key(input_hash, "none")
     assert before_checksum == det_stage.source_checksum(Path(det_stage.__file__).parent)
     target = source_copy / "render.py"
     target.write_bytes(target.read_bytes() + b"#")
     assert det_stage.source_checksum() != before_checksum
-    changed_key = det_stage.det_key(input_hash)
+    changed_key = det_stage.det_key(input_hash, "none")
     assert changed_key != before_key
     (source_copy / "notes.txt").write_text("x", encoding="utf-8")  # *.py가 아닌 파일은 키에 들어가지 않는다
-    assert det_stage.det_key(input_hash) == changed_key
+    assert det_stage.det_key(input_hash, "none") == changed_key
 
 
-def test_bdd_gen_schema_separates_llm_and_det_records(tmp_path):
+def test_bdd_gen_schema_separates_llm_and_det_records(tmp_path, pict_tool):
     # M4: det 기록은 detGeneration 분기로만 통과하고, LLM 모양의 det 기록은 거부된다
     import jsonschema
     schema = json.loads((REPO_ROOT / "site-gen" / "td" / "schemas" / "bdd-gen.schema.json").read_text(encoding="utf-8"))
-    result = det_stage.generate_det(_det_run(tmp_path), SUT_FILE, tmp_path / "generated" / "petclinic", False,
+    result = det_stage.generate_det(_det_run(tmp_path, pict=pict_tool), SUT_FILE, tmp_path / "generated" / "petclinic", False,
                                     validator=_clean_validator)
     document = {"schema": 1, "runId": None, "sut": "petclinic", "reps": 1, "regenerate": False, "maxRepairs": 0,
                 "strippedFields": [], "generations": [result.record]}
@@ -1414,7 +1440,7 @@ def test_bdd_gen_schema_separates_llm_and_det_records(tmp_path):
             jsonschema.validate({**document, "generations": [{**llm_record, key: value}]}, schema)
 
 
-def test_det_leak_check_joins_files_with_newline(tmp_path, monkeypatch):
+def test_det_leak_check_joins_files_with_newline(tmp_path, monkeypatch, pict_tool):
     # L1: 누출 검사는 파일 내용을 줄바꿈으로 이어 붙인다(파일 경계에서 토큰이 붙어 생기는 오탐·미탐 방지)
     seen = []
     original = det_stage.redact.find_leaks
@@ -1424,7 +1450,7 @@ def test_det_leak_check_joins_files_with_newline(tmp_path, monkeypatch):
         return original(text, *args, **kwargs)
 
     monkeypatch.setattr(det_stage.redact, "find_leaks", spy)
-    result = det_stage.generate_det(_det_run(tmp_path), SUT_FILE, tmp_path / "generated" / "petclinic", False,
+    result = det_stage.generate_det(_det_run(tmp_path, pict=pict_tool), SUT_FILE, tmp_path / "generated" / "petclinic", False,
                                     validator=_clean_validator)
     assert result.status == "passed", result.reason
     joined = seen[-1]

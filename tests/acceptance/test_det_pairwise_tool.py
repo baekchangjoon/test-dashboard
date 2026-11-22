@@ -240,3 +240,148 @@ def test_req302_prepare_failure(tmp_path, pict_tool, failure):
     lock = _write_lock_with(tmp_path, out_json)
     assert lock["pict"] is None
     assert lock["pictFailureReason"] == failure
+
+
+# =====================================================================================================
+# Task 5: stage 연결(상태 결정표·실행 직전 sha 대조·시간 초과)과 order 옵션(REQ-303, REQ-307, REQ-312, REQ-313)
+# =====================================================================================================
+from conftest import STUB_STAGE_DIR  # noqa: E402
+from test_det import _det_run_dir, _meta, det_env  # noqa: E402,F401
+from test_det import FIXTURE_SUT, SUT_FILE as DET_SUT_FILE, VALID  # noqa: E402
+from test_unit_detgen import (PETCLINIC_RUN, SUT_FILE, _clean_validator, _det_run, _snapshot_files,  # noqa: E402
+                              write_tools_lock)
+from test_unit_pairwise import _fake_pict  # noqa: E402
+
+from td import bddgen, snapshot  # noqa: E402
+from td.detgen import inputs  # noqa: E402
+from td.detgen import stage as det_stage  # noqa: E402
+
+PICT_SLOT = {"source": "tool:pict", "reason": "pairwise-unavailable", "endpoint": None, "rule": "pairwise"}
+
+
+@pytest.fixture
+def clean_det_env(monkeypatch):
+    """stage가 읽는 TD_DET_* 환경을 비운다(외부 셸 값이 결과를 바꾸지 않게)."""
+    for key in ("TD_DET_PICT_TIMEOUT", "TD_DET_PAIRWISE_ORDER"):
+        monkeypatch.delenv(key, raising=False)
+
+
+def _cases(result) -> dict:
+    return json.loads((result.dir / "cases.json").read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("lock", ["pict-null", "pict-key-missing", "no-tools-lock"])
+def test_req303_unavailable_degrades(tmp_path, clean_det_env, lock):
+    run = _det_run(tmp_path)
+    if lock == "pict-null":
+        write_tools_lock(run, None, failure="build-failed")
+    elif lock == "pict-key-missing":
+        write_tools_lock(run)
+    out_root = tmp_path / "generated" / "petclinic"
+    result = det_stage.generate_det(run, SUT_FILE, out_root, False, validator=_clean_validator)
+    assert result.status == "degraded" and result.reason == "pairwise-unavailable", result.reason
+    assert result.dir is not None and (result.dir / "_COMPLETE").is_file()
+    doc = _cases(result)
+    assert [u for u in doc["unresolved"] if u["source"] == "tool:pict"] == [PICT_SLOT]
+    assert not [c for c in doc["cases"] if c["rule"] == "pairwise"]
+    assert doc["universe"]["pairwise"] == {"order": 2, "byEndpoint": {}}
+    assert result.record["generator"]["pict"] is None
+    assert result.gen_id == det_stage.det_gen_id(det_stage.det_key(result.record["bundleHash"], "none"))
+
+
+def test_req303_reason_joined_with_missing_optional(tmp_path, clean_det_env):
+    run = _det_run(tmp_path)
+    write_tools_lock(run, None, failure="clone-failed")
+    shutil.rmtree(run / "S02" / "bbtg" / "raw" / "artifacts" / "inspect-auth")
+    result = det_stage.generate_det(run, SUT_FILE, tmp_path / "generated" / "petclinic", False,
+                                    validator=_clean_validator)
+    assert result.status == "degraded"
+    assert result.reason == "선택 입력 누락: auth; pairwise-unavailable"
+
+
+def test_req307_timeout_fails(det_env, monkeypatch):
+    """TD_DET_PICT_TIMEOUT=1 + sleep하는 가짜 pict(sha를 tools.lock에 기록) → det failed, dir null, 스냅샷 없음, base arm 계속."""
+    fake, argv_log = _fake_pict(det_env / "fake", stdout="", sleep=30)
+    pict = {"commit": fake.commit, "binarySha256": _sha256(fake.path), "path": str(fake.path)}
+    run_dir = _det_run_dir(det_env, ["base", "det"], pict=pict)
+    monkeypatch.setenv("TD_DET_PICT_TIMEOUT", "1")
+
+    def stub_llm(bundle_dir, prompt_file, out_json):
+        return snapshot.LlmReply(VALID["result"], 10, 5, 0.0)
+
+    result = bddgen.run_stage(run_dir, DET_SUT_FILE, FIXTURE_SUT, False, llm=stub_llm)
+    arms = result["extra"]["arms"]
+    assert argv_log.exists(), "가짜 pict가 호출되지 않았다"
+    assert arms["det"]["status"] == "failed" and "timed out" in arms["det"]["reason"], arms["det"]
+    assert arms["base"]["status"] != "failed", arms["base"]
+    assert len(arms["base"]["generations"]) == 2
+    [record] = [r for r in _meta(run_dir)["generations"] if r["arm"] == "det"]
+    assert record["status"] == "failed" and record["dir"] is None
+    assert record["generator"]["pict"] == {"commit": pict["commit"], "binarySha256": pict["binarySha256"]}
+    det_root = det_env / "generated" / "petclinic" / "det"
+    assert not (det_root / record["genId"]).exists()
+    assert not list(det_root.glob(".tmp-*"))
+    pict_work = run_dir / "S06" / "work" / "pict"
+    assert not pict_work.exists() or not any(pict_work.iterdir())
+
+
+def test_req312_sha_mismatch(tmp_path, clean_det_env, pict_tool):
+    """lock의 binarySha256과 실제 바이너리 sha256이 다르면 failed. 같은 genId의 스냅샷이 있어도 재사용하지 않고 건드리지 않는다."""
+    out_root = tmp_path / "generated" / "petclinic"
+    first = det_stage.generate_det(_det_run(tmp_path, "a", pict=pict_tool), SUT_FILE, out_root, False,
+                                   validator=_clean_validator)
+    assert first.status == "passed", first.reason
+    before = _snapshot_files(first.dir)
+    swapped = tmp_path / "swapped-pict"
+    shutil.copyfile(pict_tool["path"], swapped)
+    with swapped.open("ab") as handle:
+        handle.write(b"\0tampered")
+    swapped.chmod(0o755)
+    for name, root in (("b", out_root), ("c", tmp_path / "fresh" / "petclinic")):
+        run = _det_run(tmp_path, name)
+        write_tools_lock(run, {**pict_tool, "path": str(swapped)})
+        result = det_stage.generate_det(run, SUT_FILE, root, False, validator=_clean_validator)
+        assert result.status == "failed" and "sha256" in result.reason, result.reason
+        assert result.gen_id == first.gen_id  # genId는 lock 값(commit:binarySha256)으로 만든다
+        assert result.dir is None and result.reused is False and result.record["dir"] is None
+        assert result.record["generator"]["pict"] == {"commit": pict_tool["commit"],
+                                                      "binarySha256": pict_tool["binarySha256"]}
+        assert not list((root / "det").glob(".tmp-*"))
+    assert _snapshot_files(first.dir) == before
+    assert not (tmp_path / "fresh" / "petclinic" / "det" / first.gen_id).exists()
+
+
+def test_req313_order_option(tmp_path, monkeypatch, stub_stages):
+    hashes = {}
+    for order in ("2", "3"):
+        monkeypatch.setenv("TD_DET_PAIRWISE_ORDER", order)
+        projection = inputs.project(PETCLINIC_RUN, SUT_FILE, tmp_path / f"bundle-{order}")
+        assert projection.fatal is None, projection.fatal
+        assert inputs.Bundle.open(projection.dir).read("harness.json")["pairwiseOrder"] == int(order)
+        hashes[order] = projection.input_hash
+    assert hashes["2"] != hashes["3"]
+    monkeypatch.delenv("TD_DET_PAIRWISE_ORDER")
+    default = inputs.project(PETCLINIC_RUN, SUT_FILE, tmp_path / "bundle-default")
+    assert default.input_hash == hashes["2"]
+    for bad in ("4", "1", "two"):
+        monkeypatch.setenv("TD_DET_PAIRWISE_ORDER", bad)
+        projection = inputs.project(PETCLINIC_RUN, SUT_FILE, tmp_path / f"bundle-bad-{bad}")
+        assert projection.fatal and "TD_DET_PAIRWISE_ORDER" in projection.fatal
+    monkeypatch.delenv("TD_DET_PAIRWISE_ORDER")
+    # run-all: 2·3 밖 값은 run 디렉터리 예약 전에 종료 코드 1
+    for bad in ("4", "1", "two"):
+        result = stub_stages.run("--det-pairwise-order", bad)
+        assert result.returncode == 1 and "--det-pairwise-order" in result.stderr, result.stderr
+        assert not (result.work_dir / "runs").exists()
+    # 유효 값은 TD_DET_PAIRWISE_ORDER로 단계에 전달된다(기본 2)
+    stage_dir = tmp_path / "stages-env"
+    shutil.copytree(STUB_STAGE_DIR, stage_dir)
+    s06 = stage_dir / "S06-bdd-gen.sh"
+    s06.write_text(s06.read_text().replace("td_stage_begin S06\n",
+                                           'td_stage_begin S06\necho "${TD_DET_PAIRWISE_ORDER:-unset}" > "$TD_RUN_DIR/order.txt"\n'))
+    for args, expected in ((("--det-pairwise-order", "3"), "3"), ((), "2")):
+        result = stub_stages.run("--arms", "det", *args, TD_STAGE_DIR=str(stage_dir))
+        assert result.returncode == 0, result.stderr
+        [run_dir] = [d for d in (result.work_dir / "runs").iterdir() if (d / "run.json").is_file()]
+        assert (run_dir / "order.txt").read_text().strip() == expected
+    assert "--det-pairwise-order" in (REPO_ROOT / "pipeline" / "run-all.sh").read_text().split("\n")[6]

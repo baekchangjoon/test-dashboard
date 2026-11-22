@@ -72,7 +72,9 @@
     <tr data-det="unpaired"><td>짝 없는 위반(검증 불가)</td><td class="num">{{ d.unpaired }}</td></tr>
     <tr data-det="classUnknown"><td>관측 코드 없음(실패) / 실행 안 됨</td><td class="num">{{ d.classUnknown }} / {{ d.notRun }}</td></tr>
     <tr data-det="statusMismatch"><td>bbtg·그래프 기대 상태 불일치</td><td class="num">{{ d.statusMismatch | length }}</td></tr>
+    {% if d.pairwise %}<tr data-det="pairwise"><td>pairwise {{ d.pairwise.order }}-way 상호작용 커버(covered/feasible)</td><td class="num">{{ d.pairwise.interactionsCovered }}/{{ d.pairwise.interactionsFeasible }}</td></tr>{% endif %}
   </tbody></table></div>
+  {% if d.pairwise %}<p class="muted" id="det-pairwise">pairwise {{ d.pairwise.order }}-way: 실현 가능 상호작용 {{ d.pairwise.interactionsFeasible }}개 중 {{ d.pairwise.interactionsCovered }}개 커버 · 판단 불가 가정(undetermined) 케이스 {{ d.pairwise.undetermined }}개 · 관계식 종속 결합(rel-combined) 케이스 {{ d.pairwise.relCombined }}개. 통과율은 규칙별 표의 <code>pairwise</code> 행을 본다.</p>{% endif %}
   <div class="scroll"><table id="det-by-rule">
   <thead><tr><th>규칙</th><th class="num">생성</th><th class="num">strict 통과</th></tr></thead>
   <tbody>{% for rule, slot in d.byRule.items() %}<tr><td>{{ rule }}</td><td class="num">{{ slot.generated }}</td><td class="num">{{ slot.passedStrict }}</td></tr>{% endfor %}</tbody>
