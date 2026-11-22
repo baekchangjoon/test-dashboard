@@ -1,22 +1,82 @@
-{% extends "base.html.j2" %}
+{% extends "base_v2.html.j2" %}
+{# 첫 화면(설계 §5.1). 서버가 표와 수치를 정렬된 순서로 모두 그리고, app.js는 거르기·정렬·행 펼침만 덧입힌다. #}
 {% block title %}테스트 대시보드{% endblock %}
-{% macro pct(value) %}{% if value is number %}{{ "%.1f"|format(value * 100) }}%{% else %}—{% endif %}{% endmacro %}
+{% block crumbs %}<strong>test-dashboard</strong><span class="meta">과제 {{ projects|length }}개{% if data_date %} · 데이터 기준 {{ data_date }}{% endif %}</span>{% endblock %}
 {% block content %}
-<h1>대시보드</h1>
-<p><a href="{{ test_index_href }}">테스트 실행 기록</a> · <a href="hosting.html">호스팅 방식 비교</a></p>
-{% if not suts %}<p class="muted">게시된 run이 없다.</p>{% endif %}
-<div class="cards">
-{% for sut in suts %}
-  <div class="card" data-sut="{{ sut.name }}">
-    <h3><a href="suts/{{ sut.name }}/index.html">{{ sut.name }}</a></h3>
-    <p class="muted">최신 run <a href="suts/{{ sut.name }}/runs/{{ sut.latest.runId }}/index.html">{{ sut.latest.runId }}</a> · run {{ sut.runCount }}개</p>
-    <div class="kpi">
-      <div class="kpi-item"><span class="muted">테스트 통과율</span><b>{{ pct(sut.latest.kpis.passRate) }}</b></div>
-      <div class="kpi-item"><span class="muted">귀속 라인 커버리지</span><b>{{ pct(sut.latest.kpis.line) }}</b></div>
-      <div class="kpi-item"><span class="muted">Sonar 게이트</span><b>{{ sut.latest.kpis.sonarGate or "—" }}</b></div>
-      <div class="kpi-item"><span class="muted">hotspot 1위</span><b>{{ sut.latest.kpis.hotspot1 or "—" }}</b></div>
-    </div>
-  </div>
+<div class="home-head">
+  <div class="eyebrow">전체 품질 현황</div>
+  <h1 id="headline">{% if headline.total and headline.parts %}과제 {{ headline.total }}개 중 {% for part in headline.parts %}{% if part.level == "crit" %}<em>{{ part.text }}</em>{% else %}<i>{{ part.text }}</i>{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}입니다{% else %}{{ headline_text }}{% endif %}</h1>
+  {% if none_count %}<p class="lede" id="lede">{{ none_count }}개는 {{ none_sources }} 기록이 모두 없어 판정할 수 없습니다.</p>{% endif %}
+</div>
+<div class="sum" id="summary">
+{% for metric, item in summary.items() %}
+  <div class="sum-item" data-metric="{{ metric }}"><span>{{ item.label }}</span><b>{{ item.value }}</b><small>{{ item.detail }}</small></div>
 {% endfor %}
 </div>
+{% if not projects %}
+<p class="empty" id="empty">{{ empty_text }}</p>
+{% else %}
+<div class="tools" id="tools">
+{% for item in filters %}
+  <button type="button" class="chip{% if item.level != 'all' %} s-{{ item.level }}{% endif %}" data-filter="{{ item.level }}" aria-pressed="{{ 'true' if item.level == 'all' else 'false' }}">{{ item.label }} <b class="count">{{ item.count }}</b></button>
+{% endfor %}
+  <input type="search" id="proj-search" placeholder="과제 이름으로 거르기" aria-label="과제 이름으로 거르기" autocomplete="off">
+</div>
+<div class="scroll">
+<table id="projects">
+  <thead><tr>
+{% for column in columns %}
+    <th{% if column.numeric %} class="n"{% endif %}{% if column.id == "status" %} aria-sort="ascending"{% endif %} data-col="{{ column.id }}">{% if column.sortable %}<button type="button" data-sort="{{ column.id }}">{{ column.label }}</button>{% else %}{{ column.label }}{% endif %}</th>
+{% endfor %}
+  </tr></thead>
+  <tbody>
+{% for row in rows %}
+{% set project = row.project %}
+{% set level = project.verdict.level %}
+    <tr class="proj" data-name="{{ project.name }}" data-status="{{ level }}" tabindex="0" aria-expanded="false">
+{% for column in columns %}
+{% set cell = row.cells[column.id] %}
+{% if column.id == "status" %}
+      <td data-col="status" data-sort-value="{{ cell.sort }}"><span class="caret" aria-hidden="true">▸</span><span class="st s-{{ level }}">{{ project.verdict.label }}</span></td>
+{% elif column.id == "project" %}
+      <td data-col="project" data-sort-value="{{ cell.sort }}" class="nm"><a class="proj-link" href="{{ row.href }}">{{ project.name }}</a>{% if project.language %}<span class="tag">{{ project.language }}</span>{% endif %}{% if project.pipeline %}<span class="tag tag-pipeline">파이프라인</span>{% endif %}{% if project.verdict.partial %}<span class="tag tag-partial">부분 측정</span>{% endif %}{% if row.stale %}<span class="tag tag-stale">수집 실패 · {{ row.stale }}</span>{% endif %}{% if project.description %}<small>{{ project.description }}</small>{% endif %}</td>
+{% elif column.id == "why" %}
+      <td data-col="why" data-sort-value="" class="why">{% if project.verdict.reasons %}{{ project.verdict.reasons|join(" · ") }}{% else %}<span class="dim">—</span>{% endif %}</td>
+{% elif column.id == "ci.history" %}
+      <td data-col="ci.history" data-sort-value=""{% if not project.ciHistory and cell.title %} title="{{ cell.title }}"{% endif %}>{% if project.ciHistory %}<div class="hist" title="왼쪽이 오래된 실행" aria-label="최근 CI {{ project.ciHistory|length }}회, 실패 {{ project.ciHistory|reject|list|length }}회">{% for outcome in project.ciHistory %}{% if outcome %}<i></i>{% else %}<i class="f"></i>{% endif %}{% endfor %}</div>{% else %}<span class="dim">{{ cell.text }}</span>{% endif %}</td>
+{% else %}
+      <td data-col="{{ column.id }}" data-sort-value="{{ cell.sort }}"{% if column.numeric %} class="n"{% endif %}{% if cell.title %} title="{{ cell.title }}"{% endif %}>{% if cell.text == "—" %}<span class="dim">—</span>{% elif cell.text in ("연결 없음", "측정 없음") %}<span class="dim">{{ cell.text }}</span>{% elif column.id == "sonar.gate" and project["values"]["sonar.gate"] == "ERROR" %}<b class="bad">{{ cell.text }}</b>{% else %}{{ cell.text }}{% endif %}{% if cell.sub %}<small>{{ cell.sub }}</small>{% endif %}</td>
+{% endif %}
+{% endfor %}
+    </tr>
+{% endfor %}
+  </tbody>
+</table>
+<p class="empty" id="no-match" hidden>조건에 맞는 과제가 없습니다.</p>
+</div>
+<div id="details" hidden>
+{% for row in rows %}
+{% set project = row.project %}
+{% set level = project.verdict.level %}
+<template data-detail-for="{{ project.name }}"><tr class="proj-detail"><td colspan="{{ columns|length }}"><div class="dwrap s-{{ level }}">
+  <div class="verdict"><b>{{ project.verdict.label }}</b><div class="detail-reasons">{% if project.verdict.reasons %}<ul>{% for reason in project.verdict.reasons %}<li>{{ reason }}</li>{% endfor %}</ul>{% else %}<p>{{ project.headline }}</p>{% endif %}</div><p class="dim">{{ row.advice }}</p></div>
+  <div class="dgrid">{% for item in row.detail %}<div class="detail-kpi" data-metric="{{ item.metric }}"><span>{{ item.label }}</span><b>{{ item.text }}</b></div>{% endfor %}</div>
+  <div class="dact"><a class="btn open-project" href="{{ row.href }}">과제 페이지 열기</a>{% if not project.pipeline %}<span class="dim">파이프라인을 아직 돌리지 않아 테스트별 커버리지·hotspot·TIA 리포트가 없습니다.</span>{% endif %}<button type="button" class="btn ghost detail-close">접기</button></div>
+</div></td></tr></template>
+{% endfor %}
+</div>
+{% endif %}
+<footer class="foot">
+  <div id="rules">
+    <b>상태 판정 규칙</b>
+    <ul>
+{% for line in rules %}      <li>{{ line }}</li>
+{% endfor %}
+    </ul>
+{% if zero_coverage %}    <p class="zero-note"><b>커버리지</b>는 Sonar에 기록된 값입니다. {{ zero_note }}.</p>
+{% endif %}
+  </div>
+  <p class="foot-links"><a href="{{ test_index_href }}">테스트 실행 기록</a> · <a href="hosting.html">호스팅 방식 비교</a></p>
+</footer>
+<script type="application/json" id="projects-data">{{ data_json|safe }}</script>
 {% endblock %}

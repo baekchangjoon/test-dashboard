@@ -417,12 +417,10 @@ def _synthetic_ontology(tool: str = "jqassistant", extra_nodes: int = 40) -> dic
 
 
 @pytest.fixture(scope="module")
-def viz_browser():
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        instance = playwright.chromium.launch()
-        yield instance
-        instance.close()
+def viz_browser(playwright_instance):
+    instance = playwright_instance.chromium.launch()
+    yield instance
+    instance.close()
 
 
 @pytest.fixture(scope="module")

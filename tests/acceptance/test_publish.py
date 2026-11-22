@@ -4,6 +4,7 @@
 """
 import json
 import os
+import re
 import signal
 import time
 
@@ -38,6 +39,34 @@ def list_keys(s3, bucket, prefix) -> dict[str, str]:
 def run_ids_in(s3, bucket, prefix, sut) -> list[str]:
     raw = get_bytes(s3, bucket, f"{prefix}suts/{sut}/runs.json")
     return [r["runId"] for r in json.loads(raw)] if raw else []
+
+
+# --- 재설계 사이트(요구사항명세 2026-11-22 §3)에서 SUT의 과제와 과제 페이지 구역을 찾는 도우미 ---
+def linked_project(projects_doc: dict, sut: str) -> dict:
+    """`projects.json`(또는 홈의 `#projects-data`)에서 그 SUT와 이어진 과제 항목을 찾는다. 없으면 실패한다."""
+    linked = [entry for entry in projects_doc["projects"] if entry.get("sut") == sut]
+    assert len(linked) == 1, f"SUT {sut}와 이어진 과제가 하나가 아니다: {[entry['name'] for entry in linked]}"
+    return linked[0]
+
+
+def projects_island(home_html: str) -> dict:
+    """홈 HTML의 페이지 안 JSON 블록(`<script type="application/json" id="projects-data">`)을 읽는다."""
+    found = re.search(r'<script type="application/json" id="projects-data">(.*?)</script>', home_html, re.S)
+    assert found, "홈에 #projects-data 블록이 없다"
+    return json.loads(found.group(1))
+
+
+def runs_table(project_html: str) -> str:
+    """과제 페이지 HTML에서 실행 이력 탭(`#panel-runs`)의 `table#runs`를 잘라낸다."""
+    panel = project_html.index('id="panel-runs"')
+    start = project_html.index('<table id="runs">', panel)
+    return project_html[start:project_html.index("</table>", start)]
+
+
+def trend_panel(project_html: str) -> str:
+    """과제 페이지 HTML에서 추이 탭(`#panel-trend`) 구역을 잘라낸다."""
+    start = project_html.index('id="panel-trend"')
+    return project_html[start:project_html.index("</section>", start)]
 
 
 @pytest.fixture
@@ -178,8 +207,11 @@ def test_req044_history_accumulates(published_runs, s3_client, bucket, site_pref
     assert set(run_ids_in(s3_client, bucket, site_prefix, sut)) >= {first_id, second_id}
     first_etags = list_keys(s3_client, bucket, f"{site_prefix}suts/{sut}/runs/{first_id}/")
     assert first_etags and f"{site_prefix}suts/{sut}/runs/{first_id}/_COMPLETE" in first_etags
-    page = get_bytes(s3_client, bucket, f"{site_prefix}suts/{sut}/index.html").decode()
-    assert first_id in page and second_id in page
+    # 두 run이 `runs.json`과, 그 SUT와 이어진 과제 페이지의 실행 이력 탭(`#panel-runs table#runs`)에 모두 있다.
+    project = linked_project(json.loads(get_bytes(s3_client, bucket, f"{site_prefix}projects.json")), sut)
+    page = get_bytes(s3_client, bucket, f"{site_prefix}{project['href']}").decode()
+    table = runs_table(page)
+    assert f'data-run="{first_id}"' in table and f'data-run="{second_id}"' in table
 
 
 def test_req044_history_third_run_keeps_first_etags(publisher, published_runs, s3_client, bucket, site_prefix):

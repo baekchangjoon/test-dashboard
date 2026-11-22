@@ -102,26 +102,25 @@ def test_expected_commit_mismatch_message_has_both_short_shas():
 def test_record_pins_writes_sha_and_is_idempotent(tmp_path):
     pin_file = tmp_path / "tools.pin.yaml"
     original = yaml.safe_load((REPO_ROOT / "tools.pin.yaml").read_text())
-    text = (REPO_ROOT / "tools.pin.yaml").read_text().replace(f"'{original['hotspot']['sha256']}'", "''")
+    text = (REPO_ROOT / "tools.pin.yaml").read_text().replace(f"'{original['pjacoco']['sha256']}'", "''")
     pin_file.write_text(text)
-    assert yaml.safe_load(pin_file.read_text())["hotspot"]["sha256"] == ""
-    prepare.record_pin(pin_file, "hotspot", "a" * 64)
+    assert yaml.safe_load(pin_file.read_text())["pjacoco"]["sha256"] == ""
+    prepare.record_pin(pin_file, "pjacoco", "a" * 64)
     recorded = yaml.safe_load(pin_file.read_text())
-    assert recorded["hotspot"]["sha256"] == "a" * 64
-    assert recorded["pjacoco"] == original["pjacoco"]  # 다른 도구는 건드리지 않는다
+    assert recorded["pjacoco"]["sha256"] == "a" * 64
+    assert recorded["jacococli"] == original["jacococli"]  # 다른 도구는 건드리지 않는다
     assert "# jQA 2.x의 Spring 플러그인" in pin_file.read_text()  # 주석 보존
-    prepare.record_pin(pin_file, "hotspot", "a" * 64)
+    prepare.record_pin(pin_file, "pjacoco", "a" * 64)
     with pytest.raises(prepare.PrepareError):  # 다른 값으로 덮어쓰지 않는다
-        prepare.record_pin(pin_file, "hotspot", "b" * 64)
+        prepare.record_pin(pin_file, "pjacoco", "b" * 64)
 
 
 def test_committed_pin_file_is_fully_pinned():
     pin = yaml.safe_load((REPO_ROOT / "tools.pin.yaml").read_text())
-    for tool in ("pjacoco", "jacococli", "jqassistant", "jqassistantSpring", "hotspot"):
+    for tool in ("pjacoco", "jacococli", "jqassistant", "jqassistantSpring"):
         assert len(pin[tool]["sha256"]) == 64, f"{tool}: sha256 미기록(TD_PIN_RECORD=1로 S00 실행)"
-    assert pin["tia"]["commit"] and pin["bbtg"]["commit"]
+    assert pin["hotspot"]["commit"] and pin["tia"]["commit"] and pin["bbtg"]["commit"]
     assert pin["pjacoco"]["version"] == "2.0.0" and pin["jqassistant"]["version"] == "2.9.1"
-    assert pin["hotspot"]["version"] == "0.1.6"
 
 
 def test_resolve_model_prefers_env_override(tmp_path, monkeypatch):
@@ -191,6 +190,15 @@ def test_load_pin_requires_full_sha(tmp_path):
     with pytest.raises(prepare.PrepareError) as excinfo:
         prepare.load_pin(short)
     assert "40" in str(excinfo.value)
+
+
+def test_req129_short_hotspot_commit_fails(tmp_path):
+    pin = yaml.safe_load((REPO_ROOT / "tools.pin.yaml").read_text())
+    pin["hotspot"]["commit"] = "a5baac6"
+    path = tmp_path / "tools.pin.yaml"
+    path.write_text(yaml.safe_dump(pin))
+    with pytest.raises(prepare.PrepareError, match="hotspot.commit"):
+        prepare.load_pin(path)
 
 
 def _lock(**override):

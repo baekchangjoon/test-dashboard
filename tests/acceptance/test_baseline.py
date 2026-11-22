@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import posixpath
 import re
 import subprocess
 import xml.etree.ElementTree as ET
@@ -16,10 +17,12 @@ from pathlib import Path
 import jsonschema
 import pytest
 import yaml
+from playwright.sync_api import expect
 
 import helpers
 from conftest import token_rows
-from td import bbtg, bundle, testid
+from dashboard_fixtures import open_page
+from td import bbtg, bundle, dashboard_config, testid
 
 pytestmark = pytest.mark.baseline
 
@@ -33,6 +36,11 @@ EXPECTED_ENDPOINTS = yaml.safe_load((SUT_DIR / "expected-endpoints.yaml").read_t
 GEN_ID_RE = re.compile(r"^(base|jqa|owl)-[0-9a-f]{8}-r[1-9](-g[0-9]+)?$")
 ARMS = ("base", "jqa", "owl")
 STATUSES = {"passed", "failed", "degraded", "skipped"}
+# 이 작업 전에 게시된 run(옛 화면 그대로 남는다, REQ-139)
+OLD_RUN_ID = "20261120-131022Z-b6f9393-manual-036c288d"
+# tests/fixtures/reports/README.md "확인한 선택자"의 값
+TIA_GUIDE_SELECTOR = "#view details.tab-guide"
+TIA_CHANGED_FILE_SELECTOR = "#s-list .scrow:not(.all)"
 
 
 def _runs(baseline_run, second_run):
@@ -179,12 +187,10 @@ def test_req015_baseline_schema_and_kinds(baseline_run):
 
 
 @pytest.fixture(scope="module")
-def browser():
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        instance = playwright.chromium.launch()
-        yield instance
-        instance.close()
+def browser(playwright_instance):
+    instance = playwright_instance.chromium.launch()
+    yield instance
+    instance.close()
 
 
 def test_req016_baseline_offline_render(baseline_run, browser):
@@ -554,23 +560,41 @@ def test_req073_baseline_qualitative(prod_published, local_env):
 
 
 def test_req049_baseline_home_sut_run_pages(baseline_run, second_run, local_env):
+    """홈의 과제 데이터와 과제 페이지(요구사항명세 2026-11-22 §3 REQ-049). 값은 최신 run(두 번째 run)에서 온다."""
+    from markupsafe import escape
+    from test_publish import linked_project, projects_island, runs_table, trend_panel
     domain = local_env["TD_DOMAIN"]
     prefix = baseline_run.prefix
+    top = second_run.stage("S09")["top10"][0]["name"]
     for host in (f"reports.{domain}", f"dash.{domain}"):
         status, home = helpers.https_get(host, domain, f"/{prefix}index.html")
         home = home.decode()
-        assert status == 200 and 'href="suts/petclinic/index.html"' in home, host
-        assert home.count('class="kpi-item"') >= 4, host
-        # 네 KPI 모두 값이 있다(값이 없으면 템플릿이 "—"를 쓴다)
-        values = re.findall(r'<div class="kpi-item"><span class="muted">([^<]+)</span><b>([^<]*)</b>', home)
-        assert len(values) >= 4 and all(v.strip() not in ("", "—") for _, v in values), (host, values)
+        assert status == 200, host
+        status, projects_body = helpers.https_get(host, domain, f"/{prefix}projects.json")
+        assert status == 200, host
+        document = json.loads(projects_body)
+        assert projects_island(home) == document, host
+        # 그 SUT와 이어진 과제의 네 값(테스트 통과율, 귀속 라인 커버리지, Sonar 게이트, hotspot 1위)이 모두 있다
+        project = linked_project(document, "petclinic")
+        values = {name: project["values"][name] for name in ("tests.passRate", "coverage.line", "sonar.gate", "hotspot.topName")}
+        assert all(value is not None for value in values.values()), (host, values)
+        assert values["hotspot.topName"] == top, (host, values)
+        assert f'href="{project["href"]}"' in home, host
+        status, project_page = helpers.https_get(host, domain, f"/{prefix}{project['href']}")
+        project_page = project_page.decode()
+        assert status == 200, host
+        # '한눈에'에 그 값이 서버 렌더로 보인다(값이 없으면 템플릿이 "—"를 쓴다)
+        for metric in ("tests.passRate", "coverage.line", "sonar.gate"):
+            shown = re.search(rf'data-metric="{re.escape(metric)}"><div><span>[^<]*</span><b>([^<]*)</b>', project_page)
+            assert shown and shown.group(1).strip() not in ("", "—"), (host, metric)
+        assert str(escape(top)) in project_page, host
+        # 실행 이력 구역에 두 run, 추이 구역에 서버가 그린 SVG
+        table = runs_table(project_page)
+        assert f'data-run="{baseline_run.run_id}"' in table and f'data-run="{second_run.run_id}"' in table, host
+        assert trend_panel(project_page).count("<svg") >= 2, host
+        # SUT 페이지는 그 과제 페이지로 안내한다
         status, sut_page = helpers.https_get(host, domain, f"/{prefix}suts/petclinic/index.html")
-        sut_page = sut_page.decode()
-        assert status == 200 and baseline_run.run_id in sut_page and second_run.run_id in sut_page, host
-        assert sut_page.count("<svg") >= 2, host
-    top = baseline_run.stage("S09")["top10"][0]["name"]
-    status, home = helpers.https_get(f"reports.{domain}", domain, f"/{prefix}index.html")
-    assert top in home.decode()
+        assert status == 200 and f'id="to-project" href="../../{project["href"]}"' in sut_page.decode(), host
     # run 페이지: 성공(passed/degraded)한 리포트 단계마다 링크가 있다
     links = {"S04": "ontology/jqa.html", "S08": "coverage/coverage.html", "S09": "hotspot/hotspots.html",
              "S10": "tia/tia.html", "S11": "sonar/sonar.html", "S12": "compare/compare.html"}
@@ -588,3 +612,121 @@ def test_req052_baseline_sonar_healthy(baseline_run, local_env):
     from test_infra import test_req052_sonar_healthy
     assert baseline_run.stage("S13")["status"] in ("passed", "degraded")
     test_req052_sonar_healthy(local_env)
+
+
+# --- L. 운영 사이트(화면 재설계 REQ-130, 131, 139, 140) ----------------------------------------------------
+def count_runs_with_real_gh(repo: str) -> int:
+    """실제 `gh api`로 기본 브랜치의 완료된 Actions 실행 최근 30개를 읽어 설계 §6.3의 분류로 센다(성공 + 실패, 제외는 빼고).
+    수집기 코드를 부르지 않는 독립 오라클이다."""
+    def gh(path: str) -> dict:
+        done = subprocess.run(["gh", "api", path], capture_output=True, text=True, timeout=60)
+        assert done.returncode == 0, done.stderr[-300:]
+        return json.loads(done.stdout)
+    branch = gh(f"repos/{repo}")["default_branch"]
+    runs = gh(f"repos/{repo}/actions/runs?branch={branch}&status=completed&per_page=30")["workflow_runs"]
+    counted = {"success", "failure", "timed_out", "startup_failure"}
+    return sum(1 for run in runs[:30] if run.get("conclusion") in counted)
+
+
+def test_req130_hotspot_map_published(baseline_site, browser):
+    status, body = baseline_site.get(baseline_site.run_path + "hotspot/hotspots.html")
+    assert status == 200
+    block = re.search(r'<script type="application/json" id="hotspot-map-data">(.*?)</script>', body.decode(), re.S)
+    assert block and json.loads(block.group(1))["schemaVersion"] == 1
+    top = json.loads(baseline_site.get(baseline_site.run_path + "stages/S09.json")[1])["top10"]
+    assert 1 <= len(top) <= 10 and all({"name", "file", "score"} <= set(t) for t in top)
+    assert [t["score"] for t in top] == sorted((t["score"] for t in top), reverse=True)
+    page = open_page(browser, baseline_site.url(baseline_site.run_path + "hotspot/hotspots.html"))
+    try:
+        assert page.locator("#hm-map circle").count() >= 1
+    finally:
+        page.context.close()
+
+
+def test_req131_tia_report_published(baseline_site, browser):
+    page = open_page(browser, baseline_site.url(baseline_site.run_path + "tia/tia.html"))
+    try:
+        tabs = page.locator("#seg [role=tab]")
+        assert tabs.count() == 4 and "변경 영향" in tabs.first.inner_text()
+        # 리포트는 탭을 바꾸면 새 페이지를 비동기로 다시 그린다(클릭 직후에는 목록이 비어 있다). count()는 기다리지 않으므로
+        # 다시 그려질 때까지 재시도하는 expect로 같은 값을 단언한다.
+        for i in range(4):
+            tabs.nth(i).click()
+            expect(tabs.nth(i)).to_have_attribute("aria-selected", "true")
+            expect(page.locator(TIA_GUIDE_SELECTOR + ":visible")).to_have_count(1)
+        tabs.first.click()
+        changed = json.loads((baseline_site.run_dir / "S10" / "impact.json").read_text())["changedFiles"]
+        expect(page.locator(TIA_CHANGED_FILE_SELECTOR)).to_have_count(len(changed))
+    finally:
+        page.context.close()
+
+
+def test_req139_production_site_paths(baseline_site, browser):
+    cfg = dashboard_config.load(REPO_ROOT / "dashboard.yaml", REPO_ROOT / "suts")
+    listed = json.loads(baseline_site.get("projects.json")[1])["projects"]
+    home = open_page(browser, baseline_site.url(""))
+    try:
+        assert home.locator("tr.proj").count() == len(listed) and 1 <= len(listed) <= len(cfg.projects)
+    finally:
+        home.context.close()
+    walk = [f"projects/{baseline_site.project}/index.html", baseline_site.run_path + "index.html",
+            baseline_site.run_path + "hotspot/hotspots.html", baseline_site.run_path + "tia/tia.html",
+            f"suts/{baseline_site.sut}/index.html"]
+    for host in ("reports", "dash"):
+        statuses = {p: baseline_site.get(p, host=host)[0] for p in walk}
+        assert all(code == 200 for code in statuses.values()), (host, statuses)
+        assert baseline_site.get("_design/home-repos/", host=host)[0] != 200, host
+        assert baseline_site.get("_design/project/", host=host)[0] != 200, host
+    old = baseline_site.get(f"suts/{baseline_site.sut}/runs/{OLD_RUN_ID}/index.html")
+    assert old[0] == 200 and b"static/site.css" in old[1]
+    # 띠의 SUT 링크: run 페이지와 띠를 끼운 리포트에서 `a.tdnav-sut`의 href를 읽어 그 주소를 따라가면 과제 페이지에 닿는다
+    project_path = f"projects/{baseline_site.project}/index.html"
+    landing_path = f"suts/{baseline_site.sut}/index.html"
+    for host, page_url in (("reports", baseline_site.url), ("dash", baseline_site.dash_url)):
+        for report in ("index.html", "hotspot/hotspots.html"):
+            source = baseline_site.run_path + report
+            status, body = baseline_site.get(source, host=host)
+            href = re.search(r'<a class="tdnav-sut" href="([^"]+)"', body.decode())
+            assert status == 200 and href, (host, source)
+            target = posixpath.normpath(posixpath.join(posixpath.dirname(source), href.group(1)))
+            assert target == landing_path, (host, source, href.group(1))
+            landing_status, landing = baseline_site.get(target, host=host)
+            assert landing_status == 200 and f'id="to-project" href="../../{project_path}"' in landing.decode(), (host, target)
+        page = open_page(browser, page_url(baseline_site.run_path + "index.html"))
+        try:
+            page.click("a.tdnav-sut")
+            page.wait_for_url(page_url(project_path), timeout=15000)
+            assert page.locator("#tabs [role=tab]").count() >= 1, host
+        finally:
+            page.context.close()
+        assert baseline_site.get(project_path, host=host)[0] == 200, host
+
+
+def test_req140_production_site_values(baseline_site, browser):
+    latest = json.loads(baseline_site.get("projects/hotspot-analysis/latest.json")[1])
+    real_count = count_runs_with_real_gh("baekchangjoon/hotspot-analysis")
+    assert isinstance(latest["ci"]["runs"], int) and abs(latest["ci"]["runs"] - real_count) <= 2, (latest["ci"]["runs"], real_count)
+    data = json.loads(baseline_site.get("projects.json")[1])
+    mine = next(p for p in data["projects"] if p["name"] == baseline_site.project)
+    home = open_page(browser, baseline_site.url(""))
+    try:
+        row = home.locator(f'tr.proj[data-name="{baseline_site.project}"]')
+        assert row.get_attribute("data-status") == mine["status"]["level"]
+        row.click()
+        reasons_text = home.inner_text("tr.proj-detail .detail-reasons")
+        assert all(reason in reasons_text for reason in mine["status"]["reasons"]), (mine["status"], reasons_text)
+    finally:
+        home.context.close()
+    runs = json.loads(baseline_site.get(f"suts/{baseline_site.sut}/runs.json")[1])
+    page = open_page(browser, baseline_site.url(f"projects/{baseline_site.project}/index.html#trend"))
+    try:
+        with_rate = sum(1 for r in runs if r["kpis"]["passRate"] is not None)
+        assert page.locator('figure.trend[data-metric="tests.passRate"] .pt').count() == min(30, with_rate)
+        # '한눈에'는 최신 run(runs.json에서 runId가 가장 큰 run)의 값을 보여 준다. 기준 run이 아니라 그 run과 비교한다
+        latest_run = max(runs, key=lambda entry: entry["runId"])
+        assert latest_run["kpis"]["passRate"] is not None and latest_run["kpis"]["line"] is not None, latest_run
+        page.click("#tab-overview")
+        assert page.inner_text('#panel-overview .kpi[data-metric="tests.passRate"] b') == f'{latest_run["kpis"]["passRate"] * 100:.1f}%'
+        assert page.inner_text('#panel-overview .kpi[data-metric="coverage.line"] b') == f'{latest_run["kpis"]["line"] * 100:.1f}%'
+    finally:
+        page.context.close()

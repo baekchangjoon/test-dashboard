@@ -328,14 +328,16 @@ def validate(document: dict) -> None:
 
 
 # --- 화면 ---------------------------------------------------------------------------------------
-def render_page(out_dir, document: dict, css_href: str = "site.css", copy_css: bool = True) -> Path:
-    from td.site.pages import STATIC_DIR, jinja_env
-    import shutil
+def render_page(out_dir, document: dict, css_href: str = "app.css", copy_css: bool = True, nav_html: str | None = None) -> Path:
+    """`compare.html`을 쓴다. copy_css=True면 단독 열람용으로 app.css를 같은 디렉터리에 둔다(사이트 조립은 False와
+    `…/static/v2/app.css`, 공통 띠 nav_html)."""
+    from td.site.pages import copy_app_css, jinja_env, static_href_of
     out_dir = Path(out_dir)
     if copy_css:
-        shutil.copy2(STATIC_DIR / "site.css", out_dir / "site.css")
+        copy_app_css(out_dir)
     template = jinja_env().get_template("compare.html.j2")
-    html = template.render(doc=document, css_href=css_href, rows=display_rows(document), dots=dot_plots(document))
+    html = template.render(doc=document, css_href=css_href, static_href=static_href_of(css_href), nav_html=nav_html,
+                           rows=display_rows(document), dots=dot_plots(document))
     target = out_dir / "compare.html"
     target.write_text(html, encoding="utf-8")
     return target
@@ -383,7 +385,7 @@ def display_rows(document: dict) -> list[dict]:
 
 
 DOT_METRICS = [("endpoint", "엔드포인트 커버"), ("branch", "귀속 브랜치"), ("oracle", "오라클 커버"), ("passed", "통과율")]
-DOT_COLORS = {"base": "var(--arm-base)", "jqa": "var(--arm-jqa)", "owl": "var(--arm-owl)"}  # site.css 토큰(라이트/다크)  # 색만으로 구분하지 않도록 arm 이름도 라벨로 적는다.
+DOT_COLORS = {"base": "var(--arm-base)", "jqa": "var(--arm-jqa)", "owl": "var(--arm-owl)"}  # static/v2/app.css 토큰(라이트/다크)  # 색만으로 구분하지 않도록 arm 이름도 라벨로 적는다.
 
 
 def dot_plots(document: dict) -> list[dict]:

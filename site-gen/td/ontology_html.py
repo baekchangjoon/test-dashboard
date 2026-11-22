@@ -1,6 +1,6 @@
 """S04: 온톨로지 JSON(ontology.schema.json) -> 단독으로 열리는 HTML 그래프(Cytoscape.js).
 
-데이터, 라이브러리, CSS, 스크립트를 모두 한 파일에 인라인한다: 네트워크 요청이 없고(REQ-016), 게시본에서도 상대 경로에
+데이터, 라이브러리, CSS(`static/v2/app.css`, 그래프 전용 규칙 포함), 스크립트를 모두 한 파일에 인라인한다: 네트워크 요청이 없고(REQ-016), 게시본에서도 상대 경로에
 의존하지 않는다. 데이터는 `<script type="application/json">`에 넣고(`<`, `>`, `&` 이스케이프), 화면 쪽은 textContent로만
 그린다(innerHTML에 데이터를 넣지 않는다).
 
@@ -40,8 +40,7 @@ def render(ontology_json, out_html, variant: str | None = None, back_href: str =
     html = jinja_env().get_template("ontology.html.j2").render(
         title=TITLES[variant], variant=variant, meta=doc["meta"], node_count=len(doc["nodes"]), edge_count=len(doc["edges"]),
         kinds=KINDS, back_href=back_href, data_json=json_for_script(doc),
-        site_css=(STATIC_DIR / "site.css").read_text(), viz_css=(STATIC_DIR / "ontology.css").read_text(),
-        viz_js=(STATIC_DIR / "ontology.js").read_text(), cytoscape_js=(VENDOR_DIR / "cytoscape.min.js").read_text())
+        app_css=(STATIC_DIR / "v2" / "app.css").read_text(), viz_js=(STATIC_DIR / "ontology.js").read_text(), cytoscape_js=(VENDOR_DIR / "cytoscape.min.js").read_text())
     out_html.parent.mkdir(parents=True, exist_ok=True)
     out_html.write_text(html)
     return out_html

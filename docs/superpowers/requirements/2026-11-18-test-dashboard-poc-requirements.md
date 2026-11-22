@@ -19,7 +19,7 @@
 
 | 구분 | 내용 |
 |---|---|
-| 기준 run (fixture `baseline_run`, session scope) | `run-all.sh petclinic` 1회. 운영 사이트(`TD_SITE_PREFIX=""`)에 게시한다. E2E 레벨 테스트가 공유한다. |
+| 기준 run (fixture `baseline_run`, session scope) | `run-all.sh petclinic` 1회. 운영 사이트(`TD_SITE_PREFIX=""`)에 게시한다. 두 번째 run 뒤에 인덱스 전용 게시(`pipeline/publish-index.sh`)를 1회 돌린다(2026-11-22 개정). E2E 레벨 테스트가 공유한다. |
 | 두 번째 run (fixture `second_run`) | S05와 S06 스냅샷을 재사용해 `run-all.sh petclinic`을 1회 실행한다. 실제 `claude` 앞에 둔 호출 기록 shim의 호출 수가 0이어야 한다(REQ-075). 운영 사이트에 게시한다. |
 | 주입 실행 | `TD_SITE_PREFIX=_test/<sessionId>/`(S3)와 `/srv/dashboard/_test/<sessionId>/`(Lightsail)에 게시하고 **지우지 않는다**(나중에 과정을 확인하기 위한 보존, 사용자 결정 2026-11-18). 운영 인덱스의 SUT 목록과 KPI는 `_test/`를 집계하지 않고, 홈 하단의 "테스트 실행 기록" 링크로 `_test/index.html`(세션 목록)에 들어갈 수 있다. |
 | mini-sut | `tests/fixtures/mini-sut`(작은 Spring Boot 앱)를 테스트 시점에 `work/fixtures/mini-sut`로 `git init`해 `file://` URL로 쓴다. 게시는 주입 실행 환경에만 하고 보존한다. |
@@ -41,8 +41,9 @@
 - 검증 레벨: Int
 
 #### REQ-058 — 도구 잠금 파일 완전성
+- 개정(2026-11-22): 화면 재설계 요구사항명세(`docs/superpowers/requirements/2026-11-22-dashboard-ui-requirements.md` §3)가 이 수용기준을 고쳤다.
 - 유형: Functional / 우선순위: Must
-- 수용기준: Given S00 완료, Then `tools.lock`에 pjacoco, jacococli, jQA CLI, jQA Spring 플러그인, hotspot, TIA, bbtg, `claude` CLI 버전, 생성 모델 id가 있다. jacococli 버전이 pjacoco jar에 내장된 jacoco-core 버전(jar 안의 메타데이터를 테스트가 직접 읽음)과 같다.
+- 수용기준: Given S00 완료, Then `tools.lock`에 pjacoco, jacococli, jQA CLI, jQA Spring 플러그인, hotspot(버전이 아니라 커밋과 빌드한 jar의 sha256), TIA(커밋 `c4e6e9e2c18f52e3315cc90a6f98fa16506c9199`), bbtg, `claude` CLI 버전, 생성 모델 id가 있다. jacococli 버전이 pjacoco jar에 내장된 jacoco-core 버전(jar 안의 메타데이터를 테스트가 직접 읽음)과 같다.
 - 검증 레벨: Int
 
 #### REQ-002 — 단계 상태 기록
@@ -380,8 +381,9 @@
 - 검증 레벨: E2E-inj
 
 #### REQ-044 — 이력 누적
+- 개정(2026-11-22): 화면 재설계 요구사항명세(`docs/superpowers/requirements/2026-11-22-dashboard-ui-requirements.md` §3)가 이 수용기준을 고쳤다.
 - 유형: Functional / 우선순위: Must
-- 수용기준: Given 두 번째 run 게시, Then 기준 run 객체의 ETag가 그대로이고, `runs.json`과 SUT 페이지 이력 표에 두 run이 모두 있다.
+- 수용기준: Given 두 번째 run 게시, Then 기준 run 객체의 ETag가 그대로이고, `runs.json`과 그 SUT와 이어진 과제 페이지의 실행 이력 탭(`#panel-runs table#runs`)에 두 run이 모두 있다.
 - 검증 레벨: E2E
 
 #### REQ-045 — 인덱스 재생성 멱등
@@ -400,8 +402,9 @@
 - 검증 레벨: E2E
 
 #### REQ-047 — 정적 호스트 서비스
+- 개정(2026-11-22): 화면 재설계 요구사항명세(`docs/superpowers/requirements/2026-11-22-dashboard-ui-requirements.md` §3)가 이 수용기준을 고쳤다.
 - 유형: Functional / 우선순위: Must
-- 수용기준: Given 게시 후, When `https://reports.<domain>/`에서 시작해 같은 호스트 링크를 새 run 페이지까지 포함해 전부 크롤링하면(자체 크롤러), Then 모두 200이고 홈에 최신 runId가 보인다.
+- 수용기준: Given 게시 후, When `https://reports.<domain>/`에서 시작해 같은 호스트 링크를 새 run 페이지까지 포함해 전부 크롤링하면(자체 크롤러, 범위에 `/projects/`와 `/projects.json` 포함), Then 모두 200이고 과제 페이지의 실행 이력과 `runs.json`에 최신 runId가 보인다.
 - 검증 레벨: E2E
 
 #### REQ-069 — S3 직접 접근 차단
@@ -410,8 +413,9 @@
 - 검증 레벨: E2E
 
 #### REQ-048 — Lightsail 호스트 서비스
+- 개정(2026-11-22): 화면 재설계 요구사항명세(`docs/superpowers/requirements/2026-11-22-dashboard-ui-requirements.md` §3)가 이 수용기준을 고쳤다.
 - 유형: Functional / 우선순위: Must
-- 수용기준: Given 게시 후, When `https://dash.<domain>/`을 같은 방식으로 크롤링하면, Then 모두 200이고 `runs.json` 내용이 정적 호스트와 바이트 단위로 같다.
+- 수용기준: Given 게시 후, When `https://dash.<domain>/`을 같은 방식으로(크롤 범위에 `/projects/`와 `/projects.json` 포함) 크롤링하면, Then 모두 200이고 `runs.json` 내용이 정적 호스트와 바이트 단위로 같다.
 - 검증 레벨: E2E
 
 #### REQ-070 — Lightsail 따라잡기
@@ -428,14 +432,16 @@
 - 검증 레벨: E2E
 
 #### REQ-049 — 대시보드 홈과 SUT 페이지
+- 개정(2026-11-22): 화면 재설계 요구사항명세(`docs/superpowers/requirements/2026-11-22-dashboard-ui-requirements.md` §3)가 이 수용기준을 고쳤다.
 - 유형: Functional / 우선순위: Must
-- 수용기준: Given 게시된 사이트, Then 홈에 SUT별 최신 run의 KPI(테스트 통과율, attributed line coverage, Sonar 게이트, hotspot 1위)가 있고, SUT 페이지에 run 이력 표와 KPI 추이 차트가 있다. 각 run 페이지에 성공한 모든 리포트의 링크가 있다.
+- 수용기준: Given 게시된 사이트, Then 홈의 과제 데이터(`projects.json`과 페이지 안 JSON 블록 `#projects-data`)에 그 SUT와 이어진 과제의 최신 run 값(테스트 통과율, attributed line coverage, Sonar 게이트, hotspot 1위)이 있고, 과제 페이지 '한눈에'에 그 값이 서버 렌더로 보인다. SUT 페이지가 안내하는 과제 페이지에 실행 이력 구역(`#panel-runs table#runs`)과 추이 구역(서버가 그린 SVG, `#panel-trend`)이 있다. 각 run 페이지에 성공한 모든 리포트의 링크가 있다.
 - 검증 레벨: E2E
 
 #### REQ-050 — 멀티 SUT
+- 개정(2026-11-22): 화면 재설계 요구사항명세(`docs/superpowers/requirements/2026-11-22-dashboard-ui-requirements.md` §3)가 이 수용기준을 고쳤다.
 - 유형: Functional / 우선순위: Must
 - 수용기준:
-  - Given mini-sut 설명 파일(`--sut-file tests/fixtures/mini-sut/sut.yaml`, 엔드포인트 2개 이상, per-test 확장이 달린 블랙박스 IT 2개 이상, `coverage.probes`, 자체 `auth`), Given 같은 접두에 petclinic의 `_COMPLETE` run이 있는 상태(fixture `injected_petclinic_run`: `--only S00,S01,S08,S13`), When 주입 실행 환경에서 mini-sut의 S00, S01, S08, S13을 실행하면, Then 그 환경의 홈에 SUT 2개가 나온다.
+  - Given mini-sut 설명 파일(`--sut-file tests/fixtures/mini-sut/sut.yaml`, 엔드포인트 2개 이상, per-test 확장이 달린 블랙박스 IT 2개 이상, `coverage.probes`, 자체 `auth`), Given 같은 접두에 petclinic의 `_COMPLETE` run이 있는 상태(fixture `injected_petclinic_run`: `--only S00,S01,S08,S13`), When 주입 실행 환경에서 mini-sut의 S00, S01, S08, S13을 실행하면, Then 그 환경의 홈 과제 표(`tr.proj[data-name]`)에 두 SUT의 암묵 과제가 나오고, 각 과제 페이지(`projects/<sut>/index.html`)에 그 SUT의 runId가 있다.
   - `pipeline/`, `site-gen/`, `e2e/harness/`, `e2e/runner/`, `ontology/`, `prompts/`, `env/` 코드에 `petclinic` 문자열과 `org.springframework.samples` 패키지 문자열이 0건이다.
 - 검증 레벨: E2E-inj
 
@@ -583,6 +589,8 @@
 | REQ-057 | 접근 제어 | – | – | 🔵 out-of-scope (Won't) |
 
 Coverage: 72/72 green (100%) — target 100% (대상: Must 65 + Should 7). 제외: Could 1 deferred(🔵 REQ-030), Won't 2(🔵 REQ-056, REQ-057). 판정 근거: 같은 REQ 번호의 test_req<NNN>_* 테스트가 전체 수용 스위트 JUnit XML에서 모두 passed(2026-11-20 최종 수정 후 전체 실행: 697 passed, 0 failed, 0 skipped).
+
+개정 확인(2026-11-22, 화면 재설계): REQ-044, 047, 048, 049, 050, 058의 수용기준을 재설계 요구사항명세 §3대로 고쳤다. 비기준 테스트(test_publish·test_hosting·test_coverage·test_site의 해당 테스트, test_req058_*)는 고친 뒤 주입 접두 실행에서 passed다. 같은 REQ의 `test_baseline.py` 쌍둥이 테스트는 운영 기준 run 세션(재설계 계획 Task 14, 2026-11-22) 뒤 전체 실행(세션 `t14c`, 880 passed)에서 passed다.
 
 REQ-022, REQ-061 증거 범위(컨트롤러 결정, 2026-11-20): 기준 run은 커밋된 스냅샷을 재사용해 claude를 부르지 않는다. 실제 생성 호출은 같은 입력 키로 접두 게시 디버그 run(`_test/t25-dbg1/`, runId 20261120-093616Z-b6f9393-manual-6948ba10, 7건)에서 했고, 이 호출 기록(shim `llm-calls.jsonl`)과 스냅샷의 생성 메타를 REQ-022/REQ-061 증거로 인정한다.
 

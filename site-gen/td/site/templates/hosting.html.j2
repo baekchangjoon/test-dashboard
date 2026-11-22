@@ -1,6 +1,6 @@
-{% extends "base.html.j2" %}
+{% extends "base_v2.html.j2" %}
 {% block title %}호스팅 방식 비교{% endblock %}
-{% block header %}<a href="index.html"><strong>test-dashboard</strong></a>{% endblock %}
+{% block crumbs %}<a href="index.html"><strong>test-dashboard</strong></a><span class="crumb"><b>호스팅 방식 비교</b></span>{% endblock %}
 {% macro num(value, digits) %}{% if value is none %}측정 실패{% else %}{{ ("%." ~ digits ~ "f")|format(value) }}{% endif %}{% endmacro %}
 {% block content %}
 <h1>호스팅 방식 비교</h1>

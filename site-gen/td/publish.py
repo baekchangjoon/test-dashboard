@@ -16,6 +16,7 @@ import hashlib
 import json
 import mimetypes
 import os
+import re
 import shutil
 import signal
 import socket
@@ -29,13 +30,15 @@ from typing import Callable
 
 from botocore.exceptions import ClientError, ParamValidationError
 
+from td.dashboard_config import ConfigError
+
 CACHE_IMMUTABLE = "max-age=31536000, immutable"
 CACHE_NO_CACHE = "no-cache"
 COMPLETE_NAME = "_COMPLETE"
 # S3 조건부 쓰기가 이미 객체가 있을 때 돌려주는 코드(412), 동시 쓰기 충돌(409)
 EXISTS_CODES = ("PreconditionFailed", "ConditionalRequestConflict")
 # 게시본에서 뺀다: 최종 S13 결과는 publish-log가 기준이고, 재시도마다 시각이 달라져 재게시 비교를 깨뜨린다.
-EXCLUDED_SITE_FILES = ("stages/S13.json",)
+EXCLUDED_SITE_FILES = ("stages/S13.json", "render.json")  # render.json: 렌더 기록(공통 띠 누락), 게시하지 않는다
 
 
 class PublishError(Exception):
@@ -388,10 +391,14 @@ def safe_local_path(mirror_dir, key: str) -> Path | None:
 @contextlib.contextmanager
 def mirror_lock(work_dir):
     """미러(work/site-mirror)와 Lightsail /srv/dashboard는 접두와 무관하게 하나라서, 미러 동기화부터 rsync까지를
-    로컬 flock 하나로 직렬화한다(접두별 S3 잠금과 별개). 다른 게시가 끝날 때까지 기다린다."""
+    로컬 flock 하나로 직렬화한다(접두별 S3 잠금과 별개). 다른 게시가 끝날 때까지 기다린다.
+    잠금 파일은 미러의 실제 위치 옆에 둔다: 테스트 run처럼 TD_WORK_DIR은 따로이고 `site-mirror`만 심볼릭 링크로
+    공유하면, work_dir 기준 잠금은 서로를 막지 못해 두 sync_mirror가 같은 `.part`를 받다 한쪽이 깨진다."""
     work_dir = Path(work_dir)
     work_dir.mkdir(parents=True, exist_ok=True)
-    with (work_dir / ".site-mirror.flock").open("w") as handle:
+    lock_dir = (work_dir / "site-mirror").resolve().parent  # 링크가 아니거나 아직 없으면 work_dir 그대로
+    lock_dir.mkdir(parents=True, exist_ok=True)
+    with (lock_dir / ".site-mirror.flock").open("w") as handle:
         fcntl.flock(handle, fcntl.LOCK_EX)
         try:
             yield
@@ -460,12 +467,78 @@ def upload_files(s3, bucket: str, mirror_dir, paths, env: dict | None = None) ->
     return keys
 
 
+# --- 과제 디렉터리 삭제(설계 §6.4 삭제 범위) -------------------------------------------------------
+DELETE_BATCH = 1000                                         # S3 DeleteObjects 한 번의 최대 개수
+_PREFIX_SEGMENT = re.compile(r"[A-Za-z0-9_][A-Za-z0-9._-]*")  # 접두 구간: '.'·'..'·빈 구간·공백·따옴표 없음
+_PROJECT_KEY_PREFIX = re.compile(r"(.*/)?projects/([^/]+)/")
+
+
+def _checked_prefix(prefix: str) -> str:
+    """삭제에 쓰는 접두를 확인한다: 빈 문자열(운영 루트) 또는 안전한 구간들로 된 `a/b/` 꼴. 아니면 PublishError."""
+    if prefix == "":
+        return prefix
+    if not isinstance(prefix, str) or not prefix.endswith("/") or \
+            not all(_PREFIX_SEGMENT.fullmatch(part) for part in prefix[:-1].split("/")):
+        raise PublishError("삭제 요청의 접두가 안전한 꼴이 아니라 거부한다")
+    return prefix
+
+
+def _checked_project_name(name: str) -> str:
+    from td.dashboard_config import NAME_PATTERN
+    if not isinstance(name, str) or not NAME_PATTERN.fullmatch(name):
+        raise PublishError("삭제 요청의 과제 이름이 설정 이름 문법에 맞지 않아 거부한다")
+    return name
+
+
+def delete_prefix(s3, bucket: str, site_prefix: str, key_prefix: str) -> int:
+    """`<사이트 접두>projects/<과제 이름>/` 아래 객체를 나열해 1000개씩 묶어 지우고 지운 수를 돌려준다.
+    key_prefix가 정확히 그 꼴이 아니면(다른 접두, 다른 디렉터리, 이름 없음, '..', 접두만) 아무것도 지우지 않고 PublishError.
+    오류 사유에는 키(과제 이름)를 쓰지 않는다(제외된 과제의 이름이 게시 기록에 남지 않게)."""
+    match = _PROJECT_KEY_PREFIX.fullmatch(key_prefix) if isinstance(key_prefix, str) else None
+    if match is None:
+        raise PublishError("삭제 요청이 `(<접두>)projects/<이름>/` 꼴이 아니라 거부한다")
+    site_prefix = _checked_prefix(site_prefix)
+    name = _checked_project_name(match.group(2))
+    if key_prefix != f"{site_prefix}projects/{name}/":
+        raise PublishError("삭제 요청이 이번 게시 접두의 `projects/<이름>/`가 아니라 거부한다")
+    keys = [obj["Key"] for page in s3.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=key_prefix)
+            for obj in page.get("Contents", [])]
+    if any(not key.startswith(key_prefix) for key in keys):
+        raise PublishError("삭제 대상 나열에 접두 밖 키가 섞여 거부한다")
+    for start in range(0, len(keys), DELETE_BATCH):
+        batch = keys[start:start + DELETE_BATCH]
+        response = s3.delete_objects(Bucket=bucket, Delete={"Objects": [{"Key": key} for key in batch], "Quiet": True})
+        errors = response.get("Errors") or []
+        if errors:
+            codes = ", ".join(sorted({str(error.get("Code") or "?") for error in errors}))
+            raise PublishError(f"S3 객체 삭제 실패 {len(errors)}건({codes})")
+    return len(keys)
+
+
+def lightsail_list_command(prefix: str) -> str:
+    """Lightsail `/srv/dashboard/<접두>projects/` 바로 아래 디렉터리를 NUL로 구분해 나열하는 읽기 전용 원격 명령.
+    디렉터리가 없으면 아무것도 내지 않고 성공한다."""
+    return (f"d='{DASH_DIR}{_checked_prefix(prefix)}projects'; "
+            "if [ -d \"$d\" ]; then find \"$d\" -mindepth 1 -maxdepth 1 -type d -print0; fi")
+
+
+def lightsail_remove_command(prefix: str, name: str) -> str:
+    """Lightsail에서 과제 디렉터리 하나만 지우는 원격 명령. 확인한 접두와 설정 문법의 이름으로만 만들고, 경로는 작은따옴표로
+    묶는다(허용 문자에 따옴표·공백·`$`가 없다). 경로는 항상 `/srv/dashboard/<접두>projects/<이름>`이다."""
+    return f"rm -rf -- '{DASH_DIR}{_checked_prefix(prefix)}projects/{_checked_project_name(name)}'"
+
+
 def invalidation_paths(mirror_dir, written, prefix: str, sut: str, run_id: str, include_log: bool = True) -> list[str]:
-    """무효화 경로: 재생성한 인덱스 파일(디렉터리형 `/dir/`도), hosting.json/html(있으면), publish-log. 중간 와일드카드는 쓰지 않는다."""
+    """무효화 경로: 재생성한 인덱스 파일(디렉터리형 `/dir/`도), hosting.json/html(있으면), publish-log.
+    `<prefix>projects/` 아래 파일은 `/<prefix>projects/*` 한 경로로 묶는다(설계 §6.4). 그 밖에 중간 와일드카드는 쓰지 않는다."""
     mirror = Path(mirror_dir)
+    projects_root = f"{prefix}projects/"
     paths: list[str] = []
     for path in written:
         key = Path(path).relative_to(mirror).as_posix()
+        if key.startswith(projects_root):
+            paths.append(f"/{projects_root}*")
+            continue
         paths.append("/" + key)
         if key.endswith("index.html"):
             paths.append("/" + key[: -len("index.html")])
@@ -541,10 +614,12 @@ def timings() -> dict:
 
 
 def overall_status(hosts: dict) -> tuple[str, str | None]:
-    """설계 §13.9: S3(인덱스 포함)가 실패하면 failed, S3는 성공이고 CloudFront나 Lightsail이 실패하면 degraded."""
+    """설계 §13.9: S3(인덱스 포함)가 실패하면 failed, S3는 성공이고 CloudFront나 Lightsail이 실패하면 degraded.
+    render(공통 띠를 넣지 못한 리포트, 설계 §5.5), collect(인덱스 단계의 수집, 화면 재설계 §6.4)와 hosting(비교 측정)의
+    실패도 degraded다."""
     if hosts["s3"]["status"] != "passed":
         return "failed", f"s3: {hosts['s3'].get('reason') or hosts['s3']['status']}"
-    problems = [f"{name}: {hosts[name].get('reason') or 'failed'}" for name in ("cloudfront", "lightsail", "hosting")
+    problems = [f"{name}: {hosts[name].get('reason') or 'failed'}" for name in ("render", "collect", "cloudfront", "lightsail", "hosting")
                 if hosts.get(name, {}).get("status") == "failed"]  # hosting: TTFB 성공 표본 부족 등 비교 측정 실패
     return ("degraded", "; ".join(problems)) if problems else ("passed", None)
 
@@ -577,8 +652,13 @@ def exc_text(exc: BaseException, limit: int, env: dict | None = None) -> str:
 def check_no_home_in_file(path, label: str, env: dict | None = None) -> None:
     """업로드 전 게이트: 올릴 파일에 홈 경로·로컬 절대 경로·인프라 식별자·ARN이 있으면 PublishError
     (사유에는 값을 쓰지 않고 종류 이름만 쓴다)."""
+    check_no_home_in_text(Path(path).read_text(errors="replace"), label, env)
+
+
+def check_no_home_in_text(text: str, label: str, env: dict | None = None) -> None:
+    """check_no_home_in_file의 문자열판(파일로 쓰기 전에 거른다)."""
     from td import redact
-    kinds = redact.find_leaks(Path(path).read_text(errors="replace"), env=env)
+    kinds = redact.find_leaks(text, env=env)
     if kinds:
         raise PublishError(f"{label}에 로컬 홈 경로·절대 경로·식별자({', '.join(kinds)})가 들어 있어 게시하지 않는다(업로드 전 게이트)")
 
@@ -647,6 +727,166 @@ def _measure_both(url: str, connect_ip: str | None) -> tuple:
     return hosting.measure(url, connect_ip=connect_ip), hosting.measure_home(url, connect_ip=connect_ip)
 
 
+# --- 인덱스 단계: 수집 → 삭제 대상 → 재생성 → 삭제 → 업로드 (화면 재설계 §6.3, §6.4) -----------------------------
+REPO_ROOT = Path(__file__).resolve().parents[2]
+COLLECT_FAILED_REASON = "수집 실행 실패"
+# 설정 오류의 게시 기록 사유. ConfigError 문구에는 과제 이름·repo가 들어 있어 기록에는 이 문장만 쓰고 전체는 표준 오류에 낸다.
+CONFIG_ERROR_REASON = "dashboard config error (details on stderr)"
+COLLECT_STOP_WAIT = 60          # 중단 신호 뒤 collect.sh가 토큰을 정리하고 끝나기를 기다리는 초(넘으면 SIGKILL)
+
+
+def _collect_result(status: str = "ok", reasons: list[str] | None = None) -> dict:
+    return {"status": status, "reasons": list(reasons or []), "written": [], "excluded": [], "unverified": []}
+
+
+def _parse_collect_output(text: str) -> dict | None:
+    """collect.sh 표준 출력(JSON 한 줄)을 확인한다. 모양이 틀리면 None."""
+    try:
+        data = json.loads(text.strip())
+    except ValueError:
+        return None
+    if not isinstance(data, dict) or data.get("status") not in ("ok", "degraded"):
+        return None
+    lists = {key: data.get(key, []) for key in ("reasons", "written", "excluded", "unverified")}
+    if not all(isinstance(value, list) and all(isinstance(item, str) for item in value) for value in lists.values()):
+        return None
+    return {"status": data["status"], **lists}
+
+
+def _stop_child(proc: subprocess.Popen) -> None:
+    """자식(collect.sh)에 SIGTERM을 보내고 COLLECT_STOP_WAIT초까지 기다린다(토큰 정리는 collect.sh의 trap이 한다).
+    넘으면 그 자식이 이끄는 프로세스 그룹(자식을 새 세션으로 띄웠다) 전체에 SIGKILL을 보내 손자(td.collect, gh)도 남기지 않는다.
+    다른 그룹에는 신호를 보내지 않는다. 기다리는 동안 다시 온 신호는 무시한다."""
+    with contextlib.suppress(ProcessLookupError):
+        proc.terminate()
+    deadline = time.monotonic() + COLLECT_STOP_WAIT
+    while True:
+        try:
+            proc.wait(timeout=max(0.0, deadline - time.monotonic()))
+            return
+        except subprocess.TimeoutExpired:
+            # 아직 거두지 않은 자식의 pid = 그 그룹 번호(start_new_session)라 다른 프로세스를 가리킬 수 없다
+            with contextlib.suppress(ProcessLookupError, PermissionError):
+                os.killpg(proc.pid, signal.SIGKILL)
+            with contextlib.suppress(ProcessLookupError):
+                proc.kill()
+            proc.wait()
+            return
+        except PublishInterrupted:
+            continue  # 정리 중 중복 신호: 계속 기다린다
+
+
+def run_collect(env: dict, cfg, site_dir: Path) -> dict:
+    """설정에 `repo`가 있는 과제가 있을 때만 `pipeline/collect.sh`를 자식으로 띄워 결과 JSON을 돌려준다.
+    자식이 0이 아닌 코드로 끝나거나 표준 출력이 결과 JSON이 아니면 `degraded`(사유 "수집 실행 실패").
+    기다리는 동안 PublishInterrupted가 나면 자식에 SIGTERM을 보내 토큰 정리를 기다린 뒤 다시 올린다.
+    표준 오류(제외 과제 이름이 나올 수 있다)는 게시기의 표준 오류로 그대로 흘려보내고 결과에 담지 않는다."""
+    if not any(project.repo for project in cfg.projects):
+        return _collect_result()
+    root = Path(env.get("TD_ROOT") or REPO_ROOT)
+    if cfg.path is None:
+        print("[td] 수집: 설정 파일 경로가 없어 수집하지 않는다", file=sys.stderr)
+        return _collect_result("degraded", [COLLECT_FAILED_REASON])
+    suts_dir = Path(env.get("TD_DASHBOARD_SUTS_DIR") or root / "suts")
+    command = ["bash", str(root / "pipeline" / "collect.sh"), "--config", str(cfg.path), "--site", str(site_dir),
+               "--suts-dir", str(suts_dir)]
+    Path(site_dir).mkdir(parents=True, exist_ok=True)
+    try:
+        proc = subprocess.Popen(command, env=env, stdout=subprocess.PIPE, text=True, start_new_session=True)
+    except OSError as exc:
+        print(f"[td] 수집: collect.sh를 띄우지 못했다: {exc}", file=sys.stderr)
+        return _collect_result("degraded", [COLLECT_FAILED_REASON])
+    try:
+        stdout, _ = proc.communicate()
+    except PublishInterrupted:
+        _stop_child(proc)
+        raise
+    parsed = _parse_collect_output(stdout or "") if proc.returncode == 0 else None
+    if parsed is None:
+        print(f"[td] 수집: collect.sh 종료 코드 {proc.returncode}, 결과를 읽지 못했다", file=sys.stderr)
+        return _collect_result("degraded", [COLLECT_FAILED_REASON])
+    return parsed
+
+
+@dataclass
+class IndexOutcome:
+    written: list[Path]           # 올린 파일(rebuild가 쓴 파일 + 수집이 쓴 파일)
+    collect_status: str           # ok | degraded
+    collect_reasons: list[str]    # 이름 없는 사유(개수만)
+    deleted: list[str]            # 지운 과제 이름. 게시 기록에 쓰지 않는다
+    keep: frozenset[str]          # 남길 과제 이름(설정·암묵 과제 - 이번 제외). Lightsail 정리가 같은 집합을 쓴다
+    collect_seconds: float = 0.0  # 수집에 든 시간(S3 업로드 시간에서 뺀다)
+
+
+def _suts_with_complete_runs(base: Path) -> list[str]:
+    """`_COMPLETE`가 있는 run을 가진 SUT(재생성의 암묵 과제와 같은 기준)."""
+    suts_dir = base / "suts"
+    if not suts_dir.is_dir():
+        return []
+    return sorted(sut.name for sut in suts_dir.iterdir() if sut.is_dir() and any((sut / "runs").glob("*/_COMPLETE")))
+
+
+def _keep_names(base: Path, cfg, excluded: list[str]) -> frozenset[str]:
+    """남길 과제 이름: 설정의 과제와 암묵 과제(완료 run이 있는 미등록 SUT)에서 이번 수집이 제외한 과제를 뺀 것."""
+    from td import dashboard_config
+    names = {project.name for project in dashboard_config.with_implicit(cfg, _suts_with_complete_runs(base)).projects}
+    return frozenset(names - set(excluded))
+
+
+def _projects_to_delete(base: Path, keep: frozenset[str], excluded: list[str]) -> list[str]:
+    """수집이 제외한 과제 + `projects/` 바로 아래에서 남길 과제가 아닌 디렉터리. 이름 문법에 맞는 것만."""
+    from td import dashboard_config
+    projects_dir = base / "projects"
+    present = [entry.name for entry in projects_dir.iterdir() if entry.is_dir()] if projects_dir.is_dir() else []
+    candidates = set(excluded) | {name for name in present if name not in keep}
+    names = []
+    for name in sorted(candidates):
+        if dashboard_config.NAME_PATTERN.fullmatch(name):
+            names.append(name)
+        else:
+            print(f"[td] 삭제: 이름 문법에 맞지 않는 과제 디렉터리는 건드리지 않는다: {name!r}", file=sys.stderr)
+    return names
+
+
+def publish_index(s3, bucket: str, mirror: Path, prefix: str, env: dict) -> IndexOutcome:
+    """게시의 인덱스 단계(S13과 인덱스 전용 게시가 같이 쓴다). 접두 잠금과 미러 잠금은 호출자가 잡는다.
+    1) 미러 동기화 2) 수집 3) 지울 과제를 정하고 미러에서 지움 4) 재생성 5) S3에서 지움 6) 업로드(no-cache, 누출 게이트)."""
+    from td import dashboard_config
+    from td.site import index
+    mirror = Path(mirror)
+    base = mirror / prefix if prefix else mirror
+    sync_mirror(s3, bucket, mirror)
+    cfg = dashboard_config.resolve(env, Path(env.get("TD_ROOT") or REPO_ROOT), site_prefix=prefix)
+    if prefix == "" and cfg.path is None:
+        # 운영 루트를 설정 파일 없는(빈) 설정으로 정리하면 설정의 과제 디렉터리가 모두 지워진다. 어떤 삭제보다 먼저 멈춘다.
+        raise PublishError("운영 루트 게시에 설정 파일이 없다(빈 테스트 설정으로는 운영 과제를 정리하지 않는다)")
+    collect_started = time.monotonic()
+    collected = run_collect(env, cfg, base)
+    collect_seconds = time.monotonic() - collect_started
+    excluded = [name for name in collected["excluded"] if dashboard_config.NAME_PATTERN.fullmatch(name)]
+    keep = _keep_names(base, cfg, excluded)
+    deleted = _projects_to_delete(base, keep, excluded)
+    for name in deleted:
+        shutil.rmtree(base / "projects" / name, ignore_errors=True)
+    written = index.rebuild(mirror, prefix, cfg, exclude=frozenset(excluded))
+    for name in deleted:
+        try:
+            delete_prefix(s3, bucket, prefix, f"{prefix}projects/{name}/")
+        except PublishError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - 사유에 키(과제 이름)가 들어가지 않게 종류만 남긴다
+            print(f"[td] 삭제 실패({name}): {exc}", file=sys.stderr)
+            raise PublishError(f"과제 디렉터리 삭제 실패: {type(exc).__name__}") from None
+    collected_files = []
+    for relative in collected["written"]:
+        target = safe_local_path(base, relative)
+        if target is not None and target.is_file() and target not in written:
+            collected_files.append(target)
+    uploads = [*written, *collected_files]
+    upload_files(s3, bucket, mirror, uploads, env)
+    return IndexOutcome(uploads, collected["status"], list(collected["reasons"]), deleted, keep, collect_seconds)
+
+
 # --- 오케스트레이션 -----------------------------------------------------------------------------
 class Publication:
     def __init__(self, sut: str, run_id: str, run_dir, env: dict, s3=None, cf=None, measure_hosting: bool = True,
@@ -678,8 +918,12 @@ class Publication:
         self.ssh_key = key
         self.min_free = int(float(env.get("TD_MIN_FREE_GB", "2")) * GIB)
         self.lightsail_preflight_error: str | None = None
+        self.render_warnings: list[dict] = []  # 렌더 기록(render.json)의 navMissing: 공통 띠를 넣지 못한 리포트
         # 테스트 전용: 객체마다 잠깐 멈춰 SIGINT/SIGKILL을 끼워 넣는다(운영 실행은 TD_SITE_PREFIX가 없어 무시된다).
         self.pause = float(env.get("TD_PUBLISH_PAUSE_SEC", "0") or 0) if env.get("TD_SITE_PREFIX") else 0.0
+        self.index_outcome: IndexOutcome | None = None  # 인덱스 단계 결과(지운 과제는 Lightsail 단계가 쓴다)
+        self.rsync_runs = True                          # Lightsail에 run 디렉터리도 싣는다(인덱스 전용 게시는 False)
+        self.caller_reference = run_id                  # CloudFront 무효화의 CallerReference 머리
 
     def inject(self, point: str) -> None:
         if self.hooks.should_fail("S13", point, self.env):
@@ -711,6 +955,11 @@ class Publication:
         site_dir = self.run_dir / pages.PUBLISH_SUBDIR
         shutil.rmtree(site_dir, ignore_errors=True)  # 이전 시도의 낡은 파일이 manifest에 섞이지 않게
         pages.render_run(self.run_dir, self.run_dir)
+        record = site_dir / pages.RENDER_RECORD
+        self.render_warnings = list(json.loads(record.read_text()).get("navMissing") or []) if record.exists() else []
+        if self.render_warnings:  # overall_status가 render 항목의 실패를 degraded로 센다(S3 실패만 failed)
+            self.hosts["render"] = {"status": "failed", "reason": "; ".join(
+                f"공통 띠 없음: {item.get('file')}" for item in self.render_warnings)}
         check_no_home_in_file(self.run_dir / "run.json", "run.json", self.env)  # run.json은 로컬 원본이 그대로 올라간다
         manifest = build_manifest(site_dir, self.key_prefix, self.run_dir / "run.json")
         self.size_bytes = manifest.total_bytes
@@ -739,38 +988,84 @@ class Publication:
                             "skipped": stats.skipped, "objects": len(manifest.entries)}
 
     def index_phase(self) -> list[Path]:
-        from td.site import index
+        """인덱스 단계(publish_index). 수집이 degraded면 hosts.collect를 failed로 적어 게시 상태를 degraded로 만든다."""
         self.inject("index")
         started = time.monotonic()
-        sync_mirror(self.s3, self.bucket, self.mirror)
-        written = index.rebuild(self.mirror, self.prefix)
-        upload_files(self.s3, self.bucket, self.mirror, written, self.env)
-        self.upload_seconds += time.monotonic() - started
+        outcome = publish_index(self.s3, self.bucket, self.mirror, self.prefix, self.env)
+        self.index_outcome = outcome
+        if outcome.collect_status == "degraded":
+            self.hosts["collect"] = {"status": "failed", "reason": " · ".join(outcome.collect_reasons) or COLLECT_FAILED_REASON}
+        self.upload_seconds += max(0.0, time.monotonic() - started - outcome.collect_seconds)
         self.hosts["s3"] = {**self.hosts["s3"], "status": "passed"}
         self.hosts["s3"].pop("reason", None)
-        return written
+        return outcome.written
 
     def cloudfront_phase(self, written: list[Path]) -> None:
         try:
             paths = invalidation_paths(self.mirror, written, self.prefix, self.sut, self.run_id, include_log=False)
-            invalidation = invalidate(self.cf, self.distribution_id, paths, self.run_id)
+            if self.index_outcome is not None and self.index_outcome.deleted:
+                paths = list(dict.fromkeys([*paths, f"/{self.prefix}projects/*"]))  # 지운 과제 페이지도 캐시에서 뺀다
+            invalidation = invalidate(self.cf, self.distribution_id, paths, self.caller_reference)
             self.hosts["cloudfront"] = {"status": "passed", "invalidationId": invalidation, "paths": len(paths)}
         except Exception as exc:  # noqa: BLE001 - 무효화 실패는 degraded(인덱스는 no-cache라 곧 갱신된다)
             self.hosts["cloudfront"] = {"status": "failed", "reason": f"invalidation: {type(exc).__name__}: {exc_text(exc, 200, self.env)}"}
 
+    def _prune_lightsail_projects(self) -> str | None:
+        """Lightsail `/srv/dashboard/<접두>projects/` 바로 아래를 원격에서 나열하고, 이름 문법에 맞으면서 남길 과제(IndexOutcome.keep)가
+        아닌 디렉터리를 하나씩 지운다. 매 게시 원격 목록에서 정하므로, 앞선 게시가 지우지 못한 디렉터리도 다음 게시가 다시 지운다.
+        남길 집합을 정하지 못했으면(인덱스 단계 전 실패) 아무것도 지우지 않는다.
+        문법에 맞지 않는 이름은 건드리지 않고 개수만 담은 경고 문장을 돌려준다. 나열·삭제 실패는 개수만 담은 PublishError
+        (원격 오류 문구에는 경로, 곧 과제 이름이 들어 있어 게시 기록에 쓰지 않고 표준 오류에만 낸다)."""
+        from td.dashboard_config import NAME_PATTERN
+        if self.index_outcome is None:
+            return None
+        directory = f"{DASH_DIR}{self.prefix}projects"
+        try:
+            listing = ssh_output(self.ssh_target, self.ssh_key, lightsail_list_command(self.prefix))
+        except PublishError as exc:
+            print(f"[td] Lightsail 과제 목록 조회 실패: {exc}", file=sys.stderr)
+            raise PublishError("Lightsail 과제 목록 조회 실패") from None
+        unsafe, failures = 0, 0
+        for entry in (item for item in listing.split("\0") if item):
+            name = entry[len(directory) + 1:] if entry.startswith(directory + "/") else None
+            if name is None or not NAME_PATTERN.fullmatch(name):
+                unsafe += 1
+                continue
+            if name in self.index_outcome.keep:
+                continue
+            try:
+                ssh_output(self.ssh_target, self.ssh_key, lightsail_remove_command(self.prefix, name))
+            except PublishError as exc:
+                failures += 1
+                print(f"[td] Lightsail 과제 디렉터리 삭제 실패({name}): {exc}", file=sys.stderr)
+        if failures:
+            raise PublishError(f"Lightsail 과제 디렉터리 삭제 실패 {failures}개")
+        if unsafe:
+            print(f"[td] Lightsail: 이름 문법에 맞지 않는 과제 디렉터리 {unsafe}개는 건드리지 않았다", file=sys.stderr)
+            return f"이름 문법에 맞지 않는 과제 디렉터리 {unsafe}개는 건드리지 않았다"
+        return None
+
     def lightsail_phase(self) -> None:
+        prune_error: PublishError | None = None
+        warning: str | None = None
         try:
             self.inject("lightsail")
             if self.lightsail_preflight_error:
                 raise PublishError(self.lightsail_preflight_error)
+            try:
+                warning = self._prune_lightsail_projects()
+            except PublishError as exc:
+                prune_error = exc  # 정리가 실패해도 나머지 파일은 싣는다(다음 게시가 원격 목록에서 다시 지운다)
             rsync_started = time.monotonic()
-            rsync_lightsail(self.mirror, self.ssh_target, self.ssh_key, RSYNC_TIMEOUT)
+            rsync_lightsail(self.mirror, self.ssh_target, self.ssh_key, RSYNC_TIMEOUT, runs=self.rsync_runs)
             self.rsync_seconds = time.monotonic() - rsync_started
             try:
                 self.mem_after = server_mem_available_mb(self.ssh_target, self.ssh_key)
             except (PublishError, ValueError):
                 self.mem_after = None  # 메모리 측정 실패는 게시 실패가 아니다
-            self.hosts["lightsail"] = {"status": "passed"}
+            if prune_error is not None:
+                raise prune_error
+            self.hosts["lightsail"] = {"status": "passed", **({"warning": warning} if warning else {})}
         except (PublishError, OSError) as exc:
             self.hosts["lightsail"] = {"status": "failed", "reason": exc_text(exc, 300, self.env)}
 
@@ -791,7 +1086,7 @@ class Publication:
         upload_files(self.s3, self.bucket, self.mirror, files, self.env)
         paths = [f"/{self.prefix}{path.name}" for path in files]
         try:
-            invalidation = invalidate(self.cf, self.distribution_id, paths, self.run_id)
+            invalidation = invalidate(self.cf, self.distribution_id, paths, self.caller_reference)
             self.hosts["cloudfront"] = {**self.hosts["cloudfront"], "hostingInvalidationId": invalidation}
         except Exception as exc:  # noqa: BLE001
             problem = f"hosting invalidation: {type(exc).__name__}: {exc_text(exc, 200, self.env)}"
@@ -840,25 +1135,34 @@ class Publication:
             except Exception:  # noqa: BLE001 - 안내 페이지도 최선 노력
                 pass
 
+    # -- 기록(게시 기록 하나를 쓰고, Lightsail에 싣고, 그 경로를 무효화한다) ---------------------------------
+    def _write_result(self, result: dict, to_mirror: bool = True) -> None:
+        """게시 기록을 쓴다(S13: `suts/<sut>/publish-log/<runId>.json`). IndexPublication은 이 훅과 _log_path만 바꾼다."""
+        write_log(self.s3, self.bucket, self.mirror, self.prefix, self.sut, self.run_id, result, to_mirror=to_mirror,
+                  env=self.env)
+
+    def _log_path(self) -> str:
+        """게시 기록의 무효화 경로."""
+        return f"/{log_key(self.prefix, self.sut, self.run_id)}"
+
     def log_phase(self) -> dict:
         status, reason = overall_status(self.hosts)
-        write_log(self.s3, self.bucket, self.mirror, self.prefix, self.sut, self.run_id, self.result(status, reason), env=self.env)
+        self._write_result(self.result(status, reason))
         if self.hosts["lightsail"]["status"] == "passed":
             try:  # 방금 쓴 publish-log를 Lightsail에도 싣는다(run 페이지가 같은 호스트에서 읽는다)
                 rsync_lightsail(self.mirror, self.ssh_target, self.ssh_key, RSYNC_TIMEOUT, runs=False)
             except PublishError as exc:
                 self.hosts["lightsail"] = {"status": "failed", "reason": f"publish-log 동기화: {exc_text(exc, 300, self.env)}"[:300]}
                 status, reason = overall_status(self.hosts)
-                write_log(self.s3, self.bucket, self.mirror, self.prefix, self.sut, self.run_id, self.result(status, reason), env=self.env)
+                self._write_result(self.result(status, reason))
         self.invalidate_log()
         status, reason = overall_status(self.hosts)
         return self.result(status, reason)
 
     def invalidate_log(self) -> None:
         """publish-log는 인덱스 뒤에 쓰이므로 쓴 다음에 그 경로만 무효화한다. 실패하면 CloudFront를 failed로 고쳐 로그를 다시 쓴다."""
-        path = f"/{log_key(self.prefix, self.sut, self.run_id)}"
         try:
-            invalidate(self.cf, self.distribution_id, [path], self.run_id)
+            invalidate(self.cf, self.distribution_id, [self._log_path()], self.caller_reference)
             return
         except Exception as exc:  # noqa: BLE001
             self.hosts["cloudfront"] = {"status": "failed", "reason": f"publish-log invalidation: {type(exc).__name__}: {exc_text(exc, 200, self.env)}"}
@@ -867,7 +1171,7 @@ class Publication:
 
     def rewrite_log(self, result: dict, reinvalidate: bool = True, locked: bool = False) -> None:
         """이미 게시한 publish-log를 고쳐 쓴 뒤 Lightsail에도 다시 싣고, 그 경로 하나를 다시 무효화한다(각 단계 최선 노력)."""
-        write_log(self.s3, self.bucket, self.mirror, self.prefix, self.sut, self.run_id, result, env=self.env)
+        self._write_result(result)
         if self.hosts["lightsail"]["status"] == "passed" and self.ssh_target and self.ssh_key:
             try:
                 with contextlib.nullcontext() if locked else mirror_lock(self.work_dir):  # flock은 재진입 불가
@@ -876,7 +1180,7 @@ class Publication:
                 print(f"[td] publish-log 재동기화(Lightsail) 실패: {exc}", file=sys.stderr)
         if reinvalidate:
             try:
-                invalidate(self.cf, self.distribution_id, [f"/{log_key(self.prefix, self.sut, self.run_id)}"], self.run_id)
+                invalidate(self.cf, self.distribution_id, [self._log_path()], self.caller_reference)
             except Exception as exc:  # noqa: BLE001
                 print(f"[td] publish-log 재무효화 실패: {type(exc).__name__}", file=sys.stderr)
 
@@ -886,11 +1190,23 @@ class Publication:
             return
         status, reason = overall_status(self.hosts)
         try:
-            write_log(self.s3, self.bucket, self.mirror, self.prefix, self.sut, self.run_id, self.result(status, reason), to_mirror=False, env=self.env)
+            self._write_result(self.result(status, reason), to_mirror=False)
         except Exception:  # noqa: BLE001 - 실패 기록은 최선 노력
             pass
 
     # -- 실행 ----------------------------------------------------------------------------------
+    def steps(self) -> dict:
+        """사전 점검 뒤의 단계: 렌더 → 접두 잠금 → run 업로드 → (미러 잠금 안에서) 인덱스·무효화·Lightsail·호스팅·기록."""
+        manifest = self.render()
+        self.lock = acquire_lock(self.s3, self.bucket, self.prefix, self.attempt_id)
+        self.s3_phase(manifest)
+        with mirror_lock(self.work_dir):
+            written = self.index_phase()
+            self.cloudfront_phase(written)
+            self.lightsail_phase()
+            self.hosting_phase()
+            return self.log_phase()
+
     def execute(self) -> dict:
         global _TIMINGS
         _TIMINGS = {"uploadSeconds": None, "rsyncSeconds": None, "memBeforeMb": None, "memAfterMb": None}
@@ -902,15 +1218,7 @@ class Publication:
             if self.s3 is None or self.cf is None:
                 self.s3, self.cf = _make_clients(self.env)
             self.preflight()
-            manifest = self.render()
-            self.lock = acquire_lock(self.s3, self.bucket, self.prefix, self.attempt_id)
-            self.s3_phase(manifest)
-            with mirror_lock(self.work_dir):
-                written = self.index_phase()
-                self.cloudfront_phase(written)
-                self.lightsail_phase()
-                self.hosting_phase()
-                result = self.log_phase()
+            result = self.steps()
         except LockHeld as exc:
             self.hosts["s3"] = {"status": "failed", "reason": str(exc)}
             result = self.result("failed", str(exc))
@@ -918,6 +1226,11 @@ class Publication:
             self.hosts["s3"] = {**self.hosts["s3"], "status": "failed", "reason": f"interrupted ({exc})"}
             self.write_failure_log()
             result = self.result("failed", f"interrupted ({exc})")
+        except ConfigError as exc:
+            print(f"[td] 대시보드 설정 오류: {exc}", file=sys.stderr)
+            self.hosts["s3"] = {**self.hosts["s3"], "status": "failed", "reason": CONFIG_ERROR_REASON}
+            self.write_failure_log()
+            result = self.result("failed", CONFIG_ERROR_REASON)
         except (PublishError, self.hooks.HookRefused) as exc:
             self.hosts["s3"] = {**self.hosts["s3"], "status": "failed", "reason": exc_text(exc, 600, self.env)}
             self.write_failure_log()
@@ -968,6 +1281,63 @@ def run_publish(sut: str, run_id: str, run_dir, env: dict | None = None, s3=None
     return 1 if result["status"] == "failed" else 0
 
 
+# --- 인덱스 전용 게시(화면 재설계 §6.4): run 없이 수집과 인덱스만 갱신한다 ----------------------------------------
+def index_log_key(prefix: str) -> str:
+    return f"{prefix}publish-log/index.json"
+
+
+def write_index_log(s3, bucket: str, mirror, prefix: str, result: dict, env: dict | None = None,
+                    to_mirror: bool = True) -> str:
+    """인덱스 전용 게시의 기록(`<접두>publish-log/index.json`: 상태, 사유, 호스트별 결과, 시간)을 가린 뒤 누출 게이트를 지나
+    S3(no-cache)에, 그리고 미러에 쓴다. 지운 과제 이름과 수집의 제외·미확인 목록은 결과에 넣지 않는다(호출자가 지킨다)."""
+    key = index_log_key(prefix)
+    text = json.dumps(redact_obj({"kind": "index", **result}, env), ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    check_no_home_in_text(text, key, env)
+    if to_mirror:
+        path = Path(mirror) / key
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    s3.put_object(Bucket=bucket, Key=key, Body=text.encode(), CacheControl=CACHE_NO_CACHE, ContentType="application/json")
+    return key
+
+
+class IndexPublication(Publication):
+    """`td.publish index-only`: 접두 잠금 → 미러 잠금 → publish_index → 무효화 → Lightsail(원격 목록 기준 정리, 인덱스 rsync) → 기록.
+    잠금·신호·해제와 기록 쓰기 순서는 Publication을 그대로 쓰고 기록 훅(_write_result, _log_path)만 바꾼다. run을 만들지 않는다."""
+
+    def __init__(self, env: dict, s3=None, cf=None):
+        super().__init__("", "index", ".", env, s3, cf, measure_hosting=False)
+        self.rsync_runs = False
+        self.caller_reference = f"index-{self.attempt_id}"
+
+    def steps(self) -> dict:
+        self.lock = acquire_lock(self.s3, self.bucket, self.prefix, self.attempt_id)
+        with mirror_lock(self.work_dir):
+            written = self.index_phase()
+            self.cloudfront_phase(written)
+            self.lightsail_phase()
+            return self.log_phase()
+
+    def _write_result(self, result: dict, to_mirror: bool = True) -> None:
+        write_index_log(self.s3, self.bucket, self.mirror, self.prefix, result, self.env, to_mirror=to_mirror)
+
+    def _log_path(self) -> str:
+        return f"/{index_log_key(self.prefix)}"
+
+
+def run_index_only(env: dict | None = None, s3=None, cf=None) -> int:
+    """인덱스 전용 게시 본체. 표준 오류에 한 줄을 내고 종료 코드(failed 1, 그 밖 0)를 돌려준다."""
+    env = dict(os.environ if env is None else env)
+    root = Path(env.get("TD_ROOT") or REPO_ROOT)
+    for key, value in load_local_env(root / "infra" / "local.env").items():
+        env.setdefault(key, value)  # 실제 환경 변수가 우선
+    signal.signal(signal.SIGINT, _raise_interrupted)
+    signal.signal(signal.SIGTERM, _raise_interrupted)
+    result = redact_obj(IndexPublication(env, s3, cf).execute(), env)
+    print(f"[td] index-only {result['status']}" + (f": {result['reason']}" if result["reason"] else ""), file=sys.stderr)
+    return 1 if result["status"] == "failed" else 0
+
+
 def run_force_unlock(attempt_id: str, env: dict | None = None, s3=None) -> int:
     env = dict(os.environ if env is None else env)
     work_dir = Path(env.get("TD_WORK_DIR") or Path(env.get("TD_ROOT", ".")) / "work")
@@ -995,9 +1365,12 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--run-dir", required=True)
     unlock = sub.add_parser("force-unlock")
     unlock.add_argument("--attempt", required=True)
+    sub.add_parser("index-only")
     args = parser.parse_args(argv)
     if args.cmd == "run":
         return run_publish(args.sut, args.run_id, args.run_dir)
+    if args.cmd == "index-only":
+        return run_index_only()
     return run_force_unlock(args.attempt)
 
 

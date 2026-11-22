@@ -1,0 +1,24 @@
+{# 코드 품질: 게이트, 등급, 이슈의 종류 × 심각도 표(파이프라인 과제의 Sonar 리포트가 있을 때만) #}
+<div class="grid g5">
+{% for k in view.kpis %}
+  <div class="card kpi {{ k.level }}" data-metric="{{ k.metric }}"><div><span>{{ k.label }}</span><b>{{ k.text }}</b>{% if k.sub %}<small>{{ k.sub }}</small>{% endif %}</div></div>
+{% endfor %}
+</div>
+{% if view.matrix is not none %}
+<div class="card"><h3>열린 이슈 {{ view.issueTotal if view.issueTotal is not none else view.issueFetched }}건 <span class="links-inline">{% if view.link %}<a class="report-link" data-report="{{ view.link.report }}" href="{{ view.link.href }}">Sonar 리포트 열기 →</a>{% endif %}{% if view.dashboardUrl %} <a class="ext-link" href="{{ view.dashboardUrl }}" rel="noopener noreferrer">SonarQube에서 열기 →</a>{% endif %}</span></h3>
+  <div class="scroll"><table id="issues" class="heat">
+    <thead><tr><th>종류</th>{% for key, label in view.severities %}<th class="n c" data-sev="{{ key }}">{{ label }}</th>{% endfor %}</tr></thead>
+    <tbody>
+{% for row in view.matrix %}
+      <tr data-type="{{ row.type }}"><td>{{ row.label }}</td>{% for cell in row.cells %}<td class="h{{ ' dim' if not cell.count else '' }}" data-type="{{ row.type }}" data-sev="{{ cell.severity }}" style="--c:{{ cell.color }};--v:{{ cell.heat }}">{{ cell.count }}</td>{% endfor %}</tr>
+{% endfor %}
+    </tbody>
+  </table></div>
+{% if view.truncated %}  <p class="sub dim">이슈 목록이 잘려 가져온 {{ view.issueFetched }}건만 셌습니다.</p>
+{% endif %}
+{% if view.hotspots %}  <p class="sub dim">보안 검토가 필요한 지점 {{ view.hotspots|length }}곳: {{ view.hotspots|join(" · ") }}</p>
+{% endif %}
+</div>
+{% elif view.link %}
+<div class="card"><h3>Sonar 결과 <a class="report-link" data-report="{{ view.link.report }}" href="{{ view.link.href }}">Sonar 리포트 열기 →</a></h3></div>
+{% endif %}

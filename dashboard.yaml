@@ -1,0 +1,72 @@
+# 대시보드 설정(설계 §6.2). 과제는 자동으로 긁지 않고 여기에 직접 적는다.
+schema: 1
+projects:
+  - name: spring-petclinic
+    repo: baekchangjoon/spring-petclinic
+    sut: petclinic                  # 파이프라인을 돌리는 과제만
+  - name: hotspot-analysis
+    repo: baekchangjoon/hotspot-analysis
+  - name: test-impact-analysis
+    repo: baekchangjoon/test-impact-analysis
+  - name: graph-rag-test-generator
+    repo: baekchangjoon/graph-rag-test-generator
+  - name: kn-estimator
+    repo: baekchangjoon/kn-estimator
+  - name: spring-chaos-harness
+    repo: baekchangjoon/spring-chaos-harness
+  - name: CEF-Browser
+    repo: baekchangjoon/CEF-Browser
+  - name: atlassian-browser-skills
+    repo: baekchangjoon/atlassian-browser-skills
+  - name: ManualTestCoverageMeasurement
+    repo: baekchangjoon/ManualTestCoverageMeasurement
+  - name: CEF-Browser-Playwright
+    repo: baekchangjoon/CEF-Browser-Playwright
+  - name: baekchangjoon
+    repo: baekchangjoon/baekchangjoon
+  - name: mock-oauth2-server-poc
+    repo: baekchangjoon/mock-oauth2-server-poc
+  - name: sonarqube-ai-agent
+    repo: baekchangjoon/sonarqube-ai-agent
+  - name: token-stats
+    repo: baekchangjoon/token-stats
+  - name: homebrew-tap
+    repo: baekchangjoon/homebrew-tap
+  - name: MailosaurDemo
+    repo: baekchangjoon/MailosaurDemo
+    sonarKey: MailoSaurDemo         # Sonar 키의 대소문자가 저장소 이름과 다르다
+  - name: VcsStatistics
+    repo: baekchangjoon/VcsStatistics
+    sonarKey: vcsstatistics
+  - name: parallel-per-test-coverage
+    repo: baekchangjoon/parallel-per-test-coverage
+  - name: test-dashboard
+    repo: baekchangjoon/test-dashboard
+  - name: humanize-sepia
+    repo: baekchangjoon/humanize-sepia
+
+status:
+  order: [crit, warn, none, good]
+  labels: {crit: 위험, warn: 주의, good: 양호, none: 측정 없음}
+  none: {allMissing: [ci.runs, sonar.gate, tests.passRate]}
+  rules:
+    - {level: crit, when: {metric: sonar.gate, op: eq, value: ERROR}, reason: "Sonar 품질 게이트 실패"}
+    - {level: crit, when: {metric: ci.lastFailed, op: eq, value: true}, reason: "기본 브랜치의 최근 CI 실패"}
+    - {level: crit, when: {metric: ci.failedChecks, op: gt, value: 0}, reason: "최신 커밋의 검사 실패: {ci.failedCheckNames}"}
+    - {level: warn, when: {all: [{metric: ci.runs, op: ge, value: 5}, {metric: ci.successRate, op: lt, value: 0.9}]}, reason: "최근 CI {ci.runs}회 중 {ci.failures}회 실패"}
+    - {level: warn, when: {metric: sonar.vulnerabilities, op: gt, value: 0}, reason: "Sonar 취약점 {sonar.vulnerabilities}건"}
+
+home:
+  summary: [ci.successRateAll, sonar.gatePassCount, sonar.coverageNonZeroCount, status.noneCount]
+  columns: [status, project, why, ci.successRate, sonar.gate, sonar.coverage, sonar.issues, ci.history, repo.pushedAt]
+
+project:
+  tabs: [overview, trend, tests, coverage, hotspot, quality, generation, runs]
+  trend:
+    run: [tests.passRate, coverage.line, coverage.aggregateLine, e2e.passRate, sonar.coverage,
+          sonar.vulnerabilities, sonar.bugs, hotspot.topScore, tia.selectedRatio, run.durationSec]
+    snapshot: [ci.successRate, sonar.coverage, sonar.vulnerabilities, sonar.bugs]
+  headline:                         # 상태가 "양호"일 때만 본다. 위에서부터 처음 걸린 문장
+    - when: {all: [{metric: tests.passRate, op: eq, value: 1}, {metric: coverage.line, op: lt, value: 0.5}]}
+      text: "기존 테스트는 모두 통과하지만, 테스트가 지키는 코드는 {coverage.line}입니다"
+    - text: "판정 규칙에 걸린 항목이 없습니다"

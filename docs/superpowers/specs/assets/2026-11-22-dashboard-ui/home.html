@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>test-dashboard 첫 화면 시안 · 공개 저장소 20개</title>
+<style>
+:root{--bg:#f4f6f9;--surface:#fff;--sunk:#eaeef3;--ink:#131a24;--ink2:#465263;--muted:#6b7686;--line:#d9dfe7;
+  --accent:#2a78d6;--warn:#b97a00;--crit:#cf3d3d;--good:#16855a;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+@media (prefers-color-scheme:dark){:root{--bg:#0b1017;--surface:#131a24;--sunk:#0f151d;--ink:#e8edf3;--ink2:#b4bdc9;--muted:#8490a0;--line:#263141;
+  --accent:#4a94ee;--warn:#e0a030;--crit:#ee6b6b;--good:#2bb583;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 "Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif}
+.wrap{max-width:1240px;margin:0 auto;padding:0 16px}
+.banner{background:color-mix(in srgb,var(--warn) 14%,var(--surface));border-bottom:1px solid var(--warn);font-size:12.5px;padding:6px 0}
+.top{background:var(--surface);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;padding-block:12px}
+.top strong{font-size:15px}.top span{color:var(--muted);font-size:12.5px}
+main.wrap{padding-block:22px 60px;display:grid;gap:18px}
+.eyebrow{font:600 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
+h1{margin:2px 0 0;font-size:clamp(22px,3vw,30px);line-height:1.3;letter-spacing:-.02em;text-wrap:balance}
+h1 em{font-style:normal;color:var(--crit)}h1 i{font-style:normal;color:var(--warn)}
+.lede{margin:6px 0 0;color:var(--ink2);max-width:80ch}
+.sum{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.sum div{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px;min-width:0}
+.sum span{display:block;font-size:12px;color:var(--muted)}
+.sum b{font-size:22px;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.sum small{font-size:12px;color:var(--muted);margin-left:6px}
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.chip{font:inherit;font-size:13px;color:var(--ink2);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:5px 12px;cursor:pointer;display:inline-flex;gap:7px;align-items:center}
+.chip b{font-variant-numeric:tabular-nums;color:var(--muted);font-weight:600}
+.chip[aria-pressed="true"]{border-color:var(--c,var(--accent));box-shadow:inset 0 0 0 1px var(--c,var(--accent));color:var(--ink)}
+.chip:hover{border-color:var(--ink2)}
+input[type=search]{font:inherit;font-size:13px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin-left:auto;min-width:0;flex:0 1 240px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.scroll{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+table{width:100%;border-collapse:collapse;min-width:1040px}
+th{font-size:11px;letter-spacing:.05em;color:var(--muted);font-weight:600;text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+th button{all:unset;cursor:pointer}th button:hover{color:var(--ink)}th[aria-sort] button::after{content:" ▾"}th[aria-sort="ascending"] button::after{content:" ▴"}
+td{padding:10px 12px;white-space:nowrap;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr[data-name]{cursor:pointer}tbody tr[data-name]:hover,tbody tr.sel{background:color-mix(in srgb,var(--accent) 7%,var(--surface))}
+tbody tr.sel td{border-bottom-color:transparent}
+.caret{display:inline-block;width:14px;color:var(--muted);transition:transform .15s}tr.sel .caret{transform:rotate(90deg);color:var(--accent)}
+tr.detail td{padding:0 12px 14px;white-space:normal;background:color-mix(in srgb,var(--accent) 7%,var(--surface));border-bottom:2px solid var(--accent)}
+.dwrap{margin-left:14px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:12px}
+.dgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px 18px}
+.dgrid span{display:block;font-size:12px;color:var(--muted)}.dgrid b{font-size:16px;font-variant-numeric:tabular-nums}.dgrid small{font-weight:400;color:var(--muted);font-size:12px}
+.dact{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+@media (prefers-reduced-motion:reduce){.caret{transition:none}}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td small{display:block;color:var(--muted);font-size:12px}
+.nm b{font-size:14px}.nm small{max-width:34ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tag{font:11px var(--mono);color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:0 5px;margin-left:6px}
+.st{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;border:1px solid var(--c);white-space:nowrap}
+.st::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--c)}
+.s-crit{--c:var(--crit)}.s-warn{--c:var(--warn)}.s-good{--c:var(--good)}.s-none{--c:var(--muted)}
+.s-warn.st::before{border-radius:2px}.s-none.st::before{background:none;border:2px solid var(--c)}
+.why{color:var(--ink2);font-size:12.5px;white-space:normal;min-width:22ch}
+.dim{color:var(--muted)}
+.hist{display:flex;gap:2px;align-items:flex-end;height:18px}
+.hist i{width:4px;height:100%;border-radius:1px;background:var(--good);opacity:.75}
+.hist i.f{background:var(--crit);opacity:1}
+.layout{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;align-items:start}
+.layout.open{grid-template-columns:minmax(0,1fr) 340px}
+.side{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;display:grid;gap:12px;position:sticky;top:12px}
+.side h2{margin:2px 0 0;font-size:19px;letter-spacing:-.01em;overflow-wrap:anywhere}
+.side p{margin:0;color:var(--ink2);font-size:13px}
+.side dl{margin:0;display:grid;grid-template-columns:1fr auto;gap:6px 12px;font-size:13px}
+.side dt{color:var(--muted)}.side dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+.verdict{border:1px solid var(--line);border-left:4px solid var(--c);border-radius:10px;padding:10px 12px;background:var(--bg);font-size:13px}
+.verdict b{color:var(--c);display:block}
+.btn{font:inherit;font-size:13px;color:#fff;background:var(--accent);border:0;border-radius:8px;padding:7px 12px;text-decoration:none;display:inline-block;cursor:pointer}
+.btn.ghost{background:none;color:var(--ink2);border:1px solid var(--line)}
+.foot{font-size:12px;color:var(--muted);display:grid;gap:4px}
+.empty{padding:24px;text-align:center;color:var(--muted)}
+@media (max-width:900px){.sum{grid-template-columns:1fr 1fr}.layout.open{grid-template-columns:minmax(0,1fr)}.side{position:static}input[type=search]{margin-left:0;flex:1 1 100%}}
+</style></head>
+<body>
+<div class="banner"><div class="wrap">디자인 시안입니다. 표의 값은 2026-11-22에 GitHub와 SonarQube에서 읽은 공개 저장소 20개의 실제 데이터이고, 비공개 저장소 45개는 넣지 않았습니다.</div></div>
+<div class="top"><div class="wrap"><strong>test-dashboard</strong><span>과제 20개 · 데이터 기준 2026-11-22</span></div></div>
+<main class="wrap">
+  <div><div class="eyebrow">전체 품질 현황</div><h1 id="headline"></h1><p class="lede" id="lede"></p></div>
+  <div class="sum" id="sum"></div>
+  <div class="tools" id="tools"></div>
+  <div class="layout" id="layout">
+    <div class="scroll"><table>
+      <thead><tr id="head"></tr></thead><tbody id="rows"></tbody></table><div class="empty" id="empty" hidden>조건에 맞는 과제가 없습니다.</div></div>
+  </div>
+  <div class="foot">
+    <span><b>상태 판정(시안의 임시 규칙)</b> · 위험: Sonar 품질 게이트 실패, 기본 브랜치의 최근 CI 실패, 최신 커밋의 검사 실패 중 하나 · 주의: 최근 CI 5회 이상 중 성공률 90% 미만이거나 Sonar 취약점 1건 이상 · 측정 없음: CI와 Sonar 기록이 모두 없음 · 양호: 그 외</span>
+    <span><b>커버리지</b>는 Sonar에 기록된 값입니다. 0.0%는 테스트가 없다는 뜻일 수도, 커버리지 리포트를 Sonar에 보내지 않는다는 뜻일 수도 있어 이 값만으로는 구분되지 않습니다.</span>
+    <span>행을 누르면 그 행 바로 아래에 상세가 펼쳐집니다. <b>파이프라인</b> 표시가 있는 과제는 E2E 통과율, 테스트별 귀속 커버리지, hotspot, TIA 리포트까지 있습니다.</span>
+  </div>
+</main>
+<script type="application/json" id="data">[{"name": "test-dashboard", "desc": "E2E test generation (ontology + bbtg) and multi-SUT quality dashboard PoC — per-test coverage, hotspot, TIA, SonarQube", "lang": "Python", "fork": false, "st": "none", "why": "CI와 Sonar 기록이 모두 없음", "n": 0, "ok": 0, "hist": [], "sq": null, "pushed": "2026-11-21", "dash": null}, {"name": "hotspot-analysis", "desc": "Rank Java files, methods, and REST API endpoints by a deterministic Composite Hotspot Score (recency-weighted churn × cognitive complexity × JaCoCo coverage gap) to prioritize test generation. Also a Claude Code skill/plugin.", "lang": "Java", "fork": false, "st": "crit", "why": "Sonar 품질 게이트 실패", "n": 30, "ok": 30, "hist": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], "sq": {"gate": "ERROR", "cov": 88.9, "bugs": 2, "vuln": 0, "smells": 191, "ncloc": 5376, "last": "2026-11-20"}, "pushed": "2026-11-20", "dash": null}, {"name": "test-impact-analysis", "desc": "Test Impact Analysis (TIA) — per-test 커버리지 기반 영향 테스트 선별 + 실패 분류. Phase 0 PoC (Spring Boot MSA / teamscale-jacoco-agent / RestAssured).", "lang": "Java", "fork": false, "st": "crit", "why": "Sonar 품질 게이트 실패", "n": 30, "ok": 27, "hist": [1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1], "sq": {"gate": "ERROR", "cov": 87.7, "bugs": 0, "vuln": 0, "smells": 205, "ncloc": 2876, "last": "2026-11-20"}, "pushed": "2026-11-20", "dash": null}, {"name": "humanize-sepia", "desc": "Korean drafting, editing, and review skill combining Sepia and humanize-korean.", "lang": "Python", "fork": true, "st": "none", "why": "CI와 Sonar 기록이 모두 없음", "n": 0, "ok": 0, "hist": [], "sq": null, "pushed": "2026-11-06", "dash": null}, {"name": "parallel-per-test-coverage", "desc": "Out-of-process Java agent that splits code coverage per testId for parallel test runs — vanilla-compatible JaCoCo .exec, via OTel Baggage routing. No JaCoCo fork.", "lang": "Java", "fork": true, "st": "warn", "why": "Sonar 취약점 7건", "n": 0, "ok": 0, "hist": [], "sq": {"gate": "OK", "cov": 6.3, "bugs": 22, "vuln": 7, "smells": 500, "ncloc": 9286, "last": "2026-06-22"}, "pushed": "2026-09-26", "dash": null}, {"name": "graph-rag-test-generator", "desc": "Graph RAG-based deterministic test asset generation for Java/Spring (rebuilt from requirements; Phase 0 E2E passing). Legacy attempt preserved on legacy-main.", "lang": "Java", "fork": false, "st": "crit", "why": "Sonar 품질 게이트 실패 · Sonar 취약점 2건", "n": 30, "ok": 27, "hist": [1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], "sq": {"gate": "ERROR", "cov": 67.9, "bugs": 36, "vuln": 2, "smells": 912, "ncloc": 24766, "last": "2026-09-01"}, "pushed": "2026-09-01", "dash": null}, {"name": "kn-estimator", "desc": "Predict the cost of repetitive LLM agent tasks before you spend it — a static scan or a plain target list (--targets/--n) turns a single session's quadratic cost into linear chunked runs with a cost-optimal batch plan (C(K)=a+bK+cK²).", "lang": "Python", "fork": false, "st": "good", "why": "", "n": 30, "ok": 30, "hist": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], "sq": {"gate": "OK", "cov": 91.6, "bugs": 0, "vuln": 0, "smells": 10, "ncloc": 2035, "last": "2026-08-10"}, "pushed": "2026-08-10", "dash": null}, {"name": "spring-chaos-harness", "desc": "Spring Boot 서비스의 인프라 장애 대응을 결정적으로 검증하는 out-of-process 블랙박스 카오스 테스트 하니스 (Testcontainers + Toxiproxy)", "lang": "Java", "fork": false, "st": "good", "why": "", "n": 2, "ok": 2, "hist": [1, 1], "sq": {"gate": "OK", "cov": null, "bugs": 0, "vuln": 0, "smells": 5, "ncloc": null, "last": "2026-08-10"}, "pushed": "2026-08-10", "dash": null}, {"name": "CEF-Browser", "desc": "Custom Windows browser built on CefSharp (WinForms, .NET Framework 4.8) with navigation controls, CDP support, and a WiX installer", "lang": "C#", "fork": false, "st": "warn", "why": "최근 CI 11회 중 6회 실패", "n": 11, "ok": 5, "hist": [0, 0, 0, 0, 1, 0, 0, 1, 1, 1, 1], "sq": {"gate": "OK", "cov": null, "bugs": 0, "vuln": 0, "smells": 0, "ncloc": 12, "last": "2026-08-07"}, "pushed": "2026-08-07", "dash": null}, {"name": "MailosaurDemo", "desc": "Full-stack demo of E2E-testing OTP email flows with Mailosaur: Spring Boot backend, React frontend, Playwright tests that read the OTP email automatically", "lang": "Java", "fork": false, "st": "crit", "why": "Sonar 품질 게이트 실패 · 최신 커밋의 검사 실패: build-and-test", "n": 2, "ok": 1, "hist": [0, 1], "sq": {"gate": "ERROR", "cov": 0.0, "bugs": 0, "vuln": 0, "smells": 9, "ncloc": 408, "last": "2026-08-07"}, "pushed": "2026-08-07", "dash": null}, {"name": "atlassian-browser-skills", "desc": "Read/write Jira \u0026 Confluence from an LLM agent via your already-logged-in local browser (Safari/Chrome/Edge) — no API token, no MCP. For when corporate security blocks the Atlassian MCP and API.", "lang": "PowerShell", "fork": false, "st": "good", "why": "", "n": 27, "ok": 25, "hist": [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], "sq": {"gate": "OK", "cov": 0.0, "bugs": 0, "vuln": 0, "smells": 1, "ncloc": 213, "last": "2026-08-07"}, "pushed": "2026-08-07", "dash": null}, {"name": "ManualTestCoverageMeasurement", "desc": "Measure backend (JaCoCo) and frontend (V8/CDP) code coverage during manual testing via a Chrome extension + bridge server, with HTML/JSON/XML reports", "lang": "CSS", "fork": false, "st": "warn", "why": "Sonar 취약점 5건", "n": 1, "ok": 1, "hist": [1], "sq": {"gate": "OK", "cov": 0.0, "bugs": 26, "vuln": 5, "smells": 158, "ncloc": 15056, "last": "2026-08-07"}, "pushed": "2026-08-07", "dash": null}, {"name": "CEF-Browser-Playwright", "desc": "Playwright (TypeScript) E2E test suite for the CEF-Browser custom CefSharp browser, driven over the Chrome DevTools Protocol", "lang": "TypeScript", "fork": false, "st": "crit", "why": "기본 브랜치의 최근 CI 실패", "n": 4, "ok": 1, "hist": [0, 0, 1, 0], "sq": {"gate": "OK", "cov": 0.0, "bugs": 1, "vuln": 0, "smells": 39, "ncloc": 856, "last": "2026-08-07"}, "pushed": "2026-08-07", "dash": null}, {"name": "baekchangjoon", "desc": "My GitHub profile", "lang": "", "fork": false, "st": "good", "why": "", "n": 1, "ok": 1, "hist": [1], "sq": {"gate": "OK", "cov": null, "bugs": 0, "vuln": 0, "smells": 0, "ncloc": null, "last": "2026-08-07"}, "pushed": "2026-08-07", "dash": null}, {"name": "mock-oauth2-server-poc", "desc": "Out-of-process black-box API testing for social login (Kakao/Naver) with navikt/mock-oauth2-server — persona-driven test users (child/senior/foreigner/soldier) and a provider-fidelity kit (golden + contract + canary). Zero app-code changes, env-injection only.", "lang": "Java", "fork": false, "st": "good", "why": "", "n": 22, "ok": 20, "hist": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1], "sq": {"gate": "OK", "cov": 0.0, "bugs": 1, "vuln": 0, "smells": 12, "ncloc": 250, "last": "2026-08-07"}, "pushed": "2026-08-07", "dash": null}, {"name": "sonarqube-ai-agent", "desc": "SonarQube 결함을 LLM 에이전트로 자동 수정하고 오탐을 판정하는 오케스트레이터 — fixer/judge 모델 분리, 라벨링 코퍼스 벤치마크 | LLM-agnostic orchestrator that auto-fixes SonarQube issues and triages false positives — fixer/judge model split, labeled-corpus benchmark", "lang": "Python", "fork": false, "st": "warn", "why": "Sonar 취약점 8건", "n": 17, "ok": 17, "hist": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], "sq": {"gate": "OK", "cov": 0.0, "bugs": 23, "vuln": 8, "smells": 98, "ncloc": 4706, "last": "2026-08-07"}, "pushed": "2026-08-07", "dash": null}, {"name": "token-stats", "desc": "실험 run 원장·트랜스크립트에서 단계별·산출물종류별 토큰 사용량을 추출하는 통계 도구", "lang": "Python", "fork": false, "st": "warn", "why": "Sonar 취약점 2건", "n": 15, "ok": 14, "hist": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1], "sq": {"gate": "OK", "cov": 0.0, "bugs": 32, "vuln": 2, "smells": 89, "ncloc": 13402, "last": "2026-08-07"}, "pushed": "2026-08-07", "dash": null}, {"name": "VcsStatistics", "desc": "개발자 성과 평가 도구 — GitHub·GitLab·Jira·Confluence 정량 활동 수집 + CLI LLM(Gemini/Claude/Kiro) 정성 평가 | Developer performance evaluation: quantitative collection + qualitative LLM review", "lang": "Java", "fork": false, "st": "good", "why": "", "n": 30, "ok": 29, "hist": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1], "sq": {"gate": "OK", "cov": 0.0, "bugs": 3, "vuln": 0, "smells": 233, "ncloc": 4657, "last": "2026-08-07"}, "pushed": "2026-08-07", "dash": null}, {"name": "homebrew-tap", "desc": "Homebrew tap for hotspot-analysis", "lang": "Ruby", "fork": false, "st": "good", "why": "", "n": 1, "ok": 1, "hist": [1], "sq": {"gate": "OK", "cov": 0.0, "bugs": 0, "vuln": 0, "smells": 0, "ncloc": 31, "last": "2026-08-07"}, "pushed": "2026-08-07", "dash": null}, {"name": "spring-petclinic", "desc": "A sample Spring-based application", "lang": "CSS", "fork": false, "st": "warn", "why": "최근 CI 9회 중 1회 실패 · Sonar 취약점 18건", "n": 9, "ok": 8, "hist": [0, 1, 1, 1, 1, 1, 1, 1, 1], "sq": {"gate": "OK", "cov": 57.1, "bugs": 2, "vuln": 18, "smells": 69, "ncloc": 1778, "last": "2026-11-20"}, "pushed": "2026-08-07", "dash": {"pass": 1.0, "line": 0.41515151515151516, "gate": "OK", "hot": "Owner.getPet", "href": "/_design/project/", "runs": 5, "sq": "게이트 통과 · 57.1% (spring-petclinic-td)"}}]</script>
+<script>
+(function(){
+  "use strict";
+  var D = JSON.parse(document.getElementById("data").textContent);
+  var ORDER = {crit:0, warn:1, none:2, good:3};
+  var LABEL = {crit:"위험", warn:"주의", good:"양호", none:"측정 없음"};
+  var filter = "all", query = "", sortKey = "st", sortDir = 1, selected = null;
+  function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+  function pct(v){ return v == null ? "—" : (Math.round(v * 1000) / 10).toFixed(1) + "%"; }
+  function rate(r){ return r.n ? r.ok / r.n : null; }
+  function count(st){ return D.filter(function(r){ return r.st === st; }).length; }
+
+  var crit = D.filter(function(r){ return r.st === "crit"; }), warn = count("warn"), none = count("none");
+  var parts = [];
+  if (crit.length) parts.push("<em>" + crit.length + "개가 위험</em>");
+  if (warn) parts.push("<i>" + warn + "개가 주의</i>");
+  document.getElementById("headline").innerHTML = "과제 " + D.length + "개 중 " + (parts.length ? parts.join(", ") + "입니다" : "문제 있는 과제가 없습니다");
+  document.getElementById("lede").textContent = (crit.length ? "위험 과제는 Sonar 게이트 실패이거나 최신 커밋의 CI가 깨진 상태입니다. " : "") +
+    (none ? none + "개는 CI와 Sonar 기록이 모두 없어 판정할 수 없습니다." : "");
+
+  var totalN = D.reduce(function(a, r){ return a + r.n; }, 0), totalOk = D.reduce(function(a, r){ return a + r.ok; }, 0);
+  var sq = D.filter(function(r){ return r.sq; }), gateOk = sq.filter(function(r){ return r.sq.gate === "OK"; }).length;
+  var covN = sq.filter(function(r){ return r.sq.cov > 0; }).length;
+  document.getElementById("sum").innerHTML =
+    "<div><span>CI 성공률 (과제별 최근 30회까지 합산)</span><b>" + pct(totalOk / totalN) + "</b><small>" + totalOk + " / " + totalN + "회</small></div>" +
+    "<div><span>Sonar 게이트 통과</span><b>" + gateOk + " / " + sq.length + "</b><small>Sonar 연결 " + sq.length + "개</small></div>" +
+    "<div><span>커버리지가 0보다 큰 과제</span><b>" + covN + " / " + D.length + "</b></div>" +
+    "<div><span>판정할 수 없는 과제</span><b>" + none + "</b><small>CI·Sonar 모두 없음</small></div>";
+
+  var COLS = [["st","상태"],["name","과제"],["why","왜 이 상태인가"],["rate","CI 성공률","n"],["gate","Sonar 게이트"],["cov","커버리지","n"],["issues","버그 · 취약점","n"],["hist","최근 CI 이력"],["pushed","최근 변경"]];
+  function val(r, k){
+    if (k === "st") return ORDER[r.st];
+    if (k === "rate") return rate(r);
+    if (k === "gate") return r.sq ? (r.sq.gate === "ERROR" ? 0 : 1) : null;
+    if (k === "cov") return r.sq ? r.sq.cov : null;
+    if (k === "issues") return r.sq ? -(r.sq.vuln * 1000 + r.sq.bugs) : null;
+    return r[k];
+  }
+  function renderHead(){
+    document.getElementById("head").innerHTML = COLS.map(function(c){
+      var sortable = c[0] !== "hist" && c[0] !== "why";
+      var aria = sortKey === c[0] ? ' aria-sort="' + (sortDir > 0 ? "ascending" : "descending") + '"' : "";
+      return "<th" + (c[2] ? ' class="n"' : "") + aria + ">" + (sortable ? '<button type="button" data-k="' + c[0] + '">' + c[1] + "</button>" : c[1]) + "</th>";
+    }).join("");
+  }
+  function renderTools(){
+    var opts = [["all","전체",D.length,""],["crit","위험",crit.length,"var(--crit)"],["warn","주의",warn,"var(--warn)"],["good","양호",count("good"),"var(--good)"],["none","측정 없음",none,"var(--muted)"]];
+    document.getElementById("tools").innerHTML = opts.map(function(o){
+      return '<button type="button" class="chip" data-f="' + o[0] + '" aria-pressed="' + (filter === o[0]) + '"' + (o[3] ? ' style="--c:' + o[3] + '"' : "") + ">" + o[1] + " <b>" + o[2] + "</b></button>";
+    }).join("") + '<input type="search" id="q" placeholder="과제 이름으로 거르기" aria-label="과제 이름으로 거르기" value="' + esc(query) + '">';
+  }
+  function sonarCell(r){
+    if (!r.sq) return '<span class="dim">연결 없음</span>';
+    return r.sq.gate === "ERROR" ? '<b style="color:var(--crit)">실패</b>' : r.sq.gate === "OK" ? "통과" : '<span class="dim">—</span>';
+  }
+  function renderRows(){
+    var list = D.filter(function(r){ return (filter === "all" || r.st === filter) && r.name.toLowerCase().indexOf(query.toLowerCase()) >= 0; });
+    list.sort(function(a, b){
+      var x = val(a, sortKey), y = val(b, sortKey);
+      if (x == null && y == null) return a.name.localeCompare(b.name);
+      if (x == null) return 1; if (y == null) return -1;
+      var c = x < y ? -1 : x > y ? 1 : 0;
+      return c ? c * sortDir : a.name.localeCompare(b.name);
+    });
+    document.getElementById("empty").hidden = list.length > 0;
+    document.getElementById("rows").innerHTML = list.map(function(r){
+      var hist = r.hist.map(function(h){ return h ? "<i></i>" : '<i class="f"></i>'; }).join("");
+      return '<tr tabindex="0" aria-expanded="' + (selected === r.name) + '" data-name="' + esc(r.name) + '"' + (selected === r.name ? ' class="sel"' : "") + ">" +
+        '<td><span class="caret" aria-hidden="true">▸</span><span class="st s-' + r.st + '">' + LABEL[r.st] + "</span></td>" +
+        '<td class="nm"><b>' + esc(r.name) + "</b>" + (r.lang ? '<span class="tag">' + esc(r.lang) + "</span>" : "") + (r.fork ? '<span class="tag">fork</span>' : "") + (r.dash ? '<span class="tag" style="color:var(--accent);border-color:var(--accent)">파이프라인</span>' : "") + "<small>" + esc(r.desc) + "</small></td>" +
+        '<td class="why">' + (r.why ? esc(r.why) : '<span class="dim">—</span>') + "</td>" +
+        '<td class="n">' + (r.n ? pct(rate(r)) + "<small>" + r.ok + " / " + r.n + "회</small>" : '<span class="dim">—</span>') + "</td>" +
+        "<td>" + sonarCell(r) + "</td>" +
+        '<td class="n">' + (r.sq && r.sq.cov != null ? r.sq.cov.toFixed(1) + "%" : '<span class="dim">—</span>') + "</td>" +
+        '<td class="n">' + (r.sq ? r.sq.bugs + " · " + (r.sq.vuln ? '<b style="color:var(--warn)">' + r.sq.vuln + "</b>" : "0") : '<span class="dim">—</span>') + "</td>" +
+        "<td>" + (hist ? '<div class="hist" title="왼쪽이 오래된 실행">' + hist + "</div>" : '<span class="dim">—</span>') + "</td>" +
+        '<td class="n">' + esc(r.pushed) + "</td></tr>" + (selected === r.name ? detail(r) : "");
+    }).join("");
+  }
+  function detail(r){
+    var color = {crit:"var(--crit)", warn:"var(--warn)", good:"var(--good)", none:"var(--muted)"}[r.st];
+    var advice = {crit:"이 사유부터 확인하세요.", warn:"당장 막힌 것은 아니지만 사유를 확인해 두세요.", good:"지금 할 일은 없습니다.", none:"CI나 Sonar를 연결해야 상태를 판정할 수 있습니다."}[r.st];
+    function cell(k, v){ return "<div><span>" + k + "</span><b>" + v + "</b></div>"; }
+    var cells = cell("CI 성공률", r.n ? pct(rate(r)) + " <small>" + r.ok + "/" + r.n + "</small>" : "—") + cell("Sonar 게이트", sonarCell(r));
+    if (r.sq) cells += cell("Sonar 커버리지", r.sq.cov != null ? r.sq.cov.toFixed(1) + "%" : "—") + cell("버그 · 취약점 · 코드 스멜", r.sq.bugs + " · " + r.sq.vuln + " · " + r.sq.smells) +
+      cell("코드 줄 수", r.sq.ncloc != null ? r.sq.ncloc.toLocaleString() : "—") + cell("Sonar 분석일", esc(r.sq.last));
+    if (r.dash) cells += cell("E2E 테스트 통과율", pct(r.dash.pass)) + cell("테스트별 귀속 커버리지", pct(r.dash.line)) + cell("hotspot 1위", esc(r.dash.hot)) + cell("파이프라인 실행", r.dash.runs + "회");
+    return '<tr class="detail"><td colspan="' + COLS.length + '"><div class="dwrap" style="--c:' + color + '">' +
+      '<div class="verdict"><b>' + LABEL[r.st] + (r.why ? " · " + esc(r.why) : "") + "</b>" + advice + "</div>" +
+      '<div class="dgrid">' + cells + "</div>" +
+      '<div class="dact">' + (r.dash ? '<a class="btn" href="' + esc(r.dash.href) + '">과제 페이지 열기</a>' : '<span class="dim">파이프라인을 아직 돌리지 않아 테스트별 커버리지·hotspot·TIA 리포트가 없습니다.</span>') +
+      '<button type="button" class="btn ghost" id="close">접기</button></div></div></td></tr>';
+  }
+  function all(){ renderHead(); renderRows(); }
+  document.addEventListener("click", function(e){
+    var t = e.target.closest("[data-f],[data-k],tr[data-name],#close");
+    if (!t) return;
+    if (t.id === "close") selected = null;
+    else if (t.dataset.f) { filter = t.dataset.f; renderTools(); }
+    else if (t.dataset.k) { if (sortKey === t.dataset.k) sortDir = -sortDir; else { sortKey = t.dataset.k; sortDir = 1; } }
+    else selected = selected === t.dataset.name ? null : t.dataset.name;
+    all();
+  });
+  document.addEventListener("keydown", function(e){
+    var t = e.target.closest && e.target.closest("tr[data-name]");
+    if (t && e.target === t && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); selected = selected === t.dataset.name ? null : t.dataset.name; all(); var again = document.querySelector('tr[data-name="' + t.dataset.name + '"]'); if (again) again.focus(); }
+  });
+  document.addEventListener("input", function(e){ if (e.target.id === "q") { query = e.target.value; renderRows(); } });
+  renderTools(); all();
+})();
+</script>
+</body></html>

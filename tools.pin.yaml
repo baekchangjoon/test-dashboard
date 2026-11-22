@@ -28,15 +28,17 @@ jqassistantSpring:
   artifact: jqassistant-spring-plugin
   version: 2.9.0
   sha256: '404148151a7ca9ea2a4c946911c9abf420b7182ae65b20c0ef550c90003914fb'
+# hotspot-analysis는 릴리스 jar가 아니라 고정 커밋을 S00이 소스에서 빌드한다(JDK 21, bootJar).
+# jarGlob에 맞는 jar 가운데 이름에 -plain이 없는 하나가 work/tools/hotspot.jar가 된다. sha256은 tools.lock에 기록한다.
 hotspot:
   repo: baekchangjoon/hotspot-analysis
-  version: 0.1.6
-  tag: v0.1.6
-  asset: hotspot-0.1.6.jar
-  sha256: '216f4195f7d941cc219d5e0e76a66890708213b8b8def5388364c1fd55c2ef67'
+  commit: a5baac6c59273838374fe8a3cebf39ccc876d5c4
+  jdk: 21
+  gradleTask: bootJar
+  jarGlob: 'build/libs/hotspot-*.jar'
 tia:
   repo: baekchangjoon/test-impact-analysis
-  commit: 634a4a3f160fd3e338f101fb984221ed6173b45f
+  commit: c4e6e9e2c18f52e3315cc90a6f98fa16506c9199
   jdk: 17
   gradleTask: ':tia-cli:installDist'
 bbtg:

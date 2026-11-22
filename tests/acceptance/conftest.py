@@ -173,6 +173,26 @@ def claude_call_log():
     return _claude_call_log
 
 
+# --- 브라우저 ---------------------------------------------------------------------------
+@pytest.fixture(scope="session")
+def playwright_instance():
+    """세션에 하나뿐인 `sync_playwright()`. 한 세션에서 sync_playwright를 두 번 열면 "Sync API inside the asyncio loop"로
+    실패하므로, 브라우저가 필요한 fixture는 모두 이것에서 chromium을 띄운다."""
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as playwright:
+        yield playwright
+
+
+@pytest.fixture(scope="session")
+def browser(playwright_instance):
+    """세션 공용 chromium(playwright). 세션이 끝나면 닫는다."""
+    instance = playwright_instance.chromium.launch()
+    try:
+        yield instance
+    finally:
+        instance.close()
+
+
 # --- docker ----------------------------------------------------------------------------
 @dataclass(frozen=True)
 class DockerSnap:
@@ -624,6 +644,50 @@ def baseline_run() -> SessionRun:
 @pytest.fixture(scope="session")
 def second_run() -> SessionRun:
     return load_session_run("second")
+
+
+@dataclass
+class BaselineSite:
+    """기준 run 세션 뒤의 운영 사이트(화면 재설계 REQ-130/131/139/140). 경로는 사이트 루트(접두 포함) 기준 상대 경로다."""
+    sut: str
+    run_id: str
+    project: str
+    run_dir: Path
+    domain: str
+    prefix: str = ""
+
+    @property
+    def run_path(self) -> str:
+        return f"suts/{self.sut}/runs/{self.run_id}/"
+
+    def url(self, path: str) -> str:
+        return f"https://reports.{self.domain}/{self.prefix}{path}"
+
+    def dash_url(self, path: str) -> str:
+        return f"https://dash.{self.domain}/{self.prefix}{path}"
+
+    def get(self, path: str, host: str = "reports") -> tuple[int, bytes]:
+        from helpers import https_get
+        return https_get(f"{host}.{self.domain}", self.domain, f"/{self.prefix}{path}")
+
+
+@pytest.fixture(scope="session")
+def baseline_site(baseline_run, local_env) -> BaselineSite:
+    """세션 파일의 기준 run과 운영 `projects.json`에서 찾은 그 SUT의 과제. 인덱스 전용 게시 기록이 없거나 failed면 실패한다
+    (요구사항명세 §0: 기준 run 세션은 두 run 뒤 인덱스 전용 게시 한 번까지다)."""
+    index_publish = baseline_run.session.get("indexPublish")
+    if not index_publish or index_publish.get("status") not in ("passed", "degraded"):
+        pytest.fail(f"세션 파일의 인덱스 전용 게시 기록이 없거나 성공이 아니다: {index_publish!r} ({SESSION_FILE})", pytrace=False)
+    site = BaselineSite(sut=baseline_run.session["sut"], run_id=baseline_run.run_id, project="",
+                        run_dir=baseline_run.run_dir, domain=local_env["TD_DOMAIN"], prefix=baseline_run.prefix)
+    status, body = site.get("projects.json")
+    if status != 200:
+        pytest.fail(f"운영 projects.json을 읽지 못했다: HTTP {status}", pytrace=False)
+    linked = [entry["name"] for entry in json.loads(body)["projects"] if entry.get("sut") == site.sut]
+    if len(linked) != 1:
+        pytest.fail(f"운영 projects.json에서 SUT {site.sut}와 이어진 과제가 하나가 아니다: {linked}", pytrace=False)
+    site.project = linked[0]
+    return site
 
 
 @pytest.fixture

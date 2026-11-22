@@ -20,7 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from td.site.pages import STATIC_DIR, jinja_env, json_for_script, slug
+from td.site.pages import APP_CSS, copy_app_css, jinja_env, json_for_script, slug, static_href_of
 
 AGGREGATE_PREFIX = "aggregate"
 JACOCO_TIMEOUT = 600
@@ -453,15 +453,18 @@ def blackbox_pass_kpi(suite_json: dict, suite: str = "blackbox") -> dict | None:
 
 
 # --- 화면 ---------------------------------------------------------------------------------
-def render_page(out_dir, coverage: dict, css_href: str = "site.css", copy_css: bool = True) -> Path:
-    """coverage.json 내용으로 `coverage.html`을 만든다. 데이터는 페이지에 내장하고 TC 상세와 소스는 지연 로드한다."""
+def render_page(out_dir, coverage: dict, css_href: str = APP_CSS, copy_css: bool = True,
+                nav_html: str | None = None) -> Path:
+    """coverage.json 내용으로 `coverage.html`을 만든다. 데이터는 페이지에 내장하고 TC 상세와 소스는 지연 로드한다.
+    css_href는 불러올 스타일 파일 주소다. copy_css=True(단독 열람)면 같은 디렉터리에 app.css를 둔다. 사이트 조립은
+    copy_css=False와 `…/static/v2/app.css`, 공통 띠(nav_html)를 넘긴다."""
     out_dir = Path(out_dir)
-    if copy_css:  # 단독 열람용: 같은 디렉터리의 site.css를 참조한다. 사이트 조립(Task 7)은 copy_css=False와 css_href를 넘긴다.
-        shutil.copy2(STATIC_DIR / "site.css", out_dir / "site.css")
+    if copy_css:
+        copy_app_css(out_dir)
     template = jinja_env().get_template("coverage.html.j2")
     heat_max = max((n for suite in coverage["suites"].values() for tc in suite["tcs"] for n in tc["classCounts"].values()), default=1)
-    html = template.render(coverage=coverage, css_href=css_href, heat_max=heat_max, data_json=json_for_script(coverage),
-                           short=lambda src: Path(src).stem)
+    html = template.render(coverage=coverage, css_href=css_href, static_href=static_href_of(css_href), nav_html=nav_html,
+                           heat_max=heat_max, data_json=json_for_script(coverage), short=lambda src: Path(src).stem)
     target = out_dir / "coverage.html"
     target.write_text(html)
     return target

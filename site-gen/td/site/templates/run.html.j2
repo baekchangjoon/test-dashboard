@@ -1,31 +1,46 @@
-{% extends "base.html.j2" %}
+{% extends "base_v2.html.j2" %}
 {% block title %}실행 결과 상세{% endblock %}
-{% block header %}<strong><a href="{{ home_href }}">test-dashboard</a></strong> / <a href="{{ sut_href }}">{{ run.sut }}</a>{% endblock %}
+{# 맨 위 경로는 공통 띠(nav_html)가 그린다. 띠가 없을 때만 이 경로를 쓴다. #}
+{% block crumbs %}<span class="crumb"><a href="{{ home_href }}">test-dashboard</a> › <a href="{{ sut_href }}">{{ run.sut }}</a> › <b>run</b></span>{% endblock %}
 {% block content %}
+<div>
+<div class="eyebrow">실행 결과</div>
 <h1>run {{ run.runId }}</h1>
-<p class="muted">SUT {{ run.sut }} · 커밋 {{ run.commit }} · 시작 {{ run.startedAt }}{% if run.finishedAt %} · 종료 {{ run.finishedAt }}{% endif %}</p>
+<p class="lede">SUT {{ run.sut }} · 커밋 {{ run.commit }} · 시작 {{ run.startedAt }}{% if run.finishedAt %} · 종료 {{ run.finishedAt }}{% endif %}</p>
+</div>
 
-<h2>리포트</h2>
-{% if links %}
-<ul id="reports">
-{% for link in links %}  <li><a href="{{ link.href }}">{{ link.label }}</a></li>
+<section class="card" aria-labelledby="stages-title">
+<h2 id="stages-title">파이프라인 14단계 <span class="dim">전체 {{ total_duration }} · 칸 너비는 걸린 시간</span></h2>
+<div id="stage-strip" class="stages" role="group" aria-label="단계 고르기">
+{% for item in stage_items %}
+<button type="button" class="{{ item.css }}" data-stage="{{ item.id }}" data-status="{{ item.status or 'none' }}" aria-pressed="{{ 'true' if item.id == selected_stage else 'false' }}" aria-controls="stage-detail" style="--w:{{ item.width }}" title="{{ item.id }} {{ item.label }} · {{ item.statusText }} · {{ item.duration }}">{{ item.id[1:] }}</button>
 {% endfor %}
-</ul>
-{% else %}
-<p class="muted">게시된 리포트가 없다.</p>
+</div>
+<div id="stage-detail" class="stagebox" aria-live="polite">
+{% for item in stage_items %}
+<p class="stage-item{{ ' on' if item.id == selected_stage else '' }}" data-detail="{{ item.id }}"><b>{{ item.id }} {{ item.label }}</b><span class="st {{ item.css }}">{{ item.statusText }}</span><span>{{ item.duration }}</span><span class="stage-reason">{{ item.reason }}</span></p>
+{% endfor %}
+</div>
+</section>
+
+<section class="card" aria-labelledby="reports-title">
+<h2 id="reports-title">리포트</h2>
+{% if unmatched_missing %}
+<div class="notice">{% for item in unmatched_missing %}<p class="nav-missing">공통 띠 없음 · {{ item.file }} · {{ item.reason }}</p>{% endfor %}</div>
 {% endif %}
-
-<h2>단계</h2>
-<div class="scroll"><table id="stages">
-<thead><tr><th>단계</th><th>상태</th><th>사유</th></tr></thead>
-<tbody>
-{% for stage_id, stage in stages.items() %}
-  {% set shown = "publishing" if stage_id == "S13" else stage.status %}
-  <tr data-stage="{{ stage_id }}"><td>{{ stage_id }}</td><td class="st-{{ shown }}">{{ shown }}</td><td style="white-space: normal">{{ "" if stage_id == "S13" else (stage.reason or "") }}</td></tr>
+{% if cards %}
+<div id="reports" class="links">
+{% for card in cards %}
+<div class="report-card{{ ' has-missing' if card.missing else '' }}" data-report="{{ card.href }}"><a href="{{ card.href }}">{{ card.label }}{% if card.note %}<small>{{ card.note }}</small>{% endif %}</a>{% for item in card.missing %}<small class="nav-missing">공통 띠 없음 · {% if item.file != card.href %}{{ item.file }} · {% endif %}{{ item.reason }}</small>{% endfor %}</div>
 {% endfor %}
-</tbody></table></div>
+</div>
+{% else %}
+<p class="dim">게시된 리포트가 없다.</p>
+{% endif %}
+</section>
 
-<h2>게시 결과(S13)</h2>
-<div id="publish-result" data-url="{{ publish_log_url }}"><p class="muted">게시 결과 없음</p></div>
+<section class="card" aria-labelledby="publish-title">
+<h2 id="publish-title">게시 결과(S13)</h2>
+<div id="publish-result" data-url="{{ publish_log_url }}"><p class="dim">게시 결과 없음</p></div>
+</section>
 {% endblock %}
-{% block scripts %}<script src="{{ js_href }}"></script>{% endblock %}

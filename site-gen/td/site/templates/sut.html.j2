@@ -1,22 +1,27 @@
-{% extends "base.html.j2" %}
-{% block title %}{{ sut }} 품질 현황{% endblock %}
-{% macro pct(value) %}{% if value is number %}{{ "%.1f"|format(value * 100) }}%{% else %}—{% endif %}{% endmacro %}
-{% block header %}<strong><a href="{{ home_href }}">test-dashboard</a></strong> / {{ sut }}{% endblock %}
-{% block content %}
-<h1>{{ sut }}</h1>
-<h2>KPI 추이</h2>
-<div class="cards">
-{% for chart in charts %}<div class="card">{{ chart | safe }}</div>
-{% endfor %}
+<!doctype html>
+{# SUT 안내 페이지(설계 §5.5, §6.4): run 페이지의 공통 띠가 가리키는 바뀌지 않는 주소 suts/<sut>/index.html에서
+   지금의 과제 페이지로 보낸다. 링크(a#to-project)와 meta refresh는 같은 주소다. #}
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="refresh" content="0; url={{ target }}">
+<title>{{ sut }} 안내 페이지</title>
+<link rel="stylesheet" href="{{ static_href }}app.css">
+</head>
+<body>
+<div class="top"><div class="wrap"><strong>test-dashboard</strong></div></div>
+<main class="wrap">
+<div class="card">
+{% if project_name %}
+<p>SUT {{ sut }}의 결과는 과제 페이지에 있습니다. 잠시 뒤 자동으로 이동합니다.</p>
+<p><a id="to-project" href="{{ target }}">{{ project_name }} 과제 페이지로 가기</a></p>
+{% else %}
+<p>SUT {{ sut }}의 과제 페이지가 없습니다. 첫 화면으로 이동합니다.</p>
+<p><a id="to-project" href="{{ target }}">첫 화면으로 가기</a></p>
+{% endif %}
 </div>
-<h2>run 이력</h2>
-<div class="scroll"><table id="runs">
-<thead><tr><th>run</th><th>커밋</th><th>시작(UTC)</th><th class="num">통과율</th><th class="num">귀속 라인</th><th>Sonar</th><th>실패 단계</th></tr></thead>
-<tbody>
-{% for run in runs %}
-  <tr><td><a href="runs/{{ run.runId }}/index.html">{{ run.runId }}</a></td><td>{{ run.commit }}</td><td>{{ run.startedAt }}</td>
-  <td class="num">{{ pct(run.kpis.passRate) }}</td><td class="num">{{ pct(run.kpis.line) }}</td><td>{{ run.kpis.sonarGate or "—" }}</td>
-  <td>{{ run.stages.items() | selectattr(1, "equalto", "failed") | map(attribute=0) | join(", ") or "—" }}</td></tr>
-{% endfor %}
-</tbody></table></div>
-{% endblock %}
+</main>
+</body>
+</html>

@@ -133,11 +133,12 @@ sonar: { projectKey: spring-petclinic-td, cmd_build: "./gradlew --no-daemon buil
 - 인증 정보는 환경 변수로만 받는다. petclinic 기본값은 `infra/local.env`에 둔다.
 
 ### 6.1 S00 prepare
+> 화면 재설계(`docs/superpowers/specs/2026-11-22-dashboard-ui-design.md`)가 이 절을 고쳤다: hotspot-analysis를 커밋 고정 + 소스 빌드로 받는다(재설계 §6.5).
 - `work/suts/<name>/src`에 전체 히스토리로 clone하고 run의 `commit`을 고정한다.
 - 도구를 `work/tools/`에 확보하고 `tools.lock`에 버전, 해시, 커밋을 기록한다.
   - pjacoco agent 2.0.0. 내장 jacoco-core 버전을 읽어 같은 버전의 jacococli를 받는다.
   - jQAssistant CLI 2.9.1과 Spring 플러그인(호환 버전 고정, `ontology/jqa/.jqassistant.yml`)
-  - hotspot-analysis 릴리스 jar
+  - hotspot-analysis(고정 커밋 clone 후 JDK 21로 `./gradlew bootJar`, 빌드한 jar를 `hotspot.jar`로 복사. `tools.lock`에는 커밋과 jar의 sha256)
   - TIA(고정 커밋 clone 후 `:tia-cli:installDist`)
   - bbtg(고정 커밋 clone, 전용 venv에 `requirements.txt` 설치)
 - S00은 도구 버전과 jQA 플러그인 목록을 출력해 검증한다. bbtg는 비공개라서 공개 레포만으로는 재현할 수 없다. 이 한계는 README에 적는다.
@@ -242,10 +243,12 @@ sonar: { projectKey: spring-petclinic-td, cmd_build: "./gradlew --no-daemon buil
 - `coverage.html`: 스위트 요약 카드, TC × 클래스 히트맵, TC 표(정렬·필터), TC 상세(소스 뷰어)
 
 ### 6.10 S09 hotspot
+> 화면 재설계(`docs/superpowers/specs/2026-11-22-dashboard-ui-design.md`)가 이 절을 고쳤다: 도구 HTML에 공통 띠를 끼운다(재설계 §5.5).
 - JDK 21로 실행한다. `suts/<name>/hotspot.yml.tmpl`을 run별 절대 경로로 렌더링해 `work/runs/<runId>/hotspot/hotspot.yml`을 만든다. 설정 키는 `analysis.apiAnalysis.enabled: true`, `analysis.apiAnalysis.classpathDirectories: [<classes>]`, `analysis.jacocoReportPath: <S08 aggregate 병합 XML>`이다.
-- 도구가 만든 HTML을 그대로 게시하고, 상위 10개를 카드용으로 요약한다.
+- 도구가 만든 HTML에 공통 띠(과제·run·다른 리포트 링크)를 `<body>` 바로 뒤에 끼워 게시하고, 상위 10개를 카드용으로 요약한다. `<body>`가 없는 파일은 띠 없이 게시하고 run 페이지에 사유를 적으며 S13은 `degraded`다.
 
 ### 6.11 S10 TIA
+> 화면 재설계(`docs/superpowers/specs/2026-11-22-dashboard-ui-design.md`)가 이 절을 고쳤다: `tia report`에 `--impact`를 넘긴다(재설계 §6.5).
 - 사전 검사: `tia.range`의 base를 first-parent로 해석해 기록한다. base에 `blackbox` 태스크와 per-test 확장이 없으면 블랙박스 스위트는 건너뛴다(사유 기록).
 - 절차(`--db work/runs/<runId>/tia/tia.db`):
   1. base 커밋을 `work/runs/<runId>/tia/base`에 git worktree로 만든다. `trap`에 `git worktree remove --force`를 넣는다.
@@ -253,7 +256,7 @@ sonar: { projectKey: spring-petclinic-td, cmd_build: "./gradlew --no-daemon buil
   3. `tia convert --exec-dir <base exec> --classes <base>/build/classes/java/main --out testwise.json`
   4. `tia index --report testwise.json --repo <sut> --commit <base> --db …`
   5. HEAD clone에서 `git diff <base>..<head> > base-head.diff`를 만들고 `tia impact --db … --commit <base> --diff-file base-head.diff --format json > scenarios.json`을 실행한다.
-  6. `tia report --testwise testwise.json --scenarios scenarios.json --commit <base> --out tia.html`
+  6. `tia report --testwise testwise.json --scenarios scenarios.json --impact impact.json --commit <base> --out tia.html`(`impact.json`은 5단계 `tia impact --format json`의 출력)
 - 이번 범위(HEAD~10)는 사실상 Reservation 기능 추가 전체라서 신규 파일이 많다. TIA는 이런 경우 보수적으로 전체 선택하는 것이 정상 동작이며, 리포트 해석에 이를 적는다.
 
 ### 6.12 S12 비교와 판정 기준 (사전 등록)
@@ -276,11 +279,12 @@ sonar: { projectKey: spring-petclinic-td, cmd_build: "./gradlew --no-daemon buil
 - `compare.html`: arm × 지표 표, generation별 점 그래프, 판정 결과와 한계 서술
 
 ### 6.13 S11 SonarQube
+> 화면 재설계(`docs/superpowers/specs/2026-11-22-dashboard-ui-design.md`)가 이 절을 고쳤다: 임시 토큰을 S11 밖(수집기)에서도 쓰고, 토큰 이름 규칙이 늘어난다(재설계 §6.3).
 - **전용 프로젝트 키 `spring-petclinic-td`**를 쓴다. 없으면 API로 만들고, 분석은 그 프로젝트의 main 브랜치에 누적한다. 사용자는 기존 CI가 일부 깨지는 것을 허용했지만, 전용 키가 비용 없이 이력 혼선을 막으므로 유지한다.
-- 토큰 수명 관리(`pipeline/lib/sonar-token.sh`, 이번 세션 한정 승인):
+- 토큰 수명 관리(`pipeline/lib/sonar-token.sh`, 이번 세션 한정 승인). 발급·정리 함수는 단계에 묶이지 않고 호출자가 토큰 이름과 정리 실패 처리를 넘긴다. S11과 수집기(`pipeline/collect.sh`)가 같은 함수를 쓴다:
   1. 사전 확인: DB에서 `user_tokens` 스키마를 조회하고 해시 방식을 확인한다. aws-resource-controller 세션 기록으로는 SHA-384이고, 만든 토큰으로 `api/authentication/validate`를 호출해 실제로 검증한다. 맞지 않으면 S11은 `failed`다.
   2. 사전 청소: §13.3으로 대체(만료된 `td-%` 행만).
-  3. 발급: 무작위 토큰의 해시를 `admin` 사용자로 INSERT한다. 이름은 `td-<runId>`, `expiration_date`는 지금부터 2시간 뒤로 한다(2차 방어선).
+  3. 발급: 무작위 토큰의 해시를 `admin` 사용자로 INSERT한다. 이름은 S11이 `td-<runId>`, 수집기가 `td-collect-<UTC시각>-<난수>`이고, `expiration_date`는 지금부터 2시간 뒤로 한다(2차 방어선).
   4. 정리: `trap`으로 DELETE한 뒤 0행인지 확인한다. 정리용 SSH가 실패하면 run을 `failed`로 하고, 콘솔에 "토큰 잔존 가능, 2시간 후 만료"를 크게 출력한다.
   5. 토큰 값은 로그와 산출물에 남기지 않는다(환경 변수로만 전달).
 - 스캔: `cmd_build`와 `cmd_scan`을 따로 호출한다(Gradle 9 implicit-dependency 문제 회피). 인자는 다음과 같다.
@@ -294,26 +298,28 @@ sonar: { projectKey: spring-petclinic-td, cmd_build: "./gradlew --no-daemon buil
   - 결과를 `sonar.json`으로 저장하고 `sonar.html`로 렌더링한다. 각 항목은 Sonar 서버 페이지로 링크한다.
 
 ### 6.14 S13 게시와 누적
+> 화면 재설계(`docs/superpowers/specs/2026-11-22-dashboard-ui-design.md`)가 이 절을 고쳤다: 사이트 구조, 인덱스 재생성의 입력(설정, 수집 스냅숏), run 없이 인덱스만 게시하는 경로(재설계 §6.4, §6.6).
 - run 디렉터리는 **불변**이다. `run.json`을 포함해 한 번 올린 run 파일은 다시 쓰지 않는다.
   - `run.json` 필드: `{runId, sut, commit, branch, trigger, pr, startedAt, finishedAt, tz, stages, kpis:{<suite>:{…}}, arms, tools, inputs}`
 - **원본은 S3**다. Lightsail은 미러다.
 - 게시 절차(`pipeline/S13-publish.sh`):
   1. 잠금: §13.1로 대체(자동 만료 없음).
   2. 새 run 디렉터리를 S3에 업로드한다. 객체마다 `If-None-Match: *`로 올린다. 이미 있으면 실패다.
-  3. 인덱스 재생성: S3의 `suts/*/runs/*/run.json` 목록에서 `runs.json`, `suts.json`, 각 index HTML을 다시 만든다(덧붙이기가 아니라 재생성이므로 멱등).
+  3. 인덱스 단계: 미러를 S3와 맞춘 뒤 수집기(`pipeline/collect.sh`)가 `projects/<name>/` 아래에 스냅숏을 쓰고, `dashboard.yaml`과 미러(완료된 run, 스냅숏)에서 `runs.json`, `suts.json`, `projects.json`, 홈, 과제 페이지, SUT 안내 페이지를 다시 만든다(덧붙이기가 아니라 재생성이므로 멱등). 설정에 없거나 공개가 아닌 과제의 `projects/<name>/`는 지운다. 같은 인덱스 단계를 run 없이 도는 인덱스 전용 게시(`pipeline/publish-index.sh`)가 있다.
   4. 인덱스를 업로드한다. `Cache-Control`은 인덱스와 JSON이 `no-cache`, run 디렉터리가 `max-age=31536000, immutable`이다. CloudFront는 인덱스 경로만 무효화한다.
   5. 로컬 미러 `work/site-mirror/`를 S3와 동기화한 뒤 Lightsail로 `rsync -az`한다. run 디렉터리는 `--ignore-existing`으로 올린다.
   6. 호스트별 결과를 `suts/<sut>/publish-log.json`에 기록한다(인덱스 파일이므로 갱신 가능). Lightsail이 실패해도 다음 게시의 5단계가 전체를 다시 동기화해 따라잡는다.
   7. 잠금을 해제한다(`trap`).
 - 사이트 구조:
   ```
-  index.html, suts.json, hosting.html
-  suts/<sut>/index.html, runs.json, publish-log.json
+  index.html, projects.json, suts.json, hosting.html
+  projects/<name>/index.html, series.json, latest.json, snapshots/<YYYYMMDD>.json
+  suts/<sut>/index.html(과제 페이지로 안내), runs.json, publish-log.json
   suts/<sut>/runs/<runId>/index.html, run.json
   suts/<sut>/runs/<runId>/{ontology,coverage,hotspot,tia,sonar,cucumber/<genId>,compare}/…
   ```
 - 크기: run 크기를 KPI로 기록하고, 200MB를 넘으면 경고한다. 보존 정책은 이번에는 전부 보존한다.
-- 홈 KPI의 원천(`run.json.kpis`): 테스트 통과율은 S08이 쓰는 `kpis.tests`(기존 블랙박스 IT의 TC 결과 중 skipped를 뺀 passed 비율. 생성 E2E 스위트는 실험 데이터라 넣지 않고 arm별 통과율은 `compare.json`에 있다), 귀속 라인 커버리지는 `kpis.blackbox.line`, Sonar 게이트는 `kpis.sonar.gate`, hotspot 1위는 `stages/S09.json.top10[0]`이다(Task 25에서 `kpis.tests` 누락을 발견해 추가).
+- 과제 페이지 '한눈에'와 홈 과제 데이터의 run 값 원천(`run.json.kpis`): 테스트 통과율은 S08이 쓰는 `kpis.tests`(기존 블랙박스 IT의 TC 결과 중 skipped를 뺀 passed 비율. 생성 E2E 스위트는 실험 데이터라 넣지 않고 arm별 통과율은 `compare.json`에 있다), 귀속 라인 커버리지는 `kpis.blackbox.line`, Sonar 게이트는 `kpis.sonar.gate`, hotspot 1위는 `stages/S09.json.top10[0]`이다(Task 25에서 `kpis.tests` 누락을 발견해 추가).
 - **정적 호스팅**(`infra/static/`, Terraform): 비공개 S3 버킷(퍼블릭 차단, OAC), CloudFront, ACM(us-east-1) `reports.<domain>`, Route53 alias
 - **Lightsail**(짧은 중단 허용, 사용자 승인 2026-11-18):
   - 기존 compose의 `caddy` 서비스에 `/srv/dashboard:/srv/dashboard:ro` 볼륨을 추가한다. Caddyfile에는 `dash.<domain> { root * /srv/dashboard; encode gzip; file_server }` 블록을 추가한다.
@@ -423,19 +429,22 @@ E2E는 `pipeline/run-all.sh petclinic`을 실제로 실행한 뒤 산출물과 �
 ## 13. v3 보정: 운영 계약 (요구사항명세 v2 리뷰 역전파)
 
 ### 13.1 게시 원자성과 잠금 (§6.14 대체)
-- 업로드 순서: ① run 파일을 `suts/<sut>/runs/<runId>/`에 객체별 `If-None-Match: *`로 올린다. 이미 있는 객체는 체크섬이 같으면 건너뛰고(재시도 허용), 다르면 실패한다. ② 모든 객체를 체크섬 manifest와 대조한다. ③ `_COMPLETE` 표식을 조건부로 만든다. ④ 인덱스를 재생성한다.
+> 화면 재설계(`docs/superpowers/specs/2026-11-22-dashboard-ui-design.md`)가 이 절을 고쳤다: ④가 수집을 포함한 인덱스 단계가 되고, 인덱스 전용 게시도 같은 잠금을 쓴다(재설계 §6.4).
+- 업로드 순서: ① run 파일을 `suts/<sut>/runs/<runId>/`에 객체별 `If-None-Match: *`로 올린다. 이미 있는 객체는 체크섬이 같으면 건너뛰고(재시도 허용), 다르면 실패한다. ② 모든 객체를 체크섬 manifest와 대조한다. ③ `_COMPLETE` 표식을 조건부로 만든다. ④ 인덱스 단계(수집 → 재생성 → 빠진 과제 삭제 → 업로드)를 돈다.
 - 인덱스는 `_COMPLETE`가 있는 run만 읽는다. 표식 없이 남은 run은 같은 runId로 재시도하면 이어서 완료할 수 있다. 표식이 있는 runId를 다시 게시하면 실패한다.
-- 잠금: `locks/publish` 객체에 `{attemptId, owner(host,pid), acquiredAt}`를 조건부 PUT한다. 자동 만료는 없다. 남은 잠금은 `--force-unlock <attemptId>`로만 지우고, 지우기 전에 attemptId 일치를 확인한다. 지금은 수동 실행이라 자동 회수는 범위 밖이다.
+- 잠금: `locks/publish` 객체에 `{attemptId, owner(host,pid), acquiredAt}`를 조건부 PUT한다. 자동 만료는 없다. 인덱스 전용 게시도 같은 잠금을 잡고, 잠금이 잡혀 있으면 나중 게시는 기다리지 않고 실패한다. 남은 잠금은 `--force-unlock <attemptId>`로만 지우고, 지우기 전에 attemptId 일치를 확인한다. 지금은 수동 실행이라 자동 회수는 범위 밖이다.
 - 게시된 `run.json`의 S13 상태는 `publishing`이다. 최종 S13 결과는 로컬 `stages/S13.json`과 `publish-log.json`이 기준이다. S13은 `--only`에 없으면 실행하지 않는다.
 
 ### 13.2 수용 테스트 격리
-- `TD_SITE_PREFIX`가 있으면 S3 `<prefix>`와 Lightsail `/srv/dashboard/<prefix>` 아래에만 게시한다. 운영 인덱스의 SUT 목록과 KPI는 `_test/`를 집계하지 않는다. 주입 실행과 mini-sut은 `_test/<sessionId>/`에 게시하고 **지우지 않는다**(과정 확인용 보존, 사용자 결정). 홈 하단에 `_test/index.html`(세션 목록) 링크를 둔다.
+> 화면 재설계(`docs/superpowers/specs/2026-11-22-dashboard-ui-design.md`)가 이 절을 고쳤다: `_test` 목록 링크 위치(재설계 §5.1 각주).
+- `TD_SITE_PREFIX`가 있으면 S3 `<prefix>`와 Lightsail `/srv/dashboard/<prefix>` 아래에만 게시한다. 운영 인덱스의 과제 목록과 값은 `_test/`를 집계하지 않는다. 주입 실행과 mini-sut은 `_test/<sessionId>/`에 게시하고 **지우지 않는다**(과정 확인용 보존, 사용자 결정). 홈의 판정 규칙 각주 아래에 "테스트 실행 기록"(`_test/index.html`, 세션 목록) 링크를 둔다.
 - 장애 주입 훅: `TD_FAIL_STAGE=<ID>[:<point>]`(예: `S11:scan`, `S13:upload-mid`, `S13:lightsail`). 운영 경로에서는 쓰지 않는다.
 - mini-sut: `tests/fixtures/mini-sut`. 테스트 시점에 `work/fixtures/`로 복사해 `git init` 후 `--sut-file`로 지정한다.
 
 ### 13.3 Sonar 토큰 (§6.13 보정)
+> 화면 재설계(`docs/superpowers/specs/2026-11-22-dashboard-ui-design.md`)가 이 절을 고쳤다: 수집기 토큰의 정리 규칙을 더한다(재설계 §6.3).
 - 사전 청소는 `name LIKE 'td-%' AND expiration_date < now()`인 **만료된** 행만 지운다. 다른 run의 활성 토큰은 건드리지 않는다.
-- 종료 정리는 자기 토큰 `td-<runId>`만 지운다. 정리 SSH가 실패하면 S11은 `failed`이고, 토큰은 발급 2시간 뒤 서버에서 만료된다.
+- 종료 정리는 자기 토큰(`td-<runId>` 또는 `td-collect-…`)만 지운다. 정리 SSH가 실패하면 S11은 `failed`, 수집은 `degraded`이고, 토큰은 발급 2시간 뒤 서버에서 만료된다. Sonar를 읽을 과제가 없으면 수집기는 토큰을 발급하지 않는다.
 
 ### 13.4 LLM 격리 (§6.5 S05, §6.6 공통)
 - S05와 S06의 모든 `claude` 호출(수리 포함)은 같은 래퍼 `pipeline/lib/llm.sh`를 거친다. 래퍼는 다음을 지킨다.

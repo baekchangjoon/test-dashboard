@@ -1,0 +1,11 @@
+{# 실행 이력: run 목록(최신부터)과 단계별 수행 여부 #}
+<div class="card"><h3>실행 {{ view.rows|length }}회</h3>
+  <div class="scroll"><table id="runs">
+    <thead><tr><th>실행</th><th>시작(UTC)</th><th>단계</th><th class="n">통과율</th><th class="n">귀속 라인</th><th>Sonar</th></tr></thead>
+    <tbody>
+{% for row in view.rows %}
+      <tr data-run="{{ row.id }}"><td class="mono">{% if row.page %}<a class="report-link" data-report="{{ row.page.report }}" href="{{ row.page.href }}">{{ row.id }}</a>{% else %}{{ row.id }}{% endif %}</td><td>{{ row.at }}</td><td><div class="ministages" aria-label="단계별 수행 여부">{% for stage in row.stages %}<i class="{{ stage.css or 'x' }}" title="{{ stage.id }} {{ stage.status or '실행 안 함' }}"></i>{% endfor %}</div></td><td class="n">{{ row.passRate }}</td><td class="n">{{ row.line }}</td><td>{{ row.gate }}</td></tr>
+{% endfor %}
+    </tbody>
+  </table></div>
+</div>

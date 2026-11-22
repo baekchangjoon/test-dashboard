@@ -3,14 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>{{ title }}</title>
+{# 단독으로 열리도록 static/v2/app.css(그래프 전용 규칙 포함)를 인라인한다. 게시본은 <body> 뒤에 공통 띠가 주입되고,
+   띠 바로 뒤의 .top은 app.css가 숨긴다. #}
 <style>
-{{ site_css | safe }}
-{{ viz_css | safe }}
+{{ app_css | safe }}
 </style>
 </head>
 <body>
-<header class="site-header"><div class="wrap"><strong>test-dashboard</strong> / <a href="{{ back_href }}">run 상세</a></div></header>
+<div class="top"><div class="wrap"><strong>test-dashboard</strong><span class="crumb"><a href="{{ back_href }}">run 상세</a> › <b>{{ title }}</b></span></div></div>
 <main class="wrap">
 <h1>{{ title }}</h1>
 <p class="muted">도구 {{ meta.tool }} {{ meta.version }} · 커밋 {{ meta.commit }} · 노드 {{ node_count }} · 간선 {{ edge_count }}{% if meta.fallbacks %} · 대체 쿼리 {{ meta.fallbacks | join(", ") }}{% endif %}</p>

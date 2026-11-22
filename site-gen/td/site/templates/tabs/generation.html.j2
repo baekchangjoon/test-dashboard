@@ -1,0 +1,13 @@
+{# 생성 실험: 판정, 방식별 평균과 기준(방식 비교 리포트의 compare.json) #}
+<div class="card verdict-card"><h3 class="verdict-title">판정: {{ view.generation }} · {{ view.effect }} {% if view.link %}<a class="report-link" data-report="{{ view.link.report }}" href="{{ view.link.href }}">비교 리포트 열기 →</a>{% endif %}</h3>
+{% if view.label %}  <p class="sub">{{ view.label }}입니다. 방식 사이의 차이는 반복 간 편차와 함께 읽어야 합니다.</p>
+{% endif %}
+</div>
+<div class="card"><div class="scroll"><table id="arms">
+  <thead><tr><th>방식</th><th class="n">시나리오</th><th class="n">컴파일<br><span class="dim">{{ view.thresholds.compile or "" }}</span></th><th class="n">통과율<br><span class="dim">{{ view.thresholds.passed or "" }}</span></th><th class="n">엔드포인트 도달<br><span class="dim">{{ view.thresholds.endpoint or "" }}</span></th><th class="n">라인 커버리지</th><th class="n">토큰</th><th class="n">생성 시간</th></tr></thead>
+  <tbody>
+{% for row in view.rows %}
+    <tr data-arm="{{ row.arm }}"><td><span class="arm a-{{ row.arm }}">{{ row.arm }}</span>{% if row.status and row.status != "ok" %} <small class="dim">{{ row.status }}</small>{% endif %}</td>{% for cell in row.cells %}<td class="n {{ cell.css }}" data-col="{{ cell.name }}">{{ cell.text }}</td>{% endfor %}</tr>
+{% endfor %}
+  </tbody>
+</table></div></div>

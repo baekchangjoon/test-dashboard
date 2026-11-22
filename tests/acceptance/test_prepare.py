@@ -116,13 +116,14 @@ def test_req058_tools_lock_complete(s00):
     lock = s00.lock
     for tool in LOCK_TOOLS:
         assert tool in lock, f"tools.lock에 {tool}가 없다"
-    for tool in ("pjacoco", "jacococli", "jqassistant", "jqassistantSpring", "hotspot"):
+    for tool in ("pjacoco", "jacococli", "jqassistant", "jqassistantSpring"):
         assert lock[tool]["version"] and re.fullmatch(r"[0-9a-f]{64}", lock[tool]["sha256"]), (tool, lock[tool])
-    for tool in ("tia", "bbtg"):
+    for tool in ("hotspot", "tia", "bbtg"):
         assert re.fullmatch(r"[0-9a-f]{40}", lock[tool]["commit"]), (tool, lock[tool])
-    assert lock["tia"]["commit"].startswith("634a4a3") and lock["bbtg"]["commit"].startswith("83ea6fd")
+    assert lock["tia"]["commit"] == "c4e6e9e2c18f52e3315cc90a6f98fa16506c9199" and lock["bbtg"]["commit"].startswith("83ea6fd")
     assert lock["pjacoco"]["version"] == "2.0.0" and lock["jqassistant"]["version"] == "2.9.1"
-    assert lock["hotspot"]["version"] == "0.1.6"
+    assert lock["hotspot"]["commit"] == "a5baac6c59273838374fe8a3cebf39ccc876d5c4"
+    assert re.fullmatch(r"[0-9a-f]{64}", lock["hotspot"]["sha256"]) and lock["hotspot"]["path"].endswith("hotspot.jar")
     assert lock["jqassistantSpring"]["coordinates"].startswith("org.jqassistant.plugin:jqassistant-spring-plugin:")
     assert any("Spring" in plugin for plugin in lock["jqassistantSpring"]["plugins"]), "플러그인 목록에 Spring이 없다"
     spring = lock["jqassistantSpring"]
@@ -140,6 +141,16 @@ def test_req058_tools_lock_complete(s00):
     assert lock["model"] == configured  # _env()가 TD_*를 걸러내므로 S00이 쓴 유효 모델은 config.yaml 값이다
     assert lock["claude"]["verified"] is True
     assert lock["claude"]["model"] == lock["model"]
+
+
+def test_req129_hotspot_commit_build(s00):
+    pin = yaml.safe_load((REPO_ROOT / "tools.pin.yaml").read_text())["hotspot"]["commit"]
+    tools = s00.work / "tools"
+    head = subprocess.check_output(["git", "-C", str(tools / "hotspot-src"), "rev-parse", "HEAD"], text=True).strip()
+    assert len(pin) == 40 and head == pin and s00.lock["hotspot"]["commit"] == pin
+    assert (tools / "hotspot.jar").is_file()
+    assert s00.lock["hotspot"]["sha256"] == hashlib.sha256((tools / "hotspot.jar").read_bytes()).hexdigest()
+    assert s00.run_json["tools"]["hotspot"] == pin[:7]
 
 
 def test_req058_jacococli_matches_pjacoco_embedded_jacoco(s00):
@@ -225,16 +236,16 @@ def test_s00_reps_out_of_range_fails(tmp_path):
 
 def test_s00_tampered_pin_sha256_fails_and_keeps_cache(tmp_path):
     pin = yaml.safe_load((REPO_ROOT / "tools.pin.yaml").read_text())
-    good_sha = pin["hotspot"]["sha256"]
+    good_sha = pin["pjacoco"]["sha256"]
     text = (REPO_ROOT / "tools.pin.yaml").read_text().replace(good_sha, "0" * 64)
     pin_file = tmp_path / "tools.pin.yaml"
     pin_file.write_text(text)
     result = _run_s00(_isolated_work(tmp_path), None, TD_TOOLS_PIN=str(pin_file))
     assert result.returncode == 1, result.stderr[-2000:]
     reason = result.stage["reason"]
-    assert result.stage["status"] == "failed" and "hotspot.jar" in reason and "sha256" in reason
+    assert result.stage["status"] == "failed" and "pjacoco-agent.jar" in reason and "sha256" in reason
     assert not (result.run_dir / "tools.lock").exists()
-    assert _sha256(REAL_WORK / "tools" / "hotspot.jar") == good_sha, "검증 실패가 정상 캐시를 망가뜨리면 안 된다"
+    assert _sha256(REAL_WORK / "tools" / "pjacoco-agent.jar") == good_sha, "검증 실패가 정상 캐시를 망가뜨리면 안 된다"
 
 
 def test_s00_same_run_dir_retry_keeps_identical_lock(s00):

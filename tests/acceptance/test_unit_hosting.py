@@ -204,7 +204,7 @@ def test_unit_html_shows_values_and_follows_site_style():
     html = hosting.render_html(doc)
     assert "<title>호스팅 방식 비교</title>" in html
     for needle in ("42.0", "120.5", "3.21", "900", "880", "Sonar", doc["hosts"]["dash"]["qualitative"]["cost"]["asOf"],
-                   'href="static/site.css"', "viewport", "단일 표본", "route53-authoritative"):
+                   'href="static/v2/app.css"', "viewport", "단일 표본", "route53-authoritative"):
         assert needle in html, needle
     assert "var(--" in (REPO_ROOT / "site-gen/td/site/static/site.css").read_text()
     null_html = hosting.render_html(_build(_measures(ok=6, failed=4, median=None)))

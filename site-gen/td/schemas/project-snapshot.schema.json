@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "project snapshot (projects/<name>/snapshots/<date>.json)",
+  "type": "object",
+  "required": ["schema", "name", "repo", "visibility", "collectedAt", "date", "repoInfo", "sources", "ci", "sonar", "problems"],
+  "properties": {
+    "schema": {"const": 1},
+    "name": {"type": "string", "minLength": 1},
+    "repo": {"type": "string", "minLength": 1},
+    "visibility": {"const": "public"},
+    "collectedAt": {"type": "string", "minLength": 1},
+    "date": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "repoInfo": {
+      "type": "object",
+      "required": ["pushedAt", "language", "description", "defaultBranch"],
+      "properties": {
+        "pushedAt": {"type": "string"},
+        "language": {"type": ["string", "null"]},
+        "description": {"type": ["string", "null"]},
+        "defaultBranch": {"type": "string"}
+      }
+    },
+    "sources": {
+      "type": "object",
+      "required": ["ci", "sonar"],
+      "properties": {
+        "ci": {"enum": ["ok", "none", "failed"]},
+        "sonar": {"enum": ["ok", "absent", "failed", "skipped"]}
+      }
+    },
+    "ci": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "required": ["runs", "successes", "failures", "successRate", "lastFailed", "failedChecks", "failedCheckNames", "history"],
+          "properties": {
+            "runs": {"type": ["integer", "null"], "minimum": 0},
+            "successes": {"type": ["integer", "null"], "minimum": 0},
+            "failures": {"type": ["integer", "null"], "minimum": 0},
+            "successRate": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+            "lastFailed": {"type": ["boolean", "null"]},
+            "failedChecks": {"type": ["integer", "null"], "minimum": 0},
+            "failedCheckNames": {"type": "array", "items": {"type": "string"}},
+            "history": {"type": "array", "items": {"enum": [0, 1]}}
+          }
+        }
+      ]
+    },
+    "sonar": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "required": ["gate", "coverage", "bugs", "vulnerabilities", "codeSmells", "ncloc", "ratings"],
+          "properties": {
+            "gate": {"type": "string"},
+            "coverage": {"type": ["number", "null"]},
+            "bugs": {"type": ["integer", "null"], "minimum": 0},
+            "vulnerabilities": {"type": ["integer", "null"], "minimum": 0},
+            "codeSmells": {"type": ["integer", "null"], "minimum": 0},
+            "ncloc": {"type": ["integer", "null"], "minimum": 0},
+            "ratings": {
+              "type": "object",
+              "required": ["reliability", "security", "maintainability"],
+              "properties": {
+                "reliability": {"enum": ["A", "B", "C", "D", "E", null]},
+                "security": {"enum": ["A", "B", "C", "D", "E", null]},
+                "maintainability": {"enum": ["A", "B", "C", "D", "E", null]}
+              }
+            }
+          }
+        }
+      ]
+    },
+    "problems": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["source", "reason"],
+        "properties": {
+          "source": {"enum": ["ci", "sonar", "repo"]},
+          "reason": {"type": "string"}
+        }
+      }
+    }
+  }
+}

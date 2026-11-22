@@ -174,12 +174,10 @@ def coverage_url(s08_run):
 
 
 @pytest.fixture(scope="module")
-def browser():
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        instance = playwright.chromium.launch()
-        yield instance
-        instance.close()
+def browser(playwright_instance):
+    instance = playwright_instance.chromium.launch()
+    yield instance
+    instance.close()
 
 
 def test_req033_per_tc_view(s08_run, coverage_url, browser):
@@ -249,15 +247,23 @@ def test_req034_responsive(s08_run, coverage_url, browser):
 
 
 def test_req049_home_pass_rate_from_real_s08_output(s08_run, tmp_path):
-    """생산자(S08이 쓴 run.json.kpis) → 소비자(홈 렌더) 연결: fixture가 kpis를 직접 만들지 않는다.
+    """생산자(S08이 쓴 run.json.kpis) → 소비자(홈의 과제 데이터와 과제 페이지 렌더) 연결: fixture가 kpis를 직접 만들지 않는다.
     기대값은 JUnit XML에서 테스트가 다시 계산한다."""
     from helpers import make_site_run
     from td.blackbox import junit_results
+    from td import dashboard_config
     from td.site import index
+    from test_publish import linked_project, projects_island, runs_table, trend_panel
     sources = REPO_ROOT / "work" / "suts" / "petclinic" / "src" / SUT_YAML["blackbox"].get("test_sources", "src/test/java")
     counted = [r for r in junit_results(s08_run.run_dir / "S01" / "blackbox" / "junit", sources).values() if r != "skipped"]
     expected = f"{100 * sum(1 for r in counted if r == 'passed') / len(counted):.1f}%"
     make_site_run(tmp_path, "petclinic", s08_run.run_id, kpis=s08_run.run_json["kpis"])
-    index.rebuild(tmp_path)
+    # 등록된 과제가 없는 설정: petclinic은 SUT 이름의 암묵 과제로 그려진다(요구사항명세 2026-11-22 §3 REQ-049).
+    index.rebuild(tmp_path, config=dashboard_config.empty())
+    # 홈의 과제 데이터(페이지 안 JSON 블록 = projects.json)와 과제 페이지 '한눈에'의 서버 렌더 값이 같은 기대값이다.
     home = (tmp_path / "index.html").read_text()
-    assert f'<div class="kpi-item"><span class="muted">테스트 통과율</span><b>{expected}</b></div>' in home, expected
+    project = linked_project(projects_island(home), "petclinic")
+    assert f"{100 * project['values']['tests.passRate']:.1f}%" == expected, (project["values"]["tests.passRate"], expected)
+    project_page = (tmp_path / project["href"]).read_text()
+    assert f'data-metric="tests.passRate"><div><span>기존 테스트 통과율</span><b>{expected}</b>' in project_page, expected
+    assert f'data-run="{s08_run.run_id}"' in runs_table(project_page) and "<svg" in trend_panel(project_page)

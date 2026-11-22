@@ -1,0 +1,17 @@
+{# 추이(설계 §5.3): 지표마다 서버가 그린 SVG 차트(최근 30점), 아래에 모든 점의 표. 툴팁과 강조는 app.js가 덧입힌다. #}
+<div class="trend-grid">
+{% for figure in view.figures %}
+  <figure class="card trend" data-metric="{{ figure.metric }}"><figcaption>{{ figure.label }}</figcaption>{{ figure.svg|safe }}</figure>
+{% endfor %}
+</div>
+<div id="trend-tip" class="trend-tip" role="status" hidden></div>
+<div class="card"><h3>값 표 <span class="dim">{% if view.kind == "run" %}실행 {{ view.count }}회 · 차트는 최근 {{ view.shown }}회{% else %}수집 {{ view.count }}일치 · 차트는 최근 {{ view.shown }}일{% endif %}</span></h3>
+  <div class="scroll"><table id="trend-table">
+    <thead><tr><th>{{ "실행" if view.kind == "run" else "날짜" }}</th><th>{{ "시작(UTC)" if view.kind == "run" else "수집(UTC)" }}</th>{% for column in view.columns %}<th class="n" data-metric="{{ column.metric }}">{{ column.label }}</th>{% endfor %}</tr></thead>
+    <tbody>
+{% for row in view.rows %}
+      <tr data-id="{{ row.id }}"><td class="mono">{% if row.href %}<a href="{{ row.href }}">{{ row.idText }}</a>{% else %}{{ row.idText }}{% endif %}</td><td>{{ row.at }}</td>{% for cell in row.cells %}<td class="n{{ ' dim' if cell.text == '—' else '' }}" data-metric="{{ cell.metric }}">{{ cell.text }}</td>{% endfor %}</tr>
+{% endfor %}
+    </tbody>
+  </table></div>
+</div>

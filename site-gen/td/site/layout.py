@@ -39,8 +39,35 @@ REPORTS_EXTRA: dict[str, list[tuple[str, str]]] = {
 # 주 진입 파일이 없으면 링크하지 않는 디렉터리(S04는 jqa/owl 중 한쪽만 있을 수 있다)
 LINK_ONLY_IF_PRESENT = {"ontology/"}
 
-# 게시하지 않는 파일 패턴(.exec는 크고 사이트에서 쓰지 않는다)
-COPY_IGNORE = ("*.exec", "exec", "site.css")
+# 리포트 카드의 한 줄 설명(시안 project.html "리포트 바로가기"): 사이트 경로 -> 설명
+# 키는 사이트 경로, 또는 같은 디렉터리의 추가 진입 파일이면 그 파일까지(`ontology/owl.html`)
+REPORT_NOTES: dict[str, str] = {
+    "ontology/": "코드 구조 그래프",
+    "ontology/owl.html": "도메인 지식 그래프",
+    "coverage/": "테스트별로 지키는 코드",
+    "hotspot/": "먼저 손볼 코드",
+    "tia/": "변경에 영향받는 테스트",
+    "sonar/": "정적 분석 이슈",
+    "compare/": "생성 방식 판정",
+    "cucumber/*/": "생성 E2E 시나리오 결과",
+}
+
+# 공통 띠를 끼워 넣을 외부 도구 HTML(설계 §5.5): 사이트 경로(`*`는 generation) -> 진입 파일들.
+# 직접 만드는 리포트(커버리지, Sonar, 방식 비교)는 템플릿이 띠를 그리므로(RERENDER의 nav_html) 여기에 넣지 않는다.
+NAV_INJECT: dict[str, list[str]] = {
+    "hotspot/": ["hotspots.html", "api_report.html"],
+    "tia/": ["tia.html"],
+    "cucumber/*/": ["index.html"],
+    "ontology/": ["jqa.html", "owl.html"],
+}
+# 띠의 "지금 리포트" 이름: run 페이지 리포트 목록에 없는 진입 파일만 둔다(사이트 상대 경로 -> 표시 이름)
+NAV_EXTRA_LABELS: dict[str, str] = {
+    "hotspot/api_report.html": "hotspot API 리포트",
+}
+
+# 게시하지 않는 파일 패턴(.exec는 크고 사이트에서 쓰지 않는다. app.css는 직접 만드는 리포트의 단독 열람용 사본으로,
+# 사이트에서는 static/v2/app.css를 불러온다)
+COPY_IGNORE = ("*.exec", "exec", "app.css")
 
 
 def expand_layout(stage_id: str, outputs: dict) -> list[tuple[str, str, str]]:
@@ -60,26 +87,30 @@ def expand_layout(stage_id: str, outputs: dict) -> list[tuple[str, str, str]]:
     return entries
 
 
-# 복사된 리포트를 사이트 공통 CSS로 다시 만드는 훅: 사이트 경로 -> fn(복사된 디렉터리, css_href)
-def _rerender_coverage(target: Path, css_href: str) -> None:
-    if (target / "coverage.json").exists():  # 단독 열람용 사본 site.css는 복사에서 뺐다
+# 복사된 리포트를 새 디자인 틀로 다시 만드는 훅: 사이트 경로 -> fn(복사된 디렉터리, css_href, nav_html).
+# css_href는 `…/static/v2/app.css`이고 nav_html은 템플릿이 그리는 공통 띠다(이 리포트들은 NAV_INJECT에 없다).
+# 단독 열람용 사본 app.css는 복사에서 뺐다(COPY_IGNORE).
+def _rerender_coverage(target: Path, css_href: str, nav_html: str) -> None:
+    if (target / "coverage.json").exists():
         from td import coverage
-        coverage.render_page(target, json.loads((target / "coverage.json").read_text()), css_href=css_href, copy_css=False)
+        coverage.render_page(target, json.loads((target / "coverage.json").read_text()), css_href=css_href, copy_css=False,
+                             nav_html=nav_html)
 
 
-def _rerender_sonar(target: Path, css_href: str) -> None:
+def _rerender_sonar(target: Path, css_href: str, nav_html: str) -> None:
     if (target / "sonar.json").exists():
         from td import sonar
-        sonar.render(json.loads((target / "sonar.json").read_text()), target, css_href=css_href, copy_css=False)
+        sonar.render(json.loads((target / "sonar.json").read_text()), target, css_href=css_href, copy_css=False, nav_html=nav_html)
 
 
-def _rerender_compare(target: Path, css_href: str) -> None:
+def _rerender_compare(target: Path, css_href: str, nav_html: str) -> None:
     if (target / "compare.json").exists():
         from td import compare
-        compare.render_page(target, json.loads((target / "compare.json").read_text()), css_href=css_href, copy_css=False)
+        compare.render_page(target, json.loads((target / "compare.json").read_text()), css_href=css_href, copy_css=False,
+                            nav_html=nav_html)
 
 
-RERENDER: dict[str, Callable[[Path, str], None]] = {
+RERENDER: dict[str, Callable[[Path, str, str], None]] = {
     "coverage/": _rerender_coverage,
     "sonar/": _rerender_sonar,
     "compare/": _rerender_compare,

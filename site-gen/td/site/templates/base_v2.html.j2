@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>{% block title %}test-dashboard{% endblock %}</title>
+<link rel="stylesheet" href="{{ css_href if css_href is defined and css_href else static_href ~ 'app.css' }}">
+</head>
+<body>
+{% if nav_html %}
+{{ nav_html | safe }}
+{% else %}
+<div class="top"><div class="wrap">{% block crumbs %}<strong>test-dashboard</strong>{% endblock %}</div></div>
+{% endif %}
+<main class="wrap">
+{% block content %}{% endblock %}
+</main>
+<script src="{{ static_href }}app.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
