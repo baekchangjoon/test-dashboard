@@ -1,0 +1,54 @@
+{
+ "edges": [],
+ "meta": {},
+ "nodes": [
+  {
+   "id": "endpoint:POST /svc/kits",
+   "kind": "Endpoint",
+   "label": "POST /svc/kits",
+   "props": {
+    "anyMethod": false,
+    "handler": "ex.kit.KitController#make",
+    "method": "POST",
+    "path": "/svc/kits",
+    "view": false
+   }
+  },
+  {
+   "id": "endpoint:PUT /svc/kits/{kitId}",
+   "kind": "Endpoint",
+   "label": "PUT /svc/kits/{kitId}",
+   "props": {
+    "anyMethod": false,
+    "handler": "ex.kit.KitController#patch",
+    "method": "PUT",
+    "path": "/svc/kits/{kitId}",
+    "view": false
+   }
+  },
+  {
+   "id": "endpoint:PATCH /svc/kits/{kitId}",
+   "kind": "Endpoint",
+   "label": "PATCH /svc/kits/{kitId}",
+   "props": {
+    "anyMethod": false,
+    "handler": "ex.kit.KitController#trim",
+    "method": "PATCH",
+    "path": "/svc/kits/{kitId}",
+    "view": false
+   }
+  },
+  {
+   "id": "endpoint:POST /svc/tags",
+   "kind": "Endpoint",
+   "label": "POST /svc/tags",
+   "props": {
+    "anyMethod": false,
+    "handler": "ex.kit.TagController#tag",
+    "method": "POST",
+    "path": "/svc/tags",
+    "view": false
+   }
+  }
+ ]
+}

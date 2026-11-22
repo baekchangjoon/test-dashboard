@@ -22,6 +22,7 @@ EMAIL_VALID = "uniq@example.com"
 EMAIL_INVALID = "not-an-email"
 _DAY_SHIFT = re.compile(r"\.(plus|minus)Days\((\d+)\)")
 _NUMERIC_OPS = ("<", "<=", ">", ">=", "==", "!=")
+_ANY_KIND = ("int", "real", "bool", "string", "date", "enum", "other")
 
 
 @dataclass
@@ -69,6 +70,7 @@ class Con:
     extra: bool = False  # 날짜 `!isAfter` 위반 쪽 추가값(today-1)
     side: tuple = ()  # rel: 값을 정하는 요청 필드들
     assumes: tuple = ()  # rel: (위반 쪽 가정, 유효 쪽 가정)
+    others: tuple = ()  # rel: 관계식 상대편에 쓰인 요청 필드들(pairwise가 rel-combined 가정을 판단할 때 쓴다)
 
 
 def number(text: str):
@@ -195,8 +197,9 @@ class Constraints:
             return "unresolved-operand"
         violation, valid = (0, LARGE_NUMBER) if low_violates else (LARGE_NUMBER, 0)
         assume = {0: f"{other} > 0", LARGE_NUMBER: f"{other} 유한"}
+        others = tuple(n for n in self.request_fields(other, ep, var, _ANY_KIND) if n not in side)
         return Con(field=side[0], op="rel", value=(violation, valid), side=tuple(side),
-                   assumes=(assume[violation], assume[valid]))
+                   assumes=(assume[violation], assume[valid]), others=others)
 
     # --- 값 계산 ---------------------------------------------------------------------------------
 

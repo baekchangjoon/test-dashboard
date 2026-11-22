@@ -1,0 +1,176 @@
+[
+ {
+  "class": "KitService",
+  "file": "plan-tests-KitService.make.json",
+  "items": [
+   {
+    "branch_value": "400",
+    "condition": "form.size() < 1 || form.size() > 8",
+    "conditionSha": "b6f84c0835f1ee395bdccaa753a37efcb83ee07aa45c3284af3bdd0489edfedd",
+    "expected": "KitInvalidException code=400",
+    "index": 0,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   },
+   {
+    "branch_value": "400",
+    "condition": "form.grade() == Grade.GOLD && form.credit() < 40",
+    "conditionSha": "a486c36b153ee3972a6937cec8105999dd6a01346ec700680d7fbe8e37c1be97",
+    "expected": "KitInvalidException code=400",
+    "index": 1,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   },
+   {
+    "branch_value": "400",
+    "condition": "form.depth() > 6 && form.size() > 9",
+    "conditionSha": "e0acc19205bf1ffd55a0677101c0fe7cd126ce9151b89da156781c7a2115145a",
+    "expected": "KitInvalidException code=400",
+    "index": 2,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   },
+   {
+    "branch_value": "400",
+    "condition": "form.depth() > 4",
+    "conditionSha": "ddbd02c45d8d7c21ea05b5da986a3c5e9e1ff2fd2b174039a97fe13b9bb5d2bc",
+    "expected": "KitInvalidException code=400",
+    "index": 3,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   },
+   {
+    "branch_value": "400",
+    "condition": "form.legacy() != null",
+    "conditionSha": "6951a62690a3aac3a4b4e94cf864c5a4c1a2d8c70e9f186e9e73ae2120deaf85",
+    "expected": "KitInvalidException code=400",
+    "index": 4,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   },
+   {
+    "branch_value": "business_branch",
+    "condition": "\"PROMO\".equals(form.code())",
+    "conditionSha": "7ea51de2d0f3b2d499603a9a5d81177e92a5ef08a3a20731ec711053c8588a80",
+    "expected": "분기 진입: code=PROMO 경로",
+    "index": 5,
+    "param": "(from scenarios)",
+    "prefix": "happyPath"
+   },
+   {
+    "branch_value": "409",
+    "condition": "repository.countBySlot(form.slot()) >= SLOT_LIMIT",
+    "conditionSha": "a4b618f6a646801c4e810c592675cd61c1c85c5642d635861a743cdc842e661f",
+    "expected": "KitClashException code=409",
+    "index": 6,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   },
+   {
+    "branch_value": "400",
+    "condition": "form.slot() < 10 || form.slot() > 20",
+    "conditionSha": "e9eb1af1c3380aa787236e50e9bfb03cf3ac82d35c0cd05ab7c3dad0f72c5b4a",
+    "expected": "KitInvalidException code=400",
+    "index": 7,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   },
+   {
+    "branch_value": "400",
+    "condition": "form.deposit() * 1.5 < form.size() * form.grade().getWeight()",
+    "conditionSha": "8fdf02bd45b5e14e0a5e34750c78ccd7acc527aa506af580d6913fb4c9a88ff3",
+    "expected": "KitInvalidException code=400",
+    "index": 8,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   },
+   {
+    "branch_value": "400",
+    "condition": "!existing.getPhase().canMoveTo(form.phase())",
+    "conditionSha": "9d0a31920e3846b40f2a6456ec8f43e4e74676596b1880c5c0c9d8229e00930b",
+    "expected": "KitInvalidException code=400",
+    "index": 9,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   },
+   {
+    "branch_value": "400",
+    "condition": "form.grade() == Grade.RUBY && form.shade() == Shade.DARK && form.credit() > ledger.cap()",
+    "conditionSha": "1f2b95f55900822ec93577d507b50d588221b53f67cf969ca853e8e018b26572",
+    "expected": "KitInvalidException code=400",
+    "index": 10,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   },
+   {
+    "branch_value": "400",
+    "condition": "\"VIPKIT\".equals(form.code()) && form.credit() < 45",
+    "conditionSha": "001872d8532b5e7ff593eeac396b4058f86bcd305dd87a3d44a8773dba8a9fd8",
+    "expected": "KitInvalidException code=400",
+    "index": 11,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   }
+  ],
+  "method": "make"
+ },
+ {
+  "class": "KitService",
+  "file": "plan-tests-KitService.patch.json",
+  "items": [
+   {
+    "branch_value": "400",
+    "condition": "existing.getSize() < 5 && patch.width() < 3",
+    "conditionSha": "25c0ca451a5961c2ce2faca6715b31e7bc3ed75f0458b319711d5846f3b90972",
+    "expected": "KitInvalidException code=400",
+    "index": 0,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   },
+   {
+    "branch_value": "400",
+    "condition": "existing.getSize() > 7 && patch.height() > 3",
+    "conditionSha": "c9c1b0c66d40a822f91c2c15f77983456dabbdbeaa9a814f69e9fa984513ab9f",
+    "expected": "KitInvalidException code=400",
+    "index": 1,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   },
+   {
+    "branch_value": "400",
+    "condition": "patch.width() > 6 && patch.height() > 6",
+    "conditionSha": "542903923f701ddf0adf784330700250a6c13fe2ab28aeb380ab4000293e62e5",
+    "expected": "KitInvalidException code=400",
+    "index": 2,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   }
+  ],
+  "method": "patch"
+ },
+ {
+  "class": "KitService",
+  "file": "plan-tests-KitService.trim.json",
+  "items": [
+   {
+    "branch_value": "400",
+    "condition": "existing.getSize() < 5",
+    "conditionSha": "a0f49404284a2831973b1e763de293e4ed2d84cf8845cea5c73e5d4894a41f42",
+    "expected": "KitInvalidException code=400",
+    "index": 0,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   },
+   {
+    "branch_value": "400",
+    "condition": "cut.trim() < 1 || cut.trim() > 3",
+    "conditionSha": "aeab1584ea64e38c4d77ea9e103be14e77a4124cab05da7b251c21a5a0c8fef7",
+    "expected": "KitInvalidException code=400",
+    "index": 1,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   }
+  ],
+  "method": "trim"
+ }
+]
