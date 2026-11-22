@@ -1,0 +1,111 @@
+{
+  "files": [
+    {
+      "path": "cases.json",
+      "sha256": "3b72681c84192a9aafc2236e3e706993cb94dd4e9e94d9b222ca2b23d0fbd87b"
+    },
+    {
+      "path": "factors.json",
+      "sha256": "3ced96af229791134815c1d99824873b73e5968913f3cc2e43c0deaf6a7330af"
+    },
+    {
+      "path": "features/delete-api-reservations-id.feature",
+      "sha256": "7f3fab4bf2390b639930f7bb82eb4b04ae96ddd3beac50870986e6ca0a2765c8"
+    },
+    {
+      "path": "features/get-api-owners-ownerid.feature",
+      "sha256": "e7d01c863b0912c90fb1ea97fdaccb8aeff14e8f2a0c6122693cfebdb61eb570"
+    },
+    {
+      "path": "features/get-api-owners.feature",
+      "sha256": "547115a84568bd067592121c728511dd061664ff12483b3f426c0613b427e8c7"
+    },
+    {
+      "path": "features/get-api-pets-petid.feature",
+      "sha256": "9ffa6c4ebcea8f21461127748515dafff3258288a5d1d835a3b20687ccaceed1"
+    },
+    {
+      "path": "features/get-api-pets-types.feature",
+      "sha256": "3cddcad22f0fa45fe56548f962c53cb99feb73f43827233d6ad16502cbddb97e"
+    },
+    {
+      "path": "features/get-api-reservations-id.feature",
+      "sha256": "68ca80a220fae215eecb466a43e02f2575e9c8285566e71d07225c13efcfe49b"
+    },
+    {
+      "path": "features/get-api-reservations.feature",
+      "sha256": "7630442b9de9e798c6e1a097cdb5b0ab182510db5af11e909f3621c1992ed719"
+    },
+    {
+      "path": "features/get-api-vets-vetid.feature",
+      "sha256": "ae2880095497e811319083b265fa555135aca0f69f833ac6149e95c1c39d766b"
+    },
+    {
+      "path": "features/get-api-vets.feature",
+      "sha256": "a0bd43de30d6fddc86bc4e4046b599f61d3580b4664c784c3ba1056c1702dd77"
+    },
+    {
+      "path": "features/post-api-auth-login.feature",
+      "sha256": "91118b9817b1c4e10a20a84193330b9983bdf0889cc49586d08d63c17d3838c0"
+    },
+    {
+      "path": "features/post-api-auth-validate.feature",
+      "sha256": "981c1da55613203b4cd6bcad27fa4eb6b10d9a884da5e22237f9a46cc4308045"
+    },
+    {
+      "path": "features/post-api-owners.feature",
+      "sha256": "d0ce3aa91beb5fcd004e8d91760eb37fe391313cec90cc9ee0566545ad865eb1"
+    },
+    {
+      "path": "features/post-api-pets.feature",
+      "sha256": "321f7e33acafefd83a47f2cb21874b9aacb8f40f77c6c62e0b9d532c0d5c3f9f"
+    },
+    {
+      "path": "features/post-api-reservations.feature",
+      "sha256": "bcbf29457a0717e7c5ec42c66b6a47b4a64066d3a3ccce46269318a7d982718f"
+    },
+    {
+      "path": "features/put-api-owners-ownerid.feature",
+      "sha256": "d924e68f96de329c275670a857b7282720a284a7177510589ca81b02a2b91b63"
+    },
+    {
+      "path": "features/put-api-pets-petid.feature",
+      "sha256": "f7e60f9d22bee97f3232128dc91486d331f4dcb5fc160c17b860247409c596f2"
+    },
+    {
+      "path": "features/put-api-reservations-id.feature",
+      "sha256": "8735d5d2679fc64c9bf14367023594b5d76a6a0163aea6ffe979bd837fac1897"
+    },
+    {
+      "path": "glue/support/DetSteps.java",
+      "sha256": "c57e8c9d9e778b0bfea578055d6983267efafb7ad8954dd1a61ab14d3f0eb741"
+    },
+    {
+      "path": "glue/support/DetValues.java",
+      "sha256": "b646e3dd26d5d5368b1ff1310b8404cee3ab2adad9e79c94c6b6b6fb84af7f22"
+    }
+  ],
+  "genId": "det-a6397f85-r1",
+  "inputHash": "a6397f85967c7df1ad79a3d39de7030a50253aba9434690049589c1e208ae6e6",
+  "meta": {
+    "arm": "det",
+    "bundleHash": "5dccdafbb436a2233c9a6d29c354304020bef7ea623c1a602a1a271ebd19e5dc",
+    "cases": 80,
+    "dir": null,
+    "genId": "det-a6397f85-r1",
+    "generator": {
+      "glueChecksum": "87032d28b06acdd75fefe8379aa8c03611d05e928e0132d11e1683caa0706194",
+      "name": "td.detgen",
+      "sourceChecksum": "28fbf12130710081270b3188a1625f4228dd094c64682c0c5be141a6ed7c3949",
+      "version": "1"
+    },
+    "inputHash": "a6397f85967c7df1ad79a3d39de7030a50253aba9434690049589c1e208ae6e6",
+    "reason": null,
+    "rep": 1,
+    "reused": false,
+    "seconds": 9.452,
+    "status": "passed",
+    "unresolved": 50
+  },
+  "schema": 1
+}

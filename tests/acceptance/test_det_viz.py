@@ -140,7 +140,8 @@ def test_req202_class_counts_real():
         product *= count
     pair_total = sum(a * b for a, b in combinations(counts, 2))
     assert product == 46656 and pair_total == 403
-    theoretical = {item["endpoint"]: item for item in _cases()["universe"]["theoretical"]["factors"]}
+    # concurrency-race 항목도 같은 엔드포인트 라벨을 가지므로 fields가 있는 항목만 모은다
+    theoretical = {item["endpoint"]: item for item in _cases()["universe"]["theoretical"]["factors"] if "fields" in item}
     assert theoretical[RESERVATION]["product"] == product
 
     compared = 0
@@ -208,7 +209,8 @@ def test_req207_page_and_links():
     compare_dir = run_dir / "S12" / "compare"
     assert (compare_dir / "det.html").is_file()
     viz = _viz()
-    jsonschema.validate(viz, _schema("det-viz.schema.json"))
+    from td import detviz  # det-viz 스키마는 factors 스키마를 합성해 검증한다(스키마 검증만 쓰고 집계 계산은 쓰지 않는다)
+    detviz.validate(viz)
     case_ids = {case["id"] for case in _cases()["cases"]}
     assert len(case_ids) == 80 and set(viz["caseResults"]) == case_ids
 

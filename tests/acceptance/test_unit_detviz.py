@@ -1080,3 +1080,12 @@ def test_req211_no_page_scroll_390(tmp_path, generated, det_browser, scheme):
         assert blocked == [] and errors == []
     finally:
         context.close()
+
+
+def test_req214_docs():
+    """REQ-214: 상위 det 설계와 README에 조합 시각화 산출물이 적혀 있다."""
+    root = Path(__file__).resolve().parents[2]
+    design = (root / "docs/superpowers/specs/2026-11-22-deterministic-arm-design.md").read_text(encoding="utf-8")
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    assert "factors.json" in design and "det-viz.json" in design and "det.html" in design
+    assert "det 조합 시각화" in readme and "det.html" in readme and "det-viz.json" in readme
