@@ -1,0 +1,5999 @@
+{
+  "cases": [
+    {
+      "assumes": [
+        "보호됨"
+      ],
+      "auth": "anonymous",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "보호됨"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "class": "4xx",
+        "source": "harness-config",
+        "strict": 403
+      },
+      "id": "create-auth-1",
+      "oracle": "status",
+      "rule": "auth",
+      "setup": [],
+      "sources": [
+        "harness:unauthenticatedStatus",
+        "graph:endpoint:POST /api/reservations"
+      ],
+      "values": {}
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "create-baseline-valid-1",
+      "oracle": "status",
+      "rule": "baseline-valid",
+      "setup": [],
+      "sources": [
+        "graph:endpoint:POST /api/reservations",
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-baseline-valid-1"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 136
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "create-branch-entry-1",
+      "oracle": "status-only",
+      "rule": "branch-entry",
+      "setup": [],
+      "sources": [
+        "ReservationService_create.json#0.11@a9395b171019"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "from": "ReservationService_create.json#0.11@a9395b171019",
+          "provenance": "input",
+          "value": "WELCOME10"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 288
+        }
+      }
+    },
+    {
+      "assumes": [],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "bbtgCode": 400,
+        "class": "4xx",
+        "graphStatus": 422,
+        "source": "rule",
+        "strict": "4xx"
+      },
+      "id": "create-empty-body-1",
+      "oracle": "framework-reject",
+      "rule": "empty-body",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#0@1bcd5d3defb4"
+      ],
+      "values": {}
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "create-enum-value-1",
+      "oracle": "status",
+      "rule": "enum-value",
+      "setup": [],
+      "sources": [
+        "graph:endpoint:POST /api/reservations"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "PREMIUM"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-enum-value-1"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 190
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "create-enum-value-2",
+      "oracle": "status",
+      "rule": "enum-value",
+      "setup": [],
+      "sources": [
+        "graph:endpoint:POST /api/reservations"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "VIP"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-enum-value-2"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 165
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "create-valid-boundary-1",
+      "oracle": "status",
+      "rule": "valid-boundary",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "from": "plan-tests-ReservationService.create.json#10@6cea6217709d",
+          "provenance": "generic-sentinel",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-valid-boundary-1"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 480
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "create-valid-boundary-2",
+      "oracle": "status",
+      "rule": "valid-boundary",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "from": "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-valid-boundary-2"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 351
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "create-valid-boundary-3",
+      "oracle": "status",
+      "rule": "valid-boundary",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "from": "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+          "provenance": "input",
+          "value": 30
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-valid-boundary-3"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 190
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "create-valid-boundary-4",
+      "oracle": "status",
+      "rule": "valid-boundary",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#3@d39d0609466e"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-valid-boundary-4"
+        },
+        "body.roomNumber": {
+          "from": "plan-tests-ReservationService.create.json#3@d39d0609466e",
+          "provenance": "input",
+          "value": 100
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "create-valid-boundary-5",
+      "oracle": "status",
+      "rule": "valid-boundary",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#3@d39d0609466e"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-valid-boundary-5"
+        },
+        "body.roomNumber": {
+          "from": "plan-tests-ReservationService.create.json#3@d39d0609466e",
+          "provenance": "input",
+          "value": 499
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "create-valid-boundary-6",
+      "oracle": "status",
+      "rule": "valid-boundary",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#4@547a4919f73a"
+      ],
+      "values": {
+        "body.animalCount": {
+          "from": "plan-tests-ReservationService.create.json#4@547a4919f73a",
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-valid-boundary-6"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 491
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "create-valid-boundary-7",
+      "oracle": "status",
+      "rule": "valid-boundary",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#4@547a4919f73a"
+      ],
+      "values": {
+        "body.animalCount": {
+          "from": "plan-tests-ReservationService.create.json#4@547a4919f73a",
+          "provenance": "input",
+          "value": 4
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-valid-boundary-7"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 223
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "create-valid-boundary-8",
+      "oracle": "status",
+      "rule": "valid-boundary",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-valid-boundary-8"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 266
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "create-valid-boundary-9",
+      "oracle": "status",
+      "rule": "valid-boundary",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "from": "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-valid-boundary-9"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 219
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "create-valid-boundary-10",
+      "oracle": "status",
+      "rule": "valid-boundary",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "from": "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+          "provenance": "input",
+          "transform": "length=50",
+          "value": "6392bb1ed13afaf7cb545e7ef2401732c9d7e9fcc37e1c2905"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-valid-boundary-10"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 429
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "create-valid-boundary-11",
+      "oracle": "status",
+      "rule": "valid-boundary",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-valid-boundary-11"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 358
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "create-valid-boundary-12",
+      "oracle": "status",
+      "rule": "valid-boundary",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "from": "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+          "provenance": "derived",
+          "transform": "500-1",
+          "value": 499
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "transform": "other-constant",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-valid-boundary-12"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 131
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "create-valid-boundary-13",
+      "oracle": "status",
+      "rule": "valid-boundary",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "from": "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+          "provenance": "input",
+          "value": "VIP"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-valid-boundary-13"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 470
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "create-valid-boundary-14",
+      "oracle": "status",
+      "rule": "valid-boundary",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-valid-boundary-14"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 419
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "create-valid-boundary-15",
+      "oracle": "status",
+      "rule": "valid-boundary",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "from": "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-valid-boundary-15"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 182
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "create-valid-boundary-16",
+      "oracle": "status",
+      "rule": "valid-boundary",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#9@7da555819e33"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-valid-boundary-16"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 461
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "create-valid-boundary-17",
+      "oracle": "status",
+      "rule": "valid-boundary",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#9@7da555819e33"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "from": "plan-tests-ReservationService.create.json#9@7da555819e33",
+          "provenance": "generic-sentinel",
+          "transform": "0+1",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-valid-boundary-17"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 439
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() > 0"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() > 0"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "bbtgCode": 400,
+        "class": "4xx",
+        "graphStatus": 422,
+        "source": "graph",
+        "strict": 422
+      },
+      "id": "create-violation-1",
+      "oracle": "status",
+      "pair": "create-valid-boundary-1",
+      "rule": "violation",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "from": "plan-tests-ReservationService.create.json#10@6cea6217709d",
+          "provenance": "generic-sentinel",
+          "value": 0
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-violation-1"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 222
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "bbtgCode": 400,
+        "class": "4xx",
+        "graphStatus": 422,
+        "source": "graph",
+        "strict": 422
+      },
+      "id": "create-violation-2",
+      "oracle": "status",
+      "pair": "create-valid-boundary-2",
+      "rule": "violation",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "from": "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+          "provenance": "derived",
+          "transform": "1-1",
+          "value": 0
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-violation-2"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 228
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "bbtgCode": 400,
+        "class": "4xx",
+        "graphStatus": 422,
+        "source": "graph",
+        "strict": 422
+      },
+      "id": "create-violation-3",
+      "oracle": "status",
+      "pair": "create-valid-boundary-3",
+      "rule": "violation",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "from": "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+          "provenance": "derived",
+          "transform": "30+1",
+          "value": 31
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-violation-3"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 230
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "bbtgCode": 400,
+        "class": "4xx",
+        "graphStatus": 422,
+        "source": "graph",
+        "strict": 422
+      },
+      "id": "create-violation-4",
+      "oracle": "status",
+      "pair": "create-valid-boundary-4",
+      "rule": "violation",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#3@d39d0609466e"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-violation-4"
+        },
+        "body.roomNumber": {
+          "from": "plan-tests-ReservationService.create.json#3@d39d0609466e",
+          "provenance": "derived",
+          "transform": "100-1",
+          "value": 99
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "bbtgCode": 400,
+        "class": "4xx",
+        "graphStatus": 422,
+        "source": "graph",
+        "strict": 422
+      },
+      "id": "create-violation-5",
+      "oracle": "status",
+      "pair": "create-valid-boundary-5",
+      "rule": "violation",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#3@d39d0609466e"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-violation-5"
+        },
+        "body.roomNumber": {
+          "from": "plan-tests-ReservationService.create.json#3@d39d0609466e",
+          "provenance": "derived",
+          "transform": "499+1",
+          "value": 500
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "bbtgCode": 400,
+        "class": "4xx",
+        "graphStatus": 422,
+        "source": "graph",
+        "strict": 422
+      },
+      "id": "create-violation-6",
+      "oracle": "status",
+      "pair": "create-valid-boundary-6",
+      "rule": "violation",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#4@547a4919f73a"
+      ],
+      "values": {
+        "body.animalCount": {
+          "from": "plan-tests-ReservationService.create.json#4@547a4919f73a",
+          "provenance": "derived",
+          "transform": "1-1",
+          "value": 0
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-violation-6"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 164
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "bbtgCode": 400,
+        "class": "4xx",
+        "graphStatus": 422,
+        "source": "graph",
+        "strict": 422
+      },
+      "id": "create-violation-7",
+      "oracle": "status",
+      "pair": "create-valid-boundary-7",
+      "rule": "violation",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#4@547a4919f73a"
+      ],
+      "values": {
+        "body.animalCount": {
+          "from": "plan-tests-ReservationService.create.json#4@547a4919f73a",
+          "provenance": "derived",
+          "transform": "4+1",
+          "value": 5
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-violation-7"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 458
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "bbtgCode": 400,
+        "class": "4xx",
+        "graphStatus": 422,
+        "source": "graph",
+        "strict": 422
+      },
+      "id": "create-violation-8",
+      "oracle": "status",
+      "pair": "create-valid-boundary-8",
+      "rule": "violation",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "from": "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+          "provenance": "input",
+          "transform": "null",
+          "value": null
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-violation-8"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 221
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "bbtgCode": 400,
+        "class": "4xx",
+        "graphStatus": 422,
+        "source": "graph",
+        "strict": 422
+      },
+      "id": "create-violation-9",
+      "oracle": "status",
+      "pair": "create-valid-boundary-9",
+      "rule": "violation",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "from": "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+          "provenance": "derived",
+          "transform": "length=1",
+          "value": "a"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-violation-9"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 456
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "bbtgCode": 400,
+        "class": "4xx",
+        "graphStatus": 422,
+        "source": "graph",
+        "strict": 422
+      },
+      "id": "create-violation-10",
+      "oracle": "status",
+      "pair": "create-valid-boundary-10",
+      "rule": "violation",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "from": "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+          "provenance": "derived",
+          "transform": "length=51",
+          "value": "9090ff2fa1b78ee3b828002b269ce46b33c835d7bb4e743b676"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-violation-10"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 270
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "bbtgCode": 400,
+        "class": "4xx",
+        "graphStatus": 422,
+        "source": "graph",
+        "strict": 422
+      },
+      "id": "create-violation-11",
+      "oracle": "status",
+      "pair": "create-valid-boundary-11",
+      "rule": "violation",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+          "provenance": "input",
+          "transform": "null",
+          "value": null
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-violation-11"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 363
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "bbtgCode": 400,
+        "class": "4xx",
+        "graphStatus": 422,
+        "source": "graph",
+        "strict": 422
+      },
+      "id": "create-violation-12",
+      "oracle": "status",
+      "pair": "create-valid-boundary-13",
+      "rule": "violation",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "from": "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+          "provenance": "derived",
+          "transform": "500-1",
+          "value": 499
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+          "provenance": "input",
+          "value": "VIP"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-violation-12"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 272
+        }
+      }
+    },
+    {
+      "assumes": [
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "bbtgCode": 400,
+        "class": "4xx",
+        "graphStatus": 422,
+        "source": "graph",
+        "strict": 422
+      },
+      "id": "create-violation-13",
+      "oracle": "status",
+      "pair": "create-valid-boundary-14",
+      "rule": "violation",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "from": "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+          "provenance": "input",
+          "transform": "null",
+          "value": null
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-violation-13"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 270
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#9@7da555819e33",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "bbtgCode": 400,
+        "class": "4xx",
+        "graphStatus": 422,
+        "source": "graph",
+        "strict": 422
+      },
+      "id": "create-violation-14",
+      "oracle": "status",
+      "pair": "create-valid-boundary-15",
+      "rule": "violation",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "from": "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "not-an-email"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-violation-14"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 466
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "bbtgCode": 400,
+        "class": "4xx",
+        "graphStatus": 422,
+        "source": "graph",
+        "strict": 422
+      },
+      "id": "create-violation-15",
+      "oracle": "status",
+      "pair": "create-valid-boundary-16",
+      "rule": "violation",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#9@7da555819e33"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "from": "plan-tests-ReservationService.create.json#9@7da555819e33",
+          "provenance": "input",
+          "transform": "null",
+          "value": null
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-violation-15"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 343
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "bbtgCode": 400,
+        "class": "4xx",
+        "graphStatus": 422,
+        "source": "graph",
+        "strict": 422
+      },
+      "id": "create-violation-16",
+      "oracle": "status",
+      "pair": "create-valid-boundary-17",
+      "rule": "violation",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#9@7da555819e33"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "from": "plan-tests-ReservationService.create.json#9@7da555819e33",
+          "provenance": "generic-sentinel",
+          "value": "today"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-violation-16"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 320
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "bbtgCode": 400,
+        "class": "4xx",
+        "graphStatus": 422,
+        "source": "graph",
+        "strict": 422
+      },
+      "id": "create-violation-17",
+      "oracle": "status",
+      "pair": "create-valid-boundary-17",
+      "rule": "violation",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.create.json#9@7da555819e33"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "from": "plan-tests-ReservationService.create.json#9@7da555819e33",
+          "provenance": "generic-sentinel",
+          "transform": "0-1",
+          "value": "today-1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-violation-17"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 351
+        }
+      }
+    },
+    {
+      "assumes": [
+        "보호됨"
+      ],
+      "auth": "anonymous",
+      "baselineProof": [
+        "보호됨"
+      ],
+      "endpoint": "DELETE /api/reservations/{id}",
+      "expect": {
+        "class": "4xx",
+        "source": "harness-config",
+        "strict": 403
+      },
+      "id": "delete-auth-1",
+      "oracle": "status",
+      "rule": "auth",
+      "setup": [],
+      "sources": [
+        "harness:unauthenticatedStatus",
+        "graph:endpoint:DELETE /api/reservations/{id}"
+      ],
+      "values": {
+        "path.id": {
+          "provenance": "generic-sentinel",
+          "transform": "nonexistent-id",
+          "value": 1000000
+        }
+      }
+    },
+    {
+      "assumes": [],
+      "auth": "authed",
+      "baselineProof": [],
+      "endpoint": "DELETE /api/reservations/{id}",
+      "expect": {
+        "class": "4xx",
+        "graphStatus": 404,
+        "source": "graph",
+        "strict": 404
+      },
+      "id": "delete-no-data-1",
+      "oracle": "status",
+      "rule": "no-data",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.delete.json#0@3349a2614f0f",
+        "graph:endpoint:DELETE /api/reservations/{id}"
+      ],
+      "values": {
+        "path.id": {
+          "provenance": "generic-sentinel",
+          "transform": "nonexistent-id",
+          "value": 1000000
+        }
+      }
+    },
+    {
+      "assumes": [
+        "보호됨"
+      ],
+      "auth": "anonymous",
+      "baselineProof": [
+        "보호됨"
+      ],
+      "endpoint": "GET /api/owners",
+      "expect": {
+        "class": "4xx",
+        "source": "harness-config",
+        "strict": 403
+      },
+      "id": "get-api-owners-auth-1",
+      "oracle": "status",
+      "rule": "auth",
+      "setup": [],
+      "sources": [
+        "harness:unauthenticatedStatus",
+        "graph:endpoint:GET /api/owners"
+      ],
+      "values": {}
+    },
+    {
+      "assumes": [],
+      "auth": "authed",
+      "baselineProof": [],
+      "endpoint": "GET /api/owners",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "get-api-owners-happy-1",
+      "oracle": "status",
+      "rule": "happy",
+      "setup": [],
+      "sources": [
+        "graph:endpoint:GET /api/owners"
+      ],
+      "values": {}
+    },
+    {
+      "assumes": [
+        "보호됨"
+      ],
+      "auth": "anonymous",
+      "baselineProof": [
+        "보호됨"
+      ],
+      "endpoint": "GET /api/owners/{ownerId}",
+      "expect": {
+        "class": "4xx",
+        "source": "harness-config",
+        "strict": 403
+      },
+      "id": "get-api-owners-ownerid-auth-1",
+      "oracle": "status",
+      "rule": "auth",
+      "setup": [],
+      "sources": [
+        "harness:unauthenticatedStatus",
+        "graph:endpoint:GET /api/owners/{ownerId}"
+      ],
+      "values": {
+        "path.ownerId": {
+          "provenance": "generic-sentinel",
+          "transform": "nonexistent-id",
+          "value": 1000000
+        }
+      }
+    },
+    {
+      "assumes": [],
+      "auth": "authed",
+      "baselineProof": [],
+      "endpoint": "GET /api/owners/{ownerId}",
+      "expect": {
+        "class": "4xx",
+        "source": "rule",
+        "strict": "4xx"
+      },
+      "id": "get-api-owners-ownerid-no-data-1",
+      "oracle": "status",
+      "rule": "no-data",
+      "setup": [],
+      "sources": [
+        "graph:endpoint:GET /api/owners/{ownerId}"
+      ],
+      "values": {
+        "path.ownerId": {
+          "provenance": "generic-sentinel",
+          "transform": "nonexistent-id",
+          "value": 1000000
+        }
+      }
+    },
+    {
+      "assumes": [
+        "보호됨"
+      ],
+      "auth": "anonymous",
+      "baselineProof": [
+        "보호됨"
+      ],
+      "endpoint": "GET /api/pets/{petId}",
+      "expect": {
+        "class": "4xx",
+        "source": "harness-config",
+        "strict": 403
+      },
+      "id": "get-api-pets-petid-auth-1",
+      "oracle": "status",
+      "rule": "auth",
+      "setup": [],
+      "sources": [
+        "harness:unauthenticatedStatus",
+        "graph:endpoint:GET /api/pets/{petId}"
+      ],
+      "values": {
+        "path.petId": {
+          "provenance": "generic-sentinel",
+          "transform": "nonexistent-id",
+          "value": 1000000
+        }
+      }
+    },
+    {
+      "assumes": [],
+      "auth": "authed",
+      "baselineProof": [],
+      "endpoint": "GET /api/pets/{petId}",
+      "expect": {
+        "class": "4xx",
+        "source": "rule",
+        "strict": "4xx"
+      },
+      "id": "get-api-pets-petid-no-data-1",
+      "oracle": "status",
+      "rule": "no-data",
+      "setup": [],
+      "sources": [
+        "graph:endpoint:GET /api/pets/{petId}"
+      ],
+      "values": {
+        "path.petId": {
+          "provenance": "generic-sentinel",
+          "transform": "nonexistent-id",
+          "value": 1000000
+        }
+      }
+    },
+    {
+      "assumes": [
+        "보호됨"
+      ],
+      "auth": "anonymous",
+      "baselineProof": [
+        "보호됨"
+      ],
+      "endpoint": "GET /api/pets/types",
+      "expect": {
+        "class": "4xx",
+        "source": "harness-config",
+        "strict": 403
+      },
+      "id": "get-api-pets-types-auth-1",
+      "oracle": "status",
+      "rule": "auth",
+      "setup": [],
+      "sources": [
+        "harness:unauthenticatedStatus",
+        "graph:endpoint:GET /api/pets/types"
+      ],
+      "values": {}
+    },
+    {
+      "assumes": [],
+      "auth": "authed",
+      "baselineProof": [],
+      "endpoint": "GET /api/pets/types",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "get-api-pets-types-happy-1",
+      "oracle": "status",
+      "rule": "happy",
+      "setup": [],
+      "sources": [
+        "graph:endpoint:GET /api/pets/types"
+      ],
+      "values": {}
+    },
+    {
+      "assumes": [
+        "보호됨"
+      ],
+      "auth": "anonymous",
+      "baselineProof": [
+        "보호됨"
+      ],
+      "endpoint": "GET /api/vets",
+      "expect": {
+        "class": "4xx",
+        "source": "harness-config",
+        "strict": 403
+      },
+      "id": "get-api-vets-auth-1",
+      "oracle": "status",
+      "rule": "auth",
+      "setup": [],
+      "sources": [
+        "harness:unauthenticatedStatus",
+        "graph:endpoint:GET /api/vets"
+      ],
+      "values": {}
+    },
+    {
+      "assumes": [],
+      "auth": "authed",
+      "baselineProof": [],
+      "endpoint": "GET /api/vets",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "get-api-vets-happy-1",
+      "oracle": "status",
+      "rule": "happy",
+      "setup": [],
+      "sources": [
+        "graph:endpoint:GET /api/vets"
+      ],
+      "values": {}
+    },
+    {
+      "assumes": [
+        "보호됨"
+      ],
+      "auth": "anonymous",
+      "baselineProof": [
+        "보호됨"
+      ],
+      "endpoint": "GET /api/vets/{vetId}",
+      "expect": {
+        "class": "4xx",
+        "source": "harness-config",
+        "strict": 403
+      },
+      "id": "get-api-vets-vetid-auth-1",
+      "oracle": "status",
+      "rule": "auth",
+      "setup": [],
+      "sources": [
+        "harness:unauthenticatedStatus",
+        "graph:endpoint:GET /api/vets/{vetId}"
+      ],
+      "values": {
+        "path.vetId": {
+          "provenance": "generic-sentinel",
+          "transform": "nonexistent-id",
+          "value": 1000000
+        }
+      }
+    },
+    {
+      "assumes": [],
+      "auth": "authed",
+      "baselineProof": [],
+      "endpoint": "GET /api/vets/{vetId}",
+      "expect": {
+        "class": "4xx",
+        "source": "rule",
+        "strict": "4xx"
+      },
+      "id": "get-api-vets-vetid-no-data-1",
+      "oracle": "status",
+      "rule": "no-data",
+      "setup": [],
+      "sources": [
+        "graph:endpoint:GET /api/vets/{vetId}"
+      ],
+      "values": {
+        "path.vetId": {
+          "provenance": "generic-sentinel",
+          "transform": "nonexistent-id",
+          "value": 1000000
+        }
+      }
+    },
+    {
+      "assumes": [
+        "보호됨"
+      ],
+      "auth": "anonymous",
+      "baselineProof": [
+        "plan-tests-ReservationService.getById.json#1@18d943ea96b7",
+        "보호됨"
+      ],
+      "endpoint": "GET /api/reservations/{id}",
+      "expect": {
+        "class": "4xx",
+        "source": "harness-config",
+        "strict": 403
+      },
+      "id": "getbyid-auth-1",
+      "oracle": "status",
+      "rule": "auth",
+      "setup": [],
+      "sources": [
+        "harness:unauthenticatedStatus",
+        "graph:endpoint:GET /api/reservations/{id}"
+      ],
+      "values": {
+        "path.id": {
+          "provenance": "generic-sentinel",
+          "transform": "nonexistent-id",
+          "value": 1000000
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.getById.json#1@18d943ea96b7",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "GET /api/reservations/{id}",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "getbyid-happy-1",
+      "oracle": "status",
+      "rule": "happy",
+      "setup": [
+        {
+          "capture": {
+            "id": "id"
+          },
+          "endpoint": "POST /api/reservations",
+          "values": {
+            "animalCount": {
+              "provenance": "input",
+              "value": 1
+            },
+            "checkInDate": {
+              "provenance": "generic-sentinel",
+              "value": "today+1"
+            },
+            "depositAmount": {
+              "provenance": "generic-sentinel",
+              "transform": "relation-satisfy",
+              "value": 1000000
+            },
+            "loyaltyPoints": {
+              "provenance": "input",
+              "value": 500
+            },
+            "nights": {
+              "provenance": "input",
+              "value": 1
+            },
+            "ownerEmail": {
+              "provenance": "generic-sentinel",
+              "transform": "format-heuristic",
+              "value": "uniq@example.com"
+            },
+            "petName": {
+              "provenance": "input",
+              "transform": "length=2",
+              "value": "87"
+            },
+            "priceTier": {
+              "from": "graph:endpoint:POST /api/reservations",
+              "provenance": "input",
+              "value": "BASIC"
+            },
+            "promoCode": {
+              "provenance": "generic-sentinel",
+              "transform": "type-default",
+              "value": "uniq:getbyid-happy-1"
+            },
+            "roomNumber": {
+              "provenance": "derived",
+              "transform": "spread(sha256(caseId))",
+              "value": 474
+            }
+          }
+        }
+      ],
+      "sources": [
+        "graph:endpoint:GET /api/reservations/{id}"
+      ],
+      "values": {
+        "path.id": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "transform": "capture id",
+          "value": "ref:id"
+        },
+        "query.includeStale": {
+          "provenance": "generic-sentinel",
+          "value": true
+        }
+      }
+    },
+    {
+      "assumes": [],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.getById.json#1@18d943ea96b7"
+      ],
+      "endpoint": "GET /api/reservations/{id}",
+      "expect": {
+        "class": "4xx",
+        "graphStatus": 404,
+        "source": "graph",
+        "strict": 404
+      },
+      "id": "getbyid-no-data-1",
+      "oracle": "status",
+      "rule": "no-data",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.getById.json#0@3349a2614f0f",
+        "graph:endpoint:GET /api/reservations/{id}"
+      ],
+      "values": {
+        "path.id": {
+          "provenance": "generic-sentinel",
+          "transform": "nonexistent-id",
+          "value": 1000000
+        },
+        "query.includeStale": {
+          "provenance": "generic-sentinel",
+          "value": true
+        }
+      }
+    },
+    {
+      "assumes": [
+        "보호됨"
+      ],
+      "auth": "anonymous",
+      "baselineProof": [
+        "보호됨"
+      ],
+      "endpoint": "GET /api/reservations",
+      "expect": {
+        "class": "4xx",
+        "source": "harness-config",
+        "strict": 403
+      },
+      "id": "list-auth-1",
+      "oracle": "status",
+      "rule": "auth",
+      "setup": [],
+      "sources": [
+        "harness:unauthenticatedStatus",
+        "graph:endpoint:GET /api/reservations"
+      ],
+      "values": {}
+    },
+    {
+      "assumes": [],
+      "auth": "authed",
+      "baselineProof": [],
+      "endpoint": "GET /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "list-enum-value-1",
+      "oracle": "status",
+      "rule": "enum-value",
+      "setup": [],
+      "sources": [
+        "graph:endpoint:GET /api/reservations"
+      ],
+      "values": {
+        "query.tier": {
+          "from": "graph:endpoint:GET /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        }
+      }
+    },
+    {
+      "assumes": [],
+      "auth": "authed",
+      "baselineProof": [],
+      "endpoint": "GET /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "list-enum-value-2",
+      "oracle": "status",
+      "rule": "enum-value",
+      "setup": [],
+      "sources": [
+        "graph:endpoint:GET /api/reservations"
+      ],
+      "values": {
+        "query.tier": {
+          "from": "graph:endpoint:GET /api/reservations",
+          "provenance": "input",
+          "value": "PREMIUM"
+        }
+      }
+    },
+    {
+      "assumes": [],
+      "auth": "authed",
+      "baselineProof": [],
+      "endpoint": "GET /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "list-enum-value-3",
+      "oracle": "status",
+      "rule": "enum-value",
+      "setup": [],
+      "sources": [
+        "graph:endpoint:GET /api/reservations",
+        "plan-tests-ReservationService.list.json#2@85ff3aa1f388"
+      ],
+      "values": {
+        "query.tier": {
+          "from": "graph:endpoint:GET /api/reservations",
+          "provenance": "input",
+          "value": "VIP"
+        }
+      }
+    },
+    {
+      "assumes": [],
+      "auth": "authed",
+      "baselineProof": [],
+      "endpoint": "GET /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "list-filter-empty-1",
+      "oracle": "status-only",
+      "rule": "filter-empty",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.list.json#0@faba0c12e987"
+      ],
+      "values": {
+        "query.minNights": {
+          "provenance": "generic-sentinel",
+          "transform": "empty-filter",
+          "value": 1000000
+        }
+      }
+    },
+    {
+      "assumes": [],
+      "auth": "authed",
+      "baselineProof": [],
+      "endpoint": "GET /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "list-filter-empty-2",
+      "oracle": "status-only",
+      "rule": "filter-empty",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.list.json#1@24dbf36afec3"
+      ],
+      "values": {
+        "query.recentOnly": {
+          "provenance": "generic-sentinel",
+          "transform": "empty-filter",
+          "value": true
+        }
+      }
+    },
+    {
+      "assumes": [],
+      "auth": "authed",
+      "baselineProof": [],
+      "endpoint": "GET /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "list-happy-1",
+      "oracle": "status",
+      "rule": "happy",
+      "setup": [],
+      "sources": [
+        "graph:endpoint:GET /api/reservations"
+      ],
+      "values": {}
+    },
+    {
+      "assumes": [],
+      "auth": "authed",
+      "baselineProof": [],
+      "endpoint": "POST /api/auth/login",
+      "expect": {
+        "bbtgCode": 404,
+        "class": "4xx",
+        "source": "bbtg",
+        "strict": 404
+      },
+      "id": "loaduserbyusername-violation-1",
+      "oracle": "status",
+      "rule": "violation",
+      "setup": [],
+      "sources": [
+        "plan-tests-CustomUserDetailsService.loadUserByUsername.json#3@a922eac888b0"
+      ],
+      "values": {
+        "body.password": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:loaduserbyusername-violation-1"
+        },
+        "body.username": {
+          "from": "plan-tests-CustomUserDetailsService.loadUserByUsername.json#3@a922eac888b0",
+          "provenance": "input",
+          "value": "user"
+        }
+      }
+    },
+    {
+      "assumes": [
+        "보호됨"
+      ],
+      "auth": "anonymous",
+      "baselineProof": [
+        "보호됨"
+      ],
+      "endpoint": "POST /api/auth/validate",
+      "expect": {
+        "class": "4xx",
+        "source": "harness-config",
+        "strict": 403
+      },
+      "id": "post-api-auth-validate-auth-1",
+      "oracle": "status",
+      "rule": "auth",
+      "setup": [],
+      "sources": [
+        "harness:unauthenticatedStatus",
+        "graph:endpoint:POST /api/auth/validate"
+      ],
+      "values": {}
+    },
+    {
+      "assumes": [
+        "보호됨"
+      ],
+      "auth": "anonymous",
+      "baselineProof": [
+        "보호됨"
+      ],
+      "endpoint": "POST /api/owners",
+      "expect": {
+        "class": "4xx",
+        "source": "harness-config",
+        "strict": 403
+      },
+      "id": "post-api-owners-auth-1",
+      "oracle": "status",
+      "rule": "auth",
+      "setup": [],
+      "sources": [
+        "harness:unauthenticatedStatus",
+        "graph:endpoint:POST /api/owners"
+      ],
+      "values": {}
+    },
+    {
+      "assumes": [
+        "보호됨"
+      ],
+      "auth": "anonymous",
+      "baselineProof": [
+        "보호됨"
+      ],
+      "endpoint": "POST /api/pets",
+      "expect": {
+        "class": "4xx",
+        "source": "harness-config",
+        "strict": 403
+      },
+      "id": "post-api-pets-auth-1",
+      "oracle": "status",
+      "rule": "auth",
+      "setup": [],
+      "sources": [
+        "harness:unauthenticatedStatus",
+        "graph:endpoint:POST /api/pets"
+      ],
+      "values": {}
+    },
+    {
+      "assumes": [
+        "보호됨"
+      ],
+      "auth": "anonymous",
+      "baselineProof": [
+        "보호됨"
+      ],
+      "endpoint": "PUT /api/owners/{ownerId}",
+      "expect": {
+        "class": "4xx",
+        "source": "harness-config",
+        "strict": 403
+      },
+      "id": "put-api-owners-ownerid-auth-1",
+      "oracle": "status",
+      "rule": "auth",
+      "setup": [],
+      "sources": [
+        "harness:unauthenticatedStatus",
+        "graph:endpoint:PUT /api/owners/{ownerId}"
+      ],
+      "values": {
+        "path.ownerId": {
+          "provenance": "generic-sentinel",
+          "transform": "nonexistent-id",
+          "value": 1000000
+        }
+      }
+    },
+    {
+      "assumes": [],
+      "auth": "authed",
+      "baselineProof": [],
+      "endpoint": "PUT /api/owners/{ownerId}",
+      "expect": {
+        "class": "4xx",
+        "source": "rule",
+        "strict": "4xx"
+      },
+      "id": "put-api-owners-ownerid-no-data-1",
+      "oracle": "status",
+      "rule": "no-data",
+      "setup": [],
+      "sources": [
+        "graph:endpoint:PUT /api/owners/{ownerId}"
+      ],
+      "values": {
+        "path.ownerId": {
+          "provenance": "generic-sentinel",
+          "transform": "nonexistent-id",
+          "value": 1000000
+        }
+      }
+    },
+    {
+      "assumes": [
+        "보호됨"
+      ],
+      "auth": "anonymous",
+      "baselineProof": [
+        "보호됨"
+      ],
+      "endpoint": "PUT /api/pets/{petId}",
+      "expect": {
+        "class": "4xx",
+        "source": "harness-config",
+        "strict": 403
+      },
+      "id": "put-api-pets-petid-auth-1",
+      "oracle": "status",
+      "rule": "auth",
+      "setup": [],
+      "sources": [
+        "harness:unauthenticatedStatus",
+        "graph:endpoint:PUT /api/pets/{petId}"
+      ],
+      "values": {
+        "path.petId": {
+          "provenance": "generic-sentinel",
+          "transform": "nonexistent-id",
+          "value": 1000000
+        }
+      }
+    },
+    {
+      "assumes": [],
+      "auth": "authed",
+      "baselineProof": [],
+      "endpoint": "PUT /api/pets/{petId}",
+      "expect": {
+        "class": "4xx",
+        "source": "rule",
+        "strict": "4xx"
+      },
+      "id": "put-api-pets-petid-no-data-1",
+      "oracle": "status",
+      "rule": "no-data",
+      "setup": [],
+      "sources": [
+        "graph:endpoint:PUT /api/pets/{petId}"
+      ],
+      "values": {
+        "path.petId": {
+          "provenance": "generic-sentinel",
+          "transform": "nonexistent-id",
+          "value": 1000000
+        }
+      }
+    },
+    {
+      "assumes": [
+        "보호됨"
+      ],
+      "auth": "anonymous",
+      "baselineProof": [
+        "plan-tests-ReservationService.update.json#1@6f16312ce828",
+        "plan-tests-ReservationService.update.json#2@e7f4206ffea3",
+        "plan-tests-ReservationService.update.json#4@2f877d1b07ce",
+        "보호됨"
+      ],
+      "endpoint": "PUT /api/reservations/{id}",
+      "expect": {
+        "class": "4xx",
+        "source": "harness-config",
+        "strict": 403
+      },
+      "id": "update-auth-1",
+      "oracle": "status",
+      "rule": "auth",
+      "setup": [],
+      "sources": [
+        "harness:unauthenticatedStatus",
+        "graph:endpoint:PUT /api/reservations/{id}"
+      ],
+      "values": {
+        "path.id": {
+          "provenance": "generic-sentinel",
+          "transform": "nonexistent-id",
+          "value": 1000000
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "PUT /api/reservations/{id}",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "update-baseline-valid-1",
+      "oracle": "status",
+      "rule": "baseline-valid",
+      "setup": [
+        {
+          "capture": {
+            "id": "id"
+          },
+          "endpoint": "POST /api/reservations",
+          "values": {
+            "animalCount": {
+              "provenance": "input",
+              "value": 1
+            },
+            "checkInDate": {
+              "provenance": "generic-sentinel",
+              "value": "today+1"
+            },
+            "depositAmount": {
+              "provenance": "generic-sentinel",
+              "transform": "relation-satisfy",
+              "value": 1000000
+            },
+            "loyaltyPoints": {
+              "provenance": "input",
+              "value": 500
+            },
+            "nights": {
+              "provenance": "input",
+              "value": 1
+            },
+            "ownerEmail": {
+              "provenance": "generic-sentinel",
+              "transform": "format-heuristic",
+              "value": "uniq@example.com"
+            },
+            "petName": {
+              "provenance": "input",
+              "transform": "length=2",
+              "value": "87"
+            },
+            "priceTier": {
+              "from": "graph:endpoint:POST /api/reservations",
+              "provenance": "input",
+              "value": "BASIC"
+            },
+            "promoCode": {
+              "provenance": "generic-sentinel",
+              "transform": "type-default",
+              "value": "uniq:update-baseline-valid-1"
+            },
+            "roomNumber": {
+              "provenance": "derived",
+              "transform": "spread(sha256(caseId))",
+              "value": 387
+            }
+          }
+        }
+      ],
+      "sources": [
+        "graph:endpoint:PUT /api/reservations/{id}",
+        "plan-tests-ReservationService.update.json#1@6f16312ce828",
+        "plan-tests-ReservationService.update.json#2@e7f4206ffea3",
+        "plan-tests-ReservationService.update.json#4@2f877d1b07ce"
+      ],
+      "values": {
+        "path.id": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "transform": "capture id",
+          "value": "ref:id"
+        }
+      }
+    },
+    {
+      "assumes": [],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.update.json#1@6f16312ce828",
+        "plan-tests-ReservationService.update.json#2@e7f4206ffea3",
+        "plan-tests-ReservationService.update.json#4@2f877d1b07ce"
+      ],
+      "endpoint": "PUT /api/reservations/{id}",
+      "expect": {
+        "class": "4xx",
+        "graphStatus": 404,
+        "source": "graph",
+        "strict": 404
+      },
+      "id": "update-no-data-1",
+      "oracle": "status",
+      "rule": "no-data",
+      "setup": [],
+      "sources": [
+        "plan-tests-ReservationService.update.json#0@3349a2614f0f",
+        "graph:endpoint:PUT /api/reservations/{id}"
+      ],
+      "values": {
+        "path.id": {
+          "provenance": "generic-sentinel",
+          "transform": "nonexistent-id",
+          "value": 1000000
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.update.json#2@e7f4206ffea3",
+        "plan-tests-ReservationService.update.json#4@2f877d1b07ce",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "PUT /api/reservations/{id}",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "update-valid-boundary-1",
+      "oracle": "status",
+      "rule": "valid-boundary",
+      "setup": [
+        {
+          "capture": {
+            "id": "id"
+          },
+          "endpoint": "POST /api/reservations",
+          "values": {
+            "animalCount": {
+              "provenance": "input",
+              "value": 1
+            },
+            "checkInDate": {
+              "from": "plan-tests-ReservationService.update.json#1@6f16312ce828",
+              "provenance": "generic-sentinel",
+              "transform": "0+1",
+              "value": "today+1"
+            },
+            "depositAmount": {
+              "provenance": "generic-sentinel",
+              "transform": "relation-satisfy",
+              "value": 1000000
+            },
+            "loyaltyPoints": {
+              "provenance": "input",
+              "value": 500
+            },
+            "nights": {
+              "provenance": "input",
+              "value": 1
+            },
+            "ownerEmail": {
+              "provenance": "generic-sentinel",
+              "transform": "format-heuristic",
+              "value": "uniq@example.com"
+            },
+            "petName": {
+              "provenance": "input",
+              "transform": "length=2",
+              "value": "87"
+            },
+            "priceTier": {
+              "from": "graph:endpoint:POST /api/reservations",
+              "provenance": "input",
+              "value": "BASIC"
+            },
+            "promoCode": {
+              "provenance": "generic-sentinel",
+              "transform": "type-default",
+              "value": "uniq:update-valid-boundary-1"
+            },
+            "roomNumber": {
+              "provenance": "derived",
+              "transform": "spread(sha256(caseId))",
+              "value": 447
+            }
+          }
+        }
+      ],
+      "sources": [
+        "plan-tests-ReservationService.update.json#1@6f16312ce828"
+      ],
+      "values": {
+        "path.id": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "transform": "capture id",
+          "value": "ref:id"
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.update.json#1@6f16312ce828",
+        "plan-tests-ReservationService.update.json#2@e7f4206ffea3",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "PUT /api/reservations/{id}",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "update-valid-boundary-2",
+      "oracle": "status",
+      "rule": "valid-boundary",
+      "setup": [
+        {
+          "capture": {
+            "id": "id"
+          },
+          "endpoint": "POST /api/reservations",
+          "values": {
+            "animalCount": {
+              "provenance": "input",
+              "value": 1
+            },
+            "checkInDate": {
+              "provenance": "generic-sentinel",
+              "value": "today+1"
+            },
+            "depositAmount": {
+              "provenance": "generic-sentinel",
+              "transform": "relation-satisfy",
+              "value": 1000000
+            },
+            "loyaltyPoints": {
+              "provenance": "input",
+              "value": 500
+            },
+            "nights": {
+              "provenance": "input",
+              "value": 1
+            },
+            "ownerEmail": {
+              "provenance": "generic-sentinel",
+              "transform": "format-heuristic",
+              "value": "uniq@example.com"
+            },
+            "petName": {
+              "provenance": "input",
+              "transform": "length=2",
+              "value": "87"
+            },
+            "priceTier": {
+              "from": "graph:endpoint:POST /api/reservations",
+              "provenance": "input",
+              "value": "BASIC"
+            },
+            "promoCode": {
+              "provenance": "generic-sentinel",
+              "transform": "type-default",
+              "value": "uniq:update-valid-boundary-2"
+            },
+            "roomNumber": {
+              "provenance": "derived",
+              "transform": "spread(sha256(caseId))",
+              "value": 230
+            }
+          }
+        }
+      ],
+      "sources": [
+        "plan-tests-ReservationService.update.json#4@2f877d1b07ce"
+      ],
+      "values": {
+        "body.nights": {
+          "from": "plan-tests-ReservationService.update.json#4@2f877d1b07ce",
+          "provenance": "input",
+          "value": 1
+        },
+        "path.id": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "transform": "capture id",
+          "value": "ref:id"
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.update.json#1@6f16312ce828",
+        "plan-tests-ReservationService.update.json#2@e7f4206ffea3",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "PUT /api/reservations/{id}",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "update-valid-boundary-3",
+      "oracle": "status",
+      "rule": "valid-boundary",
+      "setup": [
+        {
+          "capture": {
+            "id": "id"
+          },
+          "endpoint": "POST /api/reservations",
+          "values": {
+            "animalCount": {
+              "provenance": "input",
+              "value": 1
+            },
+            "checkInDate": {
+              "provenance": "generic-sentinel",
+              "value": "today+1"
+            },
+            "depositAmount": {
+              "provenance": "generic-sentinel",
+              "transform": "relation-satisfy",
+              "value": 1000000
+            },
+            "loyaltyPoints": {
+              "provenance": "input",
+              "value": 500
+            },
+            "nights": {
+              "provenance": "input",
+              "value": 1
+            },
+            "ownerEmail": {
+              "provenance": "generic-sentinel",
+              "transform": "format-heuristic",
+              "value": "uniq@example.com"
+            },
+            "petName": {
+              "provenance": "input",
+              "transform": "length=2",
+              "value": "87"
+            },
+            "priceTier": {
+              "from": "graph:endpoint:POST /api/reservations",
+              "provenance": "input",
+              "value": "BASIC"
+            },
+            "promoCode": {
+              "provenance": "generic-sentinel",
+              "transform": "type-default",
+              "value": "uniq:update-valid-boundary-3"
+            },
+            "roomNumber": {
+              "provenance": "derived",
+              "transform": "spread(sha256(caseId))",
+              "value": 495
+            }
+          }
+        }
+      ],
+      "sources": [
+        "plan-tests-ReservationService.update.json#4@2f877d1b07ce"
+      ],
+      "values": {
+        "body.nights": {
+          "from": "plan-tests-ReservationService.update.json#4@2f877d1b07ce",
+          "provenance": "input",
+          "value": 30
+        },
+        "path.id": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "transform": "capture id",
+          "value": "ref:id"
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.update.json#1@6f16312ce828",
+        "plan-tests-ReservationService.update.json#2@e7f4206ffea3",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "PUT /api/reservations/{id}",
+      "expect": {
+        "bbtgCode": 400,
+        "class": "4xx",
+        "graphStatus": 422,
+        "source": "graph",
+        "strict": 422
+      },
+      "id": "update-violation-1",
+      "oracle": "status",
+      "pair": "update-valid-boundary-2",
+      "rule": "violation",
+      "setup": [
+        {
+          "capture": {
+            "id": "id"
+          },
+          "endpoint": "POST /api/reservations",
+          "values": {
+            "animalCount": {
+              "provenance": "input",
+              "value": 1
+            },
+            "checkInDate": {
+              "provenance": "generic-sentinel",
+              "value": "today+1"
+            },
+            "depositAmount": {
+              "provenance": "generic-sentinel",
+              "transform": "relation-satisfy",
+              "value": 1000000
+            },
+            "loyaltyPoints": {
+              "provenance": "input",
+              "value": 500
+            },
+            "nights": {
+              "provenance": "input",
+              "value": 1
+            },
+            "ownerEmail": {
+              "provenance": "generic-sentinel",
+              "transform": "format-heuristic",
+              "value": "uniq@example.com"
+            },
+            "petName": {
+              "provenance": "input",
+              "transform": "length=2",
+              "value": "87"
+            },
+            "priceTier": {
+              "from": "graph:endpoint:POST /api/reservations",
+              "provenance": "input",
+              "value": "BASIC"
+            },
+            "promoCode": {
+              "provenance": "generic-sentinel",
+              "transform": "type-default",
+              "value": "uniq:update-violation-1"
+            },
+            "roomNumber": {
+              "provenance": "derived",
+              "transform": "spread(sha256(caseId))",
+              "value": 119
+            }
+          }
+        }
+      ],
+      "sources": [
+        "plan-tests-ReservationService.update.json#4@2f877d1b07ce"
+      ],
+      "values": {
+        "body.nights": {
+          "from": "plan-tests-ReservationService.update.json#4@2f877d1b07ce",
+          "provenance": "derived",
+          "transform": "1-1",
+          "value": 0
+        },
+        "path.id": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "transform": "capture id",
+          "value": "ref:id"
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "plan-tests-ReservationService.update.json#1@6f16312ce828",
+        "plan-tests-ReservationService.update.json#2@e7f4206ffea3",
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "PUT /api/reservations/{id}",
+      "expect": {
+        "bbtgCode": 400,
+        "class": "4xx",
+        "graphStatus": 422,
+        "source": "graph",
+        "strict": 422
+      },
+      "id": "update-violation-2",
+      "oracle": "status",
+      "pair": "update-valid-boundary-3",
+      "rule": "violation",
+      "setup": [
+        {
+          "capture": {
+            "id": "id"
+          },
+          "endpoint": "POST /api/reservations",
+          "values": {
+            "animalCount": {
+              "provenance": "input",
+              "value": 1
+            },
+            "checkInDate": {
+              "provenance": "generic-sentinel",
+              "value": "today+1"
+            },
+            "depositAmount": {
+              "provenance": "generic-sentinel",
+              "transform": "relation-satisfy",
+              "value": 1000000
+            },
+            "loyaltyPoints": {
+              "provenance": "input",
+              "value": 500
+            },
+            "nights": {
+              "provenance": "input",
+              "value": 1
+            },
+            "ownerEmail": {
+              "provenance": "generic-sentinel",
+              "transform": "format-heuristic",
+              "value": "uniq@example.com"
+            },
+            "petName": {
+              "provenance": "input",
+              "transform": "length=2",
+              "value": "87"
+            },
+            "priceTier": {
+              "from": "graph:endpoint:POST /api/reservations",
+              "provenance": "input",
+              "value": "BASIC"
+            },
+            "promoCode": {
+              "provenance": "generic-sentinel",
+              "transform": "type-default",
+              "value": "uniq:update-violation-2"
+            },
+            "roomNumber": {
+              "provenance": "derived",
+              "transform": "spread(sha256(caseId))",
+              "value": 379
+            }
+          }
+        }
+      ],
+      "sources": [
+        "plan-tests-ReservationService.update.json#4@2f877d1b07ce"
+      ],
+      "values": {
+        "body.nights": {
+          "from": "plan-tests-ReservationService.update.json#4@2f877d1b07ce",
+          "provenance": "derived",
+          "transform": "30+1",
+          "value": 31
+        },
+        "path.id": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "transform": "capture id",
+          "value": "ref:id"
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "rel-combined:plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "format-heuristic",
+        "rel-combined:plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "create-pairwise-1",
+      "oracle": "status",
+      "pairwise": {
+        "labels": {
+          "p0": "v0",
+          "p1": "v1",
+          "p2": "v0",
+          "p3": "v0",
+          "p4": "v2",
+          "p5": "v0"
+        },
+        "order": 2
+      },
+      "rule": "pairwise",
+      "setup": [],
+      "sources": [
+        "graph:endpoint:POST /api/reservations",
+        "ReservationService_create.json#0.11@a9395b171019",
+        "ReservationService_create.json#0.12@3fe660e2a205",
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "from": "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+          "provenance": "derived",
+          "transform": "500-1",
+          "value": 499
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "PREMIUM"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-pairwise-1"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 312
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "rel-combined:plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "format-heuristic",
+        "rel-combined:plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "create-pairwise-2",
+      "oracle": "status",
+      "pairwise": {
+        "labels": {
+          "p0": "v1",
+          "p1": "v0",
+          "p2": "v1",
+          "p3": "v0",
+          "p4": "v0",
+          "p5": "v1"
+        },
+        "order": 2
+      },
+      "rule": "pairwise",
+      "setup": [],
+      "sources": [
+        "graph:endpoint:POST /api/reservations",
+        "ReservationService_create.json#0.11@a9395b171019",
+        "ReservationService_create.json#0.12@3fe660e2a205",
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33"
+      ],
+      "values": {
+        "body.animalCount": {
+          "from": "plan-tests-ReservationService.create.json#4@547a4919f73a",
+          "provenance": "input",
+          "value": 4
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "from": "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+          "provenance": "input",
+          "value": 30
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "from": "ReservationService_create.json#0.11@a9395b171019",
+          "provenance": "input",
+          "value": "WELCOME10"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 427
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "create-pairwise-3",
+      "oracle": "status",
+      "pairwise": {
+        "labels": {
+          "p0": "v1",
+          "p1": "v0",
+          "p2": "v0",
+          "p3": "v1",
+          "p4": "v0",
+          "p5": "v0"
+        },
+        "order": 2
+      },
+      "rule": "pairwise",
+      "setup": [],
+      "sources": [
+        "graph:endpoint:POST /api/reservations",
+        "ReservationService_create.json#0.11@a9395b171019",
+        "ReservationService_create.json#0.12@3fe660e2a205",
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33"
+      ],
+      "values": {
+        "body.animalCount": {
+          "from": "plan-tests-ReservationService.create.json#4@547a4919f73a",
+          "provenance": "input",
+          "value": 4
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "from": "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+          "provenance": "input",
+          "transform": "length=50",
+          "value": "6392bb1ed13afaf7cb545e7ef2401732c9d7e9fcc37e1c2905"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-pairwise-3"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 204
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "rel-combined:plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "format-heuristic",
+        "rel-combined:plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "create-pairwise-4",
+      "oracle": "status",
+      "pairwise": {
+        "labels": {
+          "p0": "v1",
+          "p1": "v1",
+          "p2": "v1",
+          "p3": "v1",
+          "p4": "v2",
+          "p5": "v1"
+        },
+        "order": 2
+      },
+      "rule": "pairwise",
+      "setup": [],
+      "sources": [
+        "graph:endpoint:POST /api/reservations",
+        "ReservationService_create.json#0.11@a9395b171019",
+        "ReservationService_create.json#0.12@3fe660e2a205",
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33"
+      ],
+      "values": {
+        "body.animalCount": {
+          "from": "plan-tests-ReservationService.create.json#4@547a4919f73a",
+          "provenance": "input",
+          "value": 4
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "from": "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+          "provenance": "derived",
+          "transform": "500-1",
+          "value": 499
+        },
+        "body.nights": {
+          "from": "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+          "provenance": "input",
+          "value": 30
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "from": "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+          "provenance": "input",
+          "transform": "length=50",
+          "value": "6392bb1ed13afaf7cb545e7ef2401732c9d7e9fcc37e1c2905"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "PREMIUM"
+        },
+        "body.promoCode": {
+          "from": "ReservationService_create.json#0.11@a9395b171019",
+          "provenance": "input",
+          "value": "WELCOME10"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 404
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "format-heuristic",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "create-pairwise-5",
+      "oracle": "status",
+      "pairwise": {
+        "labels": {
+          "p0": "v0",
+          "p1": "v1",
+          "p2": "v0",
+          "p3": "v1",
+          "p4": "v0",
+          "p5": "v1"
+        },
+        "order": 2
+      },
+      "rule": "pairwise",
+      "setup": [],
+      "sources": [
+        "graph:endpoint:POST /api/reservations",
+        "ReservationService_create.json#0.11@a9395b171019",
+        "ReservationService_create.json#0.12@3fe660e2a205",
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "from": "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+          "provenance": "derived",
+          "transform": "500-1",
+          "value": 499
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "from": "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+          "provenance": "input",
+          "transform": "length=50",
+          "value": "6392bb1ed13afaf7cb545e7ef2401732c9d7e9fcc37e1c2905"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "BASIC"
+        },
+        "body.promoCode": {
+          "from": "ReservationService_create.json#0.11@a9395b171019",
+          "provenance": "input",
+          "value": "WELCOME10"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 177
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "rel-combined:plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "format-heuristic",
+        "rel-combined:plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "create-pairwise-6",
+      "oracle": "status",
+      "pairwise": {
+        "labels": {
+          "p0": "v0",
+          "p1": "v0",
+          "p2": "v1",
+          "p3": "v0",
+          "p4": "v1",
+          "p5": "v0"
+        },
+        "order": 2
+      },
+      "rule": "pairwise",
+      "setup": [],
+      "sources": [
+        "graph:endpoint:POST /api/reservations",
+        "ReservationService_create.json#0.11@a9395b171019",
+        "ReservationService_create.json#0.12@3fe660e2a205",
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33"
+      ],
+      "values": {
+        "body.animalCount": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "from": "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+          "provenance": "input",
+          "value": 30
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "provenance": "input",
+          "transform": "length=2",
+          "value": "87"
+        },
+        "body.priceTier": {
+          "from": "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+          "provenance": "input",
+          "value": "VIP"
+        },
+        "body.promoCode": {
+          "provenance": "generic-sentinel",
+          "transform": "type-default",
+          "value": "uniq:create-pairwise-6"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 331
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "rel-combined:plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "format-heuristic",
+        "rel-combined:plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "create-pairwise-7",
+      "oracle": "status",
+      "pairwise": {
+        "labels": {
+          "p0": "v1",
+          "p1": "v0",
+          "p2": "v0",
+          "p3": "v1",
+          "p4": "v1",
+          "p5": "v1"
+        },
+        "order": 2
+      },
+      "rule": "pairwise",
+      "setup": [],
+      "sources": [
+        "graph:endpoint:POST /api/reservations",
+        "ReservationService_create.json#0.11@a9395b171019",
+        "ReservationService_create.json#0.12@3fe660e2a205",
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33"
+      ],
+      "values": {
+        "body.animalCount": {
+          "from": "plan-tests-ReservationService.create.json#4@547a4919f73a",
+          "provenance": "input",
+          "value": 4
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "provenance": "input",
+          "value": 1
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "from": "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+          "provenance": "input",
+          "transform": "length=50",
+          "value": "6392bb1ed13afaf7cb545e7ef2401732c9d7e9fcc37e1c2905"
+        },
+        "body.priceTier": {
+          "from": "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+          "provenance": "input",
+          "value": "VIP"
+        },
+        "body.promoCode": {
+          "from": "ReservationService_create.json#0.11@a9395b171019",
+          "provenance": "input",
+          "value": "WELCOME10"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 293
+        }
+      }
+    },
+    {
+      "assumes": [
+        "format-heuristic",
+        "rel-combined:plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "auth": "authed",
+      "baselineProof": [
+        "format-heuristic",
+        "rel-combined:plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "req.nights() * req.priceTier().getNightlyRate() 유한"
+      ],
+      "endpoint": "POST /api/reservations",
+      "expect": {
+        "class": "2xx",
+        "source": "rule",
+        "strict": "2xx"
+      },
+      "id": "create-pairwise-8",
+      "oracle": "status",
+      "pairwise": {
+        "labels": {
+          "p0": "v1",
+          "p1": "v0",
+          "p2": "v1",
+          "p3": "v1",
+          "p4": "v2",
+          "p5": "v1"
+        },
+        "order": 2
+      },
+      "rule": "pairwise",
+      "setup": [],
+      "sources": [
+        "graph:endpoint:POST /api/reservations",
+        "ReservationService_create.json#0.11@a9395b171019",
+        "ReservationService_create.json#0.12@3fe660e2a205",
+        "plan-tests-ReservationService.create.json#10@6cea6217709d",
+        "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+        "plan-tests-ReservationService.create.json#3@d39d0609466e",
+        "plan-tests-ReservationService.create.json#4@547a4919f73a",
+        "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+        "plan-tests-ReservationService.create.json#6@bcef4f3caf14",
+        "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+        "plan-tests-ReservationService.create.json#8@9cb13a7f75a5",
+        "plan-tests-ReservationService.create.json#9@7da555819e33"
+      ],
+      "values": {
+        "body.animalCount": {
+          "from": "plan-tests-ReservationService.create.json#4@547a4919f73a",
+          "provenance": "input",
+          "value": 4
+        },
+        "body.checkInDate": {
+          "provenance": "generic-sentinel",
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "provenance": "generic-sentinel",
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.loyaltyPoints": {
+          "provenance": "input",
+          "value": 500
+        },
+        "body.nights": {
+          "from": "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+          "provenance": "input",
+          "value": 30
+        },
+        "body.ownerEmail": {
+          "provenance": "generic-sentinel",
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.petName": {
+          "from": "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+          "provenance": "input",
+          "transform": "length=50",
+          "value": "6392bb1ed13afaf7cb545e7ef2401732c9d7e9fcc37e1c2905"
+        },
+        "body.priceTier": {
+          "from": "graph:endpoint:POST /api/reservations",
+          "provenance": "input",
+          "value": "PREMIUM"
+        },
+        "body.promoCode": {
+          "from": "ReservationService_create.json#0.11@a9395b171019",
+          "provenance": "input",
+          "value": "WELCOME10"
+        },
+        "body.roomNumber": {
+          "provenance": "derived",
+          "transform": "spread(sha256(caseId))",
+          "value": 285
+        }
+      }
+    }
+  ],
+  "universe": {
+    "byRule": {
+      "auth": 16,
+      "baseline-valid": 2,
+      "branch-entry": 1,
+      "empty-body": 1,
+      "enum-value": 5,
+      "filter-empty": 2,
+      "happy": 5,
+      "no-data": 8,
+      "pairwise": 8,
+      "valid-boundary": 20,
+      "violation": 20
+    },
+    "bySlot": {
+      "byReason": {
+        "format-unknown": 0,
+        "input-contradiction": 2,
+        "input-missing": 3,
+        "needs-state-transition": 14,
+        "no-body-schema": 4,
+        "no-condition": 7,
+        "no-endpoint-mapping": 0,
+        "no-id-ref": 3,
+        "pairwise-infeasible": 0,
+        "pairwise-row-invalid": 0,
+        "pairwise-too-large": 0,
+        "pairwise-unavailable": 0,
+        "param-name-unknown": 1,
+        "unparsed": 5,
+        "unreachable-state": 5,
+        "unresolved-operand": 6
+      },
+      "deduplicated": 1,
+      "generated": 88,
+      "total": 138,
+      "unresolved": 50
+    },
+    "pairwise": {
+      "byEndpoint": {
+        "POST /api/reservations": {
+          "candidates": 13,
+          "cases": 8,
+          "interactionsCovered": 69,
+          "interactionsFeasible": 69,
+          "interactionsTotal": 70,
+          "params": 6,
+          "rows": 8
+        }
+      },
+      "order": 2
+    },
+    "theoretical": {
+      "factors": [
+        {
+          "endpoint": "DELETE /api/reservations/{id}",
+          "fields": {
+            "path.id": 1
+          },
+          "product": 1
+        },
+        {
+          "endpoint": "GET /api/owners",
+          "fields": {},
+          "product": 1
+        },
+        {
+          "endpoint": "GET /api/owners/{ownerId}",
+          "fields": {
+            "path.ownerId": 1
+          },
+          "product": 1
+        },
+        {
+          "endpoint": "GET /api/pets/types",
+          "fields": {},
+          "product": 1
+        },
+        {
+          "endpoint": "GET /api/pets/{petId}",
+          "fields": {
+            "path.petId": 1
+          },
+          "product": 1
+        },
+        {
+          "endpoint": "GET /api/reservations",
+          "fields": {
+            "query.minNights": 1,
+            "query.recentOnly": 1,
+            "query.tier": 1
+          },
+          "product": 1
+        },
+        {
+          "endpoint": "GET /api/reservations/{id}",
+          "fields": {
+            "path.id": 1,
+            "query.includeStale": 2
+          },
+          "product": 2
+        },
+        {
+          "endpoint": "GET /api/vets",
+          "fields": {},
+          "product": 1
+        },
+        {
+          "endpoint": "GET /api/vets/{vetId}",
+          "fields": {
+            "path.vetId": 1
+          },
+          "product": 1
+        },
+        {
+          "endpoint": "POST /api/auth/login",
+          "fields": {
+            "body.password": 1,
+            "body.username": 3
+          },
+          "product": 3
+        },
+        {
+          "endpoint": "POST /api/auth/validate",
+          "fields": {},
+          "product": 1
+        },
+        {
+          "endpoint": "POST /api/owners",
+          "fields": {},
+          "product": 1
+        },
+        {
+          "endpoint": "POST /api/pets",
+          "fields": {},
+          "product": 1
+        },
+        {
+          "endpoint": "POST /api/reservations",
+          "fields": {
+            "body.animalCount": 3,
+            "body.checkInDate": 3,
+            "body.depositAmount": 2,
+            "body.loyaltyPoints": 2,
+            "body.nights": 3,
+            "body.ownerEmail": 3,
+            "body.petName": 4,
+            "body.priceTier": 3,
+            "body.promoCode": 3,
+            "body.roomNumber": 4
+          },
+          "product": 46656
+        },
+        {
+          "endpoint": "PUT /api/owners/{ownerId}",
+          "fields": {
+            "path.ownerId": 1
+          },
+          "product": 1
+        },
+        {
+          "endpoint": "PUT /api/pets/{petId}",
+          "fields": {
+            "path.petId": 1
+          },
+          "product": 1
+        },
+        {
+          "endpoint": "PUT /api/reservations/{id}",
+          "fields": {
+            "body.nights": 5,
+            "body.status": 3,
+            "path.id": 1
+          },
+          "product": 15
+        },
+        {
+          "atom": "0.0",
+          "endpoint": "POST /api/reservations",
+          "item": "plan-tests-ReservationService.create.json#11@8593c1bf9de7",
+          "kind": "concurrency-race",
+          "outOfScope": true
+        },
+        {
+          "atom": "0.1",
+          "endpoint": "PUT /api/reservations/{id}",
+          "item": "plan-tests-ReservationService.update.json#5@b004d07f8e2d",
+          "kind": "concurrency-race",
+          "outOfScope": true
+        }
+      ],
+      "formula": "Σ_endpoint Π_field (1 + 위반 클래스 수(field)) = 1 + 1 + 1 + 1 + 1 + 1*1*1 + 1*2 + 1 + 1 + 1*3 + 1 + 1 + 1 + 3*3*2*2*3*3*4*3*3*4 + 1 + 1 + 1*5*3",
+      "value": 46689
+    }
+  },
+  "unresolved": [
+    {
+      "endpoint": "POST /api/reservations",
+      "reason": "unresolved-operand",
+      "rule": "branch-entry",
+      "source": "ReservationService_create.json#0.12@3fe660e2a205"
+    },
+    {
+      "endpoint": "PUT /api/reservations/{id}",
+      "reason": "unparsed",
+      "rule": "item",
+      "source": "ReservationService_update.json#1.4@1dc63a4c6d58"
+    },
+    {
+      "endpoint": "PUT /api/reservations/{id}",
+      "reason": "needs-state-transition",
+      "rule": "branch-entry",
+      "source": "ReservationService_update.json#1.5@7cec04943888"
+    },
+    {
+      "endpoint": "DELETE /api/reservations/{id}",
+      "reason": "param-name-unknown",
+      "rule": "param",
+      "source": "graph:endpoint:DELETE /api/reservations/{id}"
+    },
+    {
+      "endpoint": "GET /api/owners/{ownerId}",
+      "reason": "no-id-ref",
+      "rule": "happy",
+      "source": "graph:endpoint:GET /api/owners/{ownerId}"
+    },
+    {
+      "endpoint": "GET /api/pets/{petId}",
+      "reason": "no-id-ref",
+      "rule": "happy",
+      "source": "graph:endpoint:GET /api/pets/{petId}"
+    },
+    {
+      "endpoint": "GET /api/vets/{vetId}",
+      "reason": "no-id-ref",
+      "rule": "happy",
+      "source": "graph:endpoint:GET /api/vets/{vetId}"
+    },
+    {
+      "cause": "credentials",
+      "endpoint": "POST /api/auth/login",
+      "reason": "input-missing",
+      "rule": "baseline-valid",
+      "source": "graph:endpoint:POST /api/auth/login"
+    },
+    {
+      "endpoint": "POST /api/owners",
+      "reason": "no-body-schema",
+      "rule": "happy",
+      "source": "graph:endpoint:POST /api/owners"
+    },
+    {
+      "endpoint": "POST /api/pets",
+      "reason": "no-body-schema",
+      "rule": "happy",
+      "source": "graph:endpoint:POST /api/pets"
+    },
+    {
+      "endpoint": "PUT /api/owners/{ownerId}",
+      "reason": "no-body-schema",
+      "rule": "happy",
+      "source": "graph:endpoint:PUT /api/owners/{ownerId}"
+    },
+    {
+      "endpoint": "PUT /api/pets/{petId}",
+      "reason": "no-body-schema",
+      "rule": "happy",
+      "source": "graph:endpoint:PUT /api/pets/{petId}"
+    },
+    {
+      "endpoint": "PUT /api/reservations/{id}",
+      "reason": "needs-state-transition",
+      "rule": "enum-value",
+      "source": "graph:endpoint:PUT /api/reservations/{id}"
+    },
+    {
+      "endpoint": "PUT /api/reservations/{id}",
+      "reason": "needs-state-transition",
+      "rule": "enum-value",
+      "source": "graph:endpoint:PUT /api/reservations/{id}"
+    },
+    {
+      "endpoint": "PUT /api/reservations/{id}",
+      "reason": "needs-state-transition",
+      "rule": "enum-value",
+      "source": "graph:endpoint:PUT /api/reservations/{id}"
+    },
+    {
+      "endpoint": "PUT /api/reservations/{id}",
+      "reason": "needs-state-transition",
+      "rule": "enum-value",
+      "source": "graph:endpoint:PUT /api/reservations/{id}"
+    },
+    {
+      "endpoint": "POST /api/auth/login",
+      "reason": "unparsed",
+      "rule": "item",
+      "source": "plan-tests-CustomUserDetailsService.loadUserByUsername.json#0@9756f69acd20"
+    },
+    {
+      "endpoint": "POST /api/auth/login",
+      "reason": "unparsed",
+      "rule": "item",
+      "source": "plan-tests-CustomUserDetailsService.loadUserByUsername.json#1@d0616d325d2f"
+    },
+    {
+      "endpoint": "POST /api/auth/login",
+      "reason": "unparsed",
+      "rule": "item",
+      "source": "plan-tests-CustomUserDetailsService.loadUserByUsername.json#2@749e03d17ca3"
+    },
+    {
+      "cause": "credentials",
+      "endpoint": "POST /api/auth/login",
+      "reason": "input-missing",
+      "rule": "valid-boundary",
+      "source": "plan-tests-CustomUserDetailsService.loadUserByUsername.json#3@a922eac888b0"
+    },
+    {
+      "endpoint": "POST /api/auth/login",
+      "reason": "no-condition",
+      "rule": "item",
+      "source": "plan-tests-CustomUserDetailsService.loadUserByUsername.json#4@4653d5c9c118"
+    },
+    {
+      "cause": "credentials",
+      "endpoint": "POST /api/auth/login",
+      "reason": "input-missing",
+      "rule": "branch-entry",
+      "source": "plan-tests-CustomUserDetailsService.loadUserByUsername.json#5@85f29a669640"
+    },
+    {
+      "endpoint": "POST /api/reservations",
+      "reason": "needs-state-transition",
+      "rule": "valid-boundary",
+      "source": "plan-tests-ReservationService.create.json#11@8593c1bf9de7"
+    },
+    {
+      "endpoint": "POST /api/reservations",
+      "reason": "needs-state-transition",
+      "rule": "violation",
+      "source": "plan-tests-ReservationService.create.json#11@8593c1bf9de7"
+    },
+    {
+      "endpoint": "POST /api/reservations",
+      "reason": "no-condition",
+      "rule": "item",
+      "source": "plan-tests-ReservationService.create.json#12@4653d5c9c118"
+    },
+    {
+      "endpoint": "POST /api/reservations",
+      "reason": "unparsed",
+      "rule": "item",
+      "source": "plan-tests-ReservationService.create.json#1@752e59497c41"
+    },
+    {
+      "endpoint": "DELETE /api/reservations/{id}",
+      "reason": "unreachable-state",
+      "rule": "valid-boundary",
+      "source": "plan-tests-ReservationService.delete.json#1@bf68ee2636cb"
+    },
+    {
+      "endpoint": "DELETE /api/reservations/{id}",
+      "reason": "unreachable-state",
+      "rule": "valid-boundary",
+      "source": "plan-tests-ReservationService.delete.json#1@bf68ee2636cb"
+    },
+    {
+      "endpoint": "DELETE /api/reservations/{id}",
+      "reason": "unreachable-state",
+      "rule": "violation",
+      "source": "plan-tests-ReservationService.delete.json#1@bf68ee2636cb"
+    },
+    {
+      "endpoint": "DELETE /api/reservations/{id}",
+      "reason": "unresolved-operand",
+      "rule": "valid-boundary",
+      "source": "plan-tests-ReservationService.delete.json#2@68fab2bebba1"
+    },
+    {
+      "endpoint": "DELETE /api/reservations/{id}",
+      "reason": "unresolved-operand",
+      "rule": "violation",
+      "source": "plan-tests-ReservationService.delete.json#2@68fab2bebba1"
+    },
+    {
+      "endpoint": "DELETE /api/reservations/{id}",
+      "reason": "no-condition",
+      "rule": "item",
+      "source": "plan-tests-ReservationService.delete.json#3@ebd0d71ea484"
+    },
+    {
+      "endpoint": "GET /api/reservations/{id}",
+      "reason": "unresolved-operand",
+      "rule": "valid-boundary",
+      "source": "plan-tests-ReservationService.getById.json#1@18d943ea96b7"
+    },
+    {
+      "endpoint": "GET /api/reservations/{id}",
+      "reason": "unresolved-operand",
+      "rule": "valid-boundary",
+      "source": "plan-tests-ReservationService.getById.json#1@18d943ea96b7"
+    },
+    {
+      "endpoint": "GET /api/reservations/{id}",
+      "reason": "unresolved-operand",
+      "rule": "violation",
+      "source": "plan-tests-ReservationService.getById.json#1@18d943ea96b7"
+    },
+    {
+      "endpoint": "GET /api/reservations/{id}",
+      "reason": "no-condition",
+      "rule": "item",
+      "source": "plan-tests-ReservationService.getById.json#2@f871f431e2fe"
+    },
+    {
+      "endpoint": "GET /api/reservations",
+      "reason": "no-condition",
+      "rule": "item",
+      "source": "plan-tests-ReservationService.list.json#3@607fcad712be"
+    },
+    {
+      "endpoint": "GET /api/reservations",
+      "reason": "no-condition",
+      "rule": "item",
+      "source": "plan-tests-ReservationService.list.json#4@f871f431e2fe"
+    },
+    {
+      "endpoint": "PUT /api/reservations/{id}",
+      "reason": "unreachable-state",
+      "rule": "violation",
+      "source": "plan-tests-ReservationService.update.json#1@6f16312ce828"
+    },
+    {
+      "endpoint": "PUT /api/reservations/{id}",
+      "reason": "unreachable-state",
+      "rule": "violation",
+      "source": "plan-tests-ReservationService.update.json#1@6f16312ce828"
+    },
+    {
+      "endpoint": "PUT /api/reservations/{id}",
+      "reason": "needs-state-transition",
+      "rule": "valid-boundary",
+      "source": "plan-tests-ReservationService.update.json#2@e7f4206ffea3"
+    },
+    {
+      "endpoint": "PUT /api/reservations/{id}",
+      "reason": "needs-state-transition",
+      "rule": "valid-boundary",
+      "source": "plan-tests-ReservationService.update.json#2@e7f4206ffea3"
+    },
+    {
+      "endpoint": "PUT /api/reservations/{id}",
+      "reason": "needs-state-transition",
+      "rule": "valid-boundary",
+      "source": "plan-tests-ReservationService.update.json#2@e7f4206ffea3"
+    },
+    {
+      "endpoint": "PUT /api/reservations/{id}",
+      "reason": "needs-state-transition",
+      "rule": "violation",
+      "source": "plan-tests-ReservationService.update.json#2@e7f4206ffea3"
+    },
+    {
+      "endpoint": "PUT /api/reservations/{id}",
+      "reason": "input-contradiction",
+      "rule": "valid-boundary",
+      "source": "plan-tests-ReservationService.update.json#3@e731e6910ece"
+    },
+    {
+      "endpoint": "PUT /api/reservations/{id}",
+      "reason": "input-contradiction",
+      "rule": "violation",
+      "source": "plan-tests-ReservationService.update.json#3@e731e6910ece"
+    },
+    {
+      "endpoint": "PUT /api/reservations/{id}",
+      "reason": "needs-state-transition",
+      "rule": "valid-boundary",
+      "source": "plan-tests-ReservationService.update.json#5@b004d07f8e2d"
+    },
+    {
+      "endpoint": "PUT /api/reservations/{id}",
+      "reason": "needs-state-transition",
+      "rule": "valid-boundary",
+      "source": "plan-tests-ReservationService.update.json#5@b004d07f8e2d"
+    },
+    {
+      "endpoint": "PUT /api/reservations/{id}",
+      "reason": "needs-state-transition",
+      "rule": "violation",
+      "source": "plan-tests-ReservationService.update.json#5@b004d07f8e2d"
+    },
+    {
+      "endpoint": "PUT /api/reservations/{id}",
+      "reason": "no-condition",
+      "rule": "item",
+      "source": "plan-tests-ReservationService.update.json#6@5c2fb62f8917"
+    }
+  ]
+}

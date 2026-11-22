@@ -1,0 +1,740 @@
+{
+  "endpoints": {
+    "DELETE /api/reservations/{id}": {
+      "dropped": [],
+      "effectiveOrder": 0,
+      "exclusions": [],
+      "fixed": {},
+      "params": [],
+      "reason": null,
+      "rows": [],
+      "skipped": "fields<2"
+    },
+    "GET /api/owners": {
+      "dropped": [],
+      "effectiveOrder": 0,
+      "exclusions": [],
+      "fixed": {},
+      "params": [],
+      "reason": null,
+      "rows": [],
+      "skipped": "fields<2"
+    },
+    "GET /api/owners/{ownerId}": {
+      "dropped": [],
+      "effectiveOrder": 0,
+      "exclusions": [],
+      "fixed": {},
+      "params": [],
+      "reason": null,
+      "rows": [],
+      "skipped": "fields<2"
+    },
+    "GET /api/pets/types": {
+      "dropped": [],
+      "effectiveOrder": 0,
+      "exclusions": [],
+      "fixed": {},
+      "params": [],
+      "reason": null,
+      "rows": [],
+      "skipped": "fields<2"
+    },
+    "GET /api/pets/{petId}": {
+      "dropped": [],
+      "effectiveOrder": 0,
+      "exclusions": [],
+      "fixed": {},
+      "params": [],
+      "reason": null,
+      "rows": [],
+      "skipped": "fields<2"
+    },
+    "GET /api/reservations": {
+      "dropped": [],
+      "effectiveOrder": 1,
+      "exclusions": [],
+      "fixed": {
+        "query.minNights": {
+          "kind": "omit",
+          "label": "v0",
+          "provenance": null,
+          "reason": "single-candidate",
+          "source": null,
+          "transform": null
+        },
+        "query.recentOnly": {
+          "kind": "omit",
+          "label": "v0",
+          "provenance": null,
+          "reason": "single-candidate",
+          "source": null,
+          "transform": null
+        }
+      },
+      "params": [
+        {
+          "candidates": [
+            {
+              "kind": "omit",
+              "label": "v0",
+              "provenance": null,
+              "source": null,
+              "transform": null
+            },
+            {
+              "kind": "literal",
+              "label": "v1",
+              "provenance": "input",
+              "source": "graph:endpoint:GET /api/reservations",
+              "transform": null,
+              "value": "BASIC"
+            },
+            {
+              "kind": "literal",
+              "label": "v2",
+              "provenance": "input",
+              "source": "graph:endpoint:GET /api/reservations",
+              "transform": null,
+              "value": "PREMIUM"
+            },
+            {
+              "kind": "literal",
+              "label": "v3",
+              "provenance": "input",
+              "source": "graph:endpoint:GET /api/reservations",
+              "transform": null,
+              "value": "VIP"
+            }
+          ],
+          "field": "tier",
+          "loc": "query",
+          "param": "p0"
+        }
+      ],
+      "reason": null,
+      "rows": [],
+      "skipped": "fields<2"
+    },
+    "GET /api/reservations/{id}": {
+      "dropped": [],
+      "effectiveOrder": 0,
+      "exclusions": [],
+      "fixed": {
+        "query.includeStale": {
+          "kind": "literal",
+          "label": "v0",
+          "provenance": "generic-sentinel",
+          "reason": "stored-or-unresolved-only",
+          "source": null,
+          "transform": null,
+          "value": true
+        }
+      },
+      "params": [],
+      "reason": null,
+      "rows": [],
+      "skipped": "fields<2"
+    },
+    "GET /api/vets": {
+      "dropped": [],
+      "effectiveOrder": 0,
+      "exclusions": [],
+      "fixed": {},
+      "params": [],
+      "reason": null,
+      "rows": [],
+      "skipped": "fields<2"
+    },
+    "GET /api/vets/{vetId}": {
+      "dropped": [],
+      "effectiveOrder": 0,
+      "exclusions": [],
+      "fixed": {},
+      "params": [],
+      "reason": null,
+      "rows": [],
+      "skipped": "fields<2"
+    },
+    "POST /api/auth/login": {
+      "dropped": [],
+      "effectiveOrder": 1,
+      "exclusions": [],
+      "fixed": {
+        "body.password": {
+          "kind": "uniq",
+          "label": "v0",
+          "provenance": "generic-sentinel",
+          "reason": "single-candidate",
+          "source": null,
+          "transform": "type-default"
+        }
+      },
+      "params": [
+        {
+          "candidates": [
+            {
+              "kind": "uniq",
+              "label": "v0",
+              "provenance": "generic-sentinel",
+              "source": null,
+              "transform": null
+            },
+            {
+              "kind": "literal",
+              "label": "v1",
+              "provenance": "input",
+              "source": "plan-tests-CustomUserDetailsService.loadUserByUsername.json#5@85f29a669640",
+              "transform": null,
+              "value": "admin"
+            }
+          ],
+          "field": "username",
+          "loc": "body",
+          "param": "p0"
+        }
+      ],
+      "reason": null,
+      "rows": [],
+      "skipped": "fields<2"
+    },
+    "POST /api/auth/validate": {
+      "dropped": [],
+      "effectiveOrder": 0,
+      "exclusions": [],
+      "fixed": {},
+      "params": [],
+      "reason": null,
+      "rows": [],
+      "skipped": "fields<2"
+    },
+    "POST /api/owners": {
+      "dropped": [],
+      "effectiveOrder": 0,
+      "exclusions": [],
+      "fixed": {},
+      "params": [],
+      "reason": null,
+      "rows": [],
+      "skipped": "fields<2"
+    },
+    "POST /api/pets": {
+      "dropped": [],
+      "effectiveOrder": 0,
+      "exclusions": [],
+      "fixed": {},
+      "params": [],
+      "reason": null,
+      "rows": [],
+      "skipped": "fields<2"
+    },
+    "POST /api/reservations": {
+      "dropped": [],
+      "effectiveOrder": 3,
+      "exclusions": [
+        {
+          "p1": "v1",
+          "p4": "v1"
+        }
+      ],
+      "fixed": {
+        "body.checkInDate": {
+          "kind": "literal",
+          "label": "v0",
+          "provenance": "generic-sentinel",
+          "reason": "single-candidate",
+          "source": null,
+          "transform": null,
+          "value": "today+1"
+        },
+        "body.depositAmount": {
+          "kind": "literal",
+          "label": "v0",
+          "provenance": "generic-sentinel",
+          "reason": "rel-dependent",
+          "source": null,
+          "transform": "relation-satisfy",
+          "value": 1000000
+        },
+        "body.ownerEmail": {
+          "kind": "literal",
+          "label": "v0",
+          "provenance": "generic-sentinel",
+          "reason": "single-candidate",
+          "source": null,
+          "transform": "format-heuristic",
+          "value": "uniq@example.com"
+        },
+        "body.roomNumber": {
+          "kind": "spread",
+          "label": "v0",
+          "provenance": "derived",
+          "range": {
+            "excluded": [
+              100,
+              499
+            ],
+            "hi": 499,
+            "lo": 100
+          },
+          "reason": "count-field",
+          "source": null,
+          "transform": "spread(sha256(caseId))"
+        }
+      },
+      "params": [
+        {
+          "candidates": [
+            {
+              "kind": "literal",
+              "label": "v0",
+              "provenance": "input",
+              "source": null,
+              "transform": null,
+              "value": 1
+            },
+            {
+              "kind": "literal",
+              "label": "v1",
+              "provenance": "input",
+              "source": "plan-tests-ReservationService.create.json#4@547a4919f73a",
+              "transform": null,
+              "value": 4
+            }
+          ],
+          "field": "animalCount",
+          "loc": "body",
+          "param": "p0"
+        },
+        {
+          "candidates": [
+            {
+              "kind": "literal",
+              "label": "v0",
+              "provenance": "input",
+              "source": null,
+              "transform": null,
+              "value": 500
+            },
+            {
+              "kind": "literal",
+              "label": "v1",
+              "provenance": "derived",
+              "source": "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+              "transform": "500-1",
+              "value": 499
+            }
+          ],
+          "field": "loyaltyPoints",
+          "loc": "body",
+          "param": "p1"
+        },
+        {
+          "candidates": [
+            {
+              "kind": "literal",
+              "label": "v0",
+              "provenance": "input",
+              "source": null,
+              "transform": null,
+              "value": 1
+            },
+            {
+              "kind": "literal",
+              "label": "v1",
+              "provenance": "input",
+              "source": "plan-tests-ReservationService.create.json#2@2f877d1b07ce",
+              "transform": null,
+              "value": 30
+            }
+          ],
+          "field": "nights",
+          "loc": "body",
+          "param": "p2"
+        },
+        {
+          "candidates": [
+            {
+              "kind": "literal",
+              "label": "v0",
+              "provenance": "input",
+              "source": null,
+              "transform": "length=2",
+              "value": "87"
+            },
+            {
+              "kind": "literal",
+              "label": "v1",
+              "provenance": "input",
+              "source": "plan-tests-ReservationService.create.json#5@638cf1d21ada",
+              "transform": "length=50",
+              "value": "6392bb1ed13afaf7cb545e7ef2401732c9d7e9fcc37e1c2905"
+            }
+          ],
+          "field": "petName",
+          "loc": "body",
+          "param": "p3"
+        },
+        {
+          "candidates": [
+            {
+              "kind": "literal",
+              "label": "v0",
+              "provenance": "input",
+              "source": "graph:endpoint:POST /api/reservations",
+              "transform": null,
+              "value": "BASIC"
+            },
+            {
+              "kind": "literal",
+              "label": "v1",
+              "provenance": "input",
+              "source": "plan-tests-ReservationService.create.json#7@63a8ee60b1b4",
+              "transform": null,
+              "value": "VIP"
+            },
+            {
+              "kind": "literal",
+              "label": "v2",
+              "provenance": "input",
+              "source": "graph:endpoint:POST /api/reservations",
+              "transform": null,
+              "value": "PREMIUM"
+            }
+          ],
+          "field": "priceTier",
+          "loc": "body",
+          "param": "p4"
+        },
+        {
+          "candidates": [
+            {
+              "kind": "uniq",
+              "label": "v0",
+              "provenance": "generic-sentinel",
+              "source": null,
+              "transform": "type-default"
+            },
+            {
+              "kind": "literal",
+              "label": "v1",
+              "provenance": "input",
+              "source": "ReservationService_create.json#0.11@a9395b171019",
+              "transform": null,
+              "value": "WELCOME10"
+            }
+          ],
+          "field": "promoCode",
+          "loc": "body",
+          "param": "p5"
+        }
+      ],
+      "reason": null,
+      "rows": [
+        {
+          "caseId": "create-pairwise-1",
+          "labels": {
+            "p0": "v1",
+            "p1": "v0",
+            "p2": "v0",
+            "p3": "v1",
+            "p4": "v1",
+            "p5": "v1"
+          },
+          "mergedInto": null
+        },
+        {
+          "caseId": "create-pairwise-2",
+          "labels": {
+            "p0": "v1",
+            "p1": "v1",
+            "p2": "v1",
+            "p3": "v0",
+            "p4": "v0",
+            "p5": "v0"
+          },
+          "mergedInto": null
+        },
+        {
+          "caseId": "create-pairwise-3",
+          "labels": {
+            "p0": "v0",
+            "p1": "v0",
+            "p2": "v0",
+            "p3": "v0",
+            "p4": "v2",
+            "p5": "v0"
+          },
+          "mergedInto": null
+        },
+        {
+          "caseId": "create-pairwise-4",
+          "labels": {
+            "p0": "v1",
+            "p1": "v1",
+            "p2": "v0",
+            "p3": "v0",
+            "p4": "v0",
+            "p5": "v1"
+          },
+          "mergedInto": null
+        },
+        {
+          "caseId": "create-pairwise-5",
+          "labels": {
+            "p0": "v1",
+            "p1": "v0",
+            "p2": "v0",
+            "p3": "v1",
+            "p4": "v0",
+            "p5": "v0"
+          },
+          "mergedInto": null
+        },
+        {
+          "caseId": "create-pairwise-6",
+          "labels": {
+            "p0": "v0",
+            "p1": "v0",
+            "p2": "v1",
+            "p3": "v0",
+            "p4": "v0",
+            "p5": "v1"
+          },
+          "mergedInto": null
+        },
+        {
+          "caseId": "create-pairwise-7",
+          "labels": {
+            "p0": "v0",
+            "p1": "v0",
+            "p2": "v1",
+            "p3": "v0",
+            "p4": "v1",
+            "p5": "v0"
+          },
+          "mergedInto": null
+        },
+        {
+          "caseId": "create-pairwise-8",
+          "labels": {
+            "p0": "v1",
+            "p1": "v1",
+            "p2": "v1",
+            "p3": "v1",
+            "p4": "v2",
+            "p5": "v0"
+          },
+          "mergedInto": null
+        },
+        {
+          "caseId": "create-pairwise-9",
+          "labels": {
+            "p0": "v0",
+            "p1": "v1",
+            "p2": "v1",
+            "p3": "v1",
+            "p4": "v0",
+            "p5": "v1"
+          },
+          "mergedInto": null
+        },
+        {
+          "caseId": "create-pairwise-10",
+          "labels": {
+            "p0": "v0",
+            "p1": "v0",
+            "p2": "v0",
+            "p3": "v1",
+            "p4": "v1",
+            "p5": "v1"
+          },
+          "mergedInto": null
+        },
+        {
+          "caseId": "create-pairwise-11",
+          "labels": {
+            "p0": "v0",
+            "p1": "v0",
+            "p2": "v1",
+            "p3": "v1",
+            "p4": "v2",
+            "p5": "v1"
+          },
+          "mergedInto": null
+        },
+        {
+          "caseId": "create-pairwise-12",
+          "labels": {
+            "p0": "v1",
+            "p1": "v0",
+            "p2": "v1",
+            "p3": "v1",
+            "p4": "v1",
+            "p5": "v0"
+          },
+          "mergedInto": null
+        },
+        {
+          "caseId": "create-pairwise-13",
+          "labels": {
+            "p0": "v1",
+            "p1": "v0",
+            "p2": "v1",
+            "p3": "v0",
+            "p4": "v1",
+            "p5": "v1"
+          },
+          "mergedInto": null
+        },
+        {
+          "caseId": "create-pairwise-14",
+          "labels": {
+            "p0": "v0",
+            "p1": "v0",
+            "p2": "v0",
+            "p3": "v0",
+            "p4": "v1",
+            "p5": "v0"
+          },
+          "mergedInto": null
+        },
+        {
+          "caseId": "create-pairwise-15",
+          "labels": {
+            "p0": "v0",
+            "p1": "v1",
+            "p2": "v0",
+            "p3": "v1",
+            "p4": "v0",
+            "p5": "v0"
+          },
+          "mergedInto": null
+        },
+        {
+          "caseId": "create-pairwise-16",
+          "labels": {
+            "p0": "v0",
+            "p1": "v1",
+            "p2": "v1",
+            "p3": "v0",
+            "p4": "v2",
+            "p5": "v1"
+          },
+          "mergedInto": null
+        },
+        {
+          "caseId": "create-pairwise-17",
+          "labels": {
+            "p0": "v1",
+            "p1": "v1",
+            "p2": "v0",
+            "p3": "v0",
+            "p4": "v2",
+            "p5": "v1"
+          },
+          "mergedInto": null
+        },
+        {
+          "caseId": "create-pairwise-18",
+          "labels": {
+            "p0": "v1",
+            "p1": "v0",
+            "p2": "v0",
+            "p3": "v1",
+            "p4": "v2",
+            "p5": "v0"
+          },
+          "mergedInto": null
+        }
+      ],
+      "skipped": null
+    },
+    "PUT /api/owners/{ownerId}": {
+      "dropped": [],
+      "effectiveOrder": 0,
+      "exclusions": [],
+      "fixed": {},
+      "params": [],
+      "reason": null,
+      "rows": [],
+      "skipped": "fields<2"
+    },
+    "PUT /api/pets/{petId}": {
+      "dropped": [],
+      "effectiveOrder": 0,
+      "exclusions": [],
+      "fixed": {},
+      "params": [],
+      "reason": null,
+      "rows": [],
+      "skipped": "fields<2"
+    },
+    "PUT /api/reservations/{id}": {
+      "dropped": [
+        {
+          "address": "plan-tests-ReservationService.update.json#2@e7f4206ffea3",
+          "candidate": {
+            "kind": "literal",
+            "provenance": "input",
+            "source": "graph:endpoint:PUT /api/reservations/{id}",
+            "transform": null,
+            "value": "CANCELLED"
+          },
+          "field": "status",
+          "loc": "body",
+          "reason": "partial-constraint"
+        }
+      ],
+      "effectiveOrder": 1,
+      "exclusions": [],
+      "fixed": {
+        "body.status": {
+          "kind": "omit",
+          "label": "v0",
+          "provenance": null,
+          "reason": "state-field",
+          "source": null,
+          "transform": null
+        }
+      },
+      "params": [
+        {
+          "candidates": [
+            {
+              "kind": "omit",
+              "label": "v0",
+              "provenance": null,
+              "source": null,
+              "transform": null
+            },
+            {
+              "kind": "literal",
+              "label": "v1",
+              "provenance": "input",
+              "source": "plan-tests-ReservationService.update.json#4@2f877d1b07ce",
+              "transform": null,
+              "value": 1
+            },
+            {
+              "kind": "literal",
+              "label": "v2",
+              "provenance": "input",
+              "source": "plan-tests-ReservationService.update.json#4@2f877d1b07ce",
+              "transform": null,
+              "value": 30
+            }
+          ],
+          "field": "nights",
+          "loc": "body",
+          "param": "p0"
+        }
+      ],
+      "reason": null,
+      "rows": [],
+      "skipped": "fields<2"
+    }
+  },
+  "order": 3,
+  "schema": 1
+}

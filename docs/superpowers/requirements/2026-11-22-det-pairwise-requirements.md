@@ -90,7 +90,7 @@
 - E2E(`runDir`): `pairwise-*` 사유 슬롯 4종 모두 0건, `byRule.pairwise.generated ≥ 1`, POST /api/reservations pairwise 케이스 ≥ 1, `interactionsCovered == interactionsFeasible`.
 
 ### REQ-315 누출·게시 금지 (Must, Unit+E2E)
-- det generation 산출물 전체와 `bdd-gen.json`에 pict 바이너리 경로·홈 경로가 없다(`redact.find_leaks == []`).
+- det generation 산출물 전체에 홈·로컬 경로가 없다(`redact.find_leaks == []`). `bdd-gen.json`(게시하지 않는 run 기록, 모든 arm의 generation `dir`을 원래 담음)에는 pict 바이너리 경로가 없다.
 - E2E: 게시 미러(`runDir/site`)에 `pairwise.json`이 없다.
 
 ### REQ-316 반하드코딩 (Must, Unit)
@@ -110,24 +110,24 @@
 
 | REQ-ID | 요약 | 검증 테스트 | 레벨 | 상태 |
 |---|---|---|---|---|
-| REQ-301 | PICT 고정 빌드 | test_det_pairwise_tool.py::test_req301_s00_builds_pict<br>test_det_pairwise_tool.py::test_req301_stamp_reuse_and_rebuild<br>test_det_pairwise.py::test_req301_tools_lock_real | Int/E2E | ⚪ |
-| REQ-302 | S00 실패 격리 | test_det_pairwise_tool.py::test_req302_not_requested<br>test_det_pairwise_tool.py::test_req302_prepare_failure (3종 parametrize) | Int | ⚪ |
-| REQ-303 | pict 없음 상태 | test_det_pairwise_tool.py::test_req303_unavailable_degrades | Int | ⚪ |
-| REQ-304 | 기존 출력 불변 | test_unit_pairwise.py::test_req304_disabled_identical<br>test_unit_pairwise.py::test_req304_existing_cases_kept<br>test_det_pairwise.py::test_req304_inputs_identical_real<br>test_det_pairwise.py::test_req304_existing_cases_real | Unit/E2E | ⚪ |
-| REQ-305 | 후보 모델 | test_unit_pairwise.py::test_req305_candidate_sources (행별)<br>test_unit_pairwise.py::test_req305_kinds<br>test_unit_pairwise.py::test_req305_filter_and_fixed<br>test_unit_pairwise.py::test_req305_petclinic_model<br>test_unit_pairwise.py::test_req305_candidate_floor | Unit | ⚪ |
-| REQ-306 | 배제 조합 | test_unit_pairwise.py::test_req306_partial_evaluation (행별)<br>test_unit_pairwise.py::test_req306_petclinic_vip_exclusion<br>test_unit_pairwise.py::test_req306_exclusions_justified<br>test_unit_pairwise.py::test_req306_undetermined | Unit | ⚪ |
-| REQ-307 | 실행·분류 | test_unit_pairwise.py::test_req307_field_count<br>test_unit_pairwise.py::test_req307_rc_and_output_contract<br>test_unit_pairwise.py::test_req307_size_caps<br>test_det_pairwise_tool.py::test_req307_timeout_fails<br>test_unit_pairwise.py::test_req307_neutral_model_and_cleanup | Unit/Int | ⚪ |
-| REQ-308 | pairwise 케이스 | test_unit_pairwise.py::test_req308_case_shape<br>test_unit_pairwise.py::test_req308_order_and_merge<br>test_unit_pairwise.py::test_req308_rel_combined<br>test_unit_pairwise.py::test_req308_no_row_invalid<br>test_unit_pairwise.py::test_req308_reasons | Unit | ⚪ |
-| REQ-309 | 실현 가능 상호작용 | test_unit_pairwise.py::test_req309_feasible_interactions<br>test_det_pairwise.py::test_req309_feasible_interactions_real | Unit/E2E | ⚪ |
-| REQ-310 | 오류 회피 | test_unit_pairwise.py::test_req310_no_error_condition<br>test_det_pairwise.py::test_req310_real | Unit/E2E | ⚪ |
-| REQ-311 | 결정성 | test_unit_pairwise.py::test_req311_deterministic<br>test_unit_pairwise.py::test_req311_pict_rows_deterministic<br>test_unit_pairwise.py::test_req311_key_tag | Unit | ⚪ |
-| REQ-312 | 실행 직전 무결성 | test_det_pairwise_tool.py::test_req312_sha_mismatch | Int | ⚪ |
-| REQ-313 | order 옵션 | test_det_pairwise_tool.py::test_req313_order_option | Int | ⚪ |
-| REQ-314 | 보고·스키마 | test_unit_pairwise.py::test_req314_schemas_and_counters<br>test_det_pairwise.py::test_req314_report_real | Unit/E2E | ⚪ |
-| REQ-315 | 누출·게시 금지 | test_unit_pairwise.py::test_req315_no_leaks<br>test_det_pairwise.py::test_req315_not_published_real | Unit/E2E | ⚪ |
-| REQ-316 | 반하드코딩 | test_unit_pairwise.py::test_req316_mutated | Unit | ⚪ |
-| REQ-317 | 커버리지 비교 | test_unit_pairwise.py::test_req317_comparability<br>test_unit_pairwise.py::test_req317_whitepaper | Unit | ⚪ |
-| REQ-318 | 3-way | test_det_pairwise.py::test_req318_three_way_real<br>test_unit_pairwise.py::test_req318_whitepaper | E2E/Unit | ⚪ |
-| REQ-319 | 문서 갱신 | test_unit_pairwise.py::test_req319_docs | Unit | ⚪ |
+| REQ-301 | PICT 고정 빌드 | test_det_pairwise_tool.py::test_req301_s00_builds_pict<br>test_det_pairwise_tool.py::test_req301_stamp_reuse_and_rebuild<br>test_det_pairwise.py::test_req301_tools_lock_real | Int/E2E | 🟢 passed |
+| REQ-302 | S00 실패 격리 | test_det_pairwise_tool.py::test_req302_not_requested<br>test_det_pairwise_tool.py::test_req302_prepare_failure (3종 parametrize) | Int | 🟢 passed |
+| REQ-303 | pict 없음 상태 | test_det_pairwise_tool.py::test_req303_unavailable_degrades | Int | 🟢 passed |
+| REQ-304 | 기존 출력 불변 | test_unit_pairwise.py::test_req304_disabled_identical<br>test_unit_pairwise.py::test_req304_existing_cases_kept<br>test_det_pairwise.py::test_req304_inputs_identical_real<br>test_det_pairwise.py::test_req304_existing_cases_real | Unit/E2E | 🟢 passed |
+| REQ-305 | 후보 모델 | test_unit_pairwise.py::test_req305_candidate_sources (행별)<br>test_unit_pairwise.py::test_req305_kinds<br>test_unit_pairwise.py::test_req305_filter_and_fixed<br>test_unit_pairwise.py::test_req305_petclinic_model<br>test_unit_pairwise.py::test_req305_candidate_floor | Unit | 🟢 passed |
+| REQ-306 | 배제 조합 | test_unit_pairwise.py::test_req306_partial_evaluation (행별)<br>test_unit_pairwise.py::test_req306_petclinic_vip_exclusion<br>test_unit_pairwise.py::test_req306_exclusions_justified<br>test_unit_pairwise.py::test_req306_undetermined | Unit | 🟢 passed |
+| REQ-307 | 실행·분류 | test_unit_pairwise.py::test_req307_field_count<br>test_unit_pairwise.py::test_req307_rc_and_output_contract<br>test_unit_pairwise.py::test_req307_size_caps<br>test_det_pairwise_tool.py::test_req307_timeout_fails<br>test_unit_pairwise.py::test_req307_neutral_model_and_cleanup | Unit/Int | 🟢 passed |
+| REQ-308 | pairwise 케이스 | test_unit_pairwise.py::test_req308_case_shape<br>test_unit_pairwise.py::test_req308_order_and_merge<br>test_unit_pairwise.py::test_req308_rel_combined<br>test_unit_pairwise.py::test_req308_no_row_invalid<br>test_unit_pairwise.py::test_req308_reasons | Unit | 🟢 passed |
+| REQ-309 | 실현 가능 상호작용 | test_unit_pairwise.py::test_req309_feasible_interactions<br>test_det_pairwise.py::test_req309_feasible_interactions_real | Unit/E2E | 🟢 passed |
+| REQ-310 | 오류 회피 | test_unit_pairwise.py::test_req310_no_error_condition<br>test_det_pairwise.py::test_req310_real | Unit/E2E | 🟢 passed |
+| REQ-311 | 결정성 | test_unit_pairwise.py::test_req311_deterministic<br>test_unit_pairwise.py::test_req311_pict_rows_deterministic<br>test_unit_pairwise.py::test_req311_key_tag | Unit | 🟢 passed |
+| REQ-312 | 실행 직전 무결성 | test_det_pairwise_tool.py::test_req312_sha_mismatch | Int | 🟢 passed |
+| REQ-313 | order 옵션 | test_det_pairwise_tool.py::test_req313_order_option | Int | 🟢 passed |
+| REQ-314 | 보고·스키마 | test_unit_pairwise.py::test_req314_schemas_and_counters<br>test_det_pairwise.py::test_req314_report_real | Unit/E2E | 🟢 passed |
+| REQ-315 | 누출·게시 금지 | test_unit_pairwise.py::test_req315_no_leaks<br>test_det_pairwise.py::test_req315_not_published_real | Unit/E2E | 🟢 passed |
+| REQ-316 | 반하드코딩 | test_unit_pairwise.py::test_req316_mutated | Unit | 🟢 passed |
+| REQ-317 | 커버리지 비교 | test_unit_pairwise.py::test_req317_comparability<br>test_unit_pairwise.py::test_req317_whitepaper | Unit | 🟢 passed |
+| REQ-318 | 3-way | test_det_pairwise.py::test_req318_three_way_real<br>test_unit_pairwise.py::test_req318_whitepaper | E2E/Unit | 🟢 passed |
+| REQ-319 | 문서 갱신 | test_unit_pairwise.py::test_req319_docs | Unit | 🟢 passed |
 
-커버리지 대상: REQ-301~319(19건). 제외: 없음.
+커버리지 대상: REQ-301~319(19건). 제외: 없음. 상태 기준: order 2 run `20261122-075628Z-b6f9393-manual-06cbd507`(게시 `_test/det-pairwise-20261122/`, det `det-7cac5644-r1`), order 3 run `20261122-083102Z-b6f9393-manual-dac4592a`(게시 `_test/det-pairwise-o3-20261122/`, det `det-7cdf5b29-r1`), E2E 15 passed(det_pairwise_e2e 8 + det_e2e 7), 단위·통합 테스트. 매트릭스 커버리지 19/19.

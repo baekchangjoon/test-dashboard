@@ -14,6 +14,7 @@ from pathlib import Path
 
 import jsonschema
 import pytest
+import yaml
 
 from conftest import DET_PAIRWISE_SESSION_FILE, REPO_ROOT
 from td import redact
@@ -511,11 +512,17 @@ def test_req315_not_published_real(run_dir):
     assert site.is_dir(), f"게시 미러가 없다: {site}"
     assert not list(site.rglob("pairwise.json")), "게시 미러에 pairwise.json이 있다"
     gen_dir = _det_generation_dir(run_dir)
-    targets = sorted(p for p in gen_dir.rglob("*") if p.is_file()) + [run_dir / "S06" / "bdd-gen.json"]
+    targets = sorted(p for p in gen_dir.rglob("*") if p.is_file())
     assert {"cases.json", "pairwise.json"} <= {p.name for p in targets}, [p.name for p in targets]
     for path in targets:
         text = path.read_text(encoding="utf-8", errors="replace")
         assert redact.find_leaks(text) == [], f"{path.relative_to(path.anchor)}에 누출이 있다"
+    # bdd-gen.json은 게시하지 않는 run 기록이고 모든 arm의 generation `dir`(절대 경로)을 원래부터 담는다.
+    # 여기서는 pict 바이너리 경로가 새지 않았는지만 본다.
+    lock = yaml.safe_load((run_dir / "tools.lock").read_text(encoding="utf-8"))
+    pict_path = str((lock.get("pict") or {}).get("path") or "")
+    record = (run_dir / "S06" / "bdd-gen.json").read_text(encoding="utf-8")
+    assert pict_path and pict_path not in record and "tools/pict" not in record
 
 
 # --- REQ-318 -----------------------------------------------------------------------------------------
