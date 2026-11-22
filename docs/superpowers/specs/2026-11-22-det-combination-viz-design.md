@@ -91,7 +91,7 @@ A를 고른다. B는 반목표에 걸리고, C는 S12가 이미 det 블록을 �
 | count 위반 | 그 필드의 `count` 클래스 |
 | count 유효 경계(priors = C-1) | `valid`, `boundaries`에 `count` 클래스 |
 | rel | `side[0]` 필드에만 칸을 적고 나머지 side 필드는 적지 않는다(값은 `cases.json` `assumes`로 추적) |
-| 저장 상태(`stored`) 원자식 | 요청 필드 칸이 아니다. 케이스 객체 `stored: [classLabel]`로 남긴다 |
+| 저장 상태(`stored`) 원자식 | 요청 필드 칸이 아니다. 위반으로 넣었으면 `stored: [classLabel]`, 유효 경계로 뒤집었으면 `storedBoundaries: [classLabel]`로 남긴다 |
 | 변환 못 한 원자식(생성 불가 슬롯) | 그 필드의 raw 클래스 |
 | enum-value | `valid`, `enumValue: {field, constant}` |
 | 칸에 없는 필드 | `valid`로 해석(baseline 값) |
