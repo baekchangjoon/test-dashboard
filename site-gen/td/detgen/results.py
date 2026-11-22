@@ -28,7 +28,7 @@ from pathlib import Path
 from td import scenarios
 from td.detgen.observed import observed_codes
 
-__all__ = ["summarize", "VIOLATION_RULE", "BASELINE_RULE"]
+__all__ = ["summarize", "case_statuses", "VIOLATION_RULE", "BASELINE_RULE"]
 
 VIOLATION_RULE = "violation"
 BASELINE_RULE = "baseline-valid"
@@ -70,7 +70,7 @@ def _case_by_line(feature_text: str) -> dict[int, str]:
     return found
 
 
-def _case_statuses(gen_dir: Path, s07_dir: Path) -> dict[str, str]:
+def case_statuses(gen_dir: Path, s07_dir: Path) -> dict[str, str]:
     """케이스 id → 시나리오 status(passed|failed|undefined|uncompilable). 결과 줄이 없는 케이스는 빠진다."""
     results_path = s07_dir / "scenario-results.json"
     if not results_path.is_file():
@@ -103,7 +103,7 @@ def summarize(gen_dir: Path, s07_dir: Path) -> dict:
     if not isinstance(document, dict) or not isinstance(document.get("cases"), list):
         raise ValueError(f"{CASES_FILE}이 없거나 형식이 맞지 않는다")
     cases: list[dict] = document["cases"]
-    statuses = _case_statuses(gen_dir, s07_dir)
+    statuses = case_statuses(gen_dir, s07_dir)
     cucumber = s07_dir / "cucumber.json"
     try:
         codes = observed_codes(cucumber.read_text(encoding="utf-8")) if cucumber.is_file() else {}
