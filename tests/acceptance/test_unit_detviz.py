@@ -7,6 +7,7 @@ import copy
 import dataclasses
 import hashlib
 import json
+import re
 from pathlib import Path
 
 import jsonschema
@@ -687,3 +688,347 @@ def test_unresolved_endpoint_mapping_petclinic(generated):
         assert by_cells == {made.cases_doc["unresolved"][slot["index"]]["endpoint"]}, slot["index"]
         checked += 1
     assert checked > 0
+
+
+# --- Task 4: compare 통합·det.html·링크(REQ-209, REQ-211) ---------------------------------------------------------
+def test_build_trace(tmp_path):
+    """화면 추적용 `trace`: 케이스별 출처 주소(`~` 제거)와 생성 불가 항목의 엔드포인트(cases.json 순서)."""
+    from td import detviz
+    gen_dir, s07_dir, _factors, _ids = _small(tmp_path)
+    cases_doc = json.loads((gen_dir / "cases.json").read_text(encoding="utf-8"))
+    cases_doc["cases"][0]["sources"] = ["plan:A#m:0~", "plan:A#m:1"]
+    (gen_dir / "cases.json").write_text(json.dumps(cases_doc), encoding="utf-8")
+    doc = detviz.build(gen_dir, s07_dir)
+    trace = doc["trace"]
+    assert set(trace["caseSources"]) == set(doc["caseResults"])
+    assert trace["caseSources"][cases_doc["cases"][0]["id"]] == ["plan:A#m:0", "plan:A#m:1"]
+    assert trace["unresolvedEndpoints"] == ["PUT /b", "POST /a"]
+    detviz.validate(doc)
+
+
+def _det_compare_run(tmp_path: Path, monkeypatch, *, factors: bool = True) -> tuple[Path, Path]:
+    """합성 compare run + det arm(test_compare.add_det_arm). factors=True면 generation에 factors.json을 둔다."""
+    from test_compare import add_det_arm, make_compare_run
+    from td import scenarios
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    run_dir = make_compare_run(tmp_path)
+    add_det_arm(run_dir, tmp_path, monkeypatch)
+    gen_dir = scenarios.generation_dir("petclinic", "det-cccccccc-r1")
+    if factors:
+        small, _ids = _small_factors()
+        cases_doc = json.loads((gen_dir / "cases.json").read_text(encoding="utf-8"))
+        cases_doc["unresolved"] = [{"source": f"src:{i}", "reason": "r", "endpoint": owner}
+                                   for i, owner in enumerate(("PUT /b", "POST /a"))]
+        (gen_dir / "cases.json").write_text(json.dumps(cases_doc), encoding="utf-8")
+        (gen_dir / "factors.json").write_text(json.dumps(small, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+    state_file = run_dir / "stages" / "S12.json"
+    state_file.write_text(json.dumps({"id": "S12", "status": "passed", "reason": None,
+                                      "outputs": {"compare": str(run_dir / "S12" / "compare")}}))
+    from td import state
+    state.set_run_field(run_dir, "stages.S12", "passed")
+    return run_dir, gen_dir
+
+
+def _run_compare(run_dir: Path) -> Path:
+    from test_compare import SUT_FILE
+    from td import compare
+    assert compare.main(["run", str(run_dir), "--sut-file", str(SUT_FILE)]) == 0
+    return run_dir / "S12" / "compare"
+
+
+def _compare_doc(out: Path) -> dict:
+    return json.loads((out / "compare.json").read_text(encoding="utf-8"))
+
+
+def _assert_no_det_page(out: Path):
+    assert not (out / "det.html").exists() and not (out / "det-viz.json").exists()
+    assert 'href="det.html"' not in (out / "compare.html").read_text(encoding="utf-8")
+
+
+def _without_viz(document: dict) -> dict:
+    document = copy.deepcopy(document)
+    document["deterministic"].pop("viz", None)
+    return document
+
+
+def test_req209_ok_baseline(tmp_path, monkeypatch):
+    """정상 경로(대조군): viz ok ⇔ det-viz.json·det.html 존재, compare.html·run 페이지 링크."""
+    from td import compare, detviz
+    from td.site import pages
+    run_dir, _gen = _det_compare_run(tmp_path, monkeypatch)
+    out = _run_compare(run_dir)
+    document = _compare_doc(out)
+    compare.validate(document)
+    assert document["deterministic"]["viz"] == {"status": "ok", "reason": None}
+    detviz.validate(json.loads((out / "det-viz.json").read_text(encoding="utf-8")))
+    html = (out / "det.html").read_text(encoding="utf-8")
+    assert 'href="site.css"' in html and "Cytoscape Consortium" in html
+    assert 'href="det.html"' in (out / "compare.html").read_text(encoding="utf-8")
+    site = tmp_path / "site"
+    index = pages.render_run(run_dir, site).read_text(encoding="utf-8")
+    assert 'href="compare/det.html"' in index and 'href="compare/compare.html"' in index
+    assert (site / "compare" / "det.html").is_file()
+    assert "static/site.css" in (site / "compare" / "det.html").read_text(encoding="utf-8")
+    assert 'href="det.html"' in (site / "compare" / "compare.html").read_text(encoding="utf-8")
+
+
+def test_req209_absent(tmp_path, monkeypatch):
+    """(a) factors.json 없음 → viz absent, 파일·링크 없음, run 페이지 링크 없음."""
+    from td import compare
+    from td.site import pages
+    run_dir, _gen = _det_compare_run(tmp_path, monkeypatch, factors=False)
+    out = _run_compare(run_dir)
+    document = _compare_doc(out)
+    compare.validate(document)
+    assert document["deterministic"]["status"] == "measured"
+    assert document["deterministic"]["viz"] == {"status": "absent", "reason": None}
+    _assert_no_det_page(out)
+    assert "factors.json" in (out / "compare.html").read_text(encoding="utf-8")   # 사유 한 줄
+    site = tmp_path / "site"
+    index = pages.render_run(run_dir, site).read_text(encoding="utf-8")
+    assert "compare/det.html" not in index and 'href="compare/compare.html"' in index
+
+
+def test_req209_build_error(tmp_path, monkeypatch):
+    """(b) detviz.build 예외 → compare 성공, viz failed(사유 문자열, 홈 경로 없음), 파일·링크 없음, 나머지 문서 동일."""
+    from td import compare, detviz
+    run_dir, _gen = _det_compare_run(tmp_path, monkeypatch)
+    healthy = _compare_doc(_run_compare(run_dir))
+    assert healthy["deterministic"]["viz"]["status"] == "ok"
+
+    def broken(gen_dir, s07_dir):
+        raise RuntimeError(f"boom at {Path.home()}/secret/factors.json")
+    monkeypatch.setattr(detviz, "build", broken)
+    out = _run_compare(run_dir)
+    document = _compare_doc(out)
+    compare.validate(document)
+    viz = document["deterministic"]["viz"]
+    assert viz["status"] == "failed" and isinstance(viz["reason"], str) and "RuntimeError" in viz["reason"]
+    assert str(Path.home()) not in viz["reason"]
+    _assert_no_det_page(out)
+    assert _without_viz(document) == _without_viz(healthy)
+
+
+def test_req209_write_error(tmp_path, monkeypatch):
+    """(c) det-viz.json 쓰기 OSError → (b)와 같은 결과."""
+    from td import compare
+    run_dir, _gen = _det_compare_run(tmp_path, monkeypatch)
+    healthy = _compare_doc(_run_compare(run_dir))
+    original = Path.write_text
+
+    def failing(self, *args, **kwargs):
+        if self.name == "det-viz.json":
+            raise OSError("disk full")
+        return original(self, *args, **kwargs)
+    monkeypatch.setattr(Path, "write_text", failing)
+    out = _run_compare(run_dir)
+    monkeypatch.setattr(Path, "write_text", original)
+    document = _compare_doc(out)
+    compare.validate(document)
+    assert document["deterministic"]["viz"]["status"] == "failed"
+    assert "OSError" in document["deterministic"]["viz"]["reason"]
+    _assert_no_det_page(out)
+    assert _without_viz(document) == _without_viz(healthy)
+
+
+def test_req209_render_error(tmp_path, monkeypatch):
+    """(d) det.html 템플릿 예외 → compare.html은 생기고 링크 없음, det.html 없음, viz failed."""
+    from td import compare
+
+    def broken(viz_doc, css_href):
+        raise RuntimeError("template exploded")
+    monkeypatch.setattr(compare, "render_det_html", broken)
+    run_dir, _gen = _det_compare_run(tmp_path, monkeypatch)
+    out = _run_compare(run_dir)
+    document = _compare_doc(out)
+    compare.validate(document)
+    assert (out / "compare.html").is_file()
+    assert document["deterministic"]["viz"]["status"] == "failed"
+    assert "template exploded" in document["deterministic"]["viz"]["reason"]
+    _assert_no_det_page(out)
+
+
+def test_req209_rerender_error(tmp_path, monkeypatch):
+    """(e) RERENDER["compare/"] 경로의 det.html 예외 → 게시 사본 compare.html 정상, det.html 없음, 게시 compare.json viz failed."""
+    from td import compare
+    from td.site import layout, pages
+    run_dir, _gen = _det_compare_run(tmp_path, monkeypatch)
+    out = _run_compare(run_dir)
+    assert (out / "det.html").is_file()
+
+    def broken(viz_doc, css_href):
+        raise RuntimeError("rerender exploded")
+    monkeypatch.setattr(compare, "render_det_html", broken)
+    assert layout.RERENDER["compare/"] is layout._rerender_compare
+    site = tmp_path / "site"
+    index = pages.render_run(run_dir, site).read_text(encoding="utf-8")
+    published = site / "compare"
+    html = (published / "compare.html").read_text(encoding="utf-8")
+    assert "탐색적 관찰" in html and 'href="det.html"' not in html
+    assert not (published / "det.html").exists() and not (published / "det-viz.json").exists()
+    document = json.loads((published / "compare.json").read_text(encoding="utf-8"))
+    compare.validate(document)
+    assert document["deterministic"]["viz"]["status"] == "failed"
+    assert "compare/det.html" not in index
+    # 원본 run 디렉터리는 건드리지 않는다
+    assert _compare_doc(out)["deterministic"]["viz"]["status"] == "ok" and (out / "det.html").is_file()
+
+
+@pytest.mark.parametrize("change", ["factors-removed", "det-null", "det-failed"])
+def test_req209_stale_removed(tmp_path, monkeypatch, change):
+    """(f) ok로 만든 뒤 factors 삭제·det 블록 null·failed 변형으로 재실행 → 이전 det-viz.json·det.html이 지워진다."""
+    from td import compare
+    from td.detgen import results as det_results
+    run_dir, gen_dir = _det_compare_run(tmp_path, monkeypatch)
+    out = _run_compare(run_dir)
+    assert (out / "det.html").is_file() and (out / "det-viz.json").is_file()
+    if change == "factors-removed":
+        (gen_dir / "factors.json").unlink()
+    elif change == "det-null":
+        stage_path = run_dir / "stages" / "S06.json"
+        stage = json.loads(stage_path.read_text(encoding="utf-8"))
+        stage["arms"]["det"] = {"status": "skipped", "reason": "det 건너뜀"}
+        stage_path.write_text(json.dumps(stage), encoding="utf-8")
+    else:
+        def broken(gen_dir, s07_dir):
+            raise ValueError("summary broke")
+        monkeypatch.setattr(det_results, "summarize", broken)
+    document = _compare_doc(_run_compare(run_dir))
+    compare.validate(document)
+    det = document["deterministic"]
+    if change == "factors-removed":
+        assert det["viz"] == {"status": "absent", "reason": None}
+    elif change == "det-null":
+        assert det is None
+    else:
+        assert det["status"] == "failed" and "viz" not in det
+    _assert_no_det_page(out)
+
+
+def test_req209_missing_viz_key(tmp_path, monkeypatch):
+    """(g) viz 키 없는 measured 블록(예전 compare.json) → compare.html 정상, 링크 없음, 낡은 det.html 삭제."""
+    from td import compare
+    run_dir, _gen = _det_compare_run(tmp_path, monkeypatch)
+    out = _run_compare(run_dir)
+    document = _without_viz(_compare_doc(out))
+    assert (out / "det.html").is_file()
+    compare.render_page(out, document)
+    html = (out / "compare.html").read_text(encoding="utf-8")
+    assert 'id="deterministic"' in html and 'href="det.html"' not in html
+    assert not (out / "det.html").exists()
+    assert "viz" not in document["deterministic"]
+
+
+# --- REQ-211: 화면 -----------------------------------------------------------------------------------------------
+HOSTILE_EXTRA = '<img src=x onerror="window.__pwned=1"> <b onclick="window.__pwned=2">x</b></script>'
+
+
+@pytest.fixture(scope="module")
+def det_browser():
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as playwright:
+        instance = playwright.chromium.launch()
+        yield instance
+        instance.close()
+
+
+def _open_det(browser, html_path: Path, **context_kwargs):
+    context = browser.new_context(**context_kwargs)
+    blocked, errors = [], []
+
+    def guard(route):
+        if route.request.url.startswith(("file:", "data:")):
+            route.continue_()
+        else:
+            blocked.append(route.request.url)
+            route.abort()
+    context.route("**/*", guard)
+    page = context.new_page()
+    page.on("console", lambda msg: errors.append(msg.text) if msg.type == "error" else None)
+    page.on("pageerror", lambda exc: errors.append(str(exc)))
+    page.goto(html_path.as_uri())
+    page.wait_for_function("window.__td_ready === true", timeout=30000)
+    return context, page, blocked, errors
+
+
+def _hostile_page(tmp_path: Path, generated) -> tuple[Path, dict, dict, str, str]:
+    """viz-kinds generation으로 det-viz 문서를 만들고, 케이스 하나의 출처 조건식에 적대적 조각을 덧붙여 det.html을 그린다."""
+    import shutil
+    from td import compare, detviz
+    made = generated("viz-kinds")
+    gen_dir = tmp_path / "det-0000beef-r1"
+    shutil.copytree(made.out, gen_dir)
+    s07_dir = tmp_path / "S07"
+    s07_dir.mkdir()
+    doc = detviz.build(gen_dir, s07_dir)
+    case = next(c for c in made.cases_doc["cases"] if c["endpoint"] == ITEMS and c["sources"]
+                and doc["factors"]["sources"].get(c["sources"][0].rstrip("~"), {}).get("condition"))
+    address = case["sources"][0].rstrip("~")
+    doc["factors"]["sources"][address]["condition"] += HOSTILE_EXTRA
+    detviz.validate(doc)
+    out = tmp_path / "compare"
+    out.mkdir()
+    (out / "det-viz.json").write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    html_path = out / "det.html"
+    html_path.write_text(compare.render_det_html(doc, "site.css"), encoding="utf-8")
+    shutil.copy2(REPO_ROOT / "site-gen" / "td" / "site" / "static" / "site.css", out / "site.css")
+    return html_path, doc, made.cases_doc, case["id"], doc["factors"]["sources"][address]["condition"]
+
+
+def test_req211_hostile_dom(tmp_path, generated, det_browser):
+    """적대적 문자열이 든 det.html: 주입 요소·실행 표식 없음, 원문은 textContent로 보인다. DOM 계약(노드 수·칸·행렬)도 맞다."""
+    html_path, doc, cases_doc, case_id, condition = _hostile_page(tmp_path, generated)
+    context, page, blocked, errors = _open_det(det_browser, html_path)
+    try:
+        assert page.evaluate("window.__pwned") is None
+        assert page.locator("img, [onerror], [onclick]").count() == 0
+        page.evaluate("id => window.__detviz.select(id)", case_id)
+        assert condition in page.locator('#panel [data-k="condition"]').first.text_content()
+        result = doc["caseResults"][case_id]
+        expect = "-" if result["expectStrict"] is None else str(result["expectStrict"])
+        assert page.locator('#panel [data-k="expect"]').first.text_content() == expect
+        assert page.locator('#panel [data-k="observed"]').first.text_content() == "-"
+        assert page.evaluate("window.__pwned") is None
+        assert page.locator("img, [onerror], [onclick]").count() == 0
+        assert '== "</script><img onerror=x>"' in page.locator("body").text_content()
+        # DOM 계약: 격자 칸·행렬 수, 선택 엔드포인트의 노드 수와 id
+        factors = doc["factors"]
+        classes = sum(len(f["classes"]) for e in factors["endpoints"] for f in e["fields"])
+        matrices = sum(len(e["pairs"]["matrix"]) for e in doc["aggregates"]["byEndpoint"].values())
+        assert page.locator("[data-class-id]").count() == classes
+        assert page.locator("details [data-pair]").count() == matrices == page.locator("[data-pair]").count()
+        options = page.eval_on_selector_all("select option", "els => els.map(e => e.value)")
+        assert options == [e["endpoint"] for e in factors["endpoints"]]
+        for label in (ITEMS, "GET /vk/ping"):
+            page.locator("select").first.select_option(value=label)
+            entry = next(e for e in factors["endpoints"] if e["endpoint"] == label)
+            klasses = [k for f in entry["fields"] for k in f["classes"]]
+            want = (len({a.rstrip("~") for k in klasses for a in k["sources"]}) + len(klasses)
+                    + sum(1 for r in doc["caseResults"].values() if r["endpoint"] == label)
+                    + sum(1 for item in cases_doc["unresolved"] if item["endpoint"] == label))
+            node = page.locator("[data-node-count]").first
+            ids = [x for x in (node.get_attribute("data-node-ids") or "").split(",") if x]
+            assert int(node.get_attribute("data-node-count")) == want == len(ids) == len(set(ids)), label
+            assert ids == sorted(ids)
+        details = page.locator("details:has([data-pair])").first
+        assert details.evaluate("e => e.open") is False
+        details.locator("summary").first.click()
+        assert details.evaluate("e => e.open") is True
+        assert blocked == [] and errors == []
+    finally:
+        context.close()
+
+
+def test_req211_static_rules(tmp_path):
+    """정적 검사: detviz.js에 금지 sink 없음, det.html에 <script src= 0개, Cytoscape·detviz.js 인라인."""
+    from td import compare, detviz
+    static = REPO_ROOT / "site-gen" / "td" / "site" / "static"
+    script = (static / "detviz.js").read_text(encoding="utf-8")
+    for sink in ("innerHTML", "outerHTML", "insertAdjacentHTML", "document.write"):
+        assert sink not in script, sink
+    assert "window.__td_ready = true" in script and "__detviz" in script
+    gen_dir, s07_dir, _factors, _ids = _small(tmp_path)
+    html = compare.render_det_html(detviz.build(gen_dir, s07_dir), "site.css")
+    assert "<script src=" not in html and not re.search(r"<script[^>]*\bsrc\s*=", html)
+    assert "Cytoscape Consortium" in html and script.strip()[:200] in html
+    assert html.count('<script type="application/json"') == 1

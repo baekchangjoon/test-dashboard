@@ -35,9 +35,10 @@ REPORTS: dict[str, tuple[str, str]] = {
 # 같은 디렉터리의 추가 진입 파일(파일이 있을 때만 링크한다): 사이트 경로 -> [(표시 이름, 진입 파일)]
 REPORTS_EXTRA: dict[str, list[tuple[str, str]]] = {
     "ontology/": [("OWL 온톨로지 그래프", "owl.html")],
+    "compare/": [("det 조합 시각화", "det.html")],
 }
-# 주 진입 파일이 없으면 링크하지 않는 디렉터리(S04는 jqa/owl 중 한쪽만 있을 수 있다)
-LINK_ONLY_IF_PRESENT = {"ontology/"}
+# 진입 파일이 없으면 링크하지 않는 디렉터리(S04는 jqa/owl 중 한쪽만 있을 수 있다, S12의 det.html은 det 시각화가 있을 때만)
+LINK_ONLY_IF_PRESENT = {"ontology/", "compare/"}
 
 # 리포트 카드의 한 줄 설명(시안 project.html "리포트 바로가기"): 사이트 경로 -> 설명
 # 키는 사이트 경로, 또는 같은 디렉터리의 추가 진입 파일이면 그 파일까지(`ontology/owl.html`)
@@ -104,10 +105,15 @@ def _rerender_sonar(target: Path, css_href: str, nav_html: str) -> None:
 
 
 def _rerender_compare(target: Path, css_href: str, nav_html: str) -> None:
-    if (target / "compare.json").exists():
+    """게시 사본의 compare.html·det.html을 다시 그린다. det.html 렌더가 실패해 문서의 viz가 바뀌면 사본 compare.json도 바꾼다."""
+    path = target / "compare.json"
+    if path.exists():
         from td import compare
-        compare.render_page(target, json.loads((target / "compare.json").read_text()), css_href=css_href, copy_css=False,
-                            nav_html=nav_html)
+        document = json.loads(path.read_text())
+        before = json.dumps(document, sort_keys=True)
+        compare.render_page(target, document, css_href=css_href, copy_css=False, nav_html=nav_html)
+        if json.dumps(document, sort_keys=True) != before:
+            compare.write_document(target, document)
 
 
 RERENDER: dict[str, Callable[[Path, str, str], None]] = {

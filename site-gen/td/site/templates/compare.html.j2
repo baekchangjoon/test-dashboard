@@ -56,6 +56,13 @@
   <p class="note"><b>{{ doc.deterministic.genId }}</b> 결과를 집계하지 못했다: {{ doc.deterministic.reason }}</p>
 {% else %}{% set d = doc.deterministic.summary %}
   <p class="muted">generation {{ doc.deterministic.genId }} · 케이스 {{ d.cases }}개, 생성 불가 {{ d.unresolved }}건{% if d.universe.theoretical %}, 이론 모수(상한) {{ d.universe.theoretical.value }}{% endif %}</p>
+  {% if det_link %}
+  <p id="det-viz-link"><a href="det.html">det 조합 시각화</a> <span class="muted">(클래스 격자·2-way 히트맵·추적 그래프)</span></p>
+  {% elif det_viz and det_viz.status == "absent" %}
+  <p class="muted" id="det-viz-status" data-viz="absent">조합 시각화 없음: 이 generation에는 factors.json이 없다(시각화 이전 생성기).</p>
+  {% elif det_viz and det_viz.status == "failed" %}
+  <p class="note" id="det-viz-status" data-viz="failed">조합 시각화를 만들지 못했다: {{ det_viz.reason }}</p>
+  {% endif %}
   <div class="scroll"><table id="det-summary">
   <tbody>
     <tr data-det="passStrict"><td>strict 통과</td><td class="num">{{ d.passStrict.passed }}/{{ d.passStrict.total }}</td></tr>

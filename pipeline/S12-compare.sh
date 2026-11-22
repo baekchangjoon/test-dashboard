@@ -2,7 +2,7 @@
 # S12 compare: arm별 generation 지표를 모아 compare.json(스키마 검증)과 compare.html을 만들고 판정한다(설계 §6.12).
 # 입력: S03/ontology-jqa.json(엔드포인트 분모), S06/bdd-gen.json, S07/<genId>/summary.json, S08/coverage.json(+귀속 XML),
 #       suts/<sut>/{oracle.yaml, sut.yaml(compare.focus)}. 오라클은 평가 전용이다(번들 쪽은 S06의 content 검사가 막는다).
-# 산출물: S12/compare/{compare.json,compare.html}, run.json kpis.compare(판정 요약).
+# 산출물: S12/compare/{compare.json,compare.html}, det 시각화가 있으면 det-viz.json·det.html, run.json kpis.compare(판정 요약).
 # 사용: S12-compare.sh <sut> <runId>
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/common.sh"
 

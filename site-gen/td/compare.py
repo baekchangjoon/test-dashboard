@@ -33,6 +33,9 @@ from td import state, verdict
 from td.verdict import ArmStats
 
 SCHEMA_PATH = Path(__file__).parent / "schemas" / "compare.schema.json"
+DET_FACTORS_FILE = "factors.json"   # det generation의 조합 시각화 입력(td.detviz.FACTORS_FILE과 같다)
+DET_VIZ_FILE = "det-viz.json"
+DET_HTML_FILE = "det.html"
 ARMS_ORDER = ("base", "jqa", "owl", "det")
 VERDICT_ARMS = ("base", "jqa", "owl")   # 사전 등록 판정 대상. det는 참고 열이라 넣지 않는다
 REFERENCE_ARMS = ("det",)
@@ -359,30 +362,116 @@ def _deterministic(run_dir: Path, run: dict, det_entry: dict | None) -> dict | N
         gen_dir = scenarios.generation_dir(run.get("sut") or "", gen_id)
         summary = results.summarize(gen_dir, run_dir / "S07" / gen_id)
     except Exception as exc:  # noqa: BLE001 - det 집계의 어떤 실패도 다른 arm·판정에 번지지 않게 이 블록의 failed로 가둔다
-        from td import redact
-        first_line = str(exc).splitlines()[0][:300] if str(exc) else ""
-        detail = f"{type(exc).__name__}: {first_line}" if first_line else type(exc).__name__
-        return {**block, "reason": redact.redact_text(f"det 결과 집계 실패: {detail}")}
-    return {**block, "status": "measured", "summary": summary}
+        return {**block, "reason": _failure_reason("det 결과 집계 실패", exc)}
+    # 조합 시각화는 여기서 만들지 않는다(파일 쓰기 없음). factors.json 유무만 보고 "만들 예정(ok)"/absent를 적는다.
+    viz_status = "ok" if (gen_dir / DET_FACTORS_FILE).is_file() else "absent"
+    return {**block, "status": "measured", "summary": summary, "viz": {"status": viz_status, "reason": None}}
+
+
+def _failure_reason(prefix: str, exc: BaseException) -> str:
+    """예외를 한 줄 사유로(첫 줄 300자, 홈 경로·식별자 가림)."""
+    from td import redact
+    first_line = str(exc).splitlines()[0][:300] if str(exc) else ""
+    detail = f"{type(exc).__name__}: {first_line}" if first_line else type(exc).__name__
+    return redact.redact_text(f"{prefix}: {detail}")
 
 
 def validate(document: dict) -> None:
     jsonschema.validate(document, json.loads(SCHEMA_PATH.read_text(encoding="utf-8")))
 
 
+def write_document(out_dir, document: dict) -> Path:
+    target = Path(out_dir) / "compare.json"
+    target.write_text(json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return target
+
+
+# --- det 조합 시각화(det-viz.json, det.html) ---------------------------------------------------------
+def _viz_block(document: dict) -> dict | None:
+    """measured 변형 deterministic 블록의 `viz`(없으면 None: det 없음·failed 변형·예전 문서의 viz 키 없음)."""
+    det = document.get("deterministic")
+    if not isinstance(det, dict) or det.get("status") != "measured":
+        return None
+    viz = det.get("viz")
+    return viz if isinstance(viz, dict) else None
+
+
+def _mark_viz_failed(document: dict, reason: str) -> None:
+    det = document["deterministic"]
+    det["viz"] = {"status": "failed", "reason": reason}
+
+
+def _remove_det_files(out_dir: Path) -> None:
+    for name in (DET_VIZ_FILE, DET_HTML_FILE):
+        (out_dir / name).unlink(missing_ok=True)
+
+
+def render_det_html(viz_doc: dict, css_href: str) -> str:
+    """det-viz 문서 → 단독으로 열리는 det.html 문자열. Cytoscape와 detviz.js를 인라인하고 데이터는 JSON 스크립트에 싣는다."""
+    from td.site.pages import STATIC_DIR, jinja_env, json_for_script
+    summary = viz_doc["aggregates"]["summary"]
+    return jinja_env().get_template("det.html.j2").render(
+        gen_id=viz_doc.get("genId"), summary=summary, css_href=css_href, data_json=json_for_script(viz_doc),
+        cytoscape_js=(STATIC_DIR / "vendor" / "cytoscape.min.js").read_text(encoding="utf-8"),
+        viz_js=(STATIC_DIR / "detviz.js").read_text(encoding="utf-8"))
+
+
+def _render_det_page(out_dir: Path, document: dict, css_href: str) -> None:
+    """det.html을 그리거나 지운다. det-viz.json이 있고 viz ok일 때만 그린다. viz 키가 없으면 absent로 보고 문서는 그대로 둔다.
+    렌더 실패(또는 ok인데 det-viz.json이 없음)는 det 파일을 지우고 메모리 문서의 viz를 failed로 바꾼다(compare.html은 계속)."""
+    viz = _viz_block(document)
+    data_path = out_dir / DET_VIZ_FILE
+    if viz is None or viz.get("status") != "ok":
+        _remove_det_files(out_dir)
+        return
+    try:
+        if not data_path.is_file():
+            raise FileNotFoundError(f"{DET_VIZ_FILE}이 없다")
+        from td import detviz
+        viz_doc = json.loads(data_path.read_text(encoding="utf-8"))
+        detviz.validate(viz_doc)
+        (out_dir / DET_HTML_FILE).write_text(render_det_html(viz_doc, css_href), encoding="utf-8")
+    except Exception as exc:  # noqa: BLE001 - 시각화 실패는 compare 결과를 실패시키지 않는다(REQ-209)
+        _remove_det_files(out_dir)
+        _mark_viz_failed(document, _failure_reason("det 조합 시각화 렌더 실패", exc))
+
+
+def _build_det_viz(run_dir: Path, out_dir: Path, document: dict) -> None:
+    """viz ok면 detviz.build를 한 번 불러 det-viz.json을 쓴다. 실패는 viz failed(파일 삭제), factors.json이 사라졌으면 absent."""
+    viz = _viz_block(document)
+    if viz is None or viz.get("status") != "ok":
+        return
+    from td import detviz, scenarios
+    gen_id = document["deterministic"]["genId"]
+    try:
+        gen_dir = scenarios.generation_dir(state.read_run(run_dir).get("sut") or "", gen_id)
+        viz_doc = detviz.build(gen_dir, run_dir / "S07" / gen_id)
+        detviz.validate(viz_doc)
+        (out_dir / DET_VIZ_FILE).write_text(json.dumps(viz_doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    except detviz.FactorsMissing:
+        _remove_det_files(out_dir)
+        document["deterministic"]["viz"] = {"status": "absent", "reason": None}
+    except Exception as exc:  # noqa: BLE001 - 시각화 실패는 compare 결과를 실패시키지 않는다(REQ-209)
+        _remove_det_files(out_dir)
+        _mark_viz_failed(document, _failure_reason("det 조합 시각화 생성 실패", exc))
+
+
 # --- 화면 ---------------------------------------------------------------------------------------
 def render_page(out_dir, document: dict, css_href: str = "app.css", copy_css: bool = True, nav_html: str | None = None) -> Path:
     """`compare.html`을 쓴다. copy_css=True면 단독 열람용으로 app.css를 같은 디렉터리에 둔다(사이트 조립은 False와
-    `…/static/v2/app.css`, 공통 띠 nav_html)."""
+    `…/static/v2/app.css`, 공통 띠 nav_html). det.html을 먼저 그리고(또는 지우고), compare.html은 det.html 파일이 있을 때만
+    링크한다. det.html 실패는 `document`의 deterministic.viz를 failed로 바꿀 수 있다(호출자가 바뀐 문서를 저장한다)."""
     from td.site.pages import copy_app_css, jinja_env, static_href_of
     out_dir = Path(out_dir)
     if copy_css:
         copy_app_css(out_dir)
+    _render_det_page(out_dir, document, css_href)
     template = jinja_env().get_template("compare.html.j2")
     html = template.render(doc=document, css_href=css_href, static_href=static_href_of(css_href), nav_html=nav_html,
                            rows=display_rows(document), dots=dot_plots(document),
                            regime_labels={arm: regime_label(entry.get("inputRegime")) for arm, entry in document["arms"].items()},
-                           reference_arms=REFERENCE_ARMS)
+                           reference_arms=REFERENCE_ARMS, det_viz=_viz_block(document),
+                           det_link=(out_dir / DET_HTML_FILE).is_file())
     target = out_dir / "compare.html"
     target.write_text(html, encoding="utf-8")
     return target
@@ -476,8 +565,13 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"status": "failed", "reason": str(exc).splitlines()[0][:1500]}, ensure_ascii=False))
         return 0
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "compare.json").write_text(json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    render_page(out_dir, document)
+    _build_det_viz(Path(args.run_dir), out_dir, document)   # viz ok일 때만 build 1회
+    render_page(out_dir, document)                           # det.html(실패 시 viz failed) → compare.html
+    viz = _viz_block(document)
+    if viz is None or viz.get("status") != "ok":
+        _remove_det_files(out_dir)   # absent·failed·det 블록 null·failed 변형: 이전 run의 낡은 파일 방지
+    validate(document)
+    write_document(out_dir, document)
     summary = {"generation": document["verdict"]["generation"], "effect": document["verdict"]["effect"],
                "label": document["label"], "arms": {name: entry["status"] for name, entry in document["arms"].items()},
                "endpointDenominator": document["endpoints"]["denominator"], "oracleRules": document["oracle"]["rules"],

@@ -7,7 +7,8 @@
     "genId",
     "factors",
     "caseResults",
-    "aggregates"
+    "aggregates",
+    "trace"
   ],
   "additionalProperties": false,
   "properties": {
@@ -226,6 +227,34 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "trace": {
+      "type": "object",
+      "required": [
+        "caseSources",
+        "unresolvedEndpoints"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "caseSources": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "unresolvedEndpoints": {
+          "type": "array",
+          "items": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       }
