@@ -14,7 +14,7 @@
 ## Global Constraints
 
 - PICT pin: `microsoft/pict` commit `d529bb1535b725c8f29704f183b23dd344895d02`(tag v3.7.4). brew 바이너리·PATH 탐색 금지, `tools.lock` 경로만 쓴다.
-- `derive(bundle)`(disabled)의 `cases.json` 전체는 지금과 바이트 동일. available·unavailable에서도 규칙 ≠ pairwise 항목은 동일(예외: `byReason` 새 키 5개, `universe.pairwise`, 병합으로 늘어난 `sources`).
+- `derive(bundle)`(disabled)의 `cases.json` 전체는 지금과 바이트 동일. available·unavailable에서도 규칙 ≠ pairwise 항목은 동일(예외: `byReason` 새 키 4개, `universe.pairwise`, 병합으로 늘어난 `sources`).
 - PICT `/r` 금지. 모델 파일에는 `p<i>`/`v<j>` 라벨만. 크기 상한: 필드당 후보 ≤ 12, 파라미터 ≤ 24, 배제 줄 ≤ 20,000. 프로세스 상한 120초(`TD_DET_PICT_TIMEOUT`), 초과 시 det failed·스냅샷 없음.
 - 새 사유(`REASONS`·`_REASON_PRIORITY` 모두 끝에 이 순서): `pairwise-unavailable`, `pairwise-too-large`, `pairwise-infeasible`, `pairwise-row-invalid`.
 - 스냅샷에 남는 pairwise 결과는 모델로 결정되는 것뿐(크기 초과, rc=5, 필드 수 부족). PICT 기타 rc·시작 실패·출력 계약 위반·시간 초과·sha 불일치는 det failed·스냅샷 없음.
@@ -57,9 +57,11 @@
 
 **Files:**
 - Modify: `tools.pin.yaml`(`pict: {repo: microsoft/pict, commit: d529bb1535b725c8f29704f183b23dd344895d02, tag: v3.7.4}`)
-- Create: `pipeline/lib/pict.sh` — `td_prepare_pict <tools_dir> <out_json>`: `fetch_git_tool "<tools_dir>/pict-src" https microsoft/pict <commit>` → 스탬프(`<tools_dir>/pict/.commit` = `{commit, binarySha256}`) 검사: 커밋·sha 일치면 재사용 → 아니면 `git -C pict-src clean -fdx` + `td_run 300 -- make -j4` → `<tools_dir>/pict/pict` → 스모크(`td_py -m td.prepare pict-smoke <bin>`) → 스탬프 기록. 결과 JSON: 성공 `{commit, binarySha256, path}` | 실패 `{failure: "clone-failed|build-failed|smoke-mismatch", detail}`. 실패해도 종료 코드 0.
+- Modify: `pipeline/lib/common.sh` — `fetch_git_tool`을 `S00-prepare.sh`에서 옮긴다(S00은 그대로 호출).
+- Modify: `tests/acceptance/conftest.py` — 세션 fixture `pict_tool`(고정 커밋을 `work/test-tools/pict`에 `td_prepare_pict`로 빌드, 스탬프 재사용, 실패 시 fail)을 이 Task에서 만든다.
+- Create: `pipeline/lib/pict.sh`(`common.sh`를 source) — `td_prepare_pict <tools_dir> <out_json>`: `fetch_git_tool "<tools_dir>/pict-src" https microsoft/pict <commit>` → 스탬프(`<tools_dir>/pict/.commit` = `{commit, binarySha256}`) 검사: 커밋·sha 일치면 재사용 → 아니면 `git -C pict-src clean -fdx` + `td_run 300 -- make -j4` → `<tools_dir>/pict/pict` → 스모크(`td_py -m td.prepare pict-smoke <bin>`) → 스탬프 기록. 결과 JSON: 성공 `{commit, binarySha256, path}` | 실패 `{failure: "clone-failed|build-failed|smoke-mismatch", detail}`. 실패해도 종료 코드 0.
 - Modify: `pipeline/S00-prepare.sh` — `td_arm_requested det`일 때만 `td_prepare_pict "${TD_PICT_TOOLS_DIR:-$TD_WORK_DIR/tools}" "$TD_RUN_DIR/S00/pict.json"`, 경고 출력. write-lock에 `--pict-json`(파일 있을 때).
-- Modify: `site-gen/td/prepare.py` — `pict-smoke <bin>` 서브커맨드(상수 `PICT_SMOKE_MODEL`, `PICT_SMOKE_EXPECTED`; `TD_PICT_SMOKE_EXPECTED_OVERRIDE`가 있으면 그 값으로 비교 — 테스트 전용), `build_lock`·`write-lock`의 `--pict-json`: 성공 → `pict: {commit, binarySha256, path}`, 실패 → `pict: null`, `pictFailureReason: <코드>`(상세는 `S00/pict.json`에만, lock은 고정 코드라 재실행 불변 비교가 흔들리지 않는다), 미요청 → `pict` 키 없음. 같은 run 재실행에서 pict 상태가 바뀌면 기존 lock을 유지하고 경고.
+- Modify: `site-gen/td/prepare.py` — `load_pin()`이 `pict.commit` 40자 hex를 검증(tia·bbtg와 같은 규칙); `pict-smoke <bin>` 서브커맨드(상수 `PICT_SMOKE_MODEL`, `PICT_SMOKE_EXPECTED`; `TD_PICT_SMOKE_EXPECTED_OVERRIDE`가 있으면 그 값으로 비교 — 테스트 전용), `build_lock`·`write-lock`의 `--pict-json`: 성공 → `pict: {commit, binarySha256, path}`, 실패 → `pict: null`, `pictFailureReason: <코드>`(상세는 `S00/pict.json`에만, lock은 고정 코드라 재실행 불변 비교가 흔들리지 않는다), 미요청 → `pict` 키 없음. 같은 run 재실행에서 pict 상태가 바뀌면 기존 lock을 유지하고 경고.
 - Test: `tests/acceptance/test_det_pairwise_tool.py` — `td_prepare_pict`를 임시 `tools_dir`로 bash에서 직접 호출. git proxy shim(PATH 앞): 인자에 `microsoft/pict` 또는 `pict-src`가 있으면 기록(실패 모드면 rc 1), 아니면 실제 git으로 exec. make shim은 실패 모드에서만 PATH 앞에 둔다.
 
 - [ ] **Step 1:** `test_req301_s00_builds_pict`(실제 clone·make, 스탬프·결과 JSON·스모크; 그리고 `write-lock` 단위로 tools.lock `pict` 확인), `test_req301_stamp_reuse_and_rebuild`(두 번째 호출 make 0회, 바이너리 바꿔치기 후 재빌드), `test_req302_not_requested`(S00 bash의 det 분기를 `td_arm_requested`가 1을 내는 run 디렉터리로 실행 → proxy shim의 pict 대상 기록 0, make 0; S00 전체가 아니라 분기 스니펫만 source해서 실행), `test_req302_prepare_failure`(3종 parametrize → 종료 코드 0, `failure` 코드, `write-lock` 결과 `pict: null`·`pictFailureReason` 코드), `test_unit_tools.py`에 lock 불변 비교 케이스 추가.
@@ -80,7 +82,7 @@
   - `class Pairwise`: `disabled()`, `unavailable(reason: str)`, `available(tool: PictTool, work_dir: Path, timeout: float)`; 속성 `mode`, `tool`, `work_dir`, `timeout`, `reason`
   - `@dataclass class Candidate: label: str; kind: Literal["literal","omit","null","uniq","spread"]; value: Value | object`(기존 `Value`를 그대로 담아 `provenance`·`source`·`transform` 보존; omit은 `OMIT`)
   - `pairwise.json` 직렬화: params `[{param, loc, field, candidates: [{label, kind, value | range: {lo, hi, excluded}, provenance, source, transform}]}]`, exclusions는 구조화 `[{param: label, ...}]`(PICT 줄은 실행 때 렌더)
-  - `@dataclass class EndpointModel: params: list[dict]; fixed: dict; dropped: list[dict]; exclusions: list[str]; order: int; effective_order: int; skipped: str | None; reason: str | None`
+  - `@dataclass class EndpointModel: params: list[dict]; fixed: dict; dropped: list[dict]; exclusions: list[dict[str, str]]; order: int; effective_order: int; skipped: str | None; reason: str | None`
   - `build_model(ep, cons: Constraints, catalog: Catalog, order: int) -> EndpointModel`(PICT 호출 없음)
   - `run_pict(model: EndpointModel, tool: PictTool, work_dir: Path, timeout: float) -> list[dict[str, str]] | Literal["pairwise-infeasible"]`
   - `class PictFatal(Exception)`(시간 초과·기타 rc·시작 실패·출력 계약 위반; 메시지에 rc·stderr 첫 줄 가림 적용), 상수 `MAX_CANDIDATES = 12`, `MAX_PARAMS = 24`, `MAX_EXCLUSIONS = 20000`
@@ -97,7 +99,7 @@
 **Files:**
 - Modify: `site-gen/td/detgen/derive.py` — `derive(bundle, pairwise=Pairwise.disabled())`; 정렬 키 앞 규칙 우선순위(`pairwise` 1); `_VALID_RULES` 끝에 `pairwise`; 행→초안(`_materialize` 재사용, pairwise 초안의 실패 사유는 종류와 무관하게 `pairwise-row-invalid`), 모두-baseline 판정은 **라벨 기준**(값 비교 아님) → 같은 엔드포인트 baseline-valid → happy → 없음이면 케이스로 남김, `_dedupe`로 흡수된 pairwise 초안은 `rows[].mergedInto = survivor id`, `assumes`의 `undetermined:`·`rel-combined:`; 새 사유; unavailable 슬롯; disabled에서는 새 사유 키·`universe.pairwise` 미출력; `Derivation.pairwise_doc`
 - Modify: `site-gen/td/detgen/render.py` — 케이스 키 `pairwise`(있을 때만), `pairwise.json`(available·unavailable일 때) 쓰기
-- Create: `site-gen/td/schemas/pairwise.schema.json`
+- Create: `site-gen/td/schemas/pairwise.schema.json` — 최상위 `{schema: 1, order: int, endpoints: {<label>: {params, fixed, dropped, exclusions, effectiveOrder, skipped, reason, rows: [{labels, caseId, mergedInto}]}}}`
 - Modify: `tests/acceptance/test_unit_detgen.py` — 케이스 키 집합 검사에 선택 키 `pairwise` 허용, `test_reasons_tuple_is_closed`를 16개로 갱신
 - Test: `tests/acceptance/test_unit_pairwise.py`
 
@@ -113,7 +115,7 @@
 - Modify: `site-gen/td/detgen/inputs.py` — `harness.json`에 `pairwiseOrder`(`TD_DET_PAIRWISE_ORDER`, 기본 2)
 - Modify: `pipeline/run-all.sh` — `--det-pairwise-order 2|3`(그 밖이면 예약 전 종료 코드 1), `TD_DET_PAIRWISE_ORDER` export
 - Modify: `site-gen/td/schemas/bdd-gen.schema.json`(generator.pict), `site-gen/td/schemas/compare.schema.json`(detSummary 필수 `pairwise: object|null`), `site-gen/td/detgen/results.py`(`summarize`의 pairwise 블록, `coverage_comparison(current_run, run3_run) -> dict`), `site-gen/td/site/templates/compare.html.j2`(pairwise 행·요약)
-- Modify(기존 테스트 갱신): `tests/acceptance/test_unit_detgen.py`(`test_det_gen_id_and_record_shape`의 generator dict·키 기대식 `det_key(input_hash, pict_tag)`, harness 키 집합에 `pairwiseOrder`, summarize 테스트의 `pairwise` 키), `tests/acceptance/test_det.py`(`_det_run_dir`의 tools.lock에 pict 항목: 세션 `pict_tool` 사용 → available; REQ-103 기대 상태 passed 유지), `tests/acceptance/test_compare.py`(det 요약 fixture에 `pairwise: null`)
+- Modify(기존 테스트 갱신): `tests/acceptance/test_unit_detgen.py`(`_det_run` 헬퍼가 `pict_tool`로 available `pict` 항목을 가진 `tools.lock`을 쓰게 해 passed 기대 테스트(`test_det_gen_id_and_record_shape`, `test_det_reuse_snapshot`, `test_det_tampered_snapshot_is_failed_not_overwritten`)가 유지됨; `test_det_gen_id_and_record_shape`의 generator dict·키 기대식 `det_key(input_hash, pict_tag)`, harness 키 집합에 `pairwiseOrder`, summarize 테스트의 `pairwise` 키), `tests/acceptance/test_det.py`(`_det_run_dir`의 tools.lock에 pict 항목: 세션 `pict_tool` 사용 → available; REQ-103 기대 상태 passed 유지), `tests/acceptance/test_compare.py`(det 요약 fixture에 `pairwise: null`)
 - Test: `tests/acceptance/test_det_pairwise_tool.py`: `test_req303_*`, `test_req307_timeout_fails`, `test_req312_*`, `test_req313_*` / `tests/acceptance/test_unit_pairwise.py`: `test_req311_key_tag`, `test_req314_*`, `test_req317_*`, `test_req315_no_leaks`의 bdd-gen 단언
 - summarize 상태별: disabled → `universe.pairwise` 없음·`summary.pairwise: null`; unavailable → `universe.pairwise = {order, byEndpoint: {}}`·`summary.pairwise: null`; available → 값.
 - `coverage_comparison`: 비교 키 `sut.commit`, `jacocoCoreEmbedded`, `pjacoco.{version, sha256}`, `jacococli.{version, sha256}`(`path` 제외); 커버리지 값은 각 run의 `S12/compare/compare.json` `arms.det`의 `line`·`branch`. 호출처는 Task 6 백서 작성 절차.
@@ -128,7 +130,7 @@
 **Files:**
 - Modify: `docs/whitepaper/2026-11-21-test-dashboard-poc-whitepaper.md`(9.6 뒤 "9.7 pairwise 추가 결과": 케이스 수·통과율·상호작용 커버·라인/브랜치 비교 또는 비교 불가, 3-way 결과)
 - Modify: `README.md`(전제 조건 clang++·make, `--det-pairwise-order`), `docs/superpowers/specs/2026-11-22-deterministic-arm-design.md`(Pairwise 상태·번들 외 입력 예외·`pairwise.json`), 요구사항명세 매트릭스
-- Test: `test_unit_pairwise.py::test_req317_whitepaper`, `::test_req319_docs`
+- Test: `test_unit_pairwise.py::test_req317_whitepaper`, `::test_req318_whitepaper`, `::test_req319_docs`
 - Add: 새 det 스냅샷 2개(order 2, order 3)
 
 - [ ] **Step 1: 준비** — `/Users/changjoonbaek/test-dashboard-det`(feat/det-arm)의 `work/{infra,site-mirror,suts,tools,fixtures}`와 `infra/local.env`를 이 worktree로 복사(gitignore, 내용 출력 금지). run3(`20261121-201248Z-b6f9393-manual-9d5ee1f4`)과 det 기준 run은 det worktree의 `work/runs/` 아래 절대 경로를 그대로 가리킨다(복사하지 않음). 두 run의 존재·SUT 커밋·`_COMPLETE`를 먼저 확인한다.
@@ -136,6 +138,6 @@
 - [ ] **Step 3: 세션 파일** `work/det-pairwise-session.json` = `{runDir, order3RunDir, previousCasesDir: <abs>/e2e/generated/petclinic/det/det-da70932c-r1, run3BundleDir: <det worktree>/work/runs/<run3>/S06/bundles/det, run3RunDir: <det worktree>/work/runs/<run3>}`; `work/det-session.json` = `{runDir: <order 2 run>, baselineRunDir: <det worktree의 det-session.json baselineRunDir 값>}`.
 - [ ] **Step 3b: 백서 초안** — `coverage_comparison(runDir, run3RunDir)` 결과와 3-way 수치로 9.7을 먼저 쓴다(Step 4의 문자열 검사 대상).
 - [ ] **Step 4:** `pytest tests/acceptance/test_det_pairwise.py tests/acceptance/test_det.py -m "det_pairwise_e2e or det_e2e" -q` 전부 PASS.
-- [ ] **Step 5:** 백서 9.7·README·상위 설계·매트릭스 갱신, `test_req317_whitepaper`·`test_req319_docs` PASS.
+- [ ] **Step 5:** 백서 9.7·README·상위 설계·매트릭스 갱신, `test_req317_whitepaper`·`test_req318_whitepaper`·`test_req319_docs` PASS.
 - [ ] **Step 6: 회귀** `uv run --project site-gen pytest tests/acceptance -q -m "not baseline"`(baseline 제외 명시), 이 세션 테스트 라벨 컨테이너·SUT PID 잔존 0. `_test/det-pairwise-*` 게시물은 보존한다(사용자 지침: 게시물은 지우지 않는다).
 - [ ] **Step 7:** Commit `docs(det-pairwise): run results, whitepaper 9.7, README and design; add det snapshots`.
