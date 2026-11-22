@@ -20,17 +20,17 @@
 - 스탬프 커밋·바이너리 sha256이 모두 맞으면 다시 빌드하지 않는다(make 호출 0). 바이너리를 바꿔 놓으면(sha 불일치) 다시 빌드한다.
 
 ### REQ-302 S00 실패 격리 (Must, Int)
-- det 미요청 run의 S00은 pict를 준비하지 않는다(git·make 호출 0, PATH 앞 shim으로 기록).
-- 준비 실패 3종(git clone 실패 shim, make 실패 shim, 스모크 기대 불일치 override)에서 S00은 passed이고 `tools.lock`에 `pict: null`, `pictFailureReason`(300자 이하, 가림 적용)이 있다.
+- det 미요청 run의 S00은 pict를 준비하지 않는다(pict 저장소·`pict-src`를 대상으로 한 git 호출 0, make 호출 0; proxy shim이 그 밖의 git은 실제 바이너리로 넘긴다).
+- pict 준비는 독립 함수(`pipeline/lib/pict.sh`의 `td_prepare_pict <tools_dir> <out_json>`)로 테스트한다. 준비 실패 3종(pict 대상 git만 실패시키는 proxy shim, make 실패 shim, `TD_PICT_SMOKE_EXPECTED_OVERRIDE`로 스모크 불일치)에서 S00은 passed이고 `tools.lock`에 `pict: null`, `pictFailureReason`(300자 이하, 가림 적용)이 있다.
 
 ### REQ-303 pict 없음 상태 (Must, Int)
-- `tools.lock` `pict: null`인 run에서 det generation은 `degraded`(사유 `pairwise-unavailable`)이고, `cases.json` `unresolved`에 `{source: "tool:pict", reason: "pairwise-unavailable", endpoint: null, rule: "pairwise"}` 1건이 있다.
+- det가 요청됐는데 `tools.lock`이 없거나 `pict` 키가 없거나 `pict: null`인 run에서 det generation은 `degraded`(사유 `pairwise-unavailable`)이고, `cases.json` `unresolved`에 `{source: "tool:pict", reason: "pairwise-unavailable", endpoint: null, rule: "pairwise"}` 1건이 있다.
 - `bdd-gen.json` det 레코드 `generator.pict == null`이고, genId가 `det_key(input_hash, pict_tag="none")` 앞 8자로 만든 값과 같다.
 
 ### REQ-304 기존 출력 불변 (Must, Unit+E2E)
 - 단위: `tests/fixtures/det/petclinic` 입력에서 `derive(bundle)`(disabled)의 `cases.json`·features·glue가 기준 스냅샷과 바이트 동일하다.
 - 단위: 같은 번들로 available·unavailable 도출 시 규칙 ≠ pairwise인 `cases[]`·`unresolved[]` 항목이 disabled와 같다(병합으로 늘어난 `sources`만 예외). 위반 케이스의 `pair`도 같다.
-  예외는 `universe.bySlot.byReason`의 새 키 5개와 `universe.pairwise`뿐이다.
+  예외: `universe.bySlot.{total, generated, unresolved, deduplicated}`, `byReason`의 새 키 4개, `universe.byRule.pairwise`, `universe.pairwise`, 병합으로 늘어난 `sources`. 불변: 규칙 ≠ pairwise인 `cases[]`·`unresolved[]` 항목, `universe.theoretical`, `byRule`의 기존 키.
 - E2E 입력 동일성(선행 단언): `runDir/S06/bundles/det/`의 `harness.json` 외 파일 sha256이 `run3BundleDir`과 같고, `harness.json`은 `pairwiseOrder` 키를 뺀 정규화 JSON이 같다. `run.json` SUT 커밋이 `b6f9393`으로 시작한다.
 - E2E: 실제 run에서 규칙 ≠ pairwise 케이스가 `previousCasesDir`의 80개와 같다(같은 예외).
 
@@ -50,17 +50,17 @@
 
 ### REQ-307 PICT 실행·분류 (Must, Unit+Int)
 - 모델 필드 0~1개 → PICT 호출 없음, `skipped: "fields<2"`, 슬롯 없음. 필드 수 < order → `effectiveOrder` = 필드 수.
-- rc=5 → `pairwise-infeasible` 1건. rc=0이지만 출력 계약 위반(빈 출력, 잘린 행, 알 수 없는 라벨, 헤더 불일치, 중복 열; 가짜 pict로 주입) → `pairwise-error` 1건. 그 밖 rc·실행 실패 → `pairwise-error` 1건, 사유에 stderr 첫 줄(가림 적용).
+- rc=5 → `pairwise-infeasible` 1건. rc=0이지만 출력 계약 위반(빈 출력, 잘린 행, 알 수 없는 라벨, 헤더 불일치, 중복 열; 가짜 pict로 주입), 그 밖 rc, 실행 시작 실패 → det generation failed, 스냅샷 없음, 사유에 rc·stderr 첫 줄(가림 적용).
 - 크기 상한 초과(후보 > 12, 파라미터 > 24, 배제 > 20,000) → `pairwise-too-large` 1건, PICT 미호출.
 - 시간 초과(Int): `TD_DET_PICT_TIMEOUT=1`과 sleep하는 가짜 pict로 det generation이 failed, `dir` null, 스냅샷 디렉터리 없음. 다른 arm은 계속된다.
-- `/r`을 쓰지 않는다. 모델 파일에 필드명·후보 값 문자열이 없다(`p<i>`/`v<j>`만). 정상·rc≠0·시간 초과·예외 경로 모두에서 `work/` 아래 임시 디렉터리 잔존 0.
+- PICT 호출 인자는 정확히 `[model, "/o:<effectiveOrder>"]`이다(가짜 pict가 argv를 기록, `/r` 없음). 모델 파일에 필드명·후보 값 문자열이 없다(`p<i>`/`v<j>`만). 정상·rc≠0·시간 초과·예외 경로 모두에서 `work/` 아래 임시 디렉터리 잔존 0.
 
 ### REQ-308 pairwise 케이스 (Must, Unit)
 - 케이스: 규칙 `pairwise`, 기대 `{strict: "2xx", class: "2xx", source: "rule"}`, oracle `status`, `sources`는 번들 주소만(상위 REQ-105 검증기 통과), 케이스 키 `pairwise: {order, labels}`. 값 `transform`은 후보의 것을 그대로 둔다.
 - 정렬상 pairwise 초안은 기존 초안 뒤다. 라벨이 모두 baseline인 행: 같은 요청의 baseline-valid(없으면 happy)가 있으면 `mergedInto`에 그 id, 없으면 pairwise 케이스로 남는다(pairwise-kinds의 enum 전용 엔드포인트로 확인).
 - rel 상대편 필드가 baseline이 아닌 케이스 `assumes`에 `rel-combined:<addr>`, 종속 필드의 기존 가정이 실린다.
 - `pairwise-row-invalid`는 controlled·mutated·petclinic·pairwise-kinds에서 0건이다.
-- REASONS·`_REASON_PRIORITY`에 새 사유 5개가 설계 순서대로 있고, unavailable·available의 `byReason`에 나온다. 기존 테스트 중 갱신 대상: `test_unit_detgen.py`의 케이스 키 집합 검사(`pairwise` 선택 키 허용), det 키 기대식.
+- `REASONS`·`_REASON_PRIORITY` 끝에 새 사유 4개(`pairwise-unavailable, pairwise-too-large, pairwise-infeasible, pairwise-row-invalid`)가 이 순서로 있고, unavailable·available의 `byReason`에 나온다. 기존 테스트 중 갱신 대상: `test_unit_detgen.py`의 케이스 키 집합 검사(`pairwise` 선택 키 허용), det 키 기대식.
 
 ### REQ-309 실현 가능 상호작용 커버리지(독립 오라클) (Must, Unit+E2E)
 - 테스트가 `pairwise.json`의 params·candidates·fixed·exclusions만 읽어 배제를 모두 만족하는 전체 행이 존재하는 order-way 값 튜플을 전수 탐색한다.
@@ -87,7 +87,7 @@
 - `compare.schema.json` `detSummary`에 필수 속성 `pairwise: object | null`을 더한다. compare det 블록: `summary.byRule.pairwise{generated, passedStrict}`와 `summary.pairwise{order, interactionsFeasible, interactionsCovered, undetermined, relCombined}`가 있고 `compare.schema.json`을 통과한다(disabled면 `pairwise: null`).
   교차 검증: `undetermined`·`relCombined` = 해당 `assumes` 접두를 가진 pairwise 케이스 수, `interactions*` = REQ-309 오라클 값.
 - `compare.html` det 표에 `pairwise` 텍스트 행과 `interactionsCovered/interactionsFeasible` 숫자가 있다. `bdd-gen.json` det 레코드 `generator.pict`가 있고 `bdd-gen.schema.json`을 통과한다.
-- E2E(`runDir`): `pairwise-*` 사유 슬롯 5종 모두 0건, `byRule.pairwise.generated ≥ 1`, POST /api/reservations pairwise 케이스 ≥ 1, `interactionsCovered == interactionsFeasible`.
+- E2E(`runDir`): `pairwise-*` 사유 슬롯 4종 모두 0건, `byRule.pairwise.generated ≥ 1`, POST /api/reservations pairwise 케이스 ≥ 1, `interactionsCovered == interactionsFeasible`.
 
 ### REQ-315 누출·게시 금지 (Must, Unit+E2E)
 - det generation 산출물 전체와 `bdd-gen.json`에 pict 바이너리 경로·홈 경로가 없다(`redact.find_leaks == []`).
@@ -120,14 +120,14 @@
 | REQ-308 | pairwise 케이스 | test_unit_pairwise.py::test_req308_case_shape<br>test_unit_pairwise.py::test_req308_order_and_merge<br>test_unit_pairwise.py::test_req308_rel_combined<br>test_unit_pairwise.py::test_req308_no_row_invalid<br>test_unit_pairwise.py::test_req308_reasons | Unit | ⚪ |
 | REQ-309 | 실현 가능 상호작용 | test_unit_pairwise.py::test_req309_feasible_interactions<br>test_det_pairwise.py::test_req309_feasible_interactions_real | Unit/E2E | ⚪ |
 | REQ-310 | 오류 회피 | test_unit_pairwise.py::test_req310_no_error_condition<br>test_det_pairwise.py::test_req310_real | Unit/E2E | ⚪ |
-| REQ-311 | 결정성 | test_unit_pairwise.py::test_req311_deterministic<br>test_unit_pairwise.py::test_req311_key_tag | Unit | ⚪ |
+| REQ-311 | 결정성 | test_unit_pairwise.py::test_req311_deterministic<br>test_unit_pairwise.py::test_req311_pict_rows_deterministic<br>test_unit_pairwise.py::test_req311_key_tag | Unit | ⚪ |
 | REQ-312 | 실행 직전 무결성 | test_det_pairwise_tool.py::test_req312_sha_mismatch | Int | ⚪ |
 | REQ-313 | order 옵션 | test_det_pairwise_tool.py::test_req313_order_option | Int | ⚪ |
 | REQ-314 | 보고·스키마 | test_unit_pairwise.py::test_req314_schemas_and_counters<br>test_det_pairwise.py::test_req314_report_real | Unit/E2E | ⚪ |
 | REQ-315 | 누출·게시 금지 | test_unit_pairwise.py::test_req315_no_leaks<br>test_det_pairwise.py::test_req315_not_published_real | Unit/E2E | ⚪ |
 | REQ-316 | 반하드코딩 | test_unit_pairwise.py::test_req316_mutated | Unit | ⚪ |
 | REQ-317 | 커버리지 비교 | test_unit_pairwise.py::test_req317_comparability<br>test_unit_pairwise.py::test_req317_whitepaper | Unit | ⚪ |
-| REQ-318 | 3-way | test_det_pairwise.py::test_req318_three_way_real | E2E | ⚪ |
+| REQ-318 | 3-way | test_det_pairwise.py::test_req318_three_way_real<br>test_unit_pairwise.py::test_req318_whitepaper | E2E/Unit | ⚪ |
 | REQ-319 | 문서 갱신 | test_unit_pairwise.py::test_req319_docs | Unit | ⚪ |
 
 커버리지 대상: REQ-301~319(19건). 제외: 없음.
