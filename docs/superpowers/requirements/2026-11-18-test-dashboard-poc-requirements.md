@@ -590,7 +590,7 @@
 
 Coverage: 72/72 green (100%) — target 100% (대상: Must 65 + Should 7). 제외: Could 1 deferred(🔵 REQ-030), Won't 2(🔵 REQ-056, REQ-057). 판정 근거: 같은 REQ 번호의 test_req<NNN>_* 테스트가 전체 수용 스위트 JUnit XML에서 모두 passed(2026-11-20 최종 수정 후 전체 실행: 697 passed, 0 failed, 0 skipped).
 
-개정 확인(2026-11-22, 화면 재설계): REQ-044, 047, 048, 049, 050, 058의 수용기준을 재설계 요구사항명세 §3대로 고쳤다. 비기준 테스트(test_publish·test_hosting·test_coverage·test_site의 해당 테스트, test_req058_*)는 고친 뒤 주입 접두 실행에서 passed다. 같은 REQ의 `test_baseline.py` 쌍둥이 테스트는 고쳤지만 운영 기준 run 세션(재설계 계획 Task 14) 전이라 아직 돌리지 않았다. 그 세션에서 다시 확인한다.
+개정 확인(2026-11-22, 화면 재설계): REQ-044, 047, 048, 049, 050, 058의 수용기준을 재설계 요구사항명세 §3대로 고쳤다. 비기준 테스트(test_publish·test_hosting·test_coverage·test_site의 해당 테스트, test_req058_*)는 고친 뒤 주입 접두 실행에서 passed다. 같은 REQ의 `test_baseline.py` 쌍둥이 테스트는 운영 기준 run 세션(재설계 계획 Task 14, 2026-11-22) 뒤 전체 실행(세션 `t14c`, 880 passed)에서 passed다.
 
 REQ-022, REQ-061 증거 범위(컨트롤러 결정, 2026-11-20): 기준 run은 커밋된 스냅샷을 재사용해 claude를 부르지 않는다. 실제 생성 호출은 같은 입력 키로 접두 게시 디버그 run(`_test/t25-dbg1/`, runId 20261120-093616Z-b6f9393-manual-6948ba10, 7건)에서 했고, 이 호출 기록(shim `llm-calls.jsonl`)과 스냅샷의 생성 메타를 REQ-022/REQ-061 증거로 인정한다.
 

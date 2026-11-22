@@ -494,8 +494,8 @@
 | REQ-127 | 띠를 넣을 수 없는 파일 | test_dashboard_nav.py::test_req127_clean_run_is_passed<br>test_dashboard_nav.py::test_req127_inject_finds_first_body_case_insensitively<br>test_dashboard_nav.py::test_req127_no_body_degraded<br>test_dashboard_nav.py::test_req127_render_json_is_not_published | Int | 🟢 passed |
 | REQ-128 | 직접 만드는 리포트의 새 틀 | test_dashboard_nav.py::test_req128_own_reports_new_frame<br>test_dashboard_nav.py::test_req128_standalone_reports_copy_app_css | Int | 🟢 passed |
 | REQ-129 | hotspot 커밋 고정 빌드 | test_prepare.py::test_req129_hotspot_commit_build<br>test_unit_tools.py::test_req129_short_hotspot_commit_fails | Int | 🟢 passed |
-| REQ-130 | 새 hotspot 리포트 | test_baseline.py::test_req130_hotspot_map_published | E2E | 🔴 planned (기준 run 세션 필요) |
-| REQ-131 | 새 TIA 리포트 | test_baseline.py::test_req131_tia_report_published | E2E | 🔴 planned (기준 run 세션 필요) |
+| REQ-130 | 새 hotspot 리포트 | test_baseline.py::test_req130_hotspot_map_published | E2E | 🟢 passed |
+| REQ-131 | 새 TIA 리포트 | test_baseline.py::test_req131_tia_report_published | E2E | 🟢 passed |
 | REQ-132 | 외부 요청 없음 | test_dashboard_common.py::test_req132_no_external_requests | Int | 🟢 passed |
 | REQ-133 | 좁은 화면 | test_dashboard_common.py::test_req133_responsive_360 | Int | 🟢 passed |
 | REQ-134 | 어두운 테마 | test_dashboard_common.py::test_req134_dark_theme | Int | 🟢 passed |
@@ -503,15 +503,15 @@
 | REQ-136 | 옛 자산 불변 | test_dashboard_common.py::test_req136_legacy_assets_unchanged | Int | 🟢 passed |
 | REQ-137 | 새 자산 경로 | test_dashboard_common.py::test_req137_app_css_tokens_and_no_external_requests<br>test_dashboard_common.py::test_req137_v2_asset_paths | Unit | 🟢 passed |
 | REQ-138 | 움직임 줄이기 | test_dashboard_common.py::test_req138_reduced_motion | Int | 🟢 passed |
-| REQ-139 | 운영 사이트의 경로 | test_baseline.py::test_req139_production_site_paths | E2E | 🔴 planned (기준 run 세션 필요) |
-| REQ-140 | 운영 사이트의 값 | test_baseline.py::test_req140_production_site_values | E2E | 🔴 planned (기준 run 세션 필요) |
+| REQ-139 | 운영 사이트의 경로 | test_baseline.py::test_req139_production_site_paths | E2E | 🟢 passed |
+| REQ-140 | 운영 사이트의 값 | test_baseline.py::test_req140_production_site_values | E2E | 🟢 passed |
 | REQ-141 | 집계 지표 계산 | test_dashboard_index.py::test_req141_aggregate_metrics<br>test_dashboard_index.py::test_req141_none_count_counts_unmeasured_projects | Unit | 🟢 passed |
 | REQ-142 | 요약 칸·버튼 개수·CI 이력 | test_dashboard_home.py::test_req142_summary_counts_history | Int | 🟢 passed |
 | REQ-143 | 공개 여부 미확인 과제 | test_dashboard_collect.py::test_req143_visibility_unknown_keeps_last_public | Int | 🟢 passed |
 | REQ-144 | 게시 중단 시 수집 정리 | test_dashboard_collect.py::test_req144_collect_sh_signal_revokes_token<br>test_dashboard_collect.py::test_req144_signal_during_revoke_still_removes_token<br>test_dashboard_publish.py::test_req144_interrupt_cleans_collect_token_and_lock | E2E-inj | 🟢 passed |
 | REQ-145 | 두 게시의 잠금 공유 | test_dashboard_publish.py::test_req145_index_only_and_s13_share_lock | E2E-inj | 🟢 passed |
 
-Coverage: 66/70 green (94%) — target 100% (대상: Must 65 + Should 5. Could 0, 연기 없음). 판정 근거: 2026-11-22 비기준 전체 실행(`pytest tests/acceptance -m "not baseline"`, 세션 `t13a`)에서 표의 테스트가 모두 passed. REQ-130, 131, 139, 140은 운영 기준 run 세션(계획 Task 14) 뒤에 확인한다.
+Coverage: 70/70 green (100%) — target 100% (대상: Must 65 + Should 5. Could 0, 연기 없음). 판정 근거: 2026-11-22 운영 기준 run 세션(`tests/acceptance/run_baseline.py`: 기준 run `20261122-012427Z-b6f9393-manual-f77d0b3f`, 두 번째 run `20261122-013901Z-b6f9393-manual-94bb8f06`, 인덱스 전용 게시 passed, 시안 `_design/` 삭제 뒤) 다음의 전체 실행(`pytest tests/acceptance -v`, 세션 `t14c`)이 880 passed, 0 failed이고 표의 테스트 이름이 모두 그 실행의 PASSED 목록에 있다.
 
 ## 3. PoC 요구사항과 테스트의 개정
 
