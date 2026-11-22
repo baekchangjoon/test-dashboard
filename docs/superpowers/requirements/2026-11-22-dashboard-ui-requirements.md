@@ -511,7 +511,7 @@
 | REQ-144 | 게시 중단 시 수집 정리 | test_dashboard_collect.py::test_req144_collect_sh_signal_revokes_token<br>test_dashboard_collect.py::test_req144_signal_during_revoke_still_removes_token<br>test_dashboard_publish.py::test_req144_interrupt_cleans_collect_token_and_lock | E2E-inj | 🟢 passed |
 | REQ-145 | 두 게시의 잠금 공유 | test_dashboard_publish.py::test_req145_index_only_and_s13_share_lock | E2E-inj | 🟢 passed |
 
-Coverage: 70/70 green (100%) — target 100% (대상: Must 65 + Should 5. Could 0, 연기 없음). 판정 근거: 2026-11-22 운영 기준 run 세션(`tests/acceptance/run_baseline.py`: 기준 run `20261122-012427Z-b6f9393-manual-f77d0b3f`, 두 번째 run `20261122-013901Z-b6f9393-manual-94bb8f06`, 인덱스 전용 게시 passed, 시안 `_design/` 삭제 뒤) 다음의 전체 실행(`pytest tests/acceptance -v`, 세션 `t14c`)이 880 passed, 0 failed이고 표의 테스트 이름이 모두 그 실행의 PASSED 목록에 있다.
+Coverage: 70/70 green (100%) — target 100% (대상: Must 65 + Should 5. Could 0, 연기 없음). 판정 근거: 2026-11-22 운영 기준 run 세션(`tests/acceptance/run_baseline.py`: 기준 run `20261122-012427Z-b6f9393-manual-f77d0b3f`, 두 번째 run `20261122-013901Z-b6f9393-manual-94bb8f06`, 인덱스 전용 게시 passed, 시안 `_design/` 삭제 뒤) 다음의 전체 실행(`pytest tests/acceptance -v`, 세션 `t14c`)이 880 passed, 0 failed이고 표의 테스트 이름이 모두 그 실행의 PASSED 목록에 있다. 최종 리뷰 수정 뒤 다시 돌린 전체 실행(세션 `t15a`, 같은 기준 run 세션 파일)도 903 passed, 0 failed이고 표의 테스트 이름이 모두 PASSED 목록에 있다.
 
 ## 3. PoC 요구사항과 테스트의 개정
 
