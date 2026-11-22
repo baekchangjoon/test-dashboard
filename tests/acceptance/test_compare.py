@@ -518,7 +518,7 @@ def test_det_reference_column(tmp_path, monkeypatch):
     assert "LLM 없음, 조건식 포함" in html
     assert "var(--arm-det)" in html
     assert 'id="deterministic"' in html
-    css = (REPO_ROOT / "site-gen" / "td" / "site" / "static" / "site.css").read_text()
+    css = (REPO_ROOT / "site-gen" / "td" / "site" / "static" / "v2" / "app.css").read_text()  # 옛 site.css는 동결(REQ-136)
     assert css.count("--arm-det:") == 3
 
 
