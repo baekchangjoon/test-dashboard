@@ -710,7 +710,7 @@ def test_reasons_tuple_is_closed():
     assert derive_module.REASONS == (
         "no-endpoint-mapping", "unparsed", "unresolved-operand", "unreachable-state", "needs-state-transition",
         "param-name-unknown", "no-id-ref", "no-condition", "no-body-schema", "format-unknown", "input-missing",
-        "input-contradiction")
+        "input-contradiction", "pairwise-unavailable", "pairwise-too-large", "pairwise-infeasible", "pairwise-row-invalid")
 
 
 def test_input_contradiction_keeps_other_boundaries(tmp_path):
@@ -937,7 +937,7 @@ def test_render_cases_json_shape(tmp_path):
         case = by_id[row["id"]]
         assert {"id", "endpoint", "rule", "sources", "values", "expect", "oracle", "assumes", "baselineProof",
                 "auth", "setup"} <= set(row) <= {"id", "endpoint", "rule", "sources", "values", "expect", "oracle",
-                                                 "assumes", "baselineProof", "auth", "setup", "pair"}
+                                                 "assumes", "baselineProof", "auth", "setup", "pair", "pairwise"}
         assert row.get("pair") == case.pair and row["baselineProof"] == case.baseline_proof
         expected_keys = ({f"body.{k}" for k in case.values} | {f"query.{k}" for k in case.query}
                          | {f"path.{k}" for k in case.path})

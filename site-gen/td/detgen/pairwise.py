@@ -407,6 +407,55 @@ def row_assumes_for(model: EndpointModel, labels: dict[str, str]) -> list[str]:
     return sorted(set(out))
 
 
+def _completable(params: list[str], labels: dict[str, list[str]], by_param: dict[str, list[dict]],
+                 assign: dict[str, str]) -> bool:
+    """부분 배정(assign)을 배제를 모두 피하는 전체 행으로 채울 수 있는가(깊이 우선 탐색, 배정이 끝난 배제만 검사)."""
+    def clash(param: str) -> bool:
+        return any(all(assign.get(k) == v for k, v in exclusion.items()) for exclusion in by_param.get(param, ()))
+
+    def walk(index: int) -> bool:
+        if index == len(params):
+            return True
+        param = params[index]
+        if param in assign:
+            return walk(index + 1)
+        for label in labels[param]:
+            assign[param] = label
+            if not clash(param) and walk(index + 1):
+                del assign[param]
+                return True
+            del assign[param]
+        return False
+
+    if any(clash(param) for param in assign):
+        return False
+    return walk(0)
+
+
+def interaction_stats(model: EndpointModel, emitted_rows: list[dict[str, str]]) -> dict:
+    """order-way 상호작용 수(설계 §5.5): 전체 값 튜플, 배제를 모두 피하는 전체 행이 존재하는 튜플(실현 가능), 그중 emitted_rows에 나타난 튜플."""
+    params = [p["param"] for p in model.params]
+    labels = {p["param"]: [c.label for c in p["candidates"]] for p in model.params}
+    by_param: dict[str, list[dict]] = {}
+    for exclusion in model.exclusions:
+        for param in exclusion:
+            by_param.setdefault(param, []).append(exclusion)
+    order = model.effective_order
+    total, feasible = 0, set()
+    for names in itertools.combinations(params, order):
+        product = 1
+        for name in names:
+            product *= len(labels[name])
+        total += product
+        for combo in itertools.product(*(labels[name] for name in names)):
+            assign = dict(zip(names, combo))
+            if _completable(params, labels, by_param, assign):
+                feasible.add(tuple(sorted(assign.items())))
+    seen = {tuple(sorted((name, row[name]) for name in names))
+            for row in emitted_rows for names in itertools.combinations(params, order)}
+    return {"interactionsTotal": total, "interactionsFeasible": len(feasible), "interactionsCovered": len(feasible & seen)}
+
+
 def model_json(model: EndpointModel) -> dict:
     """`pairwise.json` 엔드포인트 항목(rows는 derive가 더한다)."""
     return {

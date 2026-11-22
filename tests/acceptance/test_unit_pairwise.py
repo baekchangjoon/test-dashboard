@@ -1,21 +1,27 @@
-"""det pairwise 단위 테스트(Task 3: 후보 모델·배제·PICT 실행, REQ-305·306·307·311).
+"""det pairwise 단위 테스트(Task 3: 후보 모델·배제·PICT 실행, REQ-305·306·307·311 / Task 4: derive 통합·`pairwise.json`,
+REQ-304·308·309·310·311·315·316).
 
-모델 수준 테스트는 `_Deriver`의 계획 해석 단계만 돌려 엔드포인트 제약을 채운 뒤 `build_model`을 부른다(derive 통합은 Task 4).
+모델 수준 테스트는 `_Deriver`의 계획 해석 단계만 돌려 엔드포인트 제약을 채운 뒤 `build_model`을 부른다.
+derive 통합 테스트는 `derive(bundle, pairwise=...)`와 `render`의 산출물(`cases.json`·`pairwise.json`)을 읽는다.
 실제 PICT는 세션 fixture `pict_tool`(고정 커밋 빌드)을 쓰고, rc·출력 계약은 argv를 기록하는 가짜 pict로 주입한다.
 """
 import itertools
 import json
 import os
+import re
 import stat
 import time
 from pathlib import Path
 
 import pytest
 
+from td import redact
 from td.detgen import derive as derive_module
 from td.detgen import pairwise as pw
+from td.detgen import render as render_module
 from td.detgen.constraints import OMIT, Spread, Uniq, Value
-from test_unit_detgen import CONTROLLED, FIXTURES, _load_docs, _make_bundle, _real_bundle  # noqa: E402
+from test_unit_detgen import (CONTROLLED, FIXTURES, MUTATED, REPO_ROOT, _check_provenance, _load_docs,  # noqa: E402
+                              _make_bundle, _real_bundle)
 
 KINDS = FIXTURES / "pairwise-kinds"
 MAKE = "POST /svc/kits"
@@ -428,6 +434,23 @@ def test_req306_undetermined(tmp_path):
     assert pw.undetermined(model, row) == []
 
 
+def test_req306_undetermined_cases(tmp_path, pict_tool):
+    """Task 4 확장: 판단 불가 조합(credit<42 ∧ legacy 생략·null)을 담은 pairwise 케이스 assumes에 `undetermined:<#14>`가 붙는다."""
+    _, cases_doc, pairwise_doc = _derive_render(_kinds_bundle(tmp_path), tmp_path, _available(tmp_path, pict_tool))
+    make = [c for c in _pairwise_cases(cases_doc) if c["endpoint"] == MAKE]
+    assert make
+    tagged = 0
+    for case in make:
+        credit = case["values"]["body.credit"]["value"]
+        legacy = case["values"].get("body.legacy", {"value": None})["value"]
+        expected = credit < 42 and legacy is None
+        marks = [a for a in case["assumes"] if a.startswith("undetermined:plan-tests-KitService.make.json#14@")]
+        assert bool(marks) == expected, (case["id"], credit, legacy, case["assumes"])
+        tagged += bool(marks)
+    assert tagged >= 1
+    assert pairwise_doc["endpoints"][MAKE]["rows"]
+
+
 def test_truth_uniq_and_spread():
     uniq = pw.Candidate("v0", "uniq", Value(Uniq(), "generic-sentinel"))
     def con(**kw):
@@ -657,3 +680,433 @@ def test_near_cap_timing(tmp_path, pict_tool):
     elapsed = time.monotonic() - started
     print(f"near-cap: exclusions={len(exclusions)} rows={len(rows) if isinstance(rows, list) else rows} seconds={elapsed:.2f}")
     assert isinstance(rows, list)
+
+
+# --- Task 4: derive 통합·pairwise.json (REQ-304·308·309·310·311·315·316) ------------------------------
+
+SNAPSHOT = REPO_ROOT / "e2e" / "generated" / "petclinic" / "det" / "det-da70932c-r1"
+NEW_REASONS = ("pairwise-unavailable", "pairwise-too-large", "pairwise-infeasible", "pairwise-row-invalid")
+PAIRWISE_FILE = "pairwise.json"
+
+
+def _available(tmp_path, pict_tool, name="pict-work") -> pw.Pairwise:
+    return pw.Pairwise.available(_tool(pict_tool), tmp_path / name, 120)
+
+
+def _kinds_bundle(tmp_path, mutate=None, name="kinds-b"):
+    docs = _load_docs(KINDS)
+    if mutate is not None:
+        mutate(docs)
+    return _make_bundle(tmp_path / name, docs)
+
+
+def _bundle_of(which, tmp_path):
+    if which == "petclinic":
+        return _real_bundle(tmp_path / "pc")
+    if which == "kinds":
+        return _kinds_bundle(tmp_path)
+    return _make_bundle(tmp_path / which, _load_docs(CONTROLLED if which == "controlled" else MUTATED))
+
+
+def _derive_render(bundle, tmp_path, pairwise=None, name="out"):
+    """derive → render. (Derivation, cases.json 문서, pairwise.json 문서|None)."""
+    derivation = derive_module.derive(bundle) if pairwise is None else derive_module.derive(bundle, pairwise=pairwise)
+    out = tmp_path / name
+    written = render_module.render(derivation, out)
+    cases_doc = json.loads((out / "cases.json").read_text(encoding="utf-8"))
+    pairwise_doc = json.loads((out / PAIRWISE_FILE).read_text(encoding="utf-8")) if (out / PAIRWISE_FILE).exists() else None
+    assert (PAIRWISE_FILE in written) == (pairwise_doc is not None)
+    return derivation, cases_doc, pairwise_doc
+
+
+def _pairwise_cases(cases_doc):
+    return [c for c in cases_doc["cases"] if c["rule"] == "pairwise"]
+
+
+def _schema_check(pairwise_doc):
+    import jsonschema
+    schema = json.loads((REPO_ROOT / "site-gen" / "td" / "schemas" / "pairwise.schema.json").read_text(encoding="utf-8"))
+    jsonschema.validate(pairwise_doc, schema)
+
+
+def test_req304_disabled_identical(tmp_path):
+    """disabled(기본값) derive의 cases.json·features·glue는 커밋된 기준 스냅샷과 바이트 동일, pairwise.json 없음."""
+    derivation = derive_module.derive(_real_bundle(tmp_path))
+    out = tmp_path / "out"
+    written = render_module.render(derivation, out)
+    assert PAIRWISE_FILE not in written and not (out / PAIRWISE_FILE).exists()
+    expected = sorted(p.relative_to(SNAPSHOT).as_posix() for p in SNAPSHOT.rglob("*") if p.is_file() and p.name != "_COMPLETE")
+    assert written == expected
+    for relative in written:
+        assert (out / relative).read_bytes() == (SNAPSHOT / relative).read_bytes(), relative
+    assert "pairwise" not in derivation.universe and derivation.pairwise_doc is None
+    assert not set(NEW_REASONS) & set(derivation.universe["bySlot"]["byReason"])
+
+
+def _without_pairwise(doc):
+    cases = [c for c in doc["cases"] if c["rule"] != "pairwise"]
+    unresolved = [e for e in doc["unresolved"] if e["rule"] != "pairwise"]
+    return cases, unresolved
+
+
+@pytest.mark.parametrize("which", ["petclinic", "kinds"])
+def test_req304_existing_cases_kept(tmp_path, pict_tool, which):
+    """available·unavailable에서도 규칙 ≠ pairwise 항목은 disabled와 같다(병합으로 늘어난 sources만 예외)."""
+    bundle = _bundle_of(which, tmp_path)
+    _, base, _ = _derive_render(bundle, tmp_path, None, "disabled")
+    base_cases, base_unresolved = _without_pairwise(base)
+    assert len(base_cases) == len(base["cases"]) and len(base_unresolved) == len(base["unresolved"])
+    for mode in ("available", "unavailable"):
+        state = _available(tmp_path, pict_tool) if mode == "available" else pw.Pairwise.unavailable("pict-not-prepared")
+        _, doc, _ = _derive_render(bundle, tmp_path, state, mode)
+        cases, unresolved = _without_pairwise(doc)
+        assert unresolved == base_unresolved, mode
+        assert [c["id"] for c in cases] == [c["id"] for c in base_cases], mode
+        for got, want in zip(cases, base_cases):
+            assert got["sources"][:len(want["sources"])] == want["sources"], (mode, got["id"])
+            assert dict(got, sources=None) == dict(want, sources=None), (mode, got["id"])
+            assert got.get("pair") == want.get("pair")
+        universe, base_universe = doc["universe"], base["universe"]
+        assert set(universe) == set(base_universe) | {"pairwise"}
+        assert universe["theoretical"] == base_universe["theoretical"]
+        assert {k: v for k, v in universe["byRule"].items() if k != "pairwise"} == base_universe["byRule"]
+        by_reason = universe["bySlot"]["byReason"]
+        assert set(by_reason) == set(base_universe["bySlot"]["byReason"]) | set(NEW_REASONS)  # 새 키 정확히 4개
+        assert len(by_reason) == len(base_universe["bySlot"]["byReason"]) + 4
+        assert {k: by_reason[k] for k in base_universe["bySlot"]["byReason"]} == base_universe["bySlot"]["byReason"]
+        if mode == "unavailable":
+            assert "pairwise" not in universe["byRule"] and universe["bySlot"]["generated"] == base_universe["bySlot"]["generated"]
+
+
+def test_req308_case_shape(tmp_path, pict_tool):
+    bundle = _kinds_bundle(tmp_path)
+    _, cases_doc, pairwise_doc = _derive_render(bundle, tmp_path, _available(tmp_path, pict_tool))
+    _schema_check(pairwise_doc)
+    cases = _pairwise_cases(cases_doc)
+    assert cases
+    _check_provenance(bundle, derive_module.derive(bundle, pairwise=_available(tmp_path, pict_tool, "w2")), tmp_path / "out")
+    by_id = {c["id"]: c for c in cases_doc["cases"]}
+    transforms = 0
+    for case in cases:
+        assert case["expect"] == {"strict": "2xx", "class": "2xx", "source": "rule"} and case["oracle"] == "status"
+        assert case["auth"] == "authed"
+        assert all(s.startswith("graph:") or re.match(r"^[^#]+#[0-9.]+@[0-9a-f]{12}$", s) for s in case["sources"])
+        assert not any(s.startswith("pict:") for s in case["sources"])
+        endpoint = pairwise_doc["endpoints"][case["endpoint"]]
+        assert set(case["pairwise"]) == {"order", "labels"} and case["pairwise"]["order"] == endpoint["effectiveOrder"]
+        assert set(case["pairwise"]["labels"]) == {p["param"] for p in endpoint["params"]}
+        assert [r for r in endpoint["rows"] if r["caseId"] == case["id"]][0]["labels"] == case["pairwise"]["labels"]
+        for param in endpoint["params"]:
+            candidate = next(c for c in param["candidates"] if c["label"] == case["pairwise"]["labels"][param["param"]])
+            key = f"{param['loc']}.{param['field']}"
+            if candidate["kind"] == "omit":
+                assert key not in case["values"]
+                continue
+            entry = case["values"][key]
+            assert entry["provenance"] == candidate["provenance"], (case["id"], key)
+            assert entry.get("from") == candidate["source"] and entry.get("transform") == candidate["transform"], (case["id"], key)
+            transforms += candidate["transform"] is not None
+            if candidate["kind"] in ("literal", "null"):
+                assert entry["value"] == candidate["value"]
+            elif candidate["kind"] == "uniq":
+                assert entry["value"] == f"uniq:{case['id']}"
+    assert transforms >= 1  # 후보 transform 보존(예: credit 40-1)
+    assert all("pairwise" not in c for c in cases_doc["cases"] if c["rule"] != "pairwise")
+    for row in (r for e in pairwise_doc["endpoints"].values() for r in e["rows"]):
+        assert not (row["caseId"] and row["mergedInto"])  # 케이스이거나, 병합됐거나, (row-invalid면) 둘 다 없다
+        for ref in (row["caseId"], row["mergedInto"]):
+            assert ref is None or ref in by_id
+
+
+def test_req308_order_and_merge(tmp_path, pict_tool, monkeypatch):
+    # (a) 정렬: pairwise 케이스는 기존 케이스 뒤
+    _, doc, pairwise_doc = _derive_render(_kinds_bundle(tmp_path), tmp_path, _available(tmp_path, pict_tool))
+    rules = [c["rule"] for c in doc["cases"]]
+    first = rules.index("pairwise")
+    assert all(r == "pairwise" for r in rules[first:]) and "pairwise" not in rules[:first]
+    # (b) enum 전용 엔드포인트: 모두-baseline 행은 baseline-valid·happy가 없어 pairwise 케이스로 남고,
+    #     enum-value와 같은 요청인 행은 dedupe로 흡수되어 mergedInto = 남은 enum-value 케이스
+    tags = pairwise_doc["endpoints"][TAGS]
+    by_id = {c["id"]: c for c in doc["cases"]}
+    assert tags["skipped"] is None and tags["reason"] is None and len(tags["rows"]) == 6
+    baseline_rows = [r for r in tags["rows"] if set(r["labels"].values()) == {"v0"}]
+    assert len(baseline_rows) == 1 and baseline_rows[0]["mergedInto"] is None
+    assert by_id[baseline_rows[0]["caseId"]]["rule"] == "pairwise"
+    for row in tags["rows"]:
+        changed = sum(label != "v0" for label in row["labels"].values())
+        if changed == 1:
+            assert row["caseId"] is None and by_id[row["mergedInto"]]["rule"] == "enum-value", row
+        elif changed == 2:
+            assert row["mergedInto"] is None and by_id[row["caseId"]]["rule"] == "pairwise", row
+    # (c) 라벨 기준 모두-baseline(uniq 값이 있어 값 서명으로는 병합되지 않는 MAKE) → baseline-valid id
+    real_run = pw.run_pict
+
+    def with_baseline_row(model, tool, work_dir, timeout):
+        rows = real_run(model, tool, work_dir, timeout)
+        if any(p["field"] == "credit" for p in model.params) and isinstance(rows, list):
+            rows = [{p["param"]: "v0" for p in model.params}] + rows
+        return rows
+    monkeypatch.setattr(pw, "run_pict", with_baseline_row)
+    _, doc2, pairwise_doc2 = _derive_render(_kinds_bundle(tmp_path), tmp_path, _available(tmp_path, pict_tool), "merged")
+    make_rows = pairwise_doc2["endpoints"][MAKE]["rows"]
+    baseline_valid = [c["id"] for c in doc2["cases"] if c["endpoint"] == MAKE and c["rule"] == "baseline-valid"]
+    assert len(baseline_valid) == 1
+    assert make_rows[0] == {"labels": make_rows[0]["labels"], "caseId": None, "mergedInto": baseline_valid[0]}
+    assert not any(set(c["pairwise"]["labels"].values()) == {"v0"} for c in _pairwise_cases(doc2) if c["endpoint"] == MAKE)
+    # baseline-valid 케이스 자체는 그대로(출처도 늘지 않는다)
+    assert next(c for c in doc2["cases"] if c["id"] == baseline_valid[0]) == next(c for c in doc["cases"] if c["id"] == baseline_valid[0])
+    monkeypatch.setattr(pw, "run_pict", real_run)
+    # (d) _materialize가 거부한 행은 종류와 무관하게 pairwise-row-invalid(배제를 지운 모델 → VIP×499 행이 오류 조건 위반)
+    real_build = pw.build_model
+
+    def without_exclusions(ep, cons, catalog, order):
+        model = real_build(ep, cons, catalog, order)
+        model.exclusions, model.checks = [], []
+        return model
+    monkeypatch.setattr(pw, "build_model", without_exclusions)
+    derivation, doc3, pairwise_doc3 = _derive_render(_real_bundle(tmp_path / "r"), tmp_path, _available(tmp_path, pict_tool), "invalid")
+    invalid = [e for e in doc3["unresolved"] if e["rule"] == "pairwise"]
+    assert invalid and all(e == {"source": invalid[0]["source"], "reason": "pairwise-row-invalid", "endpoint": CREATE,
+                                 "rule": "pairwise"} for e in invalid)
+    assert doc3["universe"]["bySlot"]["byReason"]["pairwise-row-invalid"] == len(invalid)
+    rows = pairwise_doc3["endpoints"][CREATE]["rows"]
+    assert sum(1 for r in rows if r["caseId"] is None and r["mergedInto"] is None) == len(invalid)
+
+
+def test_req308_rel_combined(tmp_path, pict_tool):
+    bundle = _real_bundle(tmp_path)
+    deriver = _deriver(bundle)
+    ep = next(e for e in deriver.endpoints.values() if e.label == CREATE)
+    addr, rel = next((a, c) for a, cs in ep.error_disjuncts for c in cs if c.op == "rel")
+    _, doc, pairwise_doc = _derive_render(bundle, tmp_path, _available(tmp_path, pict_tool))
+    params = {p["field"]: p["param"] for p in pairwise_doc["endpoints"][CREATE]["params"]}
+    combined = plain = 0
+    for case in (c for c in _pairwise_cases(doc) if c["endpoint"] == CREATE):
+        labels = case["pairwise"]["labels"]
+        non_baseline = any(labels[params[name]] != "v0" for name in rel.others if name in params)
+        assert (f"rel-combined:{addr}" in case["assumes"]) == non_baseline, case["id"]
+        assert rel.assumes[1] in case["assumes"]  # 종속 필드의 기존 가정
+        combined += non_baseline
+        plain += not non_baseline
+    assert combined >= 1
+
+
+@pytest.mark.parametrize("which", ["controlled", "mutated", "petclinic", "kinds"])
+def test_req308_no_row_invalid(tmp_path, pict_tool, which):
+    _, doc, pairwise_doc = _derive_render(_bundle_of(which, tmp_path), tmp_path, _available(tmp_path, pict_tool))
+    assert not [e for e in doc["unresolved"] if e["reason"] == "pairwise-row-invalid"]
+    assert doc["universe"]["bySlot"]["byReason"]["pairwise-row-invalid"] == 0
+    assert _pairwise_cases(doc)
+    assert all(r["caseId"] or r["mergedInto"] for e in pairwise_doc["endpoints"].values() for r in e["rows"])
+    _schema_check(pairwise_doc)
+
+
+def test_req308_reasons(tmp_path, pict_tool, monkeypatch):
+    assert derive_module.REASONS[-4:] == NEW_REASONS and derive_module._REASON_PRIORITY[-4:] == NEW_REASONS
+    assert derive_module._VALID_RULES[-1] == "pairwise"
+    bundle = _kinds_bundle(tmp_path)
+    # unavailable: 슬롯 1건, 새 키 4개, universe.pairwise 빈 byEndpoint, pairwise.json 빈 endpoints
+    _, doc, pairwise_doc = _derive_render(bundle, tmp_path, pw.Pairwise.unavailable("pict-not-prepared"), "unavail")
+    assert [e for e in doc["unresolved"] if e["rule"] == "pairwise"] == [
+        {"source": "tool:pict", "reason": "pairwise-unavailable", "endpoint": None, "rule": "pairwise"}]
+    by_reason = doc["universe"]["bySlot"]["byReason"]
+    assert {k: by_reason[k] for k in NEW_REASONS} == {"pairwise-unavailable": 1, "pairwise-too-large": 0,
+                                                      "pairwise-infeasible": 0, "pairwise-row-invalid": 0}
+    assert doc["universe"]["pairwise"] == {"order": 2, "byEndpoint": {}}
+    assert pairwise_doc == {"schema": 1, "order": 2, "endpoints": {}}
+    _schema_check(pairwise_doc)
+    assert not _pairwise_cases(doc)
+    # available: 모델로 정해지는 infeasible(TRIM) 1건
+    _, doc, pairwise_doc = _derive_render(bundle, tmp_path, _available(tmp_path, pict_tool), "avail")
+    slots = [e for e in doc["unresolved"] if e["rule"] == "pairwise"]
+    assert slots == [{"source": slots[0]["source"], "reason": "pairwise-infeasible", "endpoint": TRIM, "rule": "pairwise"}]
+    assert slots[0]["source"].startswith("graph:")
+    assert {k: doc["universe"]["bySlot"]["byReason"][k] for k in NEW_REASONS} == {
+        "pairwise-unavailable": 0, "pairwise-too-large": 0, "pairwise-infeasible": 1, "pairwise-row-invalid": 0}
+    assert pairwise_doc["endpoints"][TRIM]["reason"] == "pairwise-infeasible" and pairwise_doc["endpoints"][TRIM]["rows"] == []
+    assert doc["universe"]["byRule"]["pairwise"] == len(_pairwise_cases(doc))
+    # 크기 상한 초과 → 엔드포인트마다 too-large 슬롯(PICT 미호출)
+    monkeypatch.setattr(pw, "MAX_CANDIDATES", 2)
+    _, doc, pairwise_doc = _derive_render(bundle, tmp_path, _available(tmp_path, pict_tool), "large")
+    large = sorted(e["endpoint"] for e in doc["unresolved"] if e["reason"] == "pairwise-too-large")
+    assert large == sorted([MAKE, PATCH_PUT, TAGS]) and all(e["rule"] == "pairwise" for e in doc["unresolved"] if e["reason"] == "pairwise-too-large")
+    assert pairwise_doc["endpoints"][MAKE]["reason"] == "pairwise-too-large"
+    assert MAKE not in doc["universe"]["pairwise"]["byEndpoint"]
+
+
+# 독립 오라클(td.detgen.pairwise를 쓰지 않는다): pairwise.json의 params·candidates·exclusions만 읽는다
+
+def _feasible_tuples(endpoint, order):
+    params = [p["param"] for p in endpoint["params"]]
+    labels = [[c["label"] for c in p["candidates"]] for p in endpoint["params"]]
+    exclusions = [tuple(sorted(e.items())) for e in endpoint["exclusions"]]
+    feasible = set()
+    for combo in itertools.product(*labels):
+        row = dict(zip(params, combo))
+        if any(all(row[k] == v for k, v in exclusion) for exclusion in exclusions):
+            continue
+        for names in itertools.combinations(params, order):
+            feasible.add(tuple((name, row[name]) for name in names))
+    return feasible
+
+
+def _matches(candidate, key, values) -> bool:
+    kind = candidate["kind"]
+    if kind == "omit":
+        return key not in values
+    if key not in values:
+        return False
+    value = values[key]["value"]
+    if kind == "null":
+        return value is None
+    if kind == "uniq":
+        return isinstance(value, str) and value.startswith("uniq:")
+    if kind == "spread":
+        rng = candidate["range"]
+        return isinstance(value, int) and rng["lo"] <= value <= rng["hi"] and value not in rng["excluded"]
+    return value == candidate["value"] and value is not None
+
+
+def test_req309_feasible_interactions(tmp_path, pict_tool):
+    _, doc, pairwise_doc = _derive_render(_real_bundle(tmp_path), tmp_path, _available(tmp_path, pict_tool))
+    by_id = {c["id"]: c for c in doc["cases"]}
+    universe = doc["universe"]["pairwise"]
+    assert universe["order"] == pairwise_doc["order"] == 2
+    totals = {"feasible": 0, "covered": 0}
+    checked = []
+    for label, endpoint in sorted(pairwise_doc["endpoints"].items()):
+        if endpoint["skipped"] or endpoint["reason"]:
+            assert label not in universe["byEndpoint"]
+            continue
+        checked.append(label)
+        order = endpoint["effectiveOrder"]
+        feasible = _feasible_tuples(endpoint, order)
+        by_param = {p["param"]: p for p in endpoint["params"]}
+        row_cases = [by_id[r["caseId"] or r["mergedInto"]] for r in endpoint["rows"] if r["caseId"] or r["mergedInto"]]
+        uncovered = []
+        for combo in feasible:
+            def hit(case):
+                return all(_matches(next(c for c in by_param[param]["candidates"] if c["label"] == lab),
+                                    f"{by_param[param]['loc']}.{by_param[param]['field']}", case["values"])
+                           for param, lab in combo)
+            if not any(hit(case) for case in row_cases):
+                uncovered.append(combo)
+        assert uncovered == [], (label, uncovered[:5])
+        stats = universe["byEndpoint"][label]
+        assert stats["interactionsFeasible"] == len(feasible) == stats["interactionsCovered"], label
+        assert stats["params"] == len(endpoint["params"])
+        assert stats["candidates"] == sum(len(p["candidates"]) for p in endpoint["params"])
+        assert stats["rows"] == len(endpoint["rows"]) and stats["cases"] == sum(1 for r in endpoint["rows"] if r["caseId"])
+        assert stats["interactionsTotal"] >= stats["interactionsFeasible"]
+        totals["feasible"] += len(feasible)
+        totals["covered"] += stats["interactionsCovered"]
+    assert CREATE in checked and universe["byEndpoint"][CREATE]["interactionsFeasible"] > 0
+    assert set(universe["byEndpoint"]) == set(checked)
+    assert totals["feasible"] == totals["covered"] == sum(s["interactionsCovered"] for s in universe["byEndpoint"].values())
+
+
+# 독립 평가기(지원 연산자: < <= > >= == != == null != null && ||, 피연산자: 요청 필드 접근자·정수·enum 상수·ext.json 상수)
+
+_ACCESSOR = re.compile(r"^\w+\.(\w+)\(\)$")
+_ATOM = re.compile(r"^(.+?)\s*(<=|>=|==|!=|<|>)\s*(.+)$")
+
+
+def _operand(text, values, constants):
+    text = text.strip()
+    match = _ACCESSOR.match(text)
+    if match:
+        key = f"body.{match.group(1)}" if f"body.{match.group(1)}" in values else f"query.{match.group(1)}"
+        return ("field", values[key]["value"] if key in values else None)
+    if re.fullmatch(r"-?\d+", text):
+        return ("int", int(text))
+    if text == "null":
+        return ("null", None)
+    if re.fullmatch(r"[A-Z]\w*\.[A-Z][A-Z0-9_]*", text):
+        return ("enum", text.split(".")[1])
+    if text in constants:
+        return ("int", constants[text])
+    raise ValueError(text)
+
+
+def _eval_atom(atom, values, constants):
+    match = _ATOM.match(atom.strip())
+    if not match or "(" in match.group(3) and not _ACCESSOR.match(match.group(3).strip()):
+        raise ValueError(atom)
+    (lk, left), op, (rk, right) = _operand(match.group(1), values, constants), match.group(2), _operand(match.group(3), values, constants)
+    if rk == "null":
+        if op not in ("==", "!="):
+            raise ValueError(atom)
+        return (left is None) == (op == "==")
+    if left is None or right is None:
+        raise ValueError(atom)  # null 비교(자바 NPE)는 평가하지 않는다
+    if rk == "enum" or isinstance(left, str) or isinstance(right, str):
+        if op not in ("==", "!="):
+            raise ValueError(atom)
+        return (left == right) == (op == "==")
+    if isinstance(left, bool) or isinstance(right, bool):
+        raise ValueError(atom)
+    return {"<": left < right, "<=": left <= right, ">": left > right, ">=": left >= right,
+            "==": left == right, "!=": left != right}[op]
+
+
+def test_req310_no_error_condition(tmp_path, pict_tool):
+    bundle = _real_bundle(tmp_path)
+    _, doc, _ = _derive_render(bundle, tmp_path, _available(tmp_path, pict_tool))
+    ext = bundle.read("ext.json")
+    constants = {c["name"]: c["value"] for c in ext["constants"] if isinstance(c.get("value"), int)}
+    endpoint_of = {(c["service"], c["method"]): c["endpoint"].split(":", 1)[1] for c in ext["calls"]}
+    evaluated, unevaluated, checks, conditions = set(), set(), 0, set()
+    cases = _pairwise_cases(doc)
+    assert cases
+    for plan in bundle.read("plans.json"):
+        label = next((ep for (svc, method), ep in endpoint_of.items() if method == plan["method"] and svc.endswith("." + plan["class"])), None)
+        targets = [c for c in cases if c["endpoint"] == label]
+        for item in plan["items"]:
+            if not re.fullmatch(r"[45]\d\d", item["branch_value"]):
+                continue  # 기대가 예외인 항목만
+            condition = " ".join(item["condition"].split())
+            conditions.add(condition)
+            disjuncts = [[a for a in d.split("&&")] for d in condition.split("||")]
+            for case in targets:
+                for atoms in disjuncts:
+                    try:
+                        result = all([_eval_atom(a, case["values"], constants) for a in atoms])
+                    except (ValueError, KeyError):
+                        unevaluated.add(condition)
+                        continue
+                    checks += 1
+                    evaluated.add(condition)
+                    assert result is False, (case["id"], condition)
+    assert checks >= 1 and len(evaluated) >= 1
+    assert any("VIP" in c and "loyaltyPoints" in c for c in evaluated)
+    # 평가하지 못한 조건(원자식 일부가 지원 밖: 날짜·형식·함수·관계식·count·길이)은 목록으로 남긴다
+    assert unevaluated <= conditions
+    print("unevaluated:", sorted(unevaluated))
+
+
+def test_req311_deterministic(tmp_path, pict_tool):
+    outs = []
+    for name in ("a", "b"):
+        base = tmp_path / name / "nested"
+        _derive_render(_real_bundle(base), base, pw.Pairwise.available(_tool(pict_tool), base / "w", 120), "out")
+        outs.append(base / "out")
+    for name in ("cases.json", PAIRWISE_FILE):
+        assert (outs[0] / name).read_bytes() == (outs[1] / name).read_bytes(), name
+
+
+def test_req315_no_leaks(tmp_path, pict_tool):
+    _derive_render(_real_bundle(tmp_path), tmp_path, _available(tmp_path, pict_tool))
+    for name in ("cases.json", PAIRWISE_FILE):
+        text = (tmp_path / "out" / name).read_text(encoding="utf-8")
+        assert redact.find_leaks(text) == [], name
+        assert str(tmp_path) not in text and str(Path.home()) not in text and str(pict_tool["path"]) not in text, name
+
+
+def test_req316_mutated(tmp_path, pict_tool):
+    _, doc, _ = _derive_render(_make_bundle(tmp_path / "m", _load_docs(MUTATED)), tmp_path, _available(tmp_path, pict_tool))
+    assert _pairwise_cases(doc)
+    originals = [line.strip() for line in (MUTATED / "original-names.txt").read_text(encoding="utf-8").splitlines() if line.strip()]
+    for name in ("cases.json", PAIRWISE_FILE):
+        text = (tmp_path / "out" / name).read_text(encoding="utf-8")
+        assert [o for o in originals if o in text] == [], name
+    assert [o for o in originals if o in (REPO_ROOT / "site-gen" / "td" / "detgen" / "pairwise.py").read_text(encoding="utf-8")] == []

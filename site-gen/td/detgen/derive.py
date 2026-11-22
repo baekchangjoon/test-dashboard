@@ -17,6 +17,8 @@
   앞선 원자식이 칸을 갖는다. 모순 항목의 슬롯은 raw 꼴 키로 잇는다. 적지 않은 필드는 `valid`로 해석한다.
 - 병합된 초안은 살아남은 케이스에 `mergedRules`·boundaries 합집합·`cellConflicts`(valid로 채워 비교한 차이)로 남는다.
 - 생성 불가 슬롯의 칸은 `cases.json` `unresolved`와 같은 안정 정렬을 거친 병렬 목록에 둔다(`cases.json` 항목은 바뀌지 않는다).
+pairwise(det pairwise 설계 §5.4): `Pairwise` 상태가 available이면 엔드포인트마다 후보 모델을 만들어 PICT 행마다 `pairwise` 초안을 더하고,
+unavailable이면 생성 불가 슬롯 1건만 더한다. disabled(기본값)면 아무것도 하지 않아 출력이 pairwise 도입 전과 바이트 동일하다.
 """
 from __future__ import annotations
 
@@ -26,6 +28,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Literal
 
+from td.detgen import pairwise as pairwise_mod
 from td.detgen.constraints import BASE, LARGE_NUMBER, OMIT, UNIQ, Con, Constraints, Spread, Uniq, Value
 from td.detgen.endpoints import Catalog, Endpoint, simple, slug, status_class
 from td.detgen.inputs import Bundle
@@ -35,10 +38,14 @@ __all__ = ["REASONS", "Case", "CellInfo", "Derivation", "Value", "class_id", "de
 
 REASONS = ("no-endpoint-mapping", "unparsed", "unresolved-operand", "unreachable-state", "needs-state-transition",
            "param-name-unknown", "no-id-ref", "no-condition", "no-body-schema", "format-unknown", "input-missing",
-           "input-contradiction")
+           "input-contradiction", "pairwise-unavailable", "pairwise-too-large", "pairwise-infeasible", "pairwise-row-invalid")
+# pairwise 사유(REASONS 끝 4개): disabled 출력의 byReason에는 쓰지 않는다
+PAIRWISE_REASONS = REASONS[-4:]
+ROW_INVALID = "pairwise-row-invalid"
 # 한 슬롯에 사유가 여럿이면 앞선 것을 쓴다(근본 원인 우선)
 _REASON_PRIORITY = ("input-missing", "input-contradiction", "needs-state-transition", "unresolved-operand",
-                    "format-unknown", "no-body-schema", "param-name-unknown", "no-id-ref", "unreachable-state")
+                    "format-unknown", "no-body-schema", "param-name-unknown", "no-id-ref", "unreachable-state",
+                    "pairwise-unavailable", "pairwise-too-large", "pairwise-infeasible", "pairwise-row-invalid")
 # bbtg 관례 표지(설계 §5.2 특수 항목)
 EMPTY_BODY_MARK = "null/empty"
 NO_DATA_MARK = "no_data"
@@ -47,7 +54,10 @@ BRANCH_REASON = "BRANCH_CONDITION"
 AUTH_HEADER = "Authorization"
 _CONDITION_SIGNS = re.compile(r"[=<>!≠.]")
 _VALID = {"strict": "2xx", "class": "2xx", "source": "rule"}
-_VALID_RULES = ("valid-boundary", "baseline-valid", "enum-value", "happy", "branch-entry", "filter-empty")
+_VALID_RULES = ("valid-boundary", "baseline-valid", "enum-value", "happy", "branch-entry", "filter-empty", "pairwise")
+PAIRWISE_RULE = "pairwise"
+PICT_SOURCE = "tool:pict"  # pict가 없을 때의 생성 불가 슬롯 출처(엔드포인트와 무관)
+PAIRWISE_SCHEMA = 1
 # 시각화: 필드 클래스 튜플로 투영할 수 없는 규칙(요청 미발송·경로 id 없음·본문 없음·모델 밖 센티널)
 _OUT_OF_MODEL = ("auth", "no-data", "empty-body", "filter-empty")
 VALID_KEY = ("valid",)
@@ -72,6 +82,7 @@ class Case:
     assumes: list[str]
     baseline_proof: list[str]
     pair: str | None
+    pairwise: dict | None = None  # pairwise 케이스만: {order, labels: {param: label}}
 
 
 @dataclass
@@ -81,6 +92,7 @@ class Derivation:
     universe: dict
     timezone: str = ""   # SUT 타임존(번들 harness.json). 렌더러가 feature Background로 실어 glue가 today±N을 푼다
     factors: dict = field(default_factory=dict)  # factors.json 문서(비어 있으면 렌더러가 쓰지 않는다)
+    pairwise_doc: dict | None = None  # `pairwise.json` 내용(unavailable·available), disabled면 None
 
 
 @dataclass
@@ -115,6 +127,8 @@ class _Draft:
     cell_info: CellInfo = field(default_factory=CellInfo)
     merged_rules: list = field(default_factory=list)  # 이 초안으로 병합된 초안들의 규칙
     cell_conflicts: list = field(default_factory=list)  # 병합 때 칸이 달랐던 필드
+    pairwise: dict | None = None  # pairwise 초안: {order, labels}
+    row: dict | None = None  # pairwise 초안이 기록할 `pairwise.json` 행
 
 
 def _sha12(text: str) -> str:
@@ -168,7 +182,8 @@ def _label(key: tuple, limit=None) -> str:
 
 
 class _Deriver:
-    def __init__(self, bundle: Bundle) -> None:
+    def __init__(self, bundle: Bundle, pairwise: "pairwise_mod.Pairwise | None" = None) -> None:
+        self.pairwise = pairwise or pairwise_mod.Pairwise.disabled()
         self.plans = bundle.read("plans.json")
         self.keyparams = {(kp["class"], kp["method"]): kp for kp in bundle.read("keyparams.json")}
         self.auth = bundle.read("auth.json")
@@ -184,6 +199,10 @@ class _Deriver:
         self._slot_cells: list[tuple] = []  # unresolved와 같은 순서의 (cells, draftKey)
         self.plan_methods: dict[str, set] = {}  # 엔드포인트 id → 대응 계획 `클래스#메서드`
         self.count_limits: dict[tuple, int] = {}  # (엔드포인트 id, 필드 이름) → count 하한(라벨용)
+        self.pairwise_order = self.harness.get("pairwiseOrder", 2)  # order는 번들 harness.json 한 곳에서만 읽는다
+        self.pairwise_models: list[tuple] = []  # (엔드포인트, 모델, 행 목록)
+        self.baseline_rows: list[tuple] = []  # (행, 기존 유효 초안): 라벨이 모두 baseline이라 그 케이스로 병합한 행
+        self.universe_pairwise: dict | None = None
 
     # --- 계획 항목 -------------------------------------------------------------------------------
 
@@ -500,12 +519,100 @@ class _Deriver:
             self._materialize(draft)
             self.drafts.append(draft)
 
+    # --- pairwise(det pairwise 설계 §5.4) ---------------------------------------------------------
+
+    def _pairwise_rules(self) -> None:
+        """unavailable이면 슬롯 1건, available이면 엔드포인트(라벨 순)마다 모델 → PICT → 행마다 초안. PictFatal은 그대로 올린다."""
+        if self.pairwise.mode == "unavailable":
+            self._skip(PICT_SOURCE, "pairwise-unavailable", None, PAIRWISE_RULE)
+            return
+        if self.pairwise.mode != "available":
+            return
+        for ep in sorted(self.endpoints.values(), key=lambda e: e.label):
+            model = pairwise_mod.build_model(ep, self.cons, self.catalog, self.pairwise_order)
+            rows: list[dict] = []
+            self.pairwise_models.append((ep, model, rows))
+            if model.skipped:
+                continue
+            source = f"graph:{ep.id}"
+            if model.reason:
+                self._skip(source, model.reason, ep, PAIRWISE_RULE)
+                continue
+            result = pairwise_mod.run_pict(model, self.pairwise.tool, self.pairwise.work_dir, self.pairwise.timeout)
+            if isinstance(result, str):
+                model.reason = result  # rc=5: 모델로 정해지는 생성 불가
+                self._skip(source, result, ep, PAIRWISE_RULE)
+                continue
+            sources = [source] + sorted({addr.rstrip("~") for addr, _ in ep.error_disjuncts}
+                                        | {addr for addr, _ in ep.branch_disjuncts})
+            rels = [(addr, con) for addr, cons in ep.error_disjuncts if not addr.endswith("~") for con in cons if con.op == "rel"]
+            params = {p["field"]: p for p in model.params}
+            # 라벨이 모두 baseline(v0)인 행은 같은 엔드포인트의 기존 유효 케이스(baseline-valid, 없으면 happy)로 병합한다(라벨 기준)
+            valid = next((d for rule in ("baseline-valid", "happy") for d in self.drafts
+                          if d.ep is ep and d.rule == rule and d.reason is None), None)
+            for index, labels in enumerate(result):
+                row = {"labels": dict(labels), "caseId": None, "mergedInto": None}
+                rows.append(row)
+                if valid is not None and all(label == "v0" for label in labels.values()):
+                    self.baseline_rows.append((row, valid))  # id는 마무리 때 정해진다
+                    continue
+                self._pairwise_draft(ep, model, params, rels, sources, index, labels, row)
+
+    def _pairwise_draft(self, ep, model, params, rels, sources, index, labels, row) -> _Draft:
+        targets = {}
+        for param in model.params:
+            candidate = next(c for c in param["candidates"] if c.label == labels[param["param"]])
+            targets[(param["loc"], param["field"])] = candidate.value
+        assumes = pairwise_mod.row_assumes_for(model, labels)
+        for addr, con in rels:  # 관계식 상대편 필드가 baseline이 아니면 가정이 약해질 수 있다
+            if any(name in params and labels[params[name]["param"]] != "v0" for name in con.others):
+                assumes.append(f"rel-combined:{addr}")
+        draft = _Draft(ep, PAIRWISE_RULE, list(sources), (PAIRWISE_RULE, index, 0, 0), targets=targets, expect=dict(_VALID),
+                       assumes=sorted(set(assumes)), pairwise={"order": model.effective_order, "labels": dict(labels)}, row=row)
+        self._materialize(draft)
+        if draft.reason is not None:
+            draft.reason, draft.cause = ROW_INVALID, None  # 다른 조건 위반 등 거부 사유와 무관하게 방어선 슬롯
+        self.drafts.append(draft)
+        return draft
+
+    def _pairwise_finish(self, case_of) -> dict | None:
+        """행의 caseId·mergedInto를 채우고 `pairwise.json` 문서와 universe.pairwise를 만든다(disabled면 None)."""
+        if self.pairwise.mode == "disabled":
+            return None
+        for draft in self.drafts:
+            if draft.row is None or draft.reason is not None:
+                continue
+            if draft.merged:
+                draft.row["mergedInto"] = case_of(draft.survivor)
+            else:
+                draft.row["caseId"] = draft.case.id
+        for row, valid in self.baseline_rows:
+            row["mergedInto"] = case_of(valid)
+        endpoints, by_endpoint = {}, {}
+        for ep, model, rows in self.pairwise_models:
+            entry = pairwise_mod.model_json(model)
+            del entry["order"]  # order는 문서 최상위 하나
+            entry["rows"] = rows
+            endpoints[ep.label] = entry
+            if model.skipped or model.reason:
+                continue
+            emitted = [r["labels"] for r in rows if r["caseId"] or r["mergedInto"]]
+            stats = pairwise_mod.interaction_stats(model, emitted)
+            by_endpoint[ep.label] = {"params": len(model.params),
+                                     "candidates": sum(len(p["candidates"]) for p in model.params),
+                                     **stats, "rows": len(rows), "cases": sum(1 for r in rows if r["caseId"])}
+        self.universe_pairwise = {"order": self.pairwise_order, "byEndpoint": by_endpoint}
+        return {"schema": PAIRWISE_SCHEMA, "order": self.pairwise_order, "endpoints": endpoints}
+
     # --- 구체화 ----------------------------------------------------------------------------------
 
-    def _fields(self, ep, fields, targets, loc, assumes, reasons) -> dict:
+    def _fields(self, ep, fields, targets, loc, assumes, reasons, explicit_omit=False) -> dict:
         out = {}
         for name, fld in fields.items():
-            value, extra, reason = self.cons.value(ep, fld, targets.get((loc, name)) if loc else targets.get(name))
+            target = targets.get((loc, name)) if loc else targets.get(name)
+            if explicit_omit and target is OMIT:
+                continue  # pairwise omit 후보: 보내지 않는다(그 밖의 규칙은 OMIT 대상을 baseline으로 채운다)
+            value, extra, reason = self.cons.value(ep, fld, target)
             assumes += extra
             reasons += [reason] if reason else []
             if value is not OMIT:
@@ -523,11 +630,11 @@ class _Deriver:
         body, query, path, setup, stored_values = {}, {}, {}, [], {}
         if draft.rule not in ("empty-body", "auth") and ep.body_type is not None:
             if ep.body is not None:
-                body = self._fields(ep, ep.body, draft.targets, "body", assumes, reasons)
+                body = self._fields(ep, ep.body, draft.targets, "body", assumes, reasons, draft.rule == PAIRWISE_RULE)
             elif draft.rule != "no-data":  # 없는 id 조회는 본문 없이도 4xx를 기대한다
                 reasons.append("no-body-schema")
         if draft.rule != "auth":
-            query = self._fields(ep, ep.query, draft.targets, "query", assumes, reasons)
+            query = self._fields(ep, ep.query, draft.targets, "query", assumes, reasons, draft.rule == PAIRWISE_RULE)
             if any(f.required for f in ep.unnamed_query):
                 reasons.append("param-name-unknown")
         if any(name in ep.state_fields and (v == BASE or isinstance(v, Value) and v.value is not None)
@@ -567,7 +674,7 @@ class _Deriver:
         checked = sorted({addr.rstrip("~") for addr, _ in ep.error_disjuncts} - set(hits) - set(draft.sources))
         draft.case = Case("", ep.label, draft.rule, list(draft.sources), body, query, path, setup,
                           "anonymous" if draft.rule == "auth" else "authed", draft.expect,
-                          draft.oracle, sorted(set(assumes)), checked + sorted(set(assumes)), None)
+                          draft.oracle, sorted(set(assumes)), checked + sorted(set(assumes)), None, draft.pairwise)
 
     # --- 마무리 ----------------------------------------------------------------------------------
 
@@ -650,7 +757,10 @@ class _Deriver:
         for draft in self.drafts:
             self._materialize(draft)
         self._late_rules()
-        made = sorted((d for d in self.drafts if d.reason is None), key=lambda d: (d.ep.slug, d.rule, d.ep.id, d.key))
+        self._pairwise_rules()
+        # 규칙 우선순위(pairwise만 1)를 앞에 둬 pairwise 초안은 항상 기존 초안 뒤: 기존 dedupe·id·pair가 바뀌지 않는다
+        made = sorted((d for d in self.drafts if d.reason is None),
+                      key=lambda d: (d.rule == PAIRWISE_RULE, d.ep.slug, d.rule, d.ep.id, d.key))
         made = self._dedupe(made)
         counters: dict[tuple, int] = {}
         by_key = {}
@@ -677,8 +787,9 @@ class _Deriver:
         cases = [d.case for d in made]
         merged = sum(1 for d in self.drafts if d.merged)
         timezone = self.harness.get("timezone")
+        pairwise_doc = self._pairwise_finish(lambda d: d.survivor.case.id if d.merged else d.case.id)
         return Derivation(cases, self.unresolved, self._universe(cases, merged),
-                          timezone if isinstance(timezone, str) else "", self._factors(made))
+                          timezone if isinstance(timezone, str) else "", self._factors(made), pairwise_doc)
 
     # --- 시각화(factors.json) --------------------------------------------------------------------
 
@@ -750,7 +861,8 @@ class _Deriver:
         return {"version": 1, "endpoints": endpoints, "sources": sources, "cases": cases, "unresolved": unresolved}
 
     def _universe(self, cases, merged: int) -> dict:
-        by_reason = dict.fromkeys(REASONS, 0)
+        disabled = self.pairwise.mode == "disabled"
+        by_reason = dict.fromkeys(REASONS[:-len(PAIRWISE_REASONS)] if disabled else REASONS, 0)
         for entry in self.unresolved:
             by_reason[entry["reason"]] += 1
         by_rule: dict[str, int] = {}
@@ -770,13 +882,19 @@ class _Deriver:
         # 동시 요청 경쟁은 범위 밖 항목으로만 기록한다(value에 넣지 않는다)
         factors += [{"endpoint": label, "item": addr, "atom": atom, "kind": "concurrency-race", "outOfScope": True}
                     for label, addr, atom in sorted(self.races)]
-        return {"bySlot": {"total": len(cases) + len(self.unresolved), "generated": len(cases),
-                           "unresolved": len(self.unresolved), "deduplicated": merged, "byReason": by_reason},
-                "byRule": dict(sorted(by_rule.items())),
-                "theoretical": {"value": total, "formula": "Σ_endpoint Π_field (1 + 위반 클래스 수(field)) = " + " + ".join(terms),
-                                "factors": factors}}
+        universe = {"bySlot": {"total": len(cases) + len(self.unresolved), "generated": len(cases),
+                               "unresolved": len(self.unresolved), "deduplicated": merged, "byReason": by_reason},
+                    "byRule": dict(sorted(by_rule.items())),
+                    "theoretical": {"value": total, "formula": "Σ_endpoint Π_field (1 + 위반 클래스 수(field)) = " + " + ".join(terms),
+                                    "factors": factors}}
+        if not disabled:
+            universe["pairwise"] = self.universe_pairwise
+        return universe
 
 
-def derive(bundle: Bundle) -> Derivation:
-    """det 번들에서 케이스·생성 불가 슬롯·모수를 도출한다. 같은 번들이면 결과가 같다."""
-    return _Deriver(bundle).run()
+def derive(bundle: Bundle, pairwise: pairwise_mod.Pairwise = pairwise_mod.Pairwise.disabled()) -> Derivation:
+    """det 번들에서 케이스·생성 불가 슬롯·모수를 도출한다. 같은 번들(·같은 pict)이면 결과가 같다.
+
+    pairwise: disabled(기본값)면 pairwise 도입 전과 같은 출력, unavailable이면 생성 불가 슬롯 1건, available이면 pairwise 케이스를 더한다.
+    PICT의 환경 의존 실패(`PictFatal`)는 잡지 않는다(stage가 det generation을 failed로 만든다)."""
+    return _Deriver(bundle, pairwise).run()
