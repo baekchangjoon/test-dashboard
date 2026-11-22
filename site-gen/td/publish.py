@@ -30,6 +30,8 @@ from typing import Callable
 
 from botocore.exceptions import ClientError, ParamValidationError
 
+from td.dashboard_config import ConfigError
+
 CACHE_IMMUTABLE = "max-age=31536000, immutable"
 CACHE_NO_CACHE = "no-cache"
 COMPLETE_NAME = "_COMPLETE"
@@ -488,15 +490,17 @@ def _checked_project_name(name: str) -> str:
     return name
 
 
-def delete_prefix(s3, bucket: str, key_prefix: str) -> int:
-    """`(<접두>)projects/<과제 이름>/` 아래 객체를 나열해 1000개씩 묶어 지우고 지운 수를 돌려준다.
-    그 꼴이 아니면(다른 디렉터리, 이름 없음, '..', 접두만) 아무것도 지우지 않고 PublishError.
+def delete_prefix(s3, bucket: str, site_prefix: str, key_prefix: str) -> int:
+    """`<사이트 접두>projects/<과제 이름>/` 아래 객체를 나열해 1000개씩 묶어 지우고 지운 수를 돌려준다.
+    key_prefix가 정확히 그 꼴이 아니면(다른 접두, 다른 디렉터리, 이름 없음, '..', 접두만) 아무것도 지우지 않고 PublishError.
     오류 사유에는 키(과제 이름)를 쓰지 않는다(제외된 과제의 이름이 게시 기록에 남지 않게)."""
     match = _PROJECT_KEY_PREFIX.fullmatch(key_prefix) if isinstance(key_prefix, str) else None
     if match is None:
         raise PublishError("삭제 요청이 `(<접두>)projects/<이름>/` 꼴이 아니라 거부한다")
-    _checked_prefix(match.group(1) or "")
-    _checked_project_name(match.group(2))
+    site_prefix = _checked_prefix(site_prefix)
+    name = _checked_project_name(match.group(2))
+    if key_prefix != f"{site_prefix}projects/{name}/":
+        raise PublishError("삭제 요청이 이번 게시 접두의 `projects/<이름>/`가 아니라 거부한다")
     keys = [obj["Key"] for page in s3.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=key_prefix)
             for obj in page.get("Contents", [])]
     if any(not key.startswith(key_prefix) for key in keys):
@@ -726,6 +730,8 @@ def _measure_both(url: str, connect_ip: str | None) -> tuple:
 # --- 인덱스 단계: 수집 → 삭제 대상 → 재생성 → 삭제 → 업로드 (화면 재설계 §6.3, §6.4) -----------------------------
 REPO_ROOT = Path(__file__).resolve().parents[2]
 COLLECT_FAILED_REASON = "수집 실행 실패"
+# 설정 오류의 게시 기록 사유. ConfigError 문구에는 과제 이름·repo가 들어 있어 기록에는 이 문장만 쓰고 전체는 표준 오류에 낸다.
+CONFIG_ERROR_REASON = "dashboard config error (details on stderr)"
 COLLECT_STOP_WAIT = 60          # 중단 신호 뒤 collect.sh가 토큰을 정리하고 끝나기를 기다리는 초(넘으면 SIGKILL)
 
 
@@ -845,7 +851,10 @@ def publish_index(s3, bucket: str, mirror: Path, prefix: str, env: dict) -> Inde
     mirror = Path(mirror)
     base = mirror / prefix if prefix else mirror
     sync_mirror(s3, bucket, mirror)
-    cfg = dashboard_config.resolve(env, Path(env.get("TD_ROOT") or REPO_ROOT))
+    cfg = dashboard_config.resolve(env, Path(env.get("TD_ROOT") or REPO_ROOT), site_prefix=prefix)
+    if prefix == "" and cfg.path is None:
+        # 운영 루트를 설정 파일 없는(빈) 설정으로 정리하면 설정의 과제 디렉터리가 모두 지워진다. 어떤 삭제보다 먼저 멈춘다.
+        raise PublishError("운영 루트 게시에 설정 파일이 없다(빈 테스트 설정으로는 운영 과제를 정리하지 않는다)")
     collect_started = time.monotonic()
     collected = run_collect(env, cfg, base)
     collect_seconds = time.monotonic() - collect_started
@@ -857,7 +866,7 @@ def publish_index(s3, bucket: str, mirror: Path, prefix: str, env: dict) -> Inde
     written = index.rebuild(mirror, prefix, cfg, exclude=frozenset(excluded))
     for name in deleted:
         try:
-            delete_prefix(s3, bucket, f"{prefix}projects/{name}/")
+            delete_prefix(s3, bucket, prefix, f"{prefix}projects/{name}/")
         except PublishError:
             raise
         except Exception as exc:  # noqa: BLE001 - 사유에 키(과제 이름)가 들어가지 않게 종류만 남긴다
@@ -1212,6 +1221,11 @@ class Publication:
             self.hosts["s3"] = {**self.hosts["s3"], "status": "failed", "reason": f"interrupted ({exc})"}
             self.write_failure_log()
             result = self.result("failed", f"interrupted ({exc})")
+        except ConfigError as exc:
+            print(f"[td] 대시보드 설정 오류: {exc}", file=sys.stderr)
+            self.hosts["s3"] = {**self.hosts["s3"], "status": "failed", "reason": CONFIG_ERROR_REASON}
+            self.write_failure_log()
+            result = self.result("failed", CONFIG_ERROR_REASON)
         except (PublishError, self.hooks.HookRefused) as exc:
             self.hosts["s3"] = {**self.hosts["s3"], "status": "failed", "reason": exc_text(exc, 600, self.env)}
             self.write_failure_log()

@@ -276,13 +276,21 @@ def empty() -> Config:
     return Config((), defaults["status"], defaults["home"], defaults["project"], None)
 
 
-def resolve(env: Mapping[str, str], repo_root: Path) -> Config:
-    """환경에 맞는 설정을 고른다. TD_DASHBOARD_CONFIG, 없으면 TD_SITE_PREFIX(빈 설정), 없으면 저장소 루트."""
+def _has_site_prefix(raw: str | None) -> bool:
+    """정규화한 접두가 비어 있지 않은가(`td.publish.normalize_prefix`와 같은 기준: "/"·"//"는 운영 루트)."""
+    return any(part for part in (raw or "").split("/"))
+
+
+def resolve(env: Mapping[str, str], repo_root: Path, *, site_prefix: str | None = None) -> Config:
+    """환경에 맞는 설정을 고른다. TD_DASHBOARD_CONFIG, 없으면 테스트 접두(빈 설정), 없으면 저장소 루트.
+
+    테스트 접두인지는 정규화한 접두로 정한다. site_prefix(호출자가 이미 정규화한 접두)를 주면 그것을, 아니면
+    TD_SITE_PREFIX를 쓴다. "/"처럼 정규화하면 비는 값은 운영 루트라 저장소 루트 설정을 읽는다."""
     repo_root = Path(repo_root)
     if env.get("TD_DASHBOARD_CONFIG"):
         suts_dir = Path(env.get("TD_DASHBOARD_SUTS_DIR") or repo_root / "suts")
         return load(Path(env["TD_DASHBOARD_CONFIG"]), suts_dir)
-    if env.get("TD_SITE_PREFIX"):
+    if _has_site_prefix(env.get("TD_SITE_PREFIX") if site_prefix is None else site_prefix):
         return empty()
     return load(repo_root / "dashboard.yaml", repo_root / "suts")
 

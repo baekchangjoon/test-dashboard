@@ -611,14 +611,14 @@ def test_req100_delete_prefix_guard(tmp_path):
     for key in ("p/projects/a/index.html", "p/projects/a/snapshots/20261122.json", "p/projects/ab/index.html",
                 "p/suts/x", "projects/a/index.html"):
         s3.put(key)
-    assert publish.delete_prefix(s3, "b", "p/projects/a/") == 2
+    assert publish.delete_prefix(s3, "b", "p/", "p/projects/a/") == 2
     assert s3.keys() == ["p/projects/ab/index.html", "p/suts/x", "projects/a/index.html"]
-    assert publish.delete_prefix(s3, "b", "projects/a/") == 1          # 운영 루트(빈 접두)도 같은 꼴이다
+    assert publish.delete_prefix(s3, "b", "", "projects/a/") == 1          # 운영 루트(빈 접두)도 같은 꼴이다
     for bad in ("p/projects/", "p/suts/x/", "p/", "", "projects/", "p/projects/a/../", "p/projects/a", "p/projects/a/b/",
                 "../projects/a/", "p/../projects/a/", "/p/projects/a/", "p//projects/a/", "p/projects/../a/",
                 "p/projects/.a/", "p/projects/a b/", "p/projects/-rf/", "p q/projects/a/", "p/projects/a\n/"):
         with pytest.raises(publish.PublishError):
-            publish.delete_prefix(s3, "b", bad)
+            publish.delete_prefix(s3, "b", "p/", bad)
     assert s3.keys() == ["p/projects/ab/index.html", "p/suts/x"], "거부된 요청은 아무것도 지우지 않는다"
 
 
@@ -626,7 +626,7 @@ def test_req100_delete_prefix_batches_and_reports_errors_without_names():
     s3 = FakeS3()
     for index in range(2345):
         s3.put(f"p/projects/many/f{index:05d}.json")
-    assert publish.delete_prefix(s3, "b", "p/projects/many/") == 2345
+    assert publish.delete_prefix(s3, "b", "p/", "p/projects/many/") == 2345
     batches = [call for call in s3.calls if call[0] == "delete_objects"]
     assert [len(call[1].split(",")) for call in batches] == [1000, 1000, 345] and s3.keys() == []
 
@@ -637,7 +637,7 @@ def test_req100_delete_prefix_batches_and_reports_errors_without_names():
     failing = PartlyFails()
     failing.put("p/projects/hush/latest.json")
     with pytest.raises(publish.PublishError) as raised:
-        publish.delete_prefix(failing, "b", "p/projects/hush/")
+        publish.delete_prefix(failing, "b", "p/", "p/projects/hush/")
     assert "hush" not in str(raised.value) and "AccessDenied" in str(raised.value)
 
 
@@ -1116,3 +1116,108 @@ def test_write_index_log_refuses_local_absolute_path(tmp_path):
     with pytest.raises(publish.PublishError, match="게이트"):
         publish.write_index_log(s3, BUCKET, tmp_path / "mirror", INDEX_PREFIX, result)
     assert [call for call in s3.calls if call[0] == "put"] == [] and not (tmp_path / "mirror").exists()
+
+
+# --- 최종 리뷰 수정: 접두 "/"는 운영 루트다(빈 테스트 설정으로 정리하지 않는다), 설정 오류 문구는 기록에 남기지 않는다 ----
+def _seed_root_projects(s3: FakeS3) -> list[str]:
+    keys = [f"projects/{name}/{file}" for name in ("alpha", "beta")
+            for file in ("latest.json", "snapshots/20261122.json", "index.html")]
+    for key in keys:
+        s3.put(key, b"{}")
+    return keys
+
+
+@pytest.mark.parametrize("slash_prefix", ["/", "//"])
+def test_slash_prefix_without_root_config_fails_without_deleting(tmp_path, monkeypatch, restore_signals, slash_prefix):
+    """접두 "/"는 정규화하면 운영 루트("")다. 설정 선택도 같은 접두로 정해 저장소 루트 설정을 읽고, 없으면 실패한다."""
+    s3 = FakeS3()
+    seeded = _seed_root_projects(s3)
+    write_fake_collect(tmp_path, f"echo '{OK_COLLECT}'\n")
+    env = index_env(tmp_path, monkeypatch, TD_SITE_PREFIX=slash_prefix)     # TD_ROOT(tmp_path)에 dashboard.yaml 없음
+    remote = fake_remote(tmp_path, monkeypatch, ["alpha", "beta"])
+    result = _publish(env, s3)
+    assert result["status"] == "failed", result
+    assert [call for call in s3.calls if call[0] == "delete_objects"] == [], "운영 과제 디렉터리를 지우지 않는다"
+    assert all(key in s3.keys() for key in seeded)
+    assert remote.removals() == [] and remote.names == ["alpha", "beta"]
+    assert "locks/publish" not in s3.objects
+
+
+def test_slash_prefix_reads_repo_root_config_and_keeps_its_projects(tmp_path, monkeypatch, restore_signals):
+    s3 = FakeS3()
+    seeded = _seed_root_projects(s3)
+    write_fake_collect(tmp_path, f"echo '{OK_COLLECT}'\n")
+    write_dashboard_cfg(tmp_path, cfg_with(plain=["alpha", "beta"]))       # 저장소 루트(TD_ROOT)의 설정
+    env = index_env(tmp_path, monkeypatch, TD_SITE_PREFIX="/")
+    remote = fake_remote(tmp_path, monkeypatch, ["alpha", "beta"])
+    result = _publish(env, s3)
+    assert result["status"] == "passed", result
+    assert [call for call in s3.calls if call[0] == "delete_objects"] == []
+    assert all(key in s3.keys() for key in seeded) and remote.removals() == []
+    assert "publish-log/index.json" in s3.objects and "projects.json" in s3.objects, "운영 루트에 게시했다"
+
+
+def test_publish_index_refuses_root_prefix_without_config_file(tmp_path, monkeypatch, restore_signals):
+    """경로 없는(빈 테스트) 설정으로 운영 루트를 정리하려 하면 어떤 삭제보다 먼저 PublishError."""
+    s3 = FakeS3()
+    seeded = _seed_root_projects(s3)
+    write_fake_collect(tmp_path, f"echo '{OK_COLLECT}'\n")
+    env = index_env(tmp_path, monkeypatch)
+    monkeypatch.setattr(dashboard_config, "resolve", lambda *args, **kwargs: dashboard_config.empty())
+    mirror = tmp_path / "work/site-mirror"
+    seeded_calls = len(s3.calls)
+    with pytest.raises(publish.PublishError):
+        publish.publish_index(s3, BUCKET, mirror, "", env)
+    assert [call for call in s3.calls[seeded_calls:] if call[0] in ("delete_objects", "put")] == []
+    assert all(key in s3.keys() for key in seeded) and (mirror / "projects/alpha/latest.json").exists()
+
+
+def test_delete_prefix_requires_the_site_prefix():
+    s3 = FakeS3()
+    for key in ("p/suts/x/projects/a/f.json", "p/projects/a/f.json", "projects/a/f.json"):
+        s3.put(key)
+    for site_prefix, key_prefix in (("p/", "p/suts/x/projects/a/"), ("p/", "projects/a/"), ("", "p/projects/a/"),
+                                    ("q/", "p/projects/a/")):
+        with pytest.raises(publish.PublishError):
+            publish.delete_prefix(s3, "b", site_prefix, key_prefix)
+    assert len(s3.keys()) == 3, "접두가 맞지 않는 요청은 아무것도 지우지 않는다"
+    assert publish.delete_prefix(s3, "b", "p/", "p/projects/a/") == 1
+    assert publish.delete_prefix(s3, "b", "", "projects/a/") == 1
+    assert s3.keys() == ["p/suts/x/projects/a/f.json"]
+
+
+SECRET_REPO = "hush-owner/hush-secret-repo"
+
+
+def _duplicate_repo_cfg(tmp_path: Path) -> Path:
+    data = cfg_with(plain=["alpha", "beta"])
+    for project in data["projects"]:
+        project["repo"] = SECRET_REPO                                     # 같은 repo 두 번 → ConfigError(repo 문구 포함)
+    return write_dashboard_cfg(tmp_path, data)
+
+
+def test_config_error_text_stays_out_of_index_publish_log(tmp_path, monkeypatch, restore_signals, capsys):
+    write_fake_collect(tmp_path, f"echo '{OK_COLLECT}'\n")
+    env = index_env(tmp_path, monkeypatch, TD_DASHBOARD_CONFIG=str(_duplicate_repo_cfg(tmp_path)))
+    fake_remote(tmp_path, monkeypatch, [])
+    s3 = FakeS3()
+    result = _publish(env, s3)
+    assert result["status"] == "failed" and result["reason"] == publish.CONFIG_ERROR_REASON, result
+    log_text = s3.objects[INDEX_LOG_KEY]["data"].decode()
+    assert "hush" not in log_text and "hush" not in json.dumps(result)
+    assert publish.CONFIG_ERROR_REASON in log_text
+    assert SECRET_REPO in capsys.readouterr().err, "전체 문구는 표준 오류에만 낸다"
+
+
+def test_config_error_text_stays_out_of_s13_publish_log(exec_env, capsys):
+    run_id, run_dir, env, tmp_path = exec_env
+    write_fake_collect(tmp_path, f"echo '{OK_COLLECT}'\n")
+    env = {**env, "TD_DASHBOARD_CONFIG": str(_duplicate_repo_cfg(tmp_path))}
+    s3 = FakeS3()
+    code = publish.run_publish("sutx", run_id, run_dir, env, s3, OkCloudFront())
+    assert code == 1
+    log_text = s3.objects[f"_test/u/suts/sutx/publish-log/{run_id}.json"]["data"].decode()
+    stage_text = (run_dir / "stages" / "S13.json").read_text()
+    for text in (log_text, stage_text):
+        assert "hush" not in text and publish.CONFIG_ERROR_REASON in text
+    assert SECRET_REPO in capsys.readouterr().err
