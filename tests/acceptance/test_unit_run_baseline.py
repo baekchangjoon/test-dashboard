@@ -127,3 +127,41 @@ def test_loader_reports_second_error(tmp_path, monkeypatch):
     monkeypatch.delenv("TD_ACCEPTANCE_SESSION_FILE", raising=False)
     with pytest.raises(pytest.fail.Exception, match="secondError: SystemExit: boom"):
         conftest.load_session_run("second")
+
+
+# --- 인덱스 전용 게시 기록(화면 재설계 요구사항명세 §0 "기준 run 세션") ------------------------------------------
+def test_record_index_publish_adds_status_and_reason(default_file):
+    session = run_baseline.run_session("", default_file, [], runner=lambda label, *a: _record(label), etags=lambda *a: {})
+    seen = []
+    publisher = lambda prefix: seen.append(prefix) or {"status": "degraded", "reason": "수집 degraded", "exitCode": 0}
+    run_baseline.record_index_publish("", default_file, session, publisher=publisher)
+    saved = json.loads(default_file.read_text())
+    assert seen == [""] and saved["indexPublish"] == {"status": "degraded", "reason": "수집 degraded", "exitCode": 0}
+    assert saved["second"]["runId"] == "R-second"
+
+
+def test_record_index_publish_failure_is_recorded_then_raised(default_file):
+    session = run_baseline.run_session("", default_file, [], runner=lambda label, *a: _record(label), etags=lambda *a: {})
+
+    def publisher(prefix):
+        raise SystemExit("index: 1800초 제한을 넘겨 중단했다")
+
+    with pytest.raises(SystemExit):
+        run_baseline.record_index_publish("", default_file, session, publisher=publisher)
+    saved = json.loads(default_file.read_text())
+    assert saved["indexPublish"]["status"] is None and "1800초" in saved["indexPublish"]["reason"]
+
+
+def test_main_skip_second_does_not_publish_index(default_file, monkeypatch):
+    monkeypatch.setattr(run_baseline, "run_pipeline", lambda label, prefix, args: _record(label))
+    monkeypatch.setattr(run_baseline, "run_index_publish", lambda prefix: pytest.fail("인덱스 게시를 부르면 안 된다"))
+    assert run_baseline.main(["--session-file", str(default_file), "--skip-second"]) == 0
+    assert "indexPublish" not in json.loads(default_file.read_text())
+
+
+def test_main_returns_nonzero_when_index_publish_failed(default_file, monkeypatch):
+    monkeypatch.setattr(run_baseline, "run_pipeline", lambda label, prefix, args: _record(label))
+    monkeypatch.setattr(run_baseline, "published_etags", lambda prefix, run_id: {})
+    monkeypatch.setattr(run_baseline, "run_index_publish", lambda prefix: {"status": "failed", "reason": "잠금", "exitCode": 1})
+    assert run_baseline.main(["--session-file", str(default_file)]) == 1
+    assert json.loads(default_file.read_text())["indexPublish"]["status"] == "failed"

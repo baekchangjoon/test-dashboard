@@ -19,7 +19,8 @@ import yaml
 
 import helpers
 from conftest import token_rows
-from td import bbtg, bundle, testid
+from dashboard_fixtures import open_page
+from td import bbtg, bundle, dashboard_config, testid
 
 pytestmark = pytest.mark.baseline
 
@@ -33,6 +34,11 @@ EXPECTED_ENDPOINTS = yaml.safe_load((SUT_DIR / "expected-endpoints.yaml").read_t
 GEN_ID_RE = re.compile(r"^(base|jqa|owl)-[0-9a-f]{8}-r[1-9](-g[0-9]+)?$")
 ARMS = ("base", "jqa", "owl")
 STATUSES = {"passed", "failed", "degraded", "skipped"}
+# 이 작업 전에 게시된 run(옛 화면 그대로 남는다, REQ-139)
+OLD_RUN_ID = "20261120-131022Z-b6f9393-manual-036c288d"
+# tests/fixtures/reports/README.md "확인한 선택자"의 값
+TIA_GUIDE_SELECTOR = "#view details.tab-guide"
+TIA_CHANGED_FILE_SELECTOR = "#s-list .scrow:not(.all)"
 
 
 def _runs(baseline_run, second_run):
@@ -604,3 +610,95 @@ def test_req052_baseline_sonar_healthy(baseline_run, local_env):
     from test_infra import test_req052_sonar_healthy
     assert baseline_run.stage("S13")["status"] in ("passed", "degraded")
     test_req052_sonar_healthy(local_env)
+
+
+# --- L. 운영 사이트(화면 재설계 REQ-130, 131, 139, 140) ----------------------------------------------------
+def count_runs_with_real_gh(repo: str) -> int:
+    """실제 `gh api`로 기본 브랜치의 완료된 Actions 실행 최근 30개를 읽어 설계 §6.3의 분류로 센다(성공 + 실패, 제외는 빼고).
+    수집기 코드를 부르지 않는 독립 오라클이다."""
+    def gh(path: str) -> dict:
+        done = subprocess.run(["gh", "api", path], capture_output=True, text=True, timeout=60)
+        assert done.returncode == 0, done.stderr[-300:]
+        return json.loads(done.stdout)
+    branch = gh(f"repos/{repo}")["default_branch"]
+    runs = gh(f"repos/{repo}/actions/runs?branch={branch}&status=completed&per_page=30")["workflow_runs"]
+    counted = {"success", "failure", "timed_out", "startup_failure"}
+    return sum(1 for run in runs[:30] if run.get("conclusion") in counted)
+
+
+def test_req130_hotspot_map_published(baseline_site, browser):
+    status, body = baseline_site.get(baseline_site.run_path + "hotspot/hotspots.html")
+    assert status == 200
+    block = re.search(r'<script type="application/json" id="hotspot-map-data">(.*?)</script>', body.decode(), re.S)
+    assert block and json.loads(block.group(1))["schemaVersion"] == 1
+    top = json.loads(baseline_site.get(baseline_site.run_path + "stages/S09.json")[1])["top10"]
+    assert 1 <= len(top) <= 10 and all({"name", "file", "score"} <= set(t) for t in top)
+    assert [t["score"] for t in top] == sorted((t["score"] for t in top), reverse=True)
+    page = open_page(browser, baseline_site.url(baseline_site.run_path + "hotspot/hotspots.html"))
+    try:
+        assert page.locator("#hm-map circle").count() >= 1
+    finally:
+        page.context.close()
+
+
+def test_req131_tia_report_published(baseline_site, browser):
+    page = open_page(browser, baseline_site.url(baseline_site.run_path + "tia/tia.html"))
+    try:
+        tabs = page.locator("#seg [role=tab]")
+        assert tabs.count() == 4 and "변경 영향" in tabs.first.inner_text()
+        for i in range(4):
+            tabs.nth(i).click()
+            assert page.locator(TIA_GUIDE_SELECTOR + ":visible").count() == 1, i
+        tabs.first.click()
+        changed = json.loads((baseline_site.run_dir / "S10" / "impact.json").read_text())["changedFiles"]
+        assert page.locator(TIA_CHANGED_FILE_SELECTOR).count() == len(changed)
+    finally:
+        page.context.close()
+
+
+def test_req139_production_site_paths(baseline_site, browser):
+    cfg = dashboard_config.load(REPO_ROOT / "dashboard.yaml", REPO_ROOT / "suts")
+    listed = json.loads(baseline_site.get("projects.json")[1])["projects"]
+    home = open_page(browser, baseline_site.url(""))
+    try:
+        assert home.locator("tr.proj").count() == len(listed) and 1 <= len(listed) <= len(cfg.projects)
+    finally:
+        home.context.close()
+    walk = [f"projects/{baseline_site.project}/index.html", baseline_site.run_path + "index.html",
+            baseline_site.run_path + "hotspot/hotspots.html", baseline_site.run_path + "tia/tia.html",
+            f"suts/{baseline_site.sut}/index.html"]
+    for host in ("reports", "dash"):
+        statuses = {p: baseline_site.get(p, host=host)[0] for p in walk}
+        assert all(code == 200 for code in statuses.values()), (host, statuses)
+        assert baseline_site.get("_design/home-repos/", host=host)[0] != 200, host
+        assert baseline_site.get("_design/project/", host=host)[0] != 200, host
+    old = baseline_site.get(f"suts/{baseline_site.sut}/runs/{OLD_RUN_ID}/index.html")
+    assert old[0] == 200 and b"static/site.css" in old[1]
+
+
+def test_req140_production_site_values(baseline_site, browser):
+    latest = json.loads(baseline_site.get("projects/hotspot-analysis/latest.json")[1])
+    real_count = count_runs_with_real_gh("baekchangjoon/hotspot-analysis")
+    assert isinstance(latest["ci"]["runs"], int) and abs(latest["ci"]["runs"] - real_count) <= 2, (latest["ci"]["runs"], real_count)
+    data = json.loads(baseline_site.get("projects.json")[1])
+    mine = next(p for p in data["projects"] if p["name"] == baseline_site.project)
+    home = open_page(browser, baseline_site.url(""))
+    try:
+        row = home.locator(f'tr.proj[data-name="{baseline_site.project}"]')
+        assert row.get_attribute("data-status") == mine["status"]["level"]
+        row.click()
+        reasons_text = home.inner_text("tr.proj-detail .detail-reasons")
+        assert all(reason in reasons_text for reason in mine["status"]["reasons"]), (mine["status"], reasons_text)
+    finally:
+        home.context.close()
+    runs = json.loads(baseline_site.get(f"suts/{baseline_site.sut}/runs.json")[1])
+    page = open_page(browser, baseline_site.url(f"projects/{baseline_site.project}/index.html#trend"))
+    try:
+        with_rate = sum(1 for r in runs if r["kpis"]["passRate"] is not None)
+        assert page.locator('figure.trend[data-metric="tests.passRate"] .pt').count() == min(30, with_rate)
+        run = json.loads((baseline_site.run_dir / "run.json").read_text())
+        page.click("#tab-overview")
+        assert page.inner_text('#panel-overview .kpi[data-metric="tests.passRate"] b') == f'{run["kpis"]["tests"]["passRate"] * 100:.1f}%'
+        assert page.inner_text('#panel-overview .kpi[data-metric="coverage.line"] b') == f'{run["kpis"]["blackbox"]["line"] * 100:.1f}%'
+    finally:
+        page.context.close()
