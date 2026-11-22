@@ -2,7 +2,11 @@
   "files": [
     {
       "path": "cases.json",
-      "sha256": "4e83d415d23273dfaea68778b7aaf66a1a6e18d68812e9abdb1336f3780764da"
+      "sha256": "01f295c5c6554887a635bb5ffd2a08a78c22e9ec9e345a5f462766c4da35373e"
+    },
+    {
+      "path": "factors.json",
+      "sha256": "f30b84ea4548d2cb4d71e58ff55b87e3abd0ea008f8b1ffe80e3f7cd0496fac7"
     },
     {
       "path": "features/delete-api-reservations-id.feature",
@@ -58,7 +62,7 @@
     },
     {
       "path": "features/post-api-reservations.feature",
-      "sha256": "6ecca37de98d861dd76369370980fa5ef12ca04403c94fae54c11586f73aa2bf"
+      "sha256": "7a05429bf284c2d04dfbf4120729e2fb01f3f0a3c782c594136e2e2486ffb232"
     },
     {
       "path": "features/put-api-owners-ownerid.feature",
@@ -82,17 +86,17 @@
     },
     {
       "path": "pairwise.json",
-      "sha256": "7f71f42824a8844eb393be83f7cef8b9cdaf4b0c98b88569bbe94752a7ee5c9f"
+      "sha256": "5daf7a549c15d2b746a6325e87b5399adbd4686fb0b4f9fcdb65f9c1a2838a95"
     }
   ],
-  "genId": "det-db8f978f-r1",
-  "inputHash": "db8f978f34883afde4022cfd9af500dd1b338eb11517b48fd0a0dd3ff3cfbade",
+  "genId": "det-405e24da-r1",
+  "inputHash": "405e24da50703793be4f17ecf91ad3710ab2a8c7cd768cef99915828a7c068da",
   "meta": {
     "arm": "det",
-    "bundleHash": "4d421c4d95708cb56d87e014e7ed7b72b4df58777dc2eb419c2dd26995ec0022",
-    "cases": 88,
+    "bundleHash": "7c8dde1a3dc6993f4124e5edc663cb5b9bb3929191b9a2719b06e57c564a0fed",
+    "cases": 98,
     "dir": null,
-    "genId": "det-db8f978f-r1",
+    "genId": "det-405e24da-r1",
     "generator": {
       "glueChecksum": "87032d28b06acdd75fefe8379aa8c03611d05e928e0132d11e1683caa0706194",
       "name": "td.detgen",
@@ -100,14 +104,14 @@
         "binarySha256": "4288a6ee252379ffd67d0298e77af9501ca2496196eb6140b6f6556d77b6d25f",
         "commit": "d529bb1535b725c8f29704f183b23dd344895d02"
       },
-      "sourceChecksum": "01c93cb1b40545547b34109b54d2d444085096c76ea7b883260cc5c0bb3ee991",
+      "sourceChecksum": "5fac954b37d124d9fb8f287b6b4b1ed722ed2bf15d9253e2a254c20c95cdb1a2",
       "version": "1"
     },
-    "inputHash": "db8f978f34883afde4022cfd9af500dd1b338eb11517b48fd0a0dd3ff3cfbade",
+    "inputHash": "405e24da50703793be4f17ecf91ad3710ab2a8c7cd768cef99915828a7c068da",
     "reason": null,
     "rep": 1,
     "reused": false,
-    "seconds": 9.242,
+    "seconds": 9.569,
     "status": "passed",
     "unresolved": 50
   },
