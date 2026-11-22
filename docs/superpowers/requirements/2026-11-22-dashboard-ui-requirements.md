@@ -135,7 +135,7 @@
 #### REQ-091 — 수집 시간 예산과 재시도
 - 유형: Non-functional / 우선순위: Must
 - 수용기준:
-  - 기본값이 연결 10초, 읽기 30초, 재시도 2회(간격 2초, 4초), 전체 예산 300초다(모듈 상수).
+  - 기본값이 요청당 읽기 30초(전체 예산 안에서, 따로 두는 연결 제한 없음), 재시도 2회(간격 2초, 4초), 전체 예산 300초다(모듈 상수).
   - Given 응답하지 않는 가짜 gh와 예산 3초(`TD_COLLECT_BUDGET_SEC`), Then 수집이 13초 안에 끝나고, 읽지 못한 과제의 값은 `null`이며 상태는 `degraded`이고, 끝난 뒤 가짜 gh 프로세스가 남아 있지 않다.
   - Given 429와 `Retry-After: 1`을 한 번 준 뒤 정상 응답, Then 값이 채워지고 두 요청의 간격이 1초 이상이다. 403도 같다.
   - Given `Retry-After`가 남은 예산보다 길면, Then 기다리지 않고 그 과제를 없음으로 둔다.
@@ -424,7 +424,7 @@
 
 #### REQ-139 — 운영 사이트의 경로
 - 유형: Functional / 우선순위: Must
-- 수용기준: Given 기준 run 세션 뒤, Then `https://reports.<domain>/` 홈의 과제 줄 수가 운영 `projects.json`의 과제 수와 같고 그 수가 `dashboard.yaml`의 과제 수 이하다. 과제 페이지 → 최신 run → `hotspots.html`과 `tia.html` → 띠의 SUT 링크 → 과제 페이지가 `reports.<domain>`과 `dash.<domain>` 양쪽에서 모두 200이다. 이 작업 전에 게시된 run `20261120-131022Z-b6f9393-manual-036c288d`의 페이지가 200이고 `static/site.css`를 불러온다. 두 호스트에서 `_design/home-repos/`와 `_design/project/`는 200이 아니다.
+- 수용기준: Given 기준 run 세션 뒤, Then `https://reports.<domain>/` 홈의 과제 줄 수가 운영 `projects.json`의 과제 수와 같고 그 수가 `dashboard.yaml`의 과제 수 이하다. 과제 페이지 → 최신 run → `hotspots.html`과 `tia.html` → 띠의 SUT 링크 → 과제 페이지가 `reports.<domain>`과 `dash.<domain>` 양쪽에서 모두 200이다. 띠의 SUT 링크는 run 페이지와 `hotspots.html`의 `a.tdnav-sut` href를 읽어 따라간다(SUT 안내 페이지를 거쳐 과제 페이지에 닿는다). 이 작업 전에 게시된 run `20261120-131022Z-b6f9393-manual-036c288d`의 페이지가 200이고 `static/site.css`를 불러온다. 두 호스트에서 `_design/home-repos/`와 `_design/project/`는 200이 아니다.
 - 검증 레벨: E2E
 
 #### REQ-140 — 운영 사이트의 값
@@ -433,7 +433,7 @@
   - 운영 `projects/hotspot-analysis/latest.json`의 `ci.runs`가 수이고, 테스트가 실제 `gh api`로 같은 저장소의 실행 목록을 읽어 같은 규칙으로 센 값과 2 이내로 같다(수집과 테스트 사이에 실행이 늘 수 있다).
   - 화면에서 운영 홈의 파이프라인 과제 행의 상태와 사유가 운영 `projects.json`과 같다.
   - 화면에서 그 과제 페이지 "추이"의 통과율 차트 점 수가 운영 `runs.json`에서 통과율이 있는 run 수(최대 30)와 같다.
-  - 화면에서 "한눈에"의 통과율과 귀속 라인 값이 기준 run의 `run.json`과 같다.
+  - 화면에서 "한눈에"의 통과율과 귀속 라인 값이 운영 `runs.json`의 최신 run(과제 페이지가 보여 주는 run)의 값과 같다.
 - 검증 레벨: E2E
 
 ## 2. 추적 매트릭스
@@ -507,7 +507,7 @@
 | REQ-140 | 운영 사이트의 값 | test_baseline.py::test_req140_production_site_values | E2E | 🟢 passed |
 | REQ-141 | 집계 지표 계산 | test_dashboard_index.py::test_req141_aggregate_metrics<br>test_dashboard_index.py::test_req141_none_count_counts_unmeasured_projects | Unit | 🟢 passed |
 | REQ-142 | 요약 칸·버튼 개수·CI 이력 | test_dashboard_home.py::test_req142_summary_counts_history | Int | 🟢 passed |
-| REQ-143 | 공개 여부 미확인 과제 | test_dashboard_collect.py::test_req143_visibility_unknown_keeps_last_public | Int | 🟢 passed |
+| REQ-143 | 공개 여부 미확인 과제 | test_dashboard_collect.py::test_req143_visibility_unknown_keeps_last_public<br>test_dashboard_home.py::test_stale_tag_shows_last_collected_date | Int | 🟢 passed |
 | REQ-144 | 게시 중단 시 수집 정리 | test_dashboard_collect.py::test_req144_collect_sh_signal_revokes_token<br>test_dashboard_collect.py::test_req144_signal_during_revoke_still_removes_token<br>test_dashboard_publish.py::test_req144_interrupt_cleans_collect_token_and_lock | E2E-inj | 🟢 passed |
 | REQ-145 | 두 게시의 잠금 공유 | test_dashboard_publish.py::test_req145_index_only_and_s13_share_lock | E2E-inj | 🟢 passed |
 
@@ -533,6 +533,7 @@ Coverage: 70/70 green (100%) — target 100% (대상: Must 65 + Should 5. Could 
 | REQ-038, 064~066 Sonar 토큰 | 그대로. 구현이 공용 함수 위로 옮겨진다 | 고치지 않는다(REQ-097) |
 | REQ-016, 017, 033, 034, 067 화면 | 그대로. 새 틀에서 다시 통과해야 한다 | `test_req067_*`가 `site.css`의 테마 토큰을 읽는 부분만 `static/v2/app.css`로 고친다. 나머지는 고치지 않는다 |
 | REQ-046 게시 잠금 | 그대로. 인덱스 전용 게시도 같은 잠금을 쓴다(REQ-145) | 고치지 않는다 |
+| REQ-071 run 페이지의 S13 표시 | 그대로. run 페이지의 단계 표가 단계 띠(`#stage-strip`)와 단계 상세(`#stage-detail`)로 바뀐다 | 매트릭스 밖 보조 테스트 `test_site.py::test_site_js_shows_publish_log_or_graceful_absence`의 S13 행 선택자(`#stages tr[data-stage=S13]`)를 단계 띠의 S13 버튼을 누른 뒤 `#stage-detail`을 읽는 것으로 고친다 |
 
 PoC 설계 §13.2의 "홈 하단의 테스트 실행 기록 링크"는 REQ-114가 본다. PoC 요구사항명세 §0.1의 "기준 run" 줄에 인덱스 전용 게시 1회를 더한다.
 
@@ -542,7 +543,7 @@ PoC 설계 §13.2의 "홈 하단의 테스트 실행 기록 링크"는 REQ-114�
 - 반목표가 모두 REQ에 이어진다: 값 지어내기 → 085·090·113, 거짓 결론 → 082·084, 외부 요청 → 132, 스크립트 없음 → 112·116, 비공개 노출 → 089·099·100·143, 판정 사유 → 081·104·111.
 - 수용 테스트를 두지 않는 설계 항목:
   - README 갱신(문서 게이트에서 확인).
-  - 최근 변경일의 상대 시각 표시(브라우저가 계산하는 덧붙임이다. 서버가 그린 절대 날짜는 REQ-112가 본다).
+  - 최근 변경일은 절대 날짜만 표시한다(상대 시각은 구현하지 않았다. 서버가 그린 절대 날짜는 REQ-112가 본다).
   - `_test/index.html`의 새 틀(REQ-137이 자산 경로를 본다).
   - 공용 자산의 버전 규칙("게시한 버전은 고치지 않는다")은 운영 규칙이다. 옛 자산은 REQ-136이 지킨다.
   - 띠를 끼운 뒤 가리기 게이트를 지나는 순서(기존 가리기 테스트와 REQ-096이 결과를 본다).

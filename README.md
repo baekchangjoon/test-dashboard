@@ -32,7 +32,7 @@ pipeline/run-all.sh petclinic
 - `https://reports.<domain>/` (S3 + CloudFront)
 - `https://dash.<domain>/` (Lightsail 서버의 Caddy)
 
-운영 사이트에 올리지 않고 확인하려면 `TD_SITE_PREFIX`를 준다. 이때도 게시는 한다. 다만 S3 `_test/<prefix>`와 Lightsail `/srv/dashboard/_test/<prefix>` 아래에 올리고, 운영 첫 화면의 과제 목록에는 넣지 않는다. 접두를 준 실행은 `dashboard.yaml`을 읽지 않는다. 등록된 과제가 없는 것으로 보고, run이 있는 SUT를 SUT 이름의 과제로 그린다(`TD_DASHBOARD_CONFIG`로 설정 파일을 넘기면 그 파일을 쓴다). 아예 게시하지 않으려면 `--only`로 S13을 뺀다.
+운영 사이트에 올리지 않고 확인하려면 `TD_SITE_PREFIX`를 준다. 이때도 게시는 한다. 다만 S3 `_test/<prefix>`와 Lightsail `/srv/dashboard/_test/<prefix>` 아래에 올리고, 운영 첫 화면의 과제 목록에는 넣지 않는다. 접두를 준 실행은 `dashboard.yaml`을 읽지 않는다. 등록된 과제가 없는 것으로 보고, run이 있는 SUT를 SUT 이름의 과제로 그린다(`TD_DASHBOARD_CONFIG`로 설정 파일을 넘기면 그 파일을 쓴다. 그 파일의 `sut`가 가리키는 `sut.yaml`은 `TD_DASHBOARD_SUTS_DIR`에서 찾고, 지정하지 않으면 저장소의 `suts/`에서 찾는다). `/`처럼 구간이 없는 접두는 운영 루트로 보고 `dashboard.yaml`을 읽는다. 아예 게시하지 않으려면 `--only`로 S13을 뺀다.
 
 ```bash
 TD_SITE_PREFIX=_test/my-try/ pipeline/run-all.sh petclinic          # _test/my-try/ 아래에 게시(운영 집계에서 빠진다)
@@ -90,7 +90,7 @@ uv run --project site-gen python -m td.site.index "$(mktemp -d)" --config dashbo
 
 ### 상태 규칙과 탭·열 바꾸기
 
-`dashboard.yaml`의 `status`, `home`, `project` 절이 화면을 정한다.
+`dashboard.yaml`의 `status`, `home`, `project` 절이 화면을 정한다. 세 절은 생략할 수 있고, 생략한 절은 기본값(설계 문서 §6.2의 예시, 지금 저장소의 `dashboard.yaml`과 같은 값)을 쓴다. 절을 적으면 그 절 전체를 적은 내용으로 바꾼다(절 안의 일부 키만 덮어쓰지 않는다).
 
 - `status.rules`: 규칙 하나는 `{level, when, reason}`이다. `when`은 `{metric, op, value}` 하나이거나 `{all: [...]}`(모두 참)이고, `op`는 `eq, ne, lt, le, gt, ge` 가운데 하나다. 걸린 규칙 가운데 `status.order`에서 가장 앞선 수준이 그 과제의 상태가 된다. 규칙이 쓰는 값이 없으면 그 규칙은 걸리지 않는다.
 - `status.none.allMissing`: 여기 적은 값이 모두 없으면 그 과제는 "측정 없음"이다.
@@ -118,7 +118,7 @@ pipeline/publish-index.sh
 - GitHub: `gh api`로 저장소 정보, 기본 브랜치의 최근 Actions 실행 30개, 최신 커밋의 검사 결과를 읽는다. `gh auth login`이 되어 있어야 한다.
 - SonarQube: S11과 같은 방식으로 Lightsail 서버에 SSH로 들어가 Sonar DB에 2시간짜리 임시 토큰(`td-collect-<시각>-<난수>`)을 넣고, 수집이 끝나면 지운다. `infra/local.env`의 `TD_LIGHTSAIL_IP`와 `TD_SSH_KEY_PATH`가 필요하다. 토큰을 지우지 못하면 경고를 내고 수집은 `degraded`가 된다(토큰은 2시간 뒤 만료된다). Sonar를 읽을 과제가 없으면 토큰을 만들지 않는다.
 - SUT와 이어진 과제에 완료된 run이 있으면 그 과제의 Sonar 값은 수집하지 않고 최신 run의 S11 결과를 쓴다.
-- 읽지 못한 값은 0으로 채우지 않고 화면에 "측정 없음"과 사유로 나온다. 수집 전체가 5분을 넘으면 남은 과제는 읽지 않는다. 수집에 문제가 있어도 인덱스는 있는 스냅숏으로 다시 만들어 게시하고, 게시 상태는 `degraded`다.
+- 읽지 못한 값은 0으로 채우지 않고 화면에 "측정 없음"과 사유로 나온다. 수집 전체가 5분을 넘으면 남은 과제는 읽지 않는다(`TD_COLLECT_BUDGET_SEC`로 초 단위로 바꿀 수 있다). 수집에 문제가 있어도 인덱스는 있는 스냅숏으로 다시 만들어 게시하고, 게시 상태는 `degraded`다.
 
 ### 옛 run 페이지
 
@@ -201,6 +201,7 @@ uv run --project site-gen pytest tests/acceptance -v
 - 다른 테스트는 장애 주입 실행과 단계별 실행을 `_test/<sessionId>/` 접두에 게시한다(보존한다).
 - 전제(AWS, SSH, Docker, `claude`)가 없으면 skip하지 않고 실패한다. 전체 실행은 40분 이상 걸린다.
 - 테스트 실행 중에는 같은 맥에서 다른 Docker 작업을 하지 않는다(자원 누수 검사가 전후 차이를 본다).
+- 알려진 한계: 호스팅 크롤 테스트(`test_hosting.py`의 크롤 테스트와 `test_baseline.py`의 같은 검사)는 시작 페이지에서 너비 우선으로 호스트당 400쪽까지만 확인한다. 운영 사이트는 이보다 커서 크롤이 사이트 전체를 돌지 않는다. 과제 페이지와 그 아래 run 페이지는 깊이 2라 이 범위 안에 든다.
 
 요구사항과 테스트의 대응은 `docs/superpowers/requirements/2026-11-18-test-dashboard-poc-requirements.md`(PoC)와 `docs/superpowers/requirements/2026-11-22-dashboard-ui-requirements.md`(화면 재설계)의 추적 매트릭스에 있다.
 
