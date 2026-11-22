@@ -105,6 +105,12 @@
 ### REQ-214 문서 갱신 (Should, Unit)
 - `docs/superpowers/specs/2026-11-22-deterministic-arm-design.md` §5.4에 `factors.json`, S12 산출물에 `det-viz.json`·`det.html`이 적혀 있고, `README.md` 리포트 목록에 det 조합 시각화가 있다(문자열 검사 테스트).
 
+### REQ-215 pairwise 케이스 표시 (Must, Unit+E2E)
+- det pairwise가 켜진 generation에서 `pairwise` 규칙 케이스도 `factors.json` `cases`에 칸을 가진다(`inModel: true`).
+- 칸은 기존 평가기로 정한다: 값이 그 필드의 원자식(오류·분기, `~` 제외)을 참으로 만들면 그 클래스, 원자식의 유효 경계값과 같으면 valid + `boundaries`, 그 밖은 valid.
+- petclinic에서 포인트 499 행은 `< 500` 클래스 칸, 500 행은 valid 칸과 `< 500` 경계를 가진다. 모든 칸의 클래스 id가 해당 필드의 `classes`에 있다.
+- E2E: pairwise가 켜진 실제 run에서 REQ-208 재계산이 pairwise 케이스를 포함해 `aggregates`와 같다.
+
 ## 2. 추적 매트릭스
 
 | REQ-ID | 요약 | 검증 테스트 | 레벨 | 상태 |
@@ -122,6 +128,7 @@
 | REQ-211 | 화면 동작 | test_det_viz.py::test_req211_browser<br>test_unit_detviz.py::test_req211_hostile_dom<br>test_unit_detviz.py::test_req211_static_rules<br>test_unit_detviz.py::test_req211_no_page_scroll_390 | E2E/Unit | 🟢 passed |
 | REQ-212 | 모듈 경계 | test_unit_detviz.py::test_req212_source_checksum_unaffected | Unit | 🟢 passed |
 | REQ-213 | 결과 결합 | test_unit_detviz.py::test_req213_status_mapping<br>test_det_viz.py::test_req213_passed_matches_summary | Unit/E2E | 🟢 passed |
+| REQ-215 | pairwise 케이스 표시 | test_unit_pairwise.py::test_req215_pairwise_cases_in_factors<br>test_det_viz.py::test_req208_recount(pairwise run) | Unit/E2E | ⚪ |
 | REQ-214 | 문서 갱신 | test_unit_detviz.py::test_req214_docs | Unit | 🟢 passed |
 
-커버리지 대상: REQ-201~214(14건). 제외: 없음. 상태 기준: run `20261122-074004Z-b6f9393-manual-5a8df216`(게시 `_test/det-viz-20261122c/`, det generation `det-a6397f85-r1`), E2E 16 passed(det_viz_e2e 9 + det_e2e 7), 단위·통합 테스트. 매트릭스 커버리지 14/14.
+커버리지 대상: REQ-201~215(15건). 제외: 없음. 상태 기준: run `20261122-074004Z-b6f9393-manual-5a8df216`(게시 `_test/det-viz-20261122c/`, det generation `det-a6397f85-r1`), E2E 16 passed(det_viz_e2e 9 + det_e2e 7), 단위·통합 테스트. 매트릭스 커버리지 14/14.

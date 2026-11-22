@@ -795,8 +795,9 @@ def test_req304_disabled_identical(tmp_path):
     written = render_module.render(derivation, out)
     assert PAIRWISE_FILE not in written and not (out / PAIRWISE_FILE).exists()
     expected = sorted(p.relative_to(SNAPSHOT).as_posix() for p in SNAPSHOT.rglob("*") if p.is_file() and p.name != "_COMPLETE")
-    assert written == expected
-    for relative in written:
+    # factors.json은 조합 시각화(det-viz)의 출력이라 기준 스냅샷(시각화 이전)에는 없다. 나머지 파일은 바이트 동일해야 한다.
+    assert [relative for relative in written if relative != "factors.json"] == expected
+    for relative in expected:
         assert (out / relative).read_bytes() == (SNAPSHOT / relative).read_bytes(), relative
     assert "pairwise" not in derivation.universe and derivation.pairwise_doc is None
     assert not set(NEW_REASONS) & set(derivation.universe["bySlot"]["byReason"])
@@ -1471,3 +1472,32 @@ def test_req318_whitepaper():
     assert "3-way" in section
     assert re.search(r"3-way[^\n]*\d+\s*(개|건)", section), "3-way 케이스 수가 없다"
     assert re.search(r"3-way[^\n]*통과[^\n]*\d|3-way[^\n]*\d[^\n]*통과", section), "3-way 통과율이 없다"
+
+
+def test_req215_pairwise_cases_in_factors(tmp_path, pict_tool):
+    """det-viz REQ-215: pairwise 케이스도 factors.json에 칸이 있어 격자·히트맵·그래프에 나온다.
+    모델 필드마다 칸이 있고, 그 클래스 id가 해당 필드의 classes에 있으며, 위반값 499는 `< 500` 클래스, 경계값 500은 valid+boundaries다."""
+    derivation = derive_module.derive(_real_bundle(tmp_path), _available(tmp_path, pict_tool))
+    factors = derivation.factors
+    classes = {(e["endpoint"], f["field"]): {c["id"]: c for c in f["classes"]} for e in factors["endpoints"] for f in e["fields"]}
+    pairwise_cases = [c for c in derivation.cases if c.rule == "pairwise"]
+    assert pairwise_cases
+    loyalty_violation_hits = loyalty_boundary_hits = 0
+    for case in pairwise_cases:
+        entry = factors["cases"][case.id]
+        assert entry["inModel"] is True and entry["rule"] == "pairwise"
+        for field_name, class_ref in entry["cells"].items():
+            assert class_ref in classes[(case.endpoint, field_name)], (case.id, field_name)
+        loyalty = case.values.get("loyaltyPoints")  # Case.values는 본문 필드 이름을 키로 쓴다
+        if loyalty is None:
+            continue
+        cell = classes[(case.endpoint, "body.loyaltyPoints")][entry["cells"]["body.loyaltyPoints"]]
+        if loyalty.value == 499:
+            assert cell["kind"] != "valid", entry
+            loyalty_violation_hits += 1
+        elif loyalty.value == 500:
+            assert cell["kind"] == "valid"
+            loyalty_classes = classes[(case.endpoint, "body.loyaltyPoints")]  # boundaries에는 다른 필드의 경계도 섞여 있다
+            assert any(b in loyalty_classes and loyalty_classes[b]["kind"] != "valid" for b in entry["boundaries"]), entry
+            loyalty_boundary_hits += 1
+    assert loyalty_violation_hits >= 1 and loyalty_boundary_hits >= 1
