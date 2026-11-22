@@ -65,7 +65,7 @@ def test_req049_home_sut_run_pages(tmp_path):
     assert (site_dir / "coverage/coverage.html").read_text() != "<html>stale</html>"
     assert not list((site_dir / "coverage").rglob("*.exec"))
     assert not (site_dir / "coverage/app.css").exists()
-    for html in (project_page, sut, run):
+    for html in (home, project_page, sut, run):
         title = re.search(r"<title>(.*?)</title>", html).group(1)
         assert 2 <= len(title.split()) <= 4, title
     assert R2 not in re.search(r"<title>(.*?)</title>", run).group(1) and R2 in run

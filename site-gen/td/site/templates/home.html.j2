@@ -1,6 +1,6 @@
 {% extends "base_v2.html.j2" %}
 {# 첫 화면(설계 §5.1). 서버가 표와 수치를 정렬된 순서로 모두 그리고, app.js는 거르기·정렬·행 펼침만 덧입힌다. #}
-{% block title %}test-dashboard{% endblock %}
+{% block title %}테스트 대시보드{% endblock %}
 {% block crumbs %}<strong>test-dashboard</strong><span class="meta">과제 {{ projects|length }}개{% if data_date %} · 데이터 기준 {{ data_date }}{% endif %}</span>{% endblock %}
 {% block content %}
 <div class="home-head">
