@@ -138,7 +138,26 @@ def build(gen_dir: Path, s07_dir: Path) -> dict:
             raise ValueError(f"{CASES_FILE}의 케이스에 id 또는 endpoint가 없다: {case!r:.80}")
     case_results = _case_results(cases, gen_dir, s07_dir)
     return {"version": VERSION, "genId": gen_dir.name, "factors": factors, "caseResults": case_results,
-            "aggregates": _aggregates(factors, case_results)}
+            "aggregates": _aggregates(factors, case_results), "trace": _trace(cases_doc, factors)}
+
+
+def _trace(cases_doc: dict, factors: dict) -> dict:
+    """화면 추적용 보조 정보. factors.json에 없는 두 가지를 cases.json에서 옮긴다.
+    - caseSources: 케이스 id → 출처 주소(`~` 제거, 순서 유지). 케이스 노드 패널의 조건식 원문에 쓴다.
+    - unresolvedEndpoints: factors.unresolved[i]의 엔드포인트(cases.json unresolved[i].endpoint, 없으면 null).
+      칸이 빈 생성 불가 슬롯도 그래프에서 엔드포인트별로 보이게 한다."""
+    case_sources: dict[str, list[str]] = {}
+    for case in cases_doc["cases"]:
+        sources = case.get("sources") if isinstance(case.get("sources"), list) else []
+        case_sources[case["id"]] = [address.rstrip("~") for address in sources if isinstance(address, str)]
+    raw = cases_doc.get("unresolved") if isinstance(cases_doc.get("unresolved"), list) else []
+    endpoints: list[str | None] = []
+    for slot in factors.get("unresolved") or []:
+        index = slot.get("index")
+        item = raw[index] if isinstance(index, int) and 0 <= index < len(raw) and isinstance(raw[index], dict) else {}
+        endpoint = item.get("endpoint")
+        endpoints.append(endpoint if isinstance(endpoint, str) else None)
+    return {"caseSources": case_sources, "unresolvedEndpoints": endpoints}
 
 
 def validate(doc: dict) -> None:

@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>det 조합 시각화</title>
+<link rel="stylesheet" href="{{ css_href }}">
+<style>
+/* det 조합 시각화 전용. 색은 v2 app.css 토큰을 쓰고 상태 색만 더한다(라이트 기본, 어두운 모드는 OS 설정, data-theme으로 고정). */
+:root { --st-pass: #1a7f37; --st-fail: #cf222e; --st-notrun: #9a6700; --st-unres: #8250df; --st-empty: #8c959f; --edge: #8c959f; --src: #0969da; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --st-pass: #3fb950; --st-fail: #ff7b72; --st-notrun: #d29922; --st-unres: #bc8cff; --st-empty: #6e7681; --edge: #6e7681; --src: #4493f8; }
+}
+:root[data-theme="dark"] { --st-pass: #3fb950; --st-fail: #ff7b72; --st-notrun: #d29922; --st-unres: #bc8cff; --st-empty: #6e7681; --edge: #6e7681; --src: #4493f8; }
+html, body { max-width: 100%; overflow-x: hidden; }
+main.wrap { min-width: 0; }
+.det-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin: 8px 0 12px; }
+.det-summary .card b { display: block; font-size: 1.3rem; }
+.legend-line { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 4px 0 10px; padding: 0; list-style: none; }
+.sym { display: inline-block; min-width: 1.2em; text-align: center; font-weight: 700; color: var(--c, var(--fg)); }
+.st-covered-pass { --c: var(--st-pass); } .st-covered-fail { --c: var(--st-fail); } .st-covered-notrun { --c: var(--st-notrun); }
+.st-unresolved { --c: var(--st-unres); } .st-empty { --c: var(--st-empty); }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+.toolbar select { flex: 1 1 220px; min-width: 0; max-width: 100%; font: inherit; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
+#viz { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 12px; align-items: start; }
+#cy { height: 60vh; min-height: 320px; min-width: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+#panel { min-width: 0; max-height: 60vh; overflow: auto; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--surface); overflow-wrap: anywhere; }
+#panel h3 { margin: 0 0 6px; font-size: 1rem; }
+#panel dl { margin: 6px 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 10px; }
+#panel dt { color: var(--muted); }
+#panel dd { margin: 0; font-family: var(--mono); font-size: 12px; white-space: pre-wrap; }
+.grid-table td, .grid-table th { vertical-align: top; }
+.grid-table td.cell { cursor: pointer; min-width: 10em; width: 16em; white-space: normal; overflow-wrap: anywhere; }
+.grid-table th { white-space: normal; min-width: 7em; }
+.grid-table td.cell:focus-visible { outline: 2px solid var(--accent); }
+.cell small { display: block; color: var(--muted); font-family: var(--mono); font-size: 11px; }
+table.heat { width: auto; }
+.heat td.num { text-align: right; font-family: var(--mono); min-width: 2.5em; }
+.heat th { font-weight: 400; font-size: 12px; white-space: normal; overflow-wrap: anywhere; min-width: 4em; max-width: 12em; }
+details.heat-ep { margin: 6px 0; border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
+details.heat-ep summary { cursor: pointer; overflow-wrap: anywhere; }
+.pair { margin: 8px 0; }
+.pair h4 { margin: 4px 0; font-size: .95rem; overflow-wrap: anywhere; }
+.slot-list li { margin: 2px 0; overflow-wrap: anywhere; }
+.slot-list code, .grid-table code { overflow-wrap: anywhere; white-space: pre-wrap; }
+@media (max-width: 800px) {
+  #viz { grid-template-columns: minmax(0, 1fr); }
+  #cy { height: 50vh; }
+  #panel { max-height: none; }
+}
+</style>
+</head>
+<body>
+<header class="site-header"><div class="wrap"><strong>test-dashboard</strong> / <a href="compare.html">arm 비교 판정</a></div></header>
+<main class="wrap">
+<h1>det 조합 시각화</h1>
+<p class="muted">generation {{ gen_id }} · 엔드포인트 {{ summary.endpoints }} · 필드 {{ summary.fields }} · 클래스 {{ summary.classes }}(valid 포함). 집계는 모델 안(inModel) 케이스만 센다.</p>
+
+<h2>요약</h2>
+<section class="det-summary" id="det-summary" aria-label="요약 띠"></section>
+<ul class="legend-line" id="det-legend" aria-label="상태 기호"></ul>
+
+<h2>추적 그래프</h2>
+<p class="muted">출처(조건식) → 클래스 → 케이스. 생성 불가 슬롯은 점선 노드다. 노드를 누르면 옆 패널에 원문이 보인다.</p>
+<div class="toolbar">
+  <label for="endpoint-select">엔드포인트</label>
+  <select id="endpoint-select" aria-label="엔드포인트 선택"></select>
+</div>
+<p class="muted" id="graph-meta" data-node-count="0" data-node-ids=""></p>
+<div id="viz">
+  <div id="cy" role="img" aria-label="det 추적 그래프"></div>
+  <aside id="panel" aria-live="polite"><p class="muted">노드나 격자 칸을 누르면 원문이 보인다.</p></aside>
+</div>
+
+<h2>클래스 격자</h2>
+<p class="muted">행은 필드, 칸은 그 필드의 클래스다. 칸에는 상태 기호, 케이스 id, 경계 케이스 수, 생성 불가 사유가 있다.</p>
+<div id="det-grid"></div>
+
+<h2>2-way 히트맵</h2>
+<p class="muted">엔드포인트마다 필드 쌍 (A, B)의 클래스 조합을 동시에 가진 케이스 수다. 펼쳐서 본다.</p>
+<div id="det-heatmap"></div>
+
+<h2>모델 밖 케이스</h2>
+<div id="det-out"></div>
+
+<h2>생성 불가 목록</h2>
+<div id="det-unresolved"></div>
+<p class="muted">원본 데이터: <a href="det-viz.json">det-viz.json</a></p>
+</main>
+<script type="application/json" id="td-data">{{ data_json | safe }}</script>
+<script>
+{{ cytoscape_js | safe }}
+</script>
+<script>
+{{ viz_js | safe }}
+</script>
+</body>
+</html>

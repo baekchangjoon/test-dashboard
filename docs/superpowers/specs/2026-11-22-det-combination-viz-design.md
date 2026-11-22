@@ -148,7 +148,10 @@ A를 고른다. B는 반목표에 걸리고, C는 S12가 이미 det 블록을 �
 ### 5.4 결과 결합과 `det.html`(S12)
 
 - `td.detviz.build(gen_dir, s07_dir) -> dict`가 `det-viz.json` 내용을 만든다(스키마 `td/schemas/det-viz.schema.json`).
-  - `factors.json` 전체 + 케이스별 `{status, observed, expectStrict, endpoint}` + `aggregates`.
+  - `factors.json` 전체 + 케이스별 `{status, observed, expectStrict, endpoint}` + `aggregates` + `trace`.
+  - `trace`(화면 추적 보조, `cases.json`에서 옮김): `caseSources`(케이스 id → 출처 주소, `~` 제거)와
+    `unresolvedEndpoints`(`factors.unresolved[i]`의 엔드포인트, 없으면 null). factors.json에는 케이스의 출처와 칸이 빈
+    생성 불가 슬롯의 엔드포인트가 없어서, 케이스 패널의 조건식 원문과 엔드포인트별 그래프 노드에 쓴다.
   - `status`: `passed`·`failed`는 그대로, 그 밖(`undefined`, `uncompilable`, 결과 줄 없음)은 `notRun`.
     `results.case_statuses`(지금의 `_case_statuses`를 공개 이름으로 바꿔 `summarize`와 같이 쓴다)를 쓴다.
   - `observed`: 실패 케이스는 `observed_codes`의 값, 통과 케이스는 `expect.strict`가 정수면 그 값, 아니면 null.
@@ -203,6 +206,7 @@ A를 고른다. B는 반목표에 걸리고, C는 S12가 이미 det 블록을 �
   "factors": { "...": "factors.json 전체" },
   "caseResults": {"<caseId>": {"endpoint": "POST /api/reservations", "status": "passed|failed|notRun",
                                 "observed": 422, "expectStrict": 422}},
+  "trace": {"caseSources": {"<caseId>": ["plan:...#...:0"]}, "unresolvedEndpoints": ["POST /api/reservations", null]},
   "aggregates": {
     "summary": {"endpoints": 17, "fields": 0, "classes": 0, "classesCovered": 0, "pairsCovered": 0, "pairsTotal": 0,
                 "outOfModel": {"auth": 16, "no-data": 8, "empty-body": 1, "filter-empty": 2}},

@@ -62,9 +62,14 @@
     "deterministic": {
       "oneOf": [
         {"type": "null"},
-        {"type": "object", "required": ["genId", "status", "reason", "summary"], "additionalProperties": false,
+        {"type": "object", "required": ["genId", "status", "reason", "summary", "viz"], "additionalProperties": false,
          "properties": {"genId": {"type": "string", "pattern": "^det-[0-9a-f]{8}-r1$"}, "status": {"const": "measured"},
-                        "reason": {"type": "null"}, "summary": {"$ref": "#/$defs/detSummary"}}},
+                        "reason": {"type": "null"}, "summary": {"$ref": "#/$defs/detSummary"},
+                        "viz": {"oneOf": [
+                          {"type": "object", "required": ["status", "reason"], "additionalProperties": false,
+                           "properties": {"status": {"enum": ["ok", "absent"]}, "reason": {"type": "null"}}},
+                          {"type": "object", "required": ["status", "reason"], "additionalProperties": false,
+                           "properties": {"status": {"const": "failed"}, "reason": {"type": "string", "minLength": 1}}}]}}},
         {"type": "object", "required": ["genId", "status", "reason", "summary"], "additionalProperties": false,
          "properties": {"genId": {"type": "string"}, "status": {"const": "failed"},
                         "reason": {"type": "string", "minLength": 1}, "summary": {"type": "null"}}}
