@@ -33,8 +33,10 @@ exit 97
 """
 
 
-def _det_run_dir(tmp_path: Path, arms: list[str], name: str = "run") -> Path:
-    """S02 정제·raw 산출물과 S03 온톨로지(petclinic det fixture)를 가진 임시 run 디렉터리."""
+def _det_run_dir(tmp_path: Path, arms: list[str], name: str = "run", pict: dict | None = None) -> Path:
+    """S02 정제·raw 산출물과 S03 온톨로지(petclinic det fixture)를 가진 임시 run 디렉터리.
+
+    pict(세션 `pict_tool` 값)를 주면 tools.lock에 available pict 항목 `{commit, binarySha256, path}`를 쓴다."""
     run_dir = make_run_dir(tmp_path, name)
     shutil.copytree(PETCLINIC_RUN / "S02" / "bbtg" / "raw", run_dir / "S02" / "bbtg" / "raw")
     for path in (PETCLINIC_RUN / "S03").iterdir():
@@ -49,7 +51,11 @@ def _det_run_dir(tmp_path: Path, arms: list[str], name: str = "run") -> Path:
     for stage in ("S00", "S02", "S03"):
         (run_dir / "stages" / f"{stage}.json").write_text(json.dumps({"id": stage, "status": "passed", "reason": None,
                                                                        "outputs": {}}))
-    (run_dir / "tools.lock").write_text("schema: 1\nclaude:\n  version: 9.9.9-test\n  model: claude-opus-5-5\n")
+    lock = "schema: 1\nclaude:\n  version: 9.9.9-test\n  model: claude-opus-5-5\n"
+    if pict is not None:
+        lock += (f"pict:\n  commit: '{pict['commit']}'\n  binarySha256: '{pict['binarySha256']}'\n"
+                 f"  path: '{pict['path']}'\n")
+    (run_dir / "tools.lock").write_text(lock)
     return run_dir
 
 
@@ -67,7 +73,7 @@ def _meta(run_dir: Path) -> dict:
     return meta
 
 
-def test_req103_no_llm_calls(det_env, monkeypatch):
+def test_req103_no_llm_calls(det_env, monkeypatch, pict_tool):
     log = det_env / "llm-calls.log"
     log.touch()
     shim_dir = det_env / "shim-bin"
@@ -85,7 +91,7 @@ def test_req103_no_llm_calls(det_env, monkeypatch):
         raise AssertionError("det 경로가 LLM을 불렀다")
 
     monkeypatch.setattr(snapshot, "call_llm", recording)
-    run_dir = _det_run_dir(det_env, ["det"])
+    run_dir = _det_run_dir(det_env, ["det"], pict=pict_tool)
     result = bddgen.run_stage(run_dir, SUT_FILE, FIXTURE_SUT, False, llm=recording)
 
     assert log.read_text() == "" and in_process == []

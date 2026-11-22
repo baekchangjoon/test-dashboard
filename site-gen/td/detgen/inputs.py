@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -25,6 +26,20 @@ FORBIDDEN_KEYS = frozenset({"file_path", "interceptor_sources", "artifact_path",
 # 로컬 절대경로 토큰(redact.LOCAL_PREFIX_PATTERN과 같은 접두)을 경로 끝(공백·따옴표·구분자)까지 통째로 지운다.
 ABS_PATH_PATTERN = re.compile(r"(?<![\w.\-~])(?:/Users|/home|/private/var|/var/folders)/[^\s\"'<>,;)]*")
 PLAN_ITEM_FIELDS = ("condition", "expected", "branch_value", "param", "prefix")
+# pairwise order(det pairwise 설계 §5.4): run-all `--det-pairwise-order`가 내보내는 값. 번들 harness.json `pairwiseOrder`로 싣는다
+PAIRWISE_ORDER_ENV = "TD_DET_PAIRWISE_ORDER"
+PAIRWISE_ORDERS = (2, 3)
+DEFAULT_PAIRWISE_ORDER = 2
+
+
+def pairwise_order() -> int:
+    """`TD_DET_PAIRWISE_ORDER`(비었으면 2). 2·3 밖이면 ValueError(투영 fatal)."""
+    raw = (os.environ.get(PAIRWISE_ORDER_ENV) or "").strip()
+    if not raw:
+        return DEFAULT_PAIRWISE_ORDER
+    if raw not in {str(order) for order in PAIRWISE_ORDERS}:
+        raise ValueError(f"{PAIRWISE_ORDER_ENV}는 2 또는 3이어야 한다: {raw[:20]}")
+    return int(raw)
 
 
 class DetInputError(RuntimeError):
@@ -205,8 +220,12 @@ def project(run_dir: Path, sut_file: Path, out_dir: Path) -> Projection:
         config = sut_config.load(sut_file)
     except sut_config.SutConfigError as exc:
         return Projection(out_dir, "", sorted(missing), f"sut.yaml 오류: {exc}")
+    try:
+        order = pairwise_order()
+    except ValueError as exc:
+        return Projection(out_dir, "", sorted(missing), str(exc))
     harness = {"login": config.auth_login, "unauthenticatedStatus": config.auth_unauthenticated_status,
-               "apiInclude": config.api_include, "timezone": _timezone(sut_file)}
+               "apiInclude": config.api_include, "timezone": _timezone(sut_file), "pairwiseOrder": order}
     documents = {"plans.json": plans, "keyparams.json": keyparams, "auth.json": auth,
                  "ontology.json": _scrub(ontology), "ext.json": _scrub(ext), "harness.json": harness}
     texts = {name: _dumps(documents[name]) for name in BUNDLE_FILES}

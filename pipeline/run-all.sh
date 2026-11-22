@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# run-all.sh <sut> [--sut-file F] [--only IDS] [--arms LIST] [--reps N] [--style cucumber] [--regenerate]
+# run-all.sh <sut> [--sut-file F] [--only IDS] [--arms LIST] [--reps N] [--style cucumber] [--regenerate] [--det-pairwise-order 2|3]
 # 종료 코드: S00 또는 S13 실패 1, 그 밖의 단계 실패 2, 실패 없음 0. SUT 해석 실패는 1(run 디렉터리 없음).
 set -uo pipefail
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/common.sh"
 
-usage() { echo "usage: run-all.sh <sut> [--sut-file F] [--only IDS] [--arms LIST] [--reps N] [--style cucumber] [--regenerate]" >&2; exit 1; }
+usage() { echo "usage: run-all.sh <sut> [--sut-file F] [--only IDS] [--arms LIST] [--reps N] [--style cucumber] [--regenerate] [--det-pairwise-order 2|3]" >&2; exit 1; }
 die() { echo "run-all: $*" >&2; exit 1; }
 
 [[ $# -ge 1 ]] || usage
 SUT="$1"; shift
-SUT_FILE="" ONLY="" ARMS="base,jqa,owl" REPS=3 STYLE="cucumber" REGENERATE=false
+SUT_FILE="" ONLY="" ARMS="base,jqa,owl" REPS=3 STYLE="cucumber" REGENERATE=false DET_PAIRWISE_ORDER=2
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --sut-file) SUT_FILE="${2:?}"; shift 2 ;;
@@ -18,6 +18,7 @@ while [[ $# -gt 0 ]]; do
     --reps) REPS="${2:?}"; shift 2 ;;
     --style) STYLE="${2:?}"; shift 2 ;;
     --regenerate) REGENERATE=true; shift ;;
+    --det-pairwise-order) DET_PAIRWISE_ORDER="${2:?}"; shift 2 ;;
     *) usage ;;
   esac
 done
@@ -25,6 +26,8 @@ done
 [[ "$REPS" =~ ^[1-9]$ ]] || die "--reps는 1~9여야 한다: $REPS"
 [[ "$STYLE" != "junit" ]] || die "--style junit은 아직 지원하지 않는다(REQ-030 연기): 지금은 cucumber만 생성한다"
 [[ "$STYLE" == "cucumber" ]] || die "--style은 cucumber여야 한다: $STYLE"
+# det pairwise order(det pairwise 설계 §5.4): det 번들 harness.json pairwiseOrder로 실린다(입력 해시에 들어간다)
+[[ "$DET_PAIRWISE_ORDER" == "2" || "$DET_PAIRWISE_ORDER" == "3" ]] || die "--det-pairwise-order는 2 또는 3이어야 한다: $DET_PAIRWISE_ORDER"
 IFS=',' read -r -a arm_list <<< "$ARMS"
 [[ ${#arm_list[@]} -gt 0 ]] || die "--arms가 비었다"
 for arm in "${arm_list[@]}"; do
@@ -82,7 +85,7 @@ echo "run-all: runId=$RUN_ID sut=$SUT_NAME commit=${COMMIT:0:7}" >&2
 
 export TD_RUN_DIR="$RUN_DIR" TD_RUN_ID="$RUN_ID" TD_SUT_NAME="$SUT_NAME" TD_SUT_COMMIT="$COMMIT" \
   TD_SUT_FILE="$SUT_FILE" TD_SUT_SRC="$SRC_DIR" TD_ARMS="$ARMS" TD_REPS="$REPS" TD_STYLE="$STYLE" \
-  TD_REGENERATE="$REGENERATE"
+  TD_REGENERATE="$REGENERATE" TD_DET_PAIRWISE_ORDER="$DET_PAIRWISE_ORDER"
 
 # 실행 순서는 td.state.EXECUTION_ORDER가 정한다(S04는 S05 뒤).
 # (macOS 기본 bash 3.2에는 mapfile이 없다)

@@ -244,7 +244,7 @@
       "description": "LLM arm(base/jqa/owl) generation 항목."
     },
     "detGeneration": {
-      "description": "det arm generation 항목(설계 §5.4). LLM을 부르지 않으므로 모델·토큰·수리 필드가 없고, rep은 항상 1이다. inputHash = sha256(bundleHash + generator.version + generator.sourceChecksum + generator.glueChecksum).",
+      "description": "det arm generation 항목(설계 §5.4). LLM을 부르지 않으므로 모델·토큰·수리 필드가 없고, rep은 항상 1이다. inputHash = sha256(bundleHash + generator.version + generator.sourceChecksum + generator.glueChecksum + pict_tag), pict_tag = '<commit>:<binarySha256>' | 'none'.",
       "type": "object",
       "required": [
         "genId",
@@ -317,6 +317,31 @@
             },
             "sourceChecksum": {
               "$ref": "#/$defs/sha256"
+            },
+            "pict": {
+              "description": "det pairwise 설계 §5.1: tools.lock의 pict 항목(경로 제외). pict 미사용(unavailable)이면 null. pairwise 도입 전 기록에는 없다.",
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "commit",
+                    "binarySha256"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "commit": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "binarySha256": {
+                      "$ref": "#/$defs/sha256"
+                    }
+                  }
+                }
+              ]
             }
           }
         },

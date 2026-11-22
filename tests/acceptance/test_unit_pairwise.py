@@ -1213,3 +1213,173 @@ def test_req316_mutated(tmp_path, pict_tool):
         text = (tmp_path / "out" / name).read_text(encoding="utf-8")
         assert [o for o in originals if o in text] == [], name
     assert [o for o in originals if o in (REPO_ROOT / "site-gen" / "td" / "detgen" / "pairwise.py").read_text(encoding="utf-8")] == []
+
+
+# =====================================================================================================
+# Task 5: det 키 태그·보고 스키마·bdd-gen 누출·커버리지 비교(REQ-311, REQ-314, REQ-315, REQ-317)
+# =====================================================================================================
+import shutil  # noqa: E402
+
+import jsonschema  # noqa: E402
+import yaml  # noqa: E402
+
+from td.detgen import results as det_results  # noqa: E402
+from td.detgen import stage as det_stage  # noqa: E402
+from test_unit_detgen import SUT_FILE, _clean_validator, _det_run, write_tools_lock  # noqa: E402
+
+SCHEMAS = REPO_ROOT / "site-gen" / "td" / "schemas"
+
+
+@pytest.fixture
+def clean_det_env(monkeypatch):
+    for key in ("TD_DET_PICT_TIMEOUT", "TD_DET_PAIRWISE_ORDER"):
+        monkeypatch.delenv(key, raising=False)
+
+
+def _generate(tmp_path, name, pict=None, unavailable=False):
+    """petclinic fixture로 stage det generation 하나(검증 스텁). pict: 세션 pict_tool 값(available) | None."""
+    run = _det_run(tmp_path, name)
+    if pict is not None:
+        write_tools_lock(run, pict)
+    elif unavailable:
+        write_tools_lock(run, None, failure="build-failed")
+    return det_stage.generate_det(run, SUT_FILE, tmp_path / name / "generated" / "petclinic", False,
+                                  validator=_clean_validator)
+
+
+def _bdd_doc(record) -> dict:
+    return {"schema": 1, "runId": None, "sut": "petclinic", "reps": 1, "regenerate": False, "maxRepairs": 0,
+            "strippedFields": [], "generations": [record]}
+
+
+def _det_summary_schema() -> dict:
+    schema = json.loads((SCHEMAS / "compare.schema.json").read_text(encoding="utf-8"))
+    return {"$defs": schema["$defs"], "$ref": "#/$defs/detSummary"}
+
+
+def test_req311_key_tag(tmp_path, clean_det_env, pict_tool):
+    input_hash = "0" * 64
+    tag = f"{pict_tool['commit']}:{pict_tool['binarySha256']}"
+    assert det_stage.det_key(input_hash, "none") != det_stage.det_key(input_hash, tag)
+    available = _generate(tmp_path, "av", pict=pict_tool)
+    unavailable = _generate(tmp_path, "un", unavailable=True)
+    assert available.record["bundleHash"] == unavailable.record["bundleHash"]
+    assert available.gen_id == det_stage.det_gen_id(det_stage.det_key(available.record["bundleHash"], tag))
+    assert unavailable.gen_id == det_stage.det_gen_id(det_stage.det_key(unavailable.record["bundleHash"], "none"))
+    assert available.gen_id != unavailable.gen_id
+
+
+def test_req314_schemas_and_counters(tmp_path, clean_det_env, pict_tool, monkeypatch):
+    bdd_schema = json.loads((SCHEMAS / "bdd-gen.schema.json").read_text(encoding="utf-8"))
+    available = _generate(tmp_path, "av", pict=pict_tool)
+    assert available.status == "passed", available.reason
+    assert available.record["generator"]["pict"] == {"commit": pict_tool["commit"],
+                                                     "binarySha256": pict_tool["binarySha256"]}
+    jsonschema.validate(_bdd_doc(available.record), bdd_schema)
+    # pairwise.json: 스키마 통과, _COMPLETE 체크섬 목록에 있다
+    _schema_check(json.loads((available.dir / PAIRWISE_FILE).read_text(encoding="utf-8")))
+    complete = json.loads((available.dir / "_COMPLETE").read_text(encoding="utf-8"))
+    assert PAIRWISE_FILE in {item["path"] for item in complete["files"]}
+    # summarize의 pairwise 블록: universe.pairwise 합계·assumes 접두 수와 교차 확인
+    s07 = tmp_path / "s07-empty"
+    s07.mkdir()
+    summary = det_results.summarize(available.dir, s07)
+    jsonschema.validate(summary, _det_summary_schema())
+    cases_doc = json.loads((available.dir / "cases.json").read_text(encoding="utf-8"))
+    universe = cases_doc["universe"]["pairwise"]
+    pairwise_cases = _pairwise_cases(cases_doc)
+    expected = {
+        "order": universe["order"],
+        "interactionsFeasible": sum(e["interactionsFeasible"] for e in universe["byEndpoint"].values()),
+        "interactionsCovered": sum(e["interactionsCovered"] for e in universe["byEndpoint"].values()),
+        "undetermined": sum(1 for c in pairwise_cases if any(a.startswith("undetermined:") for a in c["assumes"])),
+        "relCombined": sum(1 for c in pairwise_cases if any(a.startswith("rel-combined:") for a in c["assumes"])),
+    }
+    assert summary["pairwise"] == expected
+    assert summary["pairwise"]["interactionsFeasible"] >= 1 and summary["byRule"]["pairwise"]["generated"] >= 1
+    # unavailable·disabled → pairwise: null
+    unavailable = _generate(tmp_path, "un", unavailable=True)
+    jsonschema.validate(_bdd_doc(unavailable.record), bdd_schema)
+    assert unavailable.record["generator"]["pict"] is None
+    summary_un = det_results.summarize(unavailable.dir, s07)
+    jsonschema.validate(summary_un, _det_summary_schema())
+    assert summary_un["pairwise"] is None
+    without = {k: v for k, v in summary.items() if k != "pairwise"}
+    with pytest.raises(jsonschema.ValidationError):  # 필수 속성
+        jsonschema.validate(without, _det_summary_schema())
+    # compare.html det 표: pairwise 행과 covered/feasible
+    import test_compare
+    from td import compare
+    (tmp_path / "cmp").mkdir()
+    run_dir = test_compare.make_compare_run(tmp_path / "cmp")
+    test_compare.add_det_arm(run_dir, tmp_path / "cmp", monkeypatch)
+    document = test_compare.collect(run_dir)
+    document["deterministic"]["summary"]["pairwise"] = {"order": 2, "interactionsFeasible": 37, "interactionsCovered": 35,
+                                                        "undetermined": 1, "relCombined": 2}
+    jsonschema.validate(document, json.loads((SCHEMAS / "compare.schema.json").read_text(encoding="utf-8")))
+    out = tmp_path / "html"
+    out.mkdir()
+    html = compare.render_page(out, document).read_text(encoding="utf-8")
+    row = re.search(r'<tr data-det="pairwise">.*?</tr>', html, re.S)
+    assert row and "pairwise" in row.group(0) and "35/37" in row.group(0), html[-3000:]
+    document["deterministic"]["summary"]["pairwise"] = None
+    html_none = compare.render_page(out, document).read_text(encoding="utf-8")
+    assert 'data-det="pairwise"' not in html_none
+
+
+def test_req315_no_leaks_bdd_gen(tmp_path, clean_det_env, pict_tool):
+    result = _generate(tmp_path, "av", pict=pict_tool)
+    assert result.status == "passed", result.reason
+    record = {**result.record, "dir": None}  # dir는 bdd-gen.json에 쓰기 전 상대화 대상이라 기록 내용만 본다
+    text = json.dumps(record, ensure_ascii=False)
+    assert redact.find_leaks(text) == []
+    assert str(pict_tool["path"]) not in text and str(Path.home()) not in text
+    for path in sorted(result.dir.rglob("*")):
+        if path.is_file():
+            body = path.read_text(encoding="utf-8")
+            assert redact.find_leaks(body) == [], path.name
+            assert str(pict_tool["path"]) not in body, path.name
+
+
+def _comparison_run(root: Path, *, commit="c" * 40, embedded="0.8.12", pjacoco=("1.0", "a" * 64),
+                    jacococli=("0.8.12", "b" * 64), line=0.311, branch=0.372, path="/tools/x.jar") -> Path:
+    root.mkdir(parents=True)
+    (root / "run.json").write_text(json.dumps({"runId": root.name, "commit": commit}), encoding="utf-8")
+    lock = {"schema": 1, "sut": {"name": "petclinic", "commit": commit},
+            "pjacoco": {"version": pjacoco[0], "sha256": pjacoco[1], "path": path},
+            "jacocoCoreEmbedded": embedded,
+            "jacococli": {"version": jacococli[0], "sha256": jacococli[1], "path": path}}
+    (root / "tools.lock").write_text(yaml.safe_dump(lock), encoding="utf-8")
+    stat = lambda value: {"mean": value, "min": value, "max": value, "n": 1, "values": [value]}  # noqa: E731
+    compare_dir = root / "S12" / "compare"
+    compare_dir.mkdir(parents=True)
+    (compare_dir / "compare.json").write_text(json.dumps(
+        {"arms": {"det": {"arm": "det", "metrics": {"line": stat(line), "branch": stat(branch)}}}}), encoding="utf-8")
+    return root
+
+
+def test_req317_comparability(tmp_path):
+    run3 = _comparison_run(tmp_path / "run3")
+    same = _comparison_run(tmp_path / "same", line=0.35, branch=0.40, path="/other/path.jar")  # path는 비교하지 않는다
+    result = det_results.coverage_comparison(same, run3)
+    assert result["comparable"] is True
+    assert result["current"] == {"line": 0.35, "branch": 0.40}
+    assert result["run3"] == {"line": 0.311, "branch": 0.372}
+    assert result["delta"]["line"] == pytest.approx(0.039) and result["delta"]["branch"] == pytest.approx(0.028)
+    variants = {
+        "sut.commit": {"commit": "d" * 40},
+        "jacocoCoreEmbedded": {"embedded": "0.8.13"},
+        "pjacoco.version": {"pjacoco": ("1.1", "a" * 64)},
+        "pjacoco.sha256": {"pjacoco": ("1.0", "e" * 64)},
+        "jacococli.version": {"jacococli": ("0.8.13", "b" * 64)},
+        "jacococli.sha256": {"jacococli": ("0.8.12", "f" * 64)},
+    }
+    for key, change in variants.items():
+        other = _comparison_run(tmp_path / key.replace(".", "-"), **change)
+        verdict = det_results.coverage_comparison(other, run3)
+        assert verdict["comparable"] is False and key in verdict["reason"], (key, verdict)
+        assert set(verdict) == {"comparable", "reason"}
+    broken = _comparison_run(tmp_path / "no-compare")
+    shutil.rmtree(broken / "S12")
+    verdict = det_results.coverage_comparison(broken, run3)
+    assert verdict["comparable"] is False and "compare.json" in verdict["reason"]

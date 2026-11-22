@@ -17,6 +17,11 @@
 - 상태 불일치: `expect.bbtgCode`와 `expect.graphStatus`가 모두 있고 서로 다른 케이스. observed는 관측 코드이고, 통과했고
   strict가 정수면 그 정수다(통과는 strict를 만족했다는 뜻).
 
+- pairwise(det pairwise 설계 §5.5): `universe.pairwise`가 없거나(disabled) pict가 없었으면(unavailable: `pairwise-unavailable`
+  생성 불가 슬롯) null. available이면 `{order, interactionsFeasible, interactionsCovered, undetermined, relCombined}`이고
+  interactions는 `universe.pairwise.byEndpoint` 합, undetermined·relCombined는 해당 `assumes` 접두를 하나 이상 가진 pairwise 케이스 수다.
+- `coverage_comparison(current_run, run3_run)`: SUT 커밋과 tools.lock jacoco 항목이 모두 같을 때만 det 라인·브랜치 차이를 낸다.
+
 LLM을 부르지 않고 입력 파일만 읽는다. 같은 입력이면 같은 결과다.
 """
 from __future__ import annotations
@@ -28,7 +33,7 @@ from pathlib import Path
 from td import scenarios
 from td.detgen.observed import observed_codes
 
-__all__ = ["summarize", "case_statuses", "VIOLATION_RULE", "BASELINE_RULE"]
+__all__ = ["summarize", "case_statuses", "coverage_comparison", "VIOLATION_RULE", "BASELINE_RULE"]
 
 VIOLATION_RULE = "violation"
 BASELINE_RULE = "baseline-valid"
@@ -36,6 +41,10 @@ CASES_FILE = "cases.json"
 _CASE_TAG = re.compile(r"@case:(\S+)")
 _CASE_STEP = re.compile(r'^\s*(?:Given|And|\*)\s+the case "([^"]+)"\s*$')
 _SCENARIO = re.compile(r"^\s*Scenario( Outline)?\s*:")
+PAIRWISE_RULE = "pairwise"
+PAIRWISE_UNAVAILABLE = "pairwise-unavailable"
+UNDETERMINED_PREFIX = "undetermined:"
+REL_COMBINED_PREFIX = "rel-combined:"
 
 
 def _read_json(path: Path, default=None):
@@ -166,6 +175,7 @@ def summarize(gen_dir: Path, s07_dir: Path) -> dict:
         mismatch.append({"case": case["id"], "bbtgCode": bbtg, "graphStatus": graph, "observed": observed})
 
     total = len(cases)
+    pairwise = _pairwise_summary(document, cases)
     return {
         "cases": total,
         "unresolved": len(document.get("unresolved") or []),
@@ -181,4 +191,93 @@ def summarize(gen_dir: Path, s07_dir: Path) -> dict:
         "unpaired": unpaired,
         "byRule": dict(sorted(by_rule.items())),
         "statusMismatch": mismatch,
+        "pairwise": pairwise,
     }
+
+
+def _pairwise_summary(document: dict, cases: list[dict]) -> dict | None:
+    """compare det 블록의 pairwise 객체. disabled·unavailable이면 None."""
+    universe = (document.get("universe") or {}).get("pairwise")
+    if not isinstance(universe, dict):
+        return None
+    if any(isinstance(item, dict) and item.get("reason") == PAIRWISE_UNAVAILABLE for item in document.get("unresolved") or []):
+        return None
+    by_endpoint = list((universe.get("byEndpoint") or {}).values())
+    pairwise_cases = [case for case in cases if case.get("rule") == PAIRWISE_RULE]
+
+    def with_prefix(prefix: str) -> int:
+        return sum(1 for case in pairwise_cases if any(str(a).startswith(prefix) for a in case.get("assumes") or []))
+
+    return {"order": universe.get("order"),
+            "interactionsFeasible": sum(int(entry.get("interactionsFeasible") or 0) for entry in by_endpoint),
+            "interactionsCovered": sum(int(entry.get("interactionsCovered") or 0) for entry in by_endpoint),
+            "undetermined": with_prefix(UNDETERMINED_PREFIX),
+            "relCombined": with_prefix(REL_COMBINED_PREFIX)}
+
+
+# --- 커버리지 비교(det pairwise 설계 §5.5, REQ-317) ------------------------------------------------------
+COMPARE_REL = Path("S12") / "compare" / "compare.json"
+# 비교 키: (이름, tools.lock 안의 경로). path는 run마다 달라 비교하지 않는다
+_LOCK_KEYS = (("jacocoCoreEmbedded", ("jacocoCoreEmbedded",)),
+              ("pjacoco.version", ("pjacoco", "version")), ("pjacoco.sha256", ("pjacoco", "sha256")),
+              ("jacococli.version", ("jacococli", "version")), ("jacococli.sha256", ("jacococli", "sha256")))
+
+
+def _lock(run_dir: Path) -> dict:
+    import yaml
+    try:
+        data = yaml.safe_load((run_dir / "tools.lock").read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _dig(data, keys):
+    for key in keys:
+        if not isinstance(data, dict):
+            return None
+        data = data.get(key)
+    return data
+
+
+def _sut_commit(run_dir: Path, lock: dict):
+    """SUT 커밋: run.json `commit`, 없으면 tools.lock `sut.commit`."""
+    run = _read_json(run_dir / "run.json", {}) or {}
+    return run.get("commit") if isinstance(run, dict) and run.get("commit") else _dig(lock, ("sut", "commit"))
+
+
+def _det_coverage(run_dir: Path) -> dict | None:
+    """`S12/compare/compare.json` `arms.det.metrics`의 line·branch(stat이면 mean). 없으면 None."""
+    document = _read_json(run_dir / COMPARE_REL)
+    metrics = _dig(document, ("arms", "det", "metrics"))
+    if not isinstance(metrics, dict):
+        return None
+    values = {}
+    for name in ("line", "branch"):
+        value = metrics.get(name)
+        value = value.get("mean") if isinstance(value, dict) else value
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
+            return None
+        values[name] = value
+    return values
+
+
+def coverage_comparison(current_run: Path, run3_run: Path) -> dict:
+    """두 run(새 run, run3 기준)의 det 커버리지 비교. SUT 커밋·jacoco 항목이 하나라도 다르면 비교 불가."""
+    current_run, run3_run = Path(current_run), Path(run3_run)
+    current_lock, run3_lock = _lock(current_run), _lock(run3_run)
+    differ = []
+    pairs = [("sut.commit", _sut_commit(current_run, current_lock), _sut_commit(run3_run, run3_lock))]
+    pairs += [(name, _dig(current_lock, keys), _dig(run3_lock, keys)) for name, keys in _LOCK_KEYS]
+    for name, mine, theirs in pairs:
+        if mine is None or theirs is None or mine != theirs:
+            differ.append(name)
+    if differ:
+        return {"comparable": False, "reason": f"비교 불가: 다른 키 {', '.join(differ)}"}
+    current, run3 = _det_coverage(current_run), _det_coverage(run3_run)
+    missing = [f"{run.name}/{COMPARE_REL.as_posix()}" for run, value in ((current_run, current), (run3_run, run3))
+               if value is None]
+    if missing:
+        return {"comparable": False, "reason": f"비교 불가: compare.json의 det line·branch가 없다({', '.join(missing)})"}
+    return {"comparable": True, "current": current, "run3": run3,
+            "delta": {name: round(current[name] - run3[name], 6) for name in ("line", "branch")}}

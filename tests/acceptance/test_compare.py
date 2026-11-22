@@ -497,6 +497,7 @@ def test_det_excluded_from_verdict(tmp_path, monkeypatch):
     det = document["deterministic"]
     assert det["genId"] == DET_GEN and det["status"] == "measured"
     assert det["summary"]["passStrict"] == {"passed": 6, "total": 10} and det["summary"]["verifiedViolations"] == 1
+    assert det["summary"]["pairwise"] is None  # pict 미사용(universe.pairwise 없음) → null
 
 
 def test_det_absent_keeps_document_shape(tmp_path):

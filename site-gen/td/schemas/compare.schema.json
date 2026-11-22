@@ -19,7 +19,7 @@
     "detSummary": {
       "type": "object",
       "required": ["cases", "unresolved", "universe", "passStrict", "passClass", "classUnknown", "notRun", "classUnknownCases",
-                   "baselineValid", "blockedByBaseline", "verifiedViolations", "unpaired", "byRule", "statusMismatch"],
+                   "baselineValid", "blockedByBaseline", "verifiedViolations", "unpaired", "byRule", "statusMismatch", "pairwise"],
       "additionalProperties": false,
       "properties": {
         "cases": {"$ref": "#/$defs/count"}, "unresolved": {"$ref": "#/$defs/count"}, "universe": {"type": "object"},
@@ -36,7 +36,15 @@
         "statusMismatch": {"type": "array", "items": {
           "type": "object", "required": ["case", "bbtgCode", "graphStatus", "observed"], "additionalProperties": false,
           "properties": {"case": {"type": "string"}, "bbtgCode": {"type": "integer"}, "graphStatus": {"type": "integer"},
-                         "observed": {"type": ["integer", "null"]}}}}
+                         "observed": {"type": ["integer", "null"]}}}},
+        "pairwise": {"oneOf": [
+          {"type": "null"},
+          {"type": "object", "required": ["order", "interactionsFeasible", "interactionsCovered", "undetermined", "relCombined"],
+           "additionalProperties": false,
+           "properties": {"order": {"enum": [2, 3]}, "interactionsFeasible": {"$ref": "#/$defs/count"},
+                          "interactionsCovered": {"$ref": "#/$defs/count"}, "undetermined": {"$ref": "#/$defs/count"},
+                          "relCombined": {"$ref": "#/$defs/count"}}}
+        ]}
       }
     },
     "stat": {
