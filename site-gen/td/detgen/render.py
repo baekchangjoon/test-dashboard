@@ -15,7 +15,9 @@
   glue는 이 값으로 `today±N`을 푼다. Background는 pickle이 아니므로 testId·`@case:` 매핑은 시나리오 줄만 본다.
 - `empty-body` 규칙은 본문 없이 보낸다(`And the request has no body`). 그 밖의 POST/PUT/PATCH는 본문 필드가 없어도 `{}`를 보낸다(glue).
 - `cases.json`: 키 정렬·들여쓰기 2·끝 줄바꿈. values는 `body.<f>`/`query.<f>`/`path.<f>` 키(통제 fixture의 기대 목록과 같은 표기)로
-  모으고, 재현에 필요한 `auth`와 `setup`을 덧붙인다.
+  모으고, 재현에 필요한 `auth`와 `setup`을 덧붙인다. pairwise 케이스만 선택 키 `pairwise: {order, labels}`를 쓴다.
+- `pairwise.json`(det pairwise 설계 §5.4, 스키마 `td/schemas/pairwise.schema.json`): pairwise가 unavailable·available일 때만
+  `Derivation.pairwise_doc`을 cases.json과 같은 직렬화로 쓴다(disabled면 파일 없음). 사이트에는 게시하지 않는다.
 - `factors.json`(det-viz 설계 §5.3): `Derivation.factors`가 비어 있지 않을 때만 쓴다. 키 정렬·들여쓰기 2·끝 줄바꿈.
   `cases.json`과 feature 내용에는 영향이 없다.
 
@@ -40,6 +42,7 @@ FEATURES_DIR = "features"
 GLUE_OUT_DIR = "glue"
 CASES_FILE = "cases.json"
 FACTORS_FILE = "factors.json"
+PAIRWISE_FILE = "pairwise.json"
 _CASE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")
 _FIELD_NAME = re.compile(r'^[^"\s]+$')
 _PATH_VARIABLE = re.compile(r"\{([^}/]+)}")
@@ -217,6 +220,8 @@ def _case_entry(case: Case) -> dict:
              "baselineProof": list(case.baseline_proof), "auth": case.auth, "setup": setup}
     if case.pair is not None:
         entry["pair"] = case.pair
+    if case.pairwise is not None:
+        entry["pairwise"] = {"order": case.pairwise["order"], "labels": dict(case.pairwise["labels"])}
     return entry
 
 
@@ -229,7 +234,7 @@ def _cases_text(derivation: Derivation) -> str:
 # --- 진입점 ----------------------------------------------------------------------------------------
 
 def render(derivation: Derivation, out_dir: Path) -> list[str]:
-    """generation 디렉터리(`out_dir`)에 feature, glue, cases.json(그리고 factors.json)을 쓰고 쓴 파일의 상대 경로(정렬)를 돌려준다.
+    """generation 디렉터리(`out_dir`)에 feature, glue, cases.json(그리고 factors.json, 있으면 pairwise.json)을 쓰고 쓴 파일의 상대 경로(정렬)를 돌려준다.
     모든 내용을 먼저 만든 뒤 쓴다(규약 위반이면 RenderError로 아무것도 쓰지 않는다)."""
     ids = [case.id for case in derivation.cases]
     if len(ids) != len(set(ids)):
@@ -245,6 +250,9 @@ def render(derivation: Derivation, out_dir: Path) -> list[str]:
     contents[CASES_FILE] = _cases_text(derivation).encode("utf-8")
     if derivation.factors:
         contents[FACTORS_FILE] = (json.dumps(derivation.factors, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
+    if derivation.pairwise_doc is not None:
+        contents[PAIRWISE_FILE] = (json.dumps(derivation.pairwise_doc, ensure_ascii=False, sort_keys=True, indent=2,
+                                              allow_nan=False) + "\n").encode("utf-8")
     glue = _glue_files(GLUE_DIR)
     if not glue:
         raise RenderError(f"고정 glue가 없다: {GLUE_DIR.name}")
