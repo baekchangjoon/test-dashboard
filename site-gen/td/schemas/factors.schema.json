@@ -53,13 +53,14 @@
       "type": "object",
       "additionalProperties": {
         "type": "object",
-        "required": ["rule", "cells", "boundaries", "stored", "enumValue", "inModel", "outReason", "mergedRules", "cellConflicts"],
+        "required": ["rule", "cells", "boundaries", "stored", "storedBoundaries", "enumValue", "inModel", "outReason", "mergedRules", "cellConflicts"],
         "additionalProperties": false,
         "properties": {
           "rule": {"type": "string"},
           "cells": {"$ref": "#/$defs/cells"},
           "boundaries": {"type": "array", "items": {"$ref": "#/$defs/classId"}},
           "stored": {"type": "array", "items": {"type": "string"}},
+          "storedBoundaries": {"type": "array", "items": {"type": "string"}},
           "enumValue": {
             "oneOf": [
               {"type": "null"},

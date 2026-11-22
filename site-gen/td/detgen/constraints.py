@@ -98,6 +98,13 @@ class Constraints:
             return Operand("request", scalars[operand.name], operand.detail)
         return operand
 
+    def count_field(self, atom: Atom, ep: Endpoint, scalars) -> Field | None:
+        """count 질의 인자로 쓰인 요청 필드(해석 여부와 무관). `con`이 `ep.count_fields`에 넣는 조건과 같은 판정이다."""
+        if atom.op != "countGe":
+            return None
+        left = self.remap(atom.left, scalars)
+        return self.catalog.lookup(ep, left.name) if left.kind == "request" else None
+
     def con(self, atom: Atom, ep: Endpoint, var, scalars, owner) -> Con | str:
         """원자식 → Con. 만들 수 없으면 생성 불가 사유 문자열."""
         left, right = self.remap(atom.left, scalars), self.remap(atom.right, scalars)
@@ -128,8 +135,9 @@ class Constraints:
             return "unresolved-operand"
         base = {"field": fld.name, "stored": stored}
         if op == "countGe":
-            if not stored:
-                ep.count_fields.add(fld.name)
+            counted = self.count_field(atom, ep, scalars)
+            if counted is not None:
+                ep.count_fields.add(counted.name)
             if left.detail:
                 return "needs-state-transition"
             limit = self.catalog.constant(right.name, owner) if right.kind == "constant" else (
