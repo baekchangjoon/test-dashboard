@@ -1,0 +1,2963 @@
+{
+  "cases": {
+    "create-auth-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": false,
+      "mergedRules": [],
+      "outReason": "auth",
+      "rule": "auth",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-baseline-valid-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "baseline-valid",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-branch-entry-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {
+        "body.promoCode": "cacf5ef14de46"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "branch-entry",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-empty-body-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": false,
+      "mergedRules": [],
+      "outReason": "empty-body",
+      "rule": "empty-body",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-enum-value-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {
+        "body.priceTier": "cf1141bbf3391"
+      },
+      "enumValue": {
+        "constant": "PREMIUM",
+        "field": "body.priceTier"
+      },
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "enum-value",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-enum-value-2": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {
+        "body.priceTier": "cf1141bbf3391"
+      },
+      "enumValue": {
+        "constant": "VIP",
+        "field": "body.priceTier"
+      },
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "enum-value",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-pairwise-1": {
+      "boundaries": [
+        "c3cab8727b560",
+        "c64288ebe0386",
+        "cacf5ef14de46",
+        "cfad8115425e8"
+      ],
+      "cellConflicts": [],
+      "cells": {
+        "body.animalCount": "c26df0fdc21c4",
+        "body.loyaltyPoints": "c34b9cb2802ac",
+        "body.nights": "c590a359db36e",
+        "body.petName": "ca052f2538d39",
+        "body.priceTier": "cf1141bbf3391",
+        "body.promoCode": "cf86cb5a76def"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "pairwise",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-pairwise-2": {
+      "boundaries": [
+        "c0980c7c6baed",
+        "c34b9cb2802ac",
+        "c64288ebe0386",
+        "c92798e15da04",
+        "cd525197adf3a"
+      ],
+      "cellConflicts": [],
+      "cells": {
+        "body.animalCount": "c26df0fdc21c4",
+        "body.loyaltyPoints": "ce81b3c0e1f40",
+        "body.nights": "c590a359db36e",
+        "body.petName": "ca052f2538d39",
+        "body.priceTier": "cf1141bbf3391",
+        "body.promoCode": "cacf5ef14de46"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "pairwise",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-pairwise-3": {
+      "boundaries": [
+        "c0980c7c6baed",
+        "c34b9cb2802ac",
+        "c3cab8727b560",
+        "c56205fb8db76",
+        "cacf5ef14de46",
+        "cd525197adf3a"
+      ],
+      "cellConflicts": [],
+      "cells": {
+        "body.animalCount": "c26df0fdc21c4",
+        "body.loyaltyPoints": "ce81b3c0e1f40",
+        "body.nights": "c590a359db36e",
+        "body.petName": "ca052f2538d39",
+        "body.priceTier": "cf1141bbf3391",
+        "body.promoCode": "cf86cb5a76def"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "pairwise",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-pairwise-4": {
+      "boundaries": [
+        "c0980c7c6baed",
+        "c56205fb8db76",
+        "c92798e15da04"
+      ],
+      "cellConflicts": [],
+      "cells": {
+        "body.animalCount": "c26df0fdc21c4",
+        "body.loyaltyPoints": "c34b9cb2802ac",
+        "body.nights": "c590a359db36e",
+        "body.petName": "ca052f2538d39",
+        "body.priceTier": "cf1141bbf3391",
+        "body.promoCode": "cacf5ef14de46"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "pairwise",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-pairwise-5": {
+      "boundaries": [
+        "c3cab8727b560",
+        "c56205fb8db76",
+        "cd525197adf3a",
+        "cfad8115425e8"
+      ],
+      "cellConflicts": [],
+      "cells": {
+        "body.animalCount": "c26df0fdc21c4",
+        "body.loyaltyPoints": "c34b9cb2802ac",
+        "body.nights": "c590a359db36e",
+        "body.petName": "ca052f2538d39",
+        "body.priceTier": "cf1141bbf3391",
+        "body.promoCode": "cacf5ef14de46"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "pairwise",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-pairwise-6": {
+      "boundaries": [
+        "c34b9cb2802ac",
+        "c64288ebe0386",
+        "c92798e15da04",
+        "cacf5ef14de46",
+        "cfad8115425e8"
+      ],
+      "cellConflicts": [],
+      "cells": {
+        "body.animalCount": "c26df0fdc21c4",
+        "body.loyaltyPoints": "ce81b3c0e1f40",
+        "body.nights": "c590a359db36e",
+        "body.petName": "ca052f2538d39",
+        "body.priceTier": "cd525197adf3a",
+        "body.promoCode": "cf86cb5a76def"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "pairwise",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-pairwise-7": {
+      "boundaries": [
+        "c0980c7c6baed",
+        "c34b9cb2802ac",
+        "c3cab8727b560",
+        "c56205fb8db76"
+      ],
+      "cellConflicts": [],
+      "cells": {
+        "body.animalCount": "c26df0fdc21c4",
+        "body.loyaltyPoints": "ce81b3c0e1f40",
+        "body.nights": "c590a359db36e",
+        "body.petName": "ca052f2538d39",
+        "body.priceTier": "cd525197adf3a",
+        "body.promoCode": "cacf5ef14de46"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "pairwise",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-pairwise-8": {
+      "boundaries": [
+        "c0980c7c6baed",
+        "c34b9cb2802ac",
+        "c56205fb8db76",
+        "c92798e15da04"
+      ],
+      "cellConflicts": [],
+      "cells": {
+        "body.animalCount": "c26df0fdc21c4",
+        "body.loyaltyPoints": "ce81b3c0e1f40",
+        "body.nights": "c590a359db36e",
+        "body.petName": "ca052f2538d39",
+        "body.priceTier": "cf1141bbf3391",
+        "body.promoCode": "cacf5ef14de46"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "pairwise",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-valid-boundary-1": {
+      "boundaries": [
+        "cea371310bfdf"
+      ],
+      "cellConflicts": [],
+      "cells": {
+        "body.depositAmount": "c04a2576245c5"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "valid-boundary",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-valid-boundary-10": {
+      "boundaries": [
+        "c56205fb8db76"
+      ],
+      "cellConflicts": [],
+      "cells": {
+        "body.petName": "ca052f2538d39"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "valid-boundary",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-valid-boundary-11": {
+      "boundaries": [
+        "cac1daccc3452"
+      ],
+      "cellConflicts": [],
+      "cells": {
+        "body.priceTier": "cf1141bbf3391"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "valid-boundary",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-valid-boundary-12": {
+      "boundaries": [
+        "cd525197adf3a"
+      ],
+      "cellConflicts": [],
+      "cells": {
+        "body.loyaltyPoints": "c34b9cb2802ac",
+        "body.priceTier": "cf1141bbf3391"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "valid-boundary",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-valid-boundary-13": {
+      "boundaries": [
+        "c34b9cb2802ac"
+      ],
+      "cellConflicts": [],
+      "cells": {
+        "body.loyaltyPoints": "ce81b3c0e1f40",
+        "body.priceTier": "cd525197adf3a"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "valid-boundary",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-valid-boundary-14": {
+      "boundaries": [
+        "c81cd543d51ee"
+      ],
+      "cellConflicts": [],
+      "cells": {
+        "body.ownerEmail": "cbc430b6da197"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "valid-boundary",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-valid-boundary-15": {
+      "boundaries": [
+        "c0faa317cfad9"
+      ],
+      "cellConflicts": [],
+      "cells": {
+        "body.ownerEmail": "cbc430b6da197"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "valid-boundary",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-valid-boundary-16": {
+      "boundaries": [
+        "c2a2be9bfddee"
+      ],
+      "cellConflicts": [],
+      "cells": {
+        "body.checkInDate": "c3219a1776904"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "valid-boundary",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-valid-boundary-17": {
+      "boundaries": [
+        "cc1b427546ebf"
+      ],
+      "cellConflicts": [],
+      "cells": {
+        "body.checkInDate": "c3219a1776904"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "valid-boundary",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-valid-boundary-2": {
+      "boundaries": [
+        "c3cab8727b560"
+      ],
+      "cellConflicts": [],
+      "cells": {
+        "body.nights": "c590a359db36e"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "valid-boundary",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-valid-boundary-3": {
+      "boundaries": [
+        "c92798e15da04"
+      ],
+      "cellConflicts": [],
+      "cells": {
+        "body.nights": "c590a359db36e"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "valid-boundary",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-valid-boundary-4": {
+      "boundaries": [
+        "c5b72dab9cfcf"
+      ],
+      "cellConflicts": [],
+      "cells": {
+        "body.roomNumber": "c26c0137e44e6"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "valid-boundary",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-valid-boundary-5": {
+      "boundaries": [
+        "cedd2f89c7597"
+      ],
+      "cellConflicts": [],
+      "cells": {
+        "body.roomNumber": "c26c0137e44e6"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "valid-boundary",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-valid-boundary-6": {
+      "boundaries": [
+        "cfad8115425e8"
+      ],
+      "cellConflicts": [],
+      "cells": {
+        "body.animalCount": "c26df0fdc21c4"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "valid-boundary",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-valid-boundary-7": {
+      "boundaries": [
+        "c0980c7c6baed"
+      ],
+      "cellConflicts": [],
+      "cells": {
+        "body.animalCount": "c26df0fdc21c4"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "valid-boundary",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-valid-boundary-8": {
+      "boundaries": [
+        "cc78916c35893"
+      ],
+      "cellConflicts": [],
+      "cells": {
+        "body.petName": "ca052f2538d39"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "valid-boundary",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-valid-boundary-9": {
+      "boundaries": [
+        "c64288ebe0386"
+      ],
+      "cellConflicts": [],
+      "cells": {
+        "body.petName": "ca052f2538d39"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "valid-boundary",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-violation-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {
+        "body.depositAmount": "cea371310bfdf"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "violation",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-violation-10": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {
+        "body.petName": "c56205fb8db76"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "violation",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-violation-11": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {
+        "body.priceTier": "cac1daccc3452"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "violation",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-violation-12": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {
+        "body.loyaltyPoints": "c34b9cb2802ac",
+        "body.priceTier": "cd525197adf3a"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "violation",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-violation-13": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {
+        "body.ownerEmail": "c81cd543d51ee"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "violation",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-violation-14": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {
+        "body.ownerEmail": "c0faa317cfad9"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "violation",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-violation-15": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {
+        "body.checkInDate": "c2a2be9bfddee"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "violation",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-violation-16": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {
+        "body.checkInDate": "cc1b427546ebf"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "violation",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-violation-17": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {
+        "body.checkInDate": "cc1b427546ebf"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "violation",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-violation-2": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {
+        "body.nights": "c3cab8727b560"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "violation",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-violation-3": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {
+        "body.nights": "c92798e15da04"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "violation",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-violation-4": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {
+        "body.roomNumber": "c5b72dab9cfcf"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "violation",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-violation-5": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {
+        "body.roomNumber": "cedd2f89c7597"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "violation",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-violation-6": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {
+        "body.animalCount": "cfad8115425e8"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "violation",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-violation-7": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {
+        "body.animalCount": "c0980c7c6baed"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "violation",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-violation-8": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {
+        "body.petName": "cc78916c35893"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "violation",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "create-violation-9": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {
+        "body.petName": "c64288ebe0386"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "violation",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "delete-auth-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": false,
+      "mergedRules": [],
+      "outReason": "auth",
+      "rule": "auth",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "delete-no-data-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": false,
+      "mergedRules": [],
+      "outReason": "no-data",
+      "rule": "no-data",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "get-api-owners-auth-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": false,
+      "mergedRules": [],
+      "outReason": "auth",
+      "rule": "auth",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "get-api-owners-happy-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "happy",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "get-api-owners-ownerid-auth-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": false,
+      "mergedRules": [],
+      "outReason": "auth",
+      "rule": "auth",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "get-api-owners-ownerid-no-data-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": false,
+      "mergedRules": [],
+      "outReason": "no-data",
+      "rule": "no-data",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "get-api-pets-petid-auth-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": false,
+      "mergedRules": [],
+      "outReason": "auth",
+      "rule": "auth",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "get-api-pets-petid-no-data-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": false,
+      "mergedRules": [],
+      "outReason": "no-data",
+      "rule": "no-data",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "get-api-pets-types-auth-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": false,
+      "mergedRules": [],
+      "outReason": "auth",
+      "rule": "auth",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "get-api-pets-types-happy-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "happy",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "get-api-vets-auth-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": false,
+      "mergedRules": [],
+      "outReason": "auth",
+      "rule": "auth",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "get-api-vets-happy-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "happy",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "get-api-vets-vetid-auth-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": false,
+      "mergedRules": [],
+      "outReason": "auth",
+      "rule": "auth",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "get-api-vets-vetid-no-data-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": false,
+      "mergedRules": [],
+      "outReason": "no-data",
+      "rule": "no-data",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "getbyid-auth-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": false,
+      "mergedRules": [],
+      "outReason": "auth",
+      "rule": "auth",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "getbyid-happy-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "happy",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "getbyid-no-data-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": false,
+      "mergedRules": [],
+      "outReason": "no-data",
+      "rule": "no-data",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "list-auth-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": false,
+      "mergedRules": [],
+      "outReason": "auth",
+      "rule": "auth",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "list-enum-value-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {
+        "query.tier": "ce5a483467cb2"
+      },
+      "enumValue": {
+        "constant": "BASIC",
+        "field": "query.tier"
+      },
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "enum-value",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "list-enum-value-2": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {
+        "query.tier": "ce5a483467cb2"
+      },
+      "enumValue": {
+        "constant": "PREMIUM",
+        "field": "query.tier"
+      },
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "enum-value",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "list-enum-value-3": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {
+        "query.tier": "ce5a483467cb2"
+      },
+      "enumValue": {
+        "constant": "VIP",
+        "field": "query.tier"
+      },
+      "inModel": true,
+      "mergedRules": [
+        "filter-empty"
+      ],
+      "outReason": null,
+      "rule": "enum-value",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "list-filter-empty-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": false,
+      "mergedRules": [],
+      "outReason": "filter-empty",
+      "rule": "filter-empty",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "list-filter-empty-2": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": false,
+      "mergedRules": [],
+      "outReason": "filter-empty",
+      "rule": "filter-empty",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "list-happy-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "happy",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "loaduserbyusername-violation-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {
+        "body.username": "cf9da00272264"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "violation",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "post-api-auth-validate-auth-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": false,
+      "mergedRules": [],
+      "outReason": "auth",
+      "rule": "auth",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "post-api-owners-auth-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": false,
+      "mergedRules": [],
+      "outReason": "auth",
+      "rule": "auth",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "post-api-pets-auth-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": false,
+      "mergedRules": [],
+      "outReason": "auth",
+      "rule": "auth",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "put-api-owners-ownerid-auth-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": false,
+      "mergedRules": [],
+      "outReason": "auth",
+      "rule": "auth",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "put-api-owners-ownerid-no-data-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": false,
+      "mergedRules": [],
+      "outReason": "no-data",
+      "rule": "no-data",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "put-api-pets-petid-auth-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": false,
+      "mergedRules": [],
+      "outReason": "auth",
+      "rule": "auth",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "put-api-pets-petid-no-data-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": false,
+      "mergedRules": [],
+      "outReason": "no-data",
+      "rule": "no-data",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "update-auth-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": false,
+      "mergedRules": [],
+      "outReason": "auth",
+      "rule": "auth",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "update-baseline-valid-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "baseline-valid",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "update-no-data-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": false,
+      "mergedRules": [],
+      "outReason": "no-data",
+      "rule": "no-data",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "update-valid-boundary-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {},
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "valid-boundary",
+      "stored": [],
+      "storedBoundaries": [
+        "<= today"
+      ]
+    },
+    "update-valid-boundary-2": {
+      "boundaries": [
+        "cdb52bd3c5155"
+      ],
+      "cellConflicts": [],
+      "cells": {
+        "body.nights": "c39816fd96942"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "valid-boundary",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "update-valid-boundary-3": {
+      "boundaries": [
+        "cfbd882e78e29"
+      ],
+      "cellConflicts": [],
+      "cells": {
+        "body.nights": "c39816fd96942"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "valid-boundary",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "update-violation-1": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {
+        "body.nights": "cdb52bd3c5155"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "violation",
+      "stored": [],
+      "storedBoundaries": []
+    },
+    "update-violation-2": {
+      "boundaries": [],
+      "cellConflicts": [],
+      "cells": {
+        "body.nights": "cfbd882e78e29"
+      },
+      "enumValue": null,
+      "inModel": true,
+      "mergedRules": [],
+      "outReason": null,
+      "rule": "violation",
+      "stored": [],
+      "storedBoundaries": []
+    }
+  },
+  "endpoints": [
+    {
+      "endpoint": "DELETE /api/reservations/{id}",
+      "fields": [
+        {
+          "classes": [
+            {
+              "id": "c0fb0241c4dcc",
+              "kind": "valid",
+              "label": "유효",
+              "sources": []
+            }
+          ],
+          "field": "path.id"
+        }
+      ],
+      "methods": [
+        "ReservationService#delete"
+      ]
+    },
+    {
+      "endpoint": "GET /api/owners",
+      "fields": [],
+      "methods": []
+    },
+    {
+      "endpoint": "GET /api/owners/{ownerId}",
+      "fields": [
+        {
+          "classes": [
+            {
+              "id": "c187bf202031f",
+              "kind": "valid",
+              "label": "유효",
+              "sources": []
+            }
+          ],
+          "field": "path.ownerId"
+        }
+      ],
+      "methods": []
+    },
+    {
+      "endpoint": "GET /api/pets/types",
+      "fields": [],
+      "methods": []
+    },
+    {
+      "endpoint": "GET /api/pets/{petId}",
+      "fields": [
+        {
+          "classes": [
+            {
+              "id": "c57c3e63adfef",
+              "kind": "valid",
+              "label": "유효",
+              "sources": []
+            }
+          ],
+          "field": "path.petId"
+        }
+      ],
+      "methods": []
+    },
+    {
+      "endpoint": "GET /api/reservations",
+      "fields": [
+        {
+          "classes": [
+            {
+              "id": "ca9193e2d5b8c",
+              "kind": "valid",
+              "label": "유효",
+              "sources": []
+            }
+          ],
+          "field": "query.minNights"
+        },
+        {
+          "classes": [
+            {
+              "id": "ce5a483467cb2",
+              "kind": "valid",
+              "label": "유효",
+              "sources": []
+            }
+          ],
+          "field": "query.tier"
+        },
+        {
+          "classes": [
+            {
+              "id": "c53ba7b3a783f",
+              "kind": "valid",
+              "label": "유효",
+              "sources": []
+            }
+          ],
+          "field": "query.recentOnly"
+        }
+      ],
+      "methods": [
+        "ReservationService#list"
+      ]
+    },
+    {
+      "endpoint": "GET /api/reservations/{id}",
+      "fields": [
+        {
+          "classes": [
+            {
+              "id": "c9db9082e9545",
+              "kind": "valid",
+              "label": "유효",
+              "sources": []
+            }
+          ],
+          "field": "path.id"
+        },
+        {
+          "classes": [
+            {
+              "id": "cb2f7ce439443",
+              "kind": "valid",
+              "label": "유효",
+              "sources": []
+            },
+            {
+              "id": "cdd14b6f45376",
+              "kind": "violation",
+              "label": "== False",
+              "sources": [
+                "plan-tests-ReservationService.getById.json#1@18d943ea96b7"
+              ]
+            }
+          ],
+          "field": "query.includeStale"
+        }
+      ],
+      "methods": [
+        "ReservationService#getById"
+      ]
+    },
+    {
+      "endpoint": "GET /api/vets",
+      "fields": [],
+      "methods": []
+    },
+    {
+      "endpoint": "GET /api/vets/{vetId}",
+      "fields": [
+        {
+          "classes": [
+            {
+              "id": "cf91bf7feece5",
+              "kind": "valid",
+              "label": "유효",
+              "sources": []
+            }
+          ],
+          "field": "path.vetId"
+        }
+      ],
+      "methods": []
+    },
+    {
+      "endpoint": "POST /api/auth/login",
+      "fields": [
+        {
+          "classes": [
+            {
+              "id": "cfba136438cdf",
+              "kind": "valid",
+              "label": "유효",
+              "sources": []
+            }
+          ],
+          "field": "body.password"
+        },
+        {
+          "classes": [
+            {
+              "id": "c278ceaa155c5",
+              "kind": "valid",
+              "label": "유효",
+              "sources": []
+            },
+            {
+              "id": "c25d6817d3ad7",
+              "kind": "branch",
+              "label": "== \"admin\"",
+              "sources": [
+                "plan-tests-CustomUserDetailsService.loadUserByUsername.json#5@85f29a669640"
+              ]
+            },
+            {
+              "id": "cf9da00272264",
+              "kind": "violation",
+              "label": "== \"user\"",
+              "sources": [
+                "plan-tests-CustomUserDetailsService.loadUserByUsername.json#3@a922eac888b0"
+              ]
+            }
+          ],
+          "field": "body.username"
+        }
+      ],
+      "methods": [
+        "CustomUserDetailsService#loadUserByUsername"
+      ]
+    },
+    {
+      "endpoint": "POST /api/auth/validate",
+      "fields": [],
+      "methods": []
+    },
+    {
+      "endpoint": "POST /api/owners",
+      "fields": [],
+      "methods": []
+    },
+    {
+      "endpoint": "POST /api/pets",
+      "fields": [],
+      "methods": []
+    },
+    {
+      "endpoint": "POST /api/reservations",
+      "fields": [
+        {
+          "classes": [
+            {
+              "id": "c26df0fdc21c4",
+              "kind": "valid",
+              "label": "유효",
+              "sources": []
+            },
+            {
+              "id": "c0980c7c6baed",
+              "kind": "violation",
+              "label": "> 4",
+              "sources": [
+                "plan-tests-ReservationService.create.json#4@547a4919f73a"
+              ]
+            },
+            {
+              "id": "cfad8115425e8",
+              "kind": "violation",
+              "label": "< 1",
+              "sources": [
+                "plan-tests-ReservationService.create.json#4@547a4919f73a"
+              ]
+            }
+          ],
+          "field": "body.animalCount"
+        },
+        {
+          "classes": [
+            {
+              "id": "c3219a1776904",
+              "kind": "valid",
+              "label": "유효",
+              "sources": []
+            },
+            {
+              "id": "c2a2be9bfddee",
+              "kind": "violation",
+              "label": "== null",
+              "sources": [
+                "plan-tests-ReservationService.create.json#9@7da555819e33"
+              ]
+            },
+            {
+              "id": "cc1b427546ebf",
+              "kind": "violation",
+              "label": "<= today",
+              "sources": [
+                "plan-tests-ReservationService.create.json#9@7da555819e33"
+              ]
+            }
+          ],
+          "field": "body.checkInDate"
+        },
+        {
+          "classes": [
+            {
+              "id": "c04a2576245c5",
+              "kind": "valid",
+              "label": "유효",
+              "sources": []
+            },
+            {
+              "id": "cea371310bfdf",
+              "kind": "violation",
+              "label": "rel (0, 1000000)",
+              "sources": [
+                "plan-tests-ReservationService.create.json#10@6cea6217709d"
+              ]
+            }
+          ],
+          "field": "body.depositAmount"
+        },
+        {
+          "classes": [
+            {
+              "id": "ce81b3c0e1f40",
+              "kind": "valid",
+              "label": "유효",
+              "sources": []
+            },
+            {
+              "id": "c34b9cb2802ac",
+              "kind": "violation",
+              "label": "< 500",
+              "sources": [
+                "plan-tests-ReservationService.create.json#7@63a8ee60b1b4"
+              ]
+            }
+          ],
+          "field": "body.loyaltyPoints"
+        },
+        {
+          "classes": [
+            {
+              "id": "c590a359db36e",
+              "kind": "valid",
+              "label": "유효",
+              "sources": []
+            },
+            {
+              "id": "c3cab8727b560",
+              "kind": "violation",
+              "label": "< 1",
+              "sources": [
+                "plan-tests-ReservationService.create.json#2@2f877d1b07ce"
+              ]
+            },
+            {
+              "id": "c92798e15da04",
+              "kind": "violation",
+              "label": "> 30",
+              "sources": [
+                "plan-tests-ReservationService.create.json#2@2f877d1b07ce"
+              ]
+            }
+          ],
+          "field": "body.nights"
+        },
+        {
+          "classes": [
+            {
+              "id": "cbc430b6da197",
+              "kind": "valid",
+              "label": "유효",
+              "sources": []
+            },
+            {
+              "id": "c0faa317cfad9",
+              "kind": "violation",
+              "label": "!matches EMAIL",
+              "sources": [
+                "plan-tests-ReservationService.create.json#8@9cb13a7f75a5"
+              ]
+            },
+            {
+              "id": "c81cd543d51ee",
+              "kind": "violation",
+              "label": "== null",
+              "sources": [
+                "plan-tests-ReservationService.create.json#8@9cb13a7f75a5"
+              ]
+            }
+          ],
+          "field": "body.ownerEmail"
+        },
+        {
+          "classes": [
+            {
+              "id": "ca052f2538d39",
+              "kind": "valid",
+              "label": "유효",
+              "sources": []
+            },
+            {
+              "id": "c56205fb8db76",
+              "kind": "violation",
+              "label": "length > 50",
+              "sources": [
+                "plan-tests-ReservationService.create.json#5@638cf1d21ada"
+              ]
+            },
+            {
+              "id": "c64288ebe0386",
+              "kind": "violation",
+              "label": "length < 2",
+              "sources": [
+                "plan-tests-ReservationService.create.json#5@638cf1d21ada"
+              ]
+            },
+            {
+              "id": "cc78916c35893",
+              "kind": "violation",
+              "label": "== null",
+              "sources": [
+                "plan-tests-ReservationService.create.json#5@638cf1d21ada"
+              ]
+            }
+          ],
+          "field": "body.petName"
+        },
+        {
+          "classes": [
+            {
+              "id": "cf1141bbf3391",
+              "kind": "valid",
+              "label": "유효",
+              "sources": []
+            },
+            {
+              "id": "cac1daccc3452",
+              "kind": "violation",
+              "label": "== null",
+              "sources": [
+                "plan-tests-ReservationService.create.json#6@bcef4f3caf14"
+              ]
+            },
+            {
+              "id": "cd525197adf3a",
+              "kind": "violation",
+              "label": "== VIP",
+              "sources": [
+                "plan-tests-ReservationService.create.json#7@63a8ee60b1b4"
+              ]
+            }
+          ],
+          "field": "body.priceTier"
+        },
+        {
+          "classes": [
+            {
+              "id": "cc2c7b029c2b4",
+              "kind": "valid",
+              "label": "유효",
+              "sources": []
+            },
+            {
+              "id": "cacf5ef14de46",
+              "kind": "branch",
+              "label": "== \"WELCOME10\"",
+              "sources": [
+                "ReservationService_create.json#0.11@a9395b171019"
+              ]
+            },
+            {
+              "id": "cf86cb5a76def",
+              "kind": "branch",
+              "label": "!= null",
+              "sources": [
+                "ReservationService_create.json#0.12@3fe660e2a205"
+              ]
+            }
+          ],
+          "field": "body.promoCode"
+        },
+        {
+          "classes": [
+            {
+              "id": "c26c0137e44e6",
+              "kind": "valid",
+              "label": "유효",
+              "sources": []
+            },
+            {
+              "id": "c5b72dab9cfcf",
+              "kind": "violation",
+              "label": "< 100",
+              "sources": [
+                "plan-tests-ReservationService.create.json#3@d39d0609466e"
+              ]
+            },
+            {
+              "id": "cdaf8ee73fe31",
+              "kind": "count",
+              "label": "count",
+              "sources": [
+                "plan-tests-ReservationService.create.json#11@8593c1bf9de7"
+              ]
+            },
+            {
+              "id": "cedd2f89c7597",
+              "kind": "violation",
+              "label": "> 499",
+              "sources": [
+                "plan-tests-ReservationService.create.json#3@d39d0609466e"
+              ]
+            }
+          ],
+          "field": "body.roomNumber"
+        }
+      ],
+      "methods": [
+        "ReservationService#create"
+      ]
+    },
+    {
+      "endpoint": "PUT /api/owners/{ownerId}",
+      "fields": [
+        {
+          "classes": [
+            {
+              "id": "c1d214cd8a7fe",
+              "kind": "valid",
+              "label": "유효",
+              "sources": []
+            }
+          ],
+          "field": "path.ownerId"
+        }
+      ],
+      "methods": []
+    },
+    {
+      "endpoint": "PUT /api/pets/{petId}",
+      "fields": [
+        {
+          "classes": [
+            {
+              "id": "c70078148ba9f",
+              "kind": "valid",
+              "label": "유효",
+              "sources": []
+            }
+          ],
+          "field": "path.petId"
+        }
+      ],
+      "methods": []
+    },
+    {
+      "endpoint": "PUT /api/reservations/{id}",
+      "fields": [
+        {
+          "classes": [
+            {
+              "id": "c1d8d679f4ac6",
+              "kind": "valid",
+              "label": "유효",
+              "sources": []
+            }
+          ],
+          "field": "path.id"
+        },
+        {
+          "classes": [
+            {
+              "id": "c39816fd96942",
+              "kind": "valid",
+              "label": "유효",
+              "sources": []
+            },
+            {
+              "id": "c248411778591",
+              "kind": "raw",
+              "label": "!= nights",
+              "sources": [
+                "plan-tests-ReservationService.update.json#5@b004d07f8e2d"
+              ]
+            },
+            {
+              "id": "c39cc5b904c3f",
+              "kind": "contradicted",
+              "label": "!= null",
+              "sources": [
+                "plan-tests-ReservationService.update.json#3@e731e6910ece"
+              ]
+            },
+            {
+              "id": "cdb52bd3c5155",
+              "kind": "violation",
+              "label": "< 1",
+              "sources": [
+                "plan-tests-ReservationService.update.json#4@2f877d1b07ce"
+              ]
+            },
+            {
+              "id": "cfbd882e78e29",
+              "kind": "violation",
+              "label": "> 30",
+              "sources": [
+                "plan-tests-ReservationService.update.json#4@2f877d1b07ce"
+              ]
+            }
+          ],
+          "field": "body.nights"
+        },
+        {
+          "classes": [
+            {
+              "id": "c7661ae759d35",
+              "kind": "valid",
+              "label": "유효",
+              "sources": []
+            },
+            {
+              "id": "c838b4aa9557e",
+              "kind": "violation",
+              "label": "!= null",
+              "sources": [
+                "ReservationService_update.json#1.5@7cec04943888",
+                "plan-tests-ReservationService.update.json#2@e7f4206ffea3"
+              ]
+            },
+            {
+              "id": "ce505ae7dc2ec",
+              "kind": "raw",
+              "label": "!= status",
+              "sources": [
+                "plan-tests-ReservationService.update.json#2@e7f4206ffea3"
+              ]
+            }
+          ],
+          "field": "body.status"
+        }
+      ],
+      "methods": [
+        "ReservationService#update"
+      ]
+    }
+  ],
+  "sources": {
+    "ReservationService_create.json#0.11@a9395b171019": {
+      "condition": "\"WELCOME10\".equals(req.promoCode())",
+      "expected": null,
+      "kind": "keyparams",
+      "methods": [
+        "ReservationService#create"
+      ]
+    },
+    "ReservationService_create.json#0.12@3fe660e2a205": {
+      "condition": "req.promoCode() != null && Math.floorMod(req.promoCode().hashCode(), 7) == 3",
+      "expected": null,
+      "kind": "keyparams",
+      "methods": [
+        "ReservationService#create"
+      ]
+    },
+    "ReservationService_update.json#1.4@1dc63a4c6d58": {
+      "condition": "req.nights() != existing.getNights() && repository.countByRoomNumberAndStatus(existing.getRoomNumber(),\n\t\t\t\t\tReservation",
+      "expected": null,
+      "kind": "keyparams",
+      "methods": [
+        "ReservationService#update"
+      ]
+    },
+    "ReservationService_update.json#1.5@7cec04943888": {
+      "condition": "req.status() != null",
+      "expected": null,
+      "kind": "keyparams",
+      "methods": [
+        "ReservationService#update"
+      ]
+    },
+    "graph:endpoint:DELETE /api/reservations/{id}": {
+      "condition": null,
+      "expected": null,
+      "kind": "graph",
+      "methods": []
+    },
+    "graph:endpoint:GET /api/owners": {
+      "condition": null,
+      "expected": null,
+      "kind": "graph",
+      "methods": []
+    },
+    "graph:endpoint:GET /api/owners/{ownerId}": {
+      "condition": null,
+      "expected": null,
+      "kind": "graph",
+      "methods": []
+    },
+    "graph:endpoint:GET /api/pets/types": {
+      "condition": null,
+      "expected": null,
+      "kind": "graph",
+      "methods": []
+    },
+    "graph:endpoint:GET /api/pets/{petId}": {
+      "condition": null,
+      "expected": null,
+      "kind": "graph",
+      "methods": []
+    },
+    "graph:endpoint:GET /api/reservations": {
+      "condition": null,
+      "expected": null,
+      "kind": "graph",
+      "methods": []
+    },
+    "graph:endpoint:GET /api/reservations/{id}": {
+      "condition": null,
+      "expected": null,
+      "kind": "graph",
+      "methods": []
+    },
+    "graph:endpoint:GET /api/vets": {
+      "condition": null,
+      "expected": null,
+      "kind": "graph",
+      "methods": []
+    },
+    "graph:endpoint:GET /api/vets/{vetId}": {
+      "condition": null,
+      "expected": null,
+      "kind": "graph",
+      "methods": []
+    },
+    "graph:endpoint:POST /api/auth/login": {
+      "condition": null,
+      "expected": null,
+      "kind": "graph",
+      "methods": []
+    },
+    "graph:endpoint:POST /api/auth/validate": {
+      "condition": null,
+      "expected": null,
+      "kind": "graph",
+      "methods": []
+    },
+    "graph:endpoint:POST /api/owners": {
+      "condition": null,
+      "expected": null,
+      "kind": "graph",
+      "methods": []
+    },
+    "graph:endpoint:POST /api/pets": {
+      "condition": null,
+      "expected": null,
+      "kind": "graph",
+      "methods": []
+    },
+    "graph:endpoint:POST /api/reservations": {
+      "condition": null,
+      "expected": null,
+      "kind": "graph",
+      "methods": []
+    },
+    "graph:endpoint:PUT /api/owners/{ownerId}": {
+      "condition": null,
+      "expected": null,
+      "kind": "graph",
+      "methods": []
+    },
+    "graph:endpoint:PUT /api/pets/{petId}": {
+      "condition": null,
+      "expected": null,
+      "kind": "graph",
+      "methods": []
+    },
+    "graph:endpoint:PUT /api/reservations/{id}": {
+      "condition": null,
+      "expected": null,
+      "kind": "graph",
+      "methods": []
+    },
+    "harness:unauthenticatedStatus": {
+      "condition": null,
+      "expected": null,
+      "kind": "harness",
+      "methods": []
+    },
+    "plan-tests-CustomUserDetailsService.loadUserByUsername.json#0@9756f69acd20": {
+      "condition": "username = admin",
+      "expected": "분기 진입: username=admin 경로",
+      "kind": "plan",
+      "methods": [
+        "CustomUserDetailsService#loadUserByUsername"
+      ]
+    },
+    "plan-tests-CustomUserDetailsService.loadUserByUsername.json#1@d0616d325d2f": {
+      "condition": "username = user",
+      "expected": "분기 진입: username=user 경로",
+      "kind": "plan",
+      "methods": [
+        "CustomUserDetailsService#loadUserByUsername"
+      ]
+    },
+    "plan-tests-CustomUserDetailsService.loadUserByUsername.json#2@749e03d17ca3": {
+      "condition": "username ≠ admin, user",
+      "expected": "else 분기 경로 (username이 admin, user 어디에도 해당하지 않을 때)",
+      "kind": "plan",
+      "methods": [
+        "CustomUserDetailsService#loadUserByUsername"
+      ]
+    },
+    "plan-tests-CustomUserDetailsService.loadUserByUsername.json#3@a922eac888b0": {
+      "condition": "\"user\".equals(username)",
+      "expected": "UsernameNotFoundException code=404",
+      "kind": "plan",
+      "methods": [
+        "CustomUserDetailsService#loadUserByUsername"
+      ]
+    },
+    "plan-tests-CustomUserDetailsService.loadUserByUsername.json#4@4653d5c9c118": {
+      "condition": "Happy Path (POST — 상태코드 실측 필요, 코드에서 확정 불가)",
+      "expected": "분기 진입: Happy Path (POST — 상태코드 실측 필요, 코드에서 확정 불가)",
+      "kind": "plan",
+      "methods": [
+        "CustomUserDetailsService#loadUserByUsername"
+      ]
+    },
+    "plan-tests-CustomUserDetailsService.loadUserByUsername.json#5@85f29a669640": {
+      "condition": "\"admin\".equals(username)",
+      "expected": "분기 진입: 조기 return 분기: username == \"admin\"",
+      "kind": "plan",
+      "methods": [
+        "CustomUserDetailsService#loadUserByUsername"
+      ]
+    },
+    "plan-tests-ReservationService.create.json#0@1bcd5d3defb4": {
+      "condition": "req = null/empty",
+      "expected": "ReservationValidationException code=400",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#create"
+      ]
+    },
+    "plan-tests-ReservationService.create.json#10@6cea6217709d": {
+      "condition": "req.depositAmount() * 1.1 < req.nights() * req.priceTier().getNightlyRate()",
+      "expected": "ReservationValidationException code=400",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#create"
+      ]
+    },
+    "plan-tests-ReservationService.create.json#11@8593c1bf9de7": {
+      "condition": "repository.countByRoomNumberAndStatus(req.roomNumber(), ReservationStatus.CONFIRMED) >= ROOM_CAPACITY",
+      "expected": "ReservationConflictException code=409",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#create"
+      ]
+    },
+    "plan-tests-ReservationService.create.json#12@4653d5c9c118": {
+      "condition": "Happy Path (POST — 상태코드 실측 필요, 코드에서 확정 불가)",
+      "expected": "분기 진입: Happy Path (POST — 상태코드 실측 필요, 코드에서 확정 불가)",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#create"
+      ]
+    },
+    "plan-tests-ReservationService.create.json#1@752e59497c41": {
+      "condition": "req = WELCOME10",
+      "expected": "분기 진입: req=WELCOME10 경로",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#create"
+      ]
+    },
+    "plan-tests-ReservationService.create.json#2@2f877d1b07ce": {
+      "condition": "req.nights() < 1 || req.nights() > 30",
+      "expected": "ReservationValidationException code=400",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#create"
+      ]
+    },
+    "plan-tests-ReservationService.create.json#3@d39d0609466e": {
+      "condition": "req.roomNumber() < 100 || req.roomNumber() > 499",
+      "expected": "ReservationValidationException code=400",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#create"
+      ]
+    },
+    "plan-tests-ReservationService.create.json#4@547a4919f73a": {
+      "condition": "req.animalCount() < 1 || req.animalCount() > 4",
+      "expected": "ReservationValidationException code=400",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#create"
+      ]
+    },
+    "plan-tests-ReservationService.create.json#5@638cf1d21ada": {
+      "condition": "req.petName() == null || req.petName().length() < 2 || req.petName().length() > 50",
+      "expected": "ReservationValidationException code=400",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#create"
+      ]
+    },
+    "plan-tests-ReservationService.create.json#6@bcef4f3caf14": {
+      "condition": "req.priceTier() == null",
+      "expected": "ReservationValidationException code=400",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#create"
+      ]
+    },
+    "plan-tests-ReservationService.create.json#7@63a8ee60b1b4": {
+      "condition": "req.priceTier() == PriceTier.VIP && req.loyaltyPoints() < 500",
+      "expected": "ReservationValidationException code=400",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#create"
+      ]
+    },
+    "plan-tests-ReservationService.create.json#8@9cb13a7f75a5": {
+      "condition": "req.ownerEmail() == null || !EMAIL.matcher(req.ownerEmail()).matches()",
+      "expected": "ReservationValidationException code=400",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#create"
+      ]
+    },
+    "plan-tests-ReservationService.create.json#9@7da555819e33": {
+      "condition": "req.checkInDate() == null || !req.checkInDate().isAfter(LocalDate.now())",
+      "expected": "ReservationValidationException code=400",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#create"
+      ]
+    },
+    "plan-tests-ReservationService.delete.json#0@3349a2614f0f": {
+      "condition": "DB에 id 조건에 맞는 데이터 없음 (repository.findById)",
+      "expected": "데이터 미존재 시 예외 또는 빈 응답",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#delete"
+      ]
+    },
+    "plan-tests-ReservationService.delete.json#1@bf68ee2636cb": {
+      "condition": "existing.getStatus() != ReservationStatus.PENDING && existing.getStatus() != ReservationStatus.CANCELLED",
+      "expected": "ReservationConflictException code=409",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#delete"
+      ]
+    },
+    "plan-tests-ReservationService.delete.json#2@68fab2bebba1": {
+      "condition": "checkIn.isBefore(LocalDateTime.now().plusHours(48))",
+      "expected": "ReservationConflictException code=409",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#delete"
+      ]
+    },
+    "plan-tests-ReservationService.delete.json#3@ebd0d71ea484": {
+      "condition": "Happy Path (DELETE — 상태코드 실측 필요, 코드에서 확정 불가)",
+      "expected": "분기 진입: Happy Path (DELETE — 상태코드 실측 필요, 코드에서 확정 불가)",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#delete"
+      ]
+    },
+    "plan-tests-ReservationService.getById.json#0@3349a2614f0f": {
+      "condition": "DB에 id 조건에 맞는 데이터 없음 (repository.findById)",
+      "expected": "데이터 미존재 시 예외 또는 빈 응답",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#getById"
+      ]
+    },
+    "plan-tests-ReservationService.getById.json#1@18d943ea96b7": {
+      "condition": "!includeStale && r.getCheckInDate().isBefore(LocalDate.now())",
+      "expected": "ReservationNotFoundException code=404",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#getById"
+      ]
+    },
+    "plan-tests-ReservationService.getById.json#2@f871f431e2fe": {
+      "condition": "Happy Path (GET — 상태코드 실측 필요, 코드에서 확정 불가)",
+      "expected": "분기 진입: Happy Path (GET — 상태코드 실측 필요, 코드에서 확정 불가)",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#getById"
+      ]
+    },
+    "plan-tests-ReservationService.list.json#0@faba0c12e987": {
+      "condition": "DB에 minNights 조건에 맞는 데이터 없음 (repository.findAll)",
+      "expected": "데이터 미존재 시 예외 또는 빈 응답",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#list"
+      ]
+    },
+    "plan-tests-ReservationService.list.json#1@24dbf36afec3": {
+      "condition": "DB에 recentOnly 조건에 맞는 데이터 없음 (repository.findAll)",
+      "expected": "데이터 미존재 시 예외 또는 빈 응답",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#list"
+      ]
+    },
+    "plan-tests-ReservationService.list.json#2@85ff3aa1f388": {
+      "condition": "DB에 tier 조건에 맞는 데이터 없음 (repository.findAll)",
+      "expected": "데이터 미존재 시 예외 또는 빈 응답",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#list"
+      ]
+    },
+    "plan-tests-ReservationService.list.json#3@607fcad712be": {
+      "condition": "General Bad Request (400)",
+      "expected": " code=400",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#list"
+      ]
+    },
+    "plan-tests-ReservationService.list.json#4@f871f431e2fe": {
+      "condition": "Happy Path (GET — 상태코드 실측 필요, 코드에서 확정 불가)",
+      "expected": "분기 진입: Happy Path (GET — 상태코드 실측 필요, 코드에서 확정 불가)",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#list"
+      ]
+    },
+    "plan-tests-ReservationService.update.json#0@3349a2614f0f": {
+      "condition": "DB에 id 조건에 맞는 데이터 없음 (repository.findById)",
+      "expected": "데이터 미존재 시 예외 또는 빈 응답",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#update"
+      ]
+    },
+    "plan-tests-ReservationService.update.json#1@6f16312ce828": {
+      "condition": "!LocalDate.now().isBefore(existing.getCheckInDate())",
+      "expected": "ReservationValidationException code=400",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#update"
+      ]
+    },
+    "plan-tests-ReservationService.update.json#2@e7f4206ffea3": {
+      "condition": "req.status() != null && req.status() != existing.getStatus()\n\t\t\t\t&& !existing.getStatus().canTransitionTo(req.status())",
+      "expected": "ReservationConflictException code=409",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#update"
+      ]
+    },
+    "plan-tests-ReservationService.update.json#3@e731e6910ece": {
+      "condition": "req.nights() != null",
+      "expected": "ReservationValidationException code=400",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#update"
+      ]
+    },
+    "plan-tests-ReservationService.update.json#4@2f877d1b07ce": {
+      "condition": "req.nights() < 1 || req.nights() > 30",
+      "expected": "ReservationValidationException code=400",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#update"
+      ]
+    },
+    "plan-tests-ReservationService.update.json#5@b004d07f8e2d": {
+      "condition": "req.nights() != existing.getNights() && repository.countByRoomNumberAndStatus(existing.getRoomNumber(),\n\t\t\t\t\tReservationStatus.CONFIRMED) >= ROOM_CAPACITY",
+      "expected": "ReservationConflictException code=409",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#update"
+      ]
+    },
+    "plan-tests-ReservationService.update.json#6@5c2fb62f8917": {
+      "condition": "Happy Path (PUT — 상태코드 실측 필요, 코드에서 확정 불가)",
+      "expected": "분기 진입: Happy Path (PUT — 상태코드 실측 필요, 코드에서 확정 불가)",
+      "kind": "plan",
+      "methods": [
+        "ReservationService#update"
+      ]
+    }
+  },
+  "unresolved": [
+    {
+      "cells": {
+        "body.promoCode": "cf86cb5a76def"
+      },
+      "draftKey": [
+        0,
+        0,
+        0
+      ],
+      "index": 0,
+      "reason": "unresolved-operand",
+      "rule": "branch-entry",
+      "source": "ReservationService_create.json#0.12@3fe660e2a205"
+    },
+    {
+      "cells": {},
+      "draftKey": null,
+      "index": 1,
+      "reason": "unparsed",
+      "rule": "item",
+      "source": "ReservationService_update.json#1.4@1dc63a4c6d58"
+    },
+    {
+      "cells": {
+        "body.status": "c838b4aa9557e"
+      },
+      "draftKey": [
+        0,
+        0,
+        0
+      ],
+      "index": 2,
+      "reason": "needs-state-transition",
+      "rule": "branch-entry",
+      "source": "ReservationService_update.json#1.5@7cec04943888"
+    },
+    {
+      "cells": {},
+      "draftKey": null,
+      "index": 3,
+      "reason": "param-name-unknown",
+      "rule": "param",
+      "source": "graph:endpoint:DELETE /api/reservations/{id}"
+    },
+    {
+      "cells": {},
+      "draftKey": [
+        0,
+        0,
+        0
+      ],
+      "index": 4,
+      "reason": "no-id-ref",
+      "rule": "happy",
+      "source": "graph:endpoint:GET /api/owners/{ownerId}"
+    },
+    {
+      "cells": {},
+      "draftKey": [
+        0,
+        0,
+        0
+      ],
+      "index": 5,
+      "reason": "no-id-ref",
+      "rule": "happy",
+      "source": "graph:endpoint:GET /api/pets/{petId}"
+    },
+    {
+      "cells": {},
+      "draftKey": [
+        0,
+        0,
+        0
+      ],
+      "index": 6,
+      "reason": "no-id-ref",
+      "rule": "happy",
+      "source": "graph:endpoint:GET /api/vets/{vetId}"
+    },
+    {
+      "cells": {},
+      "draftKey": [
+        0,
+        0,
+        0
+      ],
+      "index": 7,
+      "reason": "input-missing",
+      "rule": "baseline-valid",
+      "source": "graph:endpoint:POST /api/auth/login"
+    },
+    {
+      "cells": {},
+      "draftKey": null,
+      "index": 8,
+      "reason": "no-body-schema",
+      "rule": "happy",
+      "source": "graph:endpoint:POST /api/owners"
+    },
+    {
+      "cells": {},
+      "draftKey": null,
+      "index": 9,
+      "reason": "no-body-schema",
+      "rule": "happy",
+      "source": "graph:endpoint:POST /api/pets"
+    },
+    {
+      "cells": {},
+      "draftKey": null,
+      "index": 10,
+      "reason": "no-body-schema",
+      "rule": "happy",
+      "source": "graph:endpoint:PUT /api/owners/{ownerId}"
+    },
+    {
+      "cells": {},
+      "draftKey": null,
+      "index": 11,
+      "reason": "no-body-schema",
+      "rule": "happy",
+      "source": "graph:endpoint:PUT /api/pets/{petId}"
+    },
+    {
+      "cells": {
+        "body.status": "c7661ae759d35"
+      },
+      "draftKey": [
+        1,
+        0,
+        0
+      ],
+      "index": 12,
+      "reason": "needs-state-transition",
+      "rule": "enum-value",
+      "source": "graph:endpoint:PUT /api/reservations/{id}"
+    },
+    {
+      "cells": {
+        "body.status": "c7661ae759d35"
+      },
+      "draftKey": [
+        1,
+        1,
+        0
+      ],
+      "index": 13,
+      "reason": "needs-state-transition",
+      "rule": "enum-value",
+      "source": "graph:endpoint:PUT /api/reservations/{id}"
+    },
+    {
+      "cells": {
+        "body.status": "c7661ae759d35"
+      },
+      "draftKey": [
+        1,
+        2,
+        0
+      ],
+      "index": 14,
+      "reason": "needs-state-transition",
+      "rule": "enum-value",
+      "source": "graph:endpoint:PUT /api/reservations/{id}"
+    },
+    {
+      "cells": {
+        "body.status": "c7661ae759d35"
+      },
+      "draftKey": [
+        1,
+        3,
+        0
+      ],
+      "index": 15,
+      "reason": "needs-state-transition",
+      "rule": "enum-value",
+      "source": "graph:endpoint:PUT /api/reservations/{id}"
+    },
+    {
+      "cells": {},
+      "draftKey": null,
+      "index": 16,
+      "reason": "unparsed",
+      "rule": "item",
+      "source": "plan-tests-CustomUserDetailsService.loadUserByUsername.json#0@9756f69acd20"
+    },
+    {
+      "cells": {},
+      "draftKey": null,
+      "index": 17,
+      "reason": "unparsed",
+      "rule": "item",
+      "source": "plan-tests-CustomUserDetailsService.loadUserByUsername.json#1@d0616d325d2f"
+    },
+    {
+      "cells": {},
+      "draftKey": null,
+      "index": 18,
+      "reason": "unparsed",
+      "rule": "item",
+      "source": "plan-tests-CustomUserDetailsService.loadUserByUsername.json#2@749e03d17ca3"
+    },
+    {
+      "cells": {
+        "body.username": "c278ceaa155c5"
+      },
+      "draftKey": [
+        0,
+        1,
+        0
+      ],
+      "index": 19,
+      "reason": "input-missing",
+      "rule": "valid-boundary",
+      "source": "plan-tests-CustomUserDetailsService.loadUserByUsername.json#3@a922eac888b0"
+    },
+    {
+      "cells": {},
+      "draftKey": null,
+      "index": 20,
+      "reason": "no-condition",
+      "rule": "item",
+      "source": "plan-tests-CustomUserDetailsService.loadUserByUsername.json#4@4653d5c9c118"
+    },
+    {
+      "cells": {
+        "body.username": "c25d6817d3ad7"
+      },
+      "draftKey": [
+        0,
+        0,
+        0
+      ],
+      "index": 21,
+      "reason": "input-missing",
+      "rule": "branch-entry",
+      "source": "plan-tests-CustomUserDetailsService.loadUserByUsername.json#5@85f29a669640"
+    },
+    {
+      "cells": {
+        "body.roomNumber": "c26c0137e44e6"
+      },
+      "draftKey": [
+        0,
+        1,
+        0
+      ],
+      "index": 22,
+      "reason": "needs-state-transition",
+      "rule": "valid-boundary",
+      "source": "plan-tests-ReservationService.create.json#11@8593c1bf9de7"
+    },
+    {
+      "cells": {
+        "body.roomNumber": "cdaf8ee73fe31"
+      },
+      "draftKey": [
+        0,
+        0,
+        0
+      ],
+      "index": 23,
+      "reason": "needs-state-transition",
+      "rule": "violation",
+      "source": "plan-tests-ReservationService.create.json#11@8593c1bf9de7"
+    },
+    {
+      "cells": {},
+      "draftKey": null,
+      "index": 24,
+      "reason": "no-condition",
+      "rule": "item",
+      "source": "plan-tests-ReservationService.create.json#12@4653d5c9c118"
+    },
+    {
+      "cells": {},
+      "draftKey": null,
+      "index": 25,
+      "reason": "unparsed",
+      "rule": "item",
+      "source": "plan-tests-ReservationService.create.json#1@752e59497c41"
+    },
+    {
+      "cells": {},
+      "draftKey": [
+        0,
+        1,
+        0
+      ],
+      "index": 26,
+      "reason": "unreachable-state",
+      "rule": "valid-boundary",
+      "source": "plan-tests-ReservationService.delete.json#1@bf68ee2636cb"
+    },
+    {
+      "cells": {},
+      "draftKey": [
+        0,
+        1,
+        1
+      ],
+      "index": 27,
+      "reason": "unreachable-state",
+      "rule": "valid-boundary",
+      "source": "plan-tests-ReservationService.delete.json#1@bf68ee2636cb"
+    },
+    {
+      "cells": {},
+      "draftKey": [
+        0,
+        0,
+        0
+      ],
+      "index": 28,
+      "reason": "unreachable-state",
+      "rule": "violation",
+      "source": "plan-tests-ReservationService.delete.json#1@bf68ee2636cb"
+    },
+    {
+      "cells": {},
+      "draftKey": [
+        0,
+        1,
+        0
+      ],
+      "index": 29,
+      "reason": "unresolved-operand",
+      "rule": "valid-boundary",
+      "source": "plan-tests-ReservationService.delete.json#2@68fab2bebba1"
+    },
+    {
+      "cells": {},
+      "draftKey": [
+        0,
+        0,
+        0
+      ],
+      "index": 30,
+      "reason": "unresolved-operand",
+      "rule": "violation",
+      "source": "plan-tests-ReservationService.delete.json#2@68fab2bebba1"
+    },
+    {
+      "cells": {},
+      "draftKey": null,
+      "index": 31,
+      "reason": "no-condition",
+      "rule": "item",
+      "source": "plan-tests-ReservationService.delete.json#3@ebd0d71ea484"
+    },
+    {
+      "cells": {
+        "query.includeStale": "cb2f7ce439443"
+      },
+      "draftKey": [
+        0,
+        1,
+        0
+      ],
+      "index": 32,
+      "reason": "unresolved-operand",
+      "rule": "valid-boundary",
+      "source": "plan-tests-ReservationService.getById.json#1@18d943ea96b7"
+    },
+    {
+      "cells": {
+        "query.includeStale": "cdd14b6f45376"
+      },
+      "draftKey": [
+        0,
+        1,
+        1
+      ],
+      "index": 33,
+      "reason": "unresolved-operand",
+      "rule": "valid-boundary",
+      "source": "plan-tests-ReservationService.getById.json#1@18d943ea96b7"
+    },
+    {
+      "cells": {
+        "query.includeStale": "cdd14b6f45376"
+      },
+      "draftKey": [
+        0,
+        0,
+        0
+      ],
+      "index": 34,
+      "reason": "unresolved-operand",
+      "rule": "violation",
+      "source": "plan-tests-ReservationService.getById.json#1@18d943ea96b7"
+    },
+    {
+      "cells": {},
+      "draftKey": null,
+      "index": 35,
+      "reason": "no-condition",
+      "rule": "item",
+      "source": "plan-tests-ReservationService.getById.json#2@f871f431e2fe"
+    },
+    {
+      "cells": {},
+      "draftKey": null,
+      "index": 36,
+      "reason": "no-condition",
+      "rule": "item",
+      "source": "plan-tests-ReservationService.list.json#3@607fcad712be"
+    },
+    {
+      "cells": {},
+      "draftKey": null,
+      "index": 37,
+      "reason": "no-condition",
+      "rule": "item",
+      "source": "plan-tests-ReservationService.list.json#4@f871f431e2fe"
+    },
+    {
+      "cells": {},
+      "draftKey": [
+        0,
+        0,
+        0
+      ],
+      "index": 38,
+      "reason": "unreachable-state",
+      "rule": "violation",
+      "source": "plan-tests-ReservationService.update.json#1@6f16312ce828"
+    },
+    {
+      "cells": {},
+      "draftKey": [
+        0,
+        0,
+        1
+      ],
+      "index": 39,
+      "reason": "unreachable-state",
+      "rule": "violation",
+      "source": "plan-tests-ReservationService.update.json#1@6f16312ce828"
+    },
+    {
+      "cells": {
+        "body.status": "c7661ae759d35"
+      },
+      "draftKey": [
+        0,
+        1,
+        0
+      ],
+      "index": 40,
+      "reason": "needs-state-transition",
+      "rule": "valid-boundary",
+      "source": "plan-tests-ReservationService.update.json#2@e7f4206ffea3"
+    },
+    {
+      "cells": {
+        "body.status": "c7661ae759d35"
+      },
+      "draftKey": [
+        0,
+        1,
+        1
+      ],
+      "index": 41,
+      "reason": "needs-state-transition",
+      "rule": "valid-boundary",
+      "source": "plan-tests-ReservationService.update.json#2@e7f4206ffea3"
+    },
+    {
+      "cells": {
+        "body.status": "c838b4aa9557e"
+      },
+      "draftKey": [
+        0,
+        1,
+        2
+      ],
+      "index": 42,
+      "reason": "needs-state-transition",
+      "rule": "valid-boundary",
+      "source": "plan-tests-ReservationService.update.json#2@e7f4206ffea3"
+    },
+    {
+      "cells": {
+        "body.status": "c838b4aa9557e"
+      },
+      "draftKey": [
+        0,
+        0,
+        0
+      ],
+      "index": 43,
+      "reason": "needs-state-transition",
+      "rule": "violation",
+      "source": "plan-tests-ReservationService.update.json#2@e7f4206ffea3"
+    },
+    {
+      "cells": {
+        "body.nights": "c39816fd96942"
+      },
+      "draftKey": [
+        0,
+        1,
+        0
+      ],
+      "index": 44,
+      "reason": "input-contradiction",
+      "rule": "valid-boundary",
+      "source": "plan-tests-ReservationService.update.json#3@e731e6910ece"
+    },
+    {
+      "cells": {
+        "body.nights": "c39cc5b904c3f"
+      },
+      "draftKey": [
+        0,
+        0,
+        0
+      ],
+      "index": 45,
+      "reason": "input-contradiction",
+      "rule": "violation",
+      "source": "plan-tests-ReservationService.update.json#3@e731e6910ece"
+    },
+    {
+      "cells": {
+        "body.nights": "c39816fd96942"
+      },
+      "draftKey": [
+        0,
+        1,
+        0
+      ],
+      "index": 46,
+      "reason": "needs-state-transition",
+      "rule": "valid-boundary",
+      "source": "plan-tests-ReservationService.update.json#5@b004d07f8e2d"
+    },
+    {
+      "cells": {
+        "body.nights": "c248411778591"
+      },
+      "draftKey": [
+        0,
+        1,
+        1
+      ],
+      "index": 47,
+      "reason": "needs-state-transition",
+      "rule": "valid-boundary",
+      "source": "plan-tests-ReservationService.update.json#5@b004d07f8e2d"
+    },
+    {
+      "cells": {
+        "body.nights": "c248411778591"
+      },
+      "draftKey": [
+        0,
+        0,
+        0
+      ],
+      "index": 48,
+      "reason": "needs-state-transition",
+      "rule": "violation",
+      "source": "plan-tests-ReservationService.update.json#5@b004d07f8e2d"
+    },
+    {
+      "cells": {},
+      "draftKey": null,
+      "index": 49,
+      "reason": "no-condition",
+      "rule": "item",
+      "source": "plan-tests-ReservationService.update.json#6@5c2fb62f8917"
+    }
+  ],
+  "version": 1
+}

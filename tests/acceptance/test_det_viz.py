@@ -107,7 +107,8 @@ def test_req201_factors_real():
     jsonschema.validate(factors, _schema("factors.schema.json"))
     assert len(factors["endpoints"]) == 17
     assert sum(1 for endpoint in factors["endpoints"] if endpoint["fields"] == []) == 6
-    assert len(factors["cases"]) == 80
+    # pairwise가 켜진 run이면 pairwise 케이스가 더해진다(기존 80개 + pairwise)
+    assert len(factors["cases"]) == BASE_CASES + _pairwise_count()
     assert [item["index"] for item in factors["unresolved"]] == list(range(50))
     assert all(item["source"] for item in factors["unresolved"])
 
@@ -155,6 +156,13 @@ def test_req202_class_counts_real():
 
 
 # --- REQ-203 ----------------------------------------------------------------------------------------------------
+BASE_CASES = 80  # 기준 스냅샷 det-da70932c-r1의 케이스 수(pairwise 도입 전)
+
+
+def _pairwise_count() -> int:
+    return sum(1 for case in _cases()["cases"] if case["rule"] == "pairwise")
+
+
 def _digests(root: Path) -> dict[str, str]:
     """cases.json, features/**, glue/** 의 상대경로 → sha256."""
     files = [root / "cases.json"]
@@ -164,13 +172,24 @@ def _digests(root: Path) -> dict[str, str]:
 
 
 def test_req203_cases_unchanged():
-    """REQ-203: 새 generation의 cases.json·features·glue가 기준 스냅샷과 바이트 단위로 같다."""
+    """REQ-203: 기존(pairwise가 아닌) 생성 결과는 기준 스냅샷과 같다. pairwise가 켜진 run이면 pairwise 케이스만 더해진다:
+    glue와 pairwise 시나리오가 없는 feature는 바이트 동일, pairwise 시나리오가 붙은 feature는 기준 내용이 앞부분(접두)이고,
+    cases.json의 pairwise가 아닌 케이스 항목은 기준과 같다."""
     previous = Path(_session()["previousCasesDir"])
     assert previous.is_dir(), previous
-    current = _digests(_generation_dir())
+    gen_dir = _generation_dir()
+    current = _digests(gen_dir)
     baseline = _digests(previous)
     assert sorted(current) == sorted(baseline)
-    assert current == baseline
+    for relative, digest in baseline.items():
+        if relative == "cases.json" or digest == current[relative]:
+            continue
+        old, new = (previous / relative).read_bytes(), (gen_dir / relative).read_bytes()
+        assert relative.startswith("features/") and new.startswith(old.rstrip(b"\n")), relative
+        assert b"pairwise" in new[len(old.rstrip(b"\n")):], relative
+    old_cases = json.loads((previous / "cases.json").read_text(encoding="utf-8"))["cases"]
+    new_cases = [case for case in _cases()["cases"] if case["rule"] != "pairwise"]
+    assert new_cases == old_cases
 
 
 # --- REQ-204 ----------------------------------------------------------------------------------------------------
@@ -212,7 +231,7 @@ def test_req207_page_and_links():
     from td import detviz  # det-viz 스키마는 factors 스키마를 합성해 검증한다(스키마 검증만 쓰고 집계 계산은 쓰지 않는다)
     detviz.validate(viz)
     case_ids = {case["id"] for case in _cases()["cases"]}
-    assert len(case_ids) == 80 and set(viz["caseResults"]) == case_ids
+    assert len(case_ids) == BASE_CASES + _pairwise_count() and set(viz["caseResults"]) == case_ids
 
     compare = _read_json(compare_dir / "compare.json")
     assert compare["deterministic"]["viz"]["status"] == "ok"
@@ -369,7 +388,7 @@ def test_req208_recount():
         assert summary[key] == want_summary[key], key
     assert 0 < summary["classesCovered"] <= 55 and 0 < summary["pairsCovered"] <= 434
     assert summary["outOfModel"] == want_summary["outOfModel"] == OUT_OF_MODEL
-    assert want_summary["inModel"] == 53
+    assert want_summary["inModel"] == 53 + _pairwise_count()  # pairwise 케이스는 모두 모델 안이다(REQ-215)
     assert (summary["endpoints"], summary["fields"], summary["classes"], summary["pairsTotal"]) == (17, 26, 55, 434)
 
 

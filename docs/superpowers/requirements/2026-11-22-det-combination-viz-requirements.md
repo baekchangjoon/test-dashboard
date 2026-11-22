@@ -33,6 +33,7 @@
 ### REQ-203 생성 결과 불변 (Must, Unit+E2E)
 - Given: 기준 스냅샷 `e2e/generated/petclinic/det/det-da70932c-r1/`(지우지 않는다).
 - Then: 새 generation의 `cases.json`과 `features/` 아래 모든 파일의 상대경로 집합·sha256이 기준과 같다. `glue/`도 같다(고정 glue).
+  det pairwise가 켜진 run이면: pairwise가 아닌 케이스 항목은 기준과 같고, pairwise 시나리오가 붙은 feature는 기준 내용이 앞부분이며 나머지 파일은 바이트 동일하다.
   단위는 `tests/fixtures/det/petclinic` 입력으로, E2E는 실제 run의 generation으로 확인한다.
 
 ### REQ-204 케이스 칸 규칙 (Must, Unit+E2E)
@@ -128,7 +129,7 @@
 | REQ-211 | 화면 동작 | test_det_viz.py::test_req211_browser<br>test_unit_detviz.py::test_req211_hostile_dom<br>test_unit_detviz.py::test_req211_static_rules<br>test_unit_detviz.py::test_req211_no_page_scroll_390 | E2E/Unit | 🟢 passed |
 | REQ-212 | 모듈 경계 | test_unit_detviz.py::test_req212_source_checksum_unaffected | Unit | 🟢 passed |
 | REQ-213 | 결과 결합 | test_unit_detviz.py::test_req213_status_mapping<br>test_det_viz.py::test_req213_passed_matches_summary | Unit/E2E | 🟢 passed |
-| REQ-215 | pairwise 케이스 표시 | test_unit_pairwise.py::test_req215_pairwise_cases_in_factors<br>test_det_viz.py::test_req208_recount(pairwise run) | Unit/E2E | ⚪ |
+| REQ-215 | pairwise 케이스 표시 | test_unit_pairwise.py::test_req215_pairwise_cases_in_factors<br>test_det_viz.py::test_req208_recount(pairwise run) | Unit/E2E | 🟢 passed |
 | REQ-214 | 문서 갱신 | test_unit_detviz.py::test_req214_docs | Unit | 🟢 passed |
 
-커버리지 대상: REQ-201~215(15건). 제외: 없음. 상태 기준: run `20261122-074004Z-b6f9393-manual-5a8df216`(게시 `_test/det-viz-20261122c/`, det generation `det-a6397f85-r1`), E2E 16 passed(det_viz_e2e 9 + det_e2e 7), 단위·통합 테스트. 매트릭스 커버리지 14/14.
+커버리지 대상: REQ-201~215(15건). 제외: 없음. 상태 기준(시각화·pairwise 병합 후): run `20261122-143840Z-b6f9393-manual-0f579dc7`(게시 `_test/det-combined-20261122b/`, det `det-45f35ad4-r1`, pairwise 8케이스 포함), E2E 24 passed(det_viz_e2e 9 + det_pairwise_e2e 8 + det_e2e 7). 매트릭스 커버리지 15/15.
