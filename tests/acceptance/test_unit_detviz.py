@@ -509,7 +509,11 @@ def _small(tmp_path):
     from test_unit_detgen import make_det_results
     gen_dir, s07_dir = make_det_results(tmp_path, rows=_small_rows())
     factors, ids = _small_factors()
-    # 케이스 파일의 unresolved도 엔드포인트를 갖게 한다(시각화는 칸의 클래스로 판단하지만 형식은 실제와 같게).
+    # 실제 cases.json처럼 생성 불가 항목이 endpoint를 갖게 한다(집계는 칸의 클래스로 판정하므로 둘이 일치해야 한다).
+    cases_doc = json.loads((gen_dir / "cases.json").read_text(encoding="utf-8"))
+    owner = {0: "PUT /b", 1: "POST /a"}
+    cases_doc["unresolved"] = [{"source": f"src:{i}", "reason": "r", "endpoint": owner[i]} for i in (0, 1)]
+    (gen_dir / "cases.json").write_text(json.dumps(cases_doc), encoding="utf-8")
     (gen_dir / "factors.json").write_text(json.dumps(factors, ensure_ascii=False, sort_keys=True), encoding="utf-8")
     return gen_dir, s07_dir, factors, ids
 
@@ -622,7 +626,64 @@ def test_req212_source_checksum_unaffected():
     from td.detgen import stage
     names = {path.name for path in stage.SOURCE_DIR.glob("*.py")}
     assert "detviz.py" not in names
-    assert not (stage.SOURCE_DIR / "detviz.py").exists()
-    detviz_py = Path(stage.__file__).resolve().parents[1] / "detviz.py"
-    assert detviz_py.is_file() and detviz_py.parent != stage.SOURCE_DIR
     assert not any(name in ("detviz.js", "det.html.j2") for name in names)
+    td_dir = stage.SOURCE_DIR.parent
+    assert (td_dir / "detviz.py").is_file()
+    before = stage.source_checksum()
+    scratch = td_dir / "detviz_scratch_probe.py"
+    try:
+        scratch.write_text("# 체크섬 대상이 아님을 보이는 임시 파일\n", encoding="utf-8")
+        assert stage.source_checksum() == before
+    finally:
+        scratch.unlink(missing_ok=True)
+    assert stage.source_checksum() == before
+
+
+def test_build_rejects_bad_cases_json(tmp_path):
+    from td import detviz
+    gen_dir, s07_dir, _factors, _ids = _small(tmp_path)
+    cases_path = gen_dir / "cases.json"
+    good = cases_path.read_text(encoding="utf-8")
+    for bad in ("not json", "[]", json.dumps({"cases": "x"}),
+                json.dumps({"cases": [{"id": "a"}]})):
+        cases_path.write_text(bad, encoding="utf-8")
+        with pytest.raises(ValueError):
+            detviz.build(gen_dir, s07_dir)
+    cases_path.unlink()
+    with pytest.raises(ValueError):
+        detviz.build(gen_dir, s07_dir)
+    cases_path.write_text(good, encoding="utf-8")
+    detviz.build(gen_dir, s07_dir)
+
+def test_validate_composes_factors_schema(tmp_path):
+    """det-viz 스키마가 factors.schema.json을 실제로 합성한다: factors가 어긋난 문서는 거부된다."""
+    from td import detviz
+    gen_dir, s07_dir, _factors, _ids = _small(tmp_path)
+    doc = detviz.build(gen_dir, s07_dir)
+    assert "$defs" not in json.loads(detviz.SCHEMA_PATH.read_text(encoding="utf-8"))
+    broken = copy.deepcopy(doc)
+    broken["factors"]["endpoints"][0]["fields"][0]["classes"][1]["id"] = "not-a-class-id"
+    with pytest.raises(jsonschema.ValidationError):
+        detviz.validate(broken)
+    broken = copy.deepcopy(doc)
+    broken["factors"]["version"] = 2
+    with pytest.raises(jsonschema.ValidationError):
+        detviz.validate(broken)
+
+
+def test_unresolved_endpoint_mapping_petclinic(generated):
+    """칸의 클래스로 정한 생성 불가 슬롯의 엔드포인트가 cases.json unresolved[index].endpoint와 같다."""
+    made = generated("petclinic")
+    owners = {}
+    for entry in made.factors["endpoints"]:
+        for field in entry["fields"]:
+            for klass in field["classes"]:
+                owners[klass["id"]] = entry["endpoint"]
+    checked = 0
+    for slot in made.factors["unresolved"]:
+        if not slot["cells"]:
+            continue
+        by_cells = {owners[class_id] for class_id in slot["cells"].values()}
+        assert by_cells == {made.cases_doc["unresolved"][slot["index"]]["endpoint"]}, slot["index"]
+        checked += 1
+    assert checked > 0

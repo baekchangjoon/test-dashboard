@@ -20,7 +20,9 @@ __all__ = ["FactorsMissing", "build", "validate"]
 VERSION = 1
 FACTORS_FILE = "factors.json"
 CASES_FILE = "cases.json"
-SCHEMA_PATH = Path(__file__).resolve().parent / "schemas" / "det-viz.schema.json"
+SCHEMA_DIR = Path(__file__).resolve().parent / "schemas"
+SCHEMA_PATH = SCHEMA_DIR / "det-viz.schema.json"
+FACTORS_SCHEMA_PATH = SCHEMA_DIR / "factors.schema.json"
 
 
 class FactorsMissing(Exception):
@@ -124,7 +126,16 @@ def build(gen_dir: Path, s07_dir: Path) -> dict:
     if not factors_path.is_file():
         raise FactorsMissing(str(factors_path.name))
     factors = _read_json(factors_path)
-    cases = _read_json(gen_dir / CASES_FILE)["cases"]
+    try:
+        cases_doc = _read_json(gen_dir / CASES_FILE)
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"{CASES_FILE}을 읽을 수 없다: {exc}") from exc
+    if not isinstance(cases_doc, dict) or not isinstance(cases_doc.get("cases"), list):
+        raise ValueError(f"{CASES_FILE} 형식이 맞지 않는다(cases 목록 필요)")
+    cases = cases_doc["cases"]
+    for case in cases:
+        if not isinstance(case, dict) or not isinstance(case.get("id"), str) or not isinstance(case.get("endpoint"), str):
+            raise ValueError(f"{CASES_FILE}의 케이스에 id 또는 endpoint가 없다: {case!r:.80}")
     case_results = _case_results(cases, gen_dir, s07_dir)
     return {"version": VERSION, "genId": gen_dir.name, "factors": factors, "caseResults": case_results,
             "aggregates": _aggregates(factors, case_results)}
@@ -132,4 +143,20 @@ def build(gen_dir: Path, s07_dir: Path) -> dict:
 
 def validate(doc: dict) -> None:
     """det-viz.schema.json 검증. 어긋나면 jsonschema.ValidationError."""
-    jsonschema.validate(doc, _read_json(SCHEMA_PATH))
+    jsonschema.validate(doc, _composed_schema())
+
+
+def _composed_schema() -> dict:
+    """det-viz 스키마의 `#/$defs/factors`에 factors.schema.json을 넣는다(정의 중복 방지).
+    factors 스키마 자신의 `$defs`(classId 등)는 루트 `$defs`로 올린다. 이름이 겹치면 오류다."""
+    schema = _read_json(SCHEMA_PATH)
+    factors = _read_json(FACTORS_SCHEMA_PATH)
+    inner = factors.pop("$defs", {})
+    factors.pop("$schema", None)
+    defs = schema.setdefault("$defs", {})
+    clash = (set(inner) | {"factors"}) & set(defs)
+    if clash:
+        raise ValueError(f"스키마 $defs 이름 충돌: {sorted(clash)}")
+    defs.update(inner)
+    defs["factors"] = factors
+    return schema
