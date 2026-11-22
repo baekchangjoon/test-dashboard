@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import posixpath
 import re
 import subprocess
 import xml.etree.ElementTree as ET
@@ -678,6 +679,27 @@ def test_req139_production_site_paths(baseline_site, browser):
         assert baseline_site.get("_design/project/", host=host)[0] != 200, host
     old = baseline_site.get(f"suts/{baseline_site.sut}/runs/{OLD_RUN_ID}/index.html")
     assert old[0] == 200 and b"static/site.css" in old[1]
+    # 띠의 SUT 링크: run 페이지와 띠를 끼운 리포트에서 `a.tdnav-sut`의 href를 읽어 그 주소를 따라가면 과제 페이지에 닿는다
+    project_path = f"projects/{baseline_site.project}/index.html"
+    landing_path = f"suts/{baseline_site.sut}/index.html"
+    for host, page_url in (("reports", baseline_site.url), ("dash", baseline_site.dash_url)):
+        for report in ("index.html", "hotspot/hotspots.html"):
+            source = baseline_site.run_path + report
+            status, body = baseline_site.get(source, host=host)
+            href = re.search(r'<a class="tdnav-sut" href="([^"]+)"', body.decode())
+            assert status == 200 and href, (host, source)
+            target = posixpath.normpath(posixpath.join(posixpath.dirname(source), href.group(1)))
+            assert target == landing_path, (host, source, href.group(1))
+            landing_status, landing = baseline_site.get(target, host=host)
+            assert landing_status == 200 and f'id="to-project" href="../../{project_path}"' in landing.decode(), (host, target)
+        page = open_page(browser, page_url(baseline_site.run_path + "index.html"))
+        try:
+            page.click("a.tdnav-sut")
+            page.wait_for_url(page_url(project_path), timeout=15000)
+            assert page.locator("#tabs [role=tab]").count() >= 1, host
+        finally:
+            page.context.close()
+        assert baseline_site.get(project_path, host=host)[0] == 200, host
 
 
 def test_req140_production_site_values(baseline_site, browser):
@@ -700,9 +722,11 @@ def test_req140_production_site_values(baseline_site, browser):
     try:
         with_rate = sum(1 for r in runs if r["kpis"]["passRate"] is not None)
         assert page.locator('figure.trend[data-metric="tests.passRate"] .pt').count() == min(30, with_rate)
-        run = json.loads((baseline_site.run_dir / "run.json").read_text())
+        # '한눈에'는 최신 run(runs.json에서 runId가 가장 큰 run)의 값을 보여 준다. 기준 run이 아니라 그 run과 비교한다
+        latest_run = max(runs, key=lambda entry: entry["runId"])
+        assert latest_run["kpis"]["passRate"] is not None and latest_run["kpis"]["line"] is not None, latest_run
         page.click("#tab-overview")
-        assert page.inner_text('#panel-overview .kpi[data-metric="tests.passRate"] b') == f'{run["kpis"]["tests"]["passRate"] * 100:.1f}%'
-        assert page.inner_text('#panel-overview .kpi[data-metric="coverage.line"] b') == f'{run["kpis"]["blackbox"]["line"] * 100:.1f}%'
+        assert page.inner_text('#panel-overview .kpi[data-metric="tests.passRate"] b') == f'{latest_run["kpis"]["passRate"] * 100:.1f}%'
+        assert page.inner_text('#panel-overview .kpi[data-metric="coverage.line"] b') == f'{latest_run["kpis"]["line"] * 100:.1f}%'
     finally:
         page.context.close()

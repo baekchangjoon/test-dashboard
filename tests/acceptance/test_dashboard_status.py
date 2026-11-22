@@ -41,6 +41,9 @@ def test_req082_missing_and_boundaries():
     assert ev({"sonar.gate": "OK"}).level == "good"
     assert ev(ci(4, 0)).partial is True and ev({**ci(4, 0), "sonar.gate": "OK"}).partial is False
     assert ev({"sonar.gate": "OK"}, has_repo=False).partial is False
+    # 경계에서 걸린 규칙의 사유도 그 값으로 채워지고, 비교할 수 없는 타입(문자열 "3")은 규칙에 걸리지 않는다
+    assert ev({**ci(5, 1), "sonar.gate": "OK"}).reasons == ("최근 CI 5회 중 1회 실패",)
+    assert ev({**OKCI, "sonar.gate": "OK", "sonar.vulnerabilities": "3"}).level == "good"
 
 
 def test_req084_headline_selection():
@@ -53,9 +56,10 @@ def test_req084_headline_selection():
 
 
 def test_rules_text_shows_thresholds():
-    lines = dashboard_config.rules_text(CFG)
-    assert "주의: CI 실행 수 ≥ 5 그리고 CI 성공률 < 90.0% / Sonar 취약점 > 0" in lines
-    assert lines[0].startswith("위험: Sonar 게이트 = 실패")
+    assert dashboard_config.rules_text(CFG) == [
+        "위험: Sonar 게이트 = 실패 / 최근 CI 실패 = 예 / 실패한 검사 수 > 0",
+        "주의: CI 실행 수 ≥ 5 그리고 CI 성공률 < 90.0% / Sonar 취약점 > 0",
+    ], "규칙이 없는 수준(측정 없음, 양호)은 줄이 없다"
 
 
 def test_req083_threshold_change_changes_verdict(tmp_path):
