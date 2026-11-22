@@ -101,7 +101,7 @@ PICT 확보는 brew가 아니라 **고정 커밋 소스 빌드**로 한다(`micr
 | literal | 1, "VIP", "today+1" | 값 같음 | 그 값 | 그대로 |
 | omit | 필드 생략 | omit끼리 같음 | `OMIT` | 보내지 않음 |
 | null | 명시 null | null끼리 같음 | None 값 | null |
-| uniq | `Uniq` | 기호로 비교: uniq 후보는 필드당 최대 1개(baseline)이고 서로 같다 | 판단 불가(길이·형식 조건은 baseline이 이미 만족시킨 형식으로 평가) | `uniq:<caseId>` |
+| uniq | `Uniq` | 기호로 비교: uniq 후보는 필드당 최대 1개이고 서로 같다 | `eqlit`/`neqlit`은 판단 가능(`uniq:<caseId>`는 `uniq:`로 시작하지 않는 리터럴과 같지 않다 → eqlit 거짓, neqlit 참). 길이·형식은 baseline이 이미 만족시킨 형식으로 평가. 그 밖은 판단 불가 | `uniq:<caseId>` |
 | spread | `Spread(lo,hi,excluded)` | 같은 범위끼리 같음 | 범위 대표(경계 제외 내부)로 평가 | 기존 `_finalize`와 같이 caseId 해시 |
 
 `BASE` 자리표시는 `base(ignore_null=True)` 값으로 바꿔 넣는다.
@@ -132,7 +132,7 @@ rel 가정: 종속 필드는 고정 극단값(예: 1,000,000)을 그대로 쓰�
   모두 참이면(또는 고정 원자식이 없으면) 남은 모델 원자식만으로 논리곱을 줄인다. 고정 원자식이 판단 불가면 보수적으로 "참"으로 본다. 단 count(pairwise 행은 선행 건수 0 → 거짓)·rel(고정 극단값과 기존 가정 → 거짓)·저장 상태(선행 생성 요청의 baseline 값으로 평가)는 고정 조건에서 판단 가능하므로 그 값을 쓴다.
 - 줄인 논리곱의 필드 후보 데카르트 곱을 열거해, `holds`로 모든 원자식이 참이 되는 조합마다 PICT 제약
   `IF [p0] = "v1" AND [p2] = "v0" THEN [p3] <> "v2";` 한 줄을 쓴다(PICT는 단독 `NOT (...)` 문장을 받지 않는다. 3.7.4에서 확인).
-  모델 원자식이 0개로 줄면(고정 원자식만으로 참) 그 엔드포인트의 모든 행이 오류이므로 `pairwise-infeasible`. 1개로 줄면 그 원자식을 참으로 만드는 후보를 필드에서 빼고 `dropped`에 `{address, reason: "reduced-single-atom"}`로 남긴다. 2개 이상이면 배제 줄을 만든다.
+  모델 원자식이 0개로 줄면: 고정 원자식이 모두 판단 가능하게 참이면 모든 행이 오류이므로 `pairwise-infeasible`, 판단 불가가 섞여 있으면 infeasible로 보지 않고 모든 행에 `undetermined:<addr>`를 단다. 1개로 줄면 그 원자식을 참으로 만드는 후보를 필드에서 빼고 `dropped`에 `{address, reason: "reduced-single-atom"}`로 남긴다. 2개 이상이면 배제 줄을 만든다(한 논리곱의 원자식은 서로 다른 필드다. 같은 필드 논리곱은 derive가 이미 `~`로 강등한다 — 코드에 assert).
 - `holds`가 None인 조합은 배제하지 않는다. 그 조합을 담은 행은 `assumes`에 `undetermined:<addr>`를 달고 보고에서 따로 센다.
 - 잔여 위험: 배제 줄 수 상한은 PICT 실행 시간을 제한하지 않는다. 24×12 모델에 쌍·삼중 배제를 섞은 실측에서 1,944줄이 154초였다(120초 초과 → det failed, 스냅샷 없음). 이번 SUT의 배제는 1~4줄이다.
 - 복잡도 상한(결정적): 필드당 후보 ≤ 12, 모델 파라미터 ≤ 24, 엔드포인트당 배제 줄 ≤ 20,000(`Σ_논리곱 Π_필드 후보 수`).
