@@ -135,7 +135,7 @@ rel 가정: 종속 필드는 고정 극단값(예: 1,000,000)을 그대로 쓰�
   모델 원자식이 0개로 줄면: 고정 원자식이 모두 판단 가능하게 참이면 모든 행이 오류이므로 `pairwise-infeasible`, 판단 불가가 섞여 있으면 infeasible로 보지 않고 모든 행에 `undetermined:<addr>`를 단다. 1개로 줄면 그 원자식을 참으로 만드는 후보를 필드에서 빼고 `dropped`에 `{address, reason: "reduced-single-atom"}`로 남긴다. 2개 이상이면 배제 줄을 만든다(한 논리곱의 원자식은 서로 다른 필드다. 같은 필드 논리곱은 derive가 이미 `~`로 강등한다 — 코드에 assert).
 - `holds`가 None인 조합은 배제하지 않는다. 그 조합을 담은 행은 `assumes`에 `undetermined:<addr>`를 달고 보고에서 따로 센다.
 - 잔여 위험: 배제 줄 수 상한은 PICT 실행 시간을 제한하지 않는다. 24×12 모델에 쌍·삼중 배제를 섞은 실측에서 1,944줄이 154초였다(120초 초과 → det failed, 스냅샷 없음). 이번 SUT의 배제는 1~4줄이다.
-- 복잡도 상한(결정적): 필드당 후보 ≤ 12, 모델 파라미터 ≤ 24, 엔드포인트당 배제 줄 ≤ 20,000(`Σ_논리곱 Π_필드 후보 수`).
+- 복잡도 상한(결정적): 필드당 후보 ≤ 12, 모델 파라미터 ≤ 24, 엔드포인트당 배제 줄 ≤ 20,000(`Σ_논리곱 Π_필드 후보 수`), 유효 order 튜플 수 ≤ 20,000(`Σ_파라미터 조합 Π 후보 수`, 실현 가능 상호작용 계산의 상한).
   넘으면 그 엔드포인트는 PICT를 부르지 않고 생성 불가 슬롯 `pairwise-too-large` 1건. 시간이 아니라 크기로 끊으므로 결과가 결정적이다.
 
 ### 5.4 생성
@@ -158,7 +158,7 @@ rel 가정: 종속 필드는 고정 극단값(예: 1,000,000)을 그대로 쓰�
 - 케이스 키 `pairwise`는 `cases.json` 케이스 항목의 새 선택 키다(기존 케이스에는 없음 → 기존 80개 바이트 불변 조건과 충돌하지 않도록,
   `_case_entry`는 pairwise 라벨이 없으면 키 자체를 쓰지 않는다).
 - 기존 케이스 우선: 정렬 키 앞에 규칙 우선순위(`pairwise`만 1, 나머지 0)를 둬 pairwise 초안이 항상 뒤에 온다. 따라서 기존 dedupe에서 기존 케이스가 남고
-  기존 id·pair는 바뀌지 않는다. 라벨이 모두 baseline인 행은 같은 엔드포인트의 기존 유효 케이스(baseline-valid, 없으면 happy) 중 요청이 같은 것이 있으면 만들지 않고 `rows[].mergedInto`에 그 id를 적는다. 없으면 pairwise 케이스로 남긴다.
+  기존 id·pair는 바뀌지 않는다. 라벨이 모두 v0(= baseline)인 행은 같은 엔드포인트의 기존 유효 케이스(baseline-valid, 없으면 happy) 중 요청이 같은 것이 있으면 만들지 않고 `rows[].mergedInto`에 그 id를 적는다. 없으면 pairwise 케이스로 남긴다.
 - 방어선: `_materialize`가 행을 거부하면(다른 조건 위반) 슬롯 `pairwise-row-invalid`. 기대값은 0건이고 E3·단위 테스트가 0건을 단언한다.
 - `REASONS`와 `_REASON_PRIORITY` 끝에 모두 `pairwise-unavailable, pairwise-too-large, pairwise-infeasible, pairwise-row-invalid` 순으로 4개를 더한다. `pairwise-unavailable`은 pict가 없을 때(det가 요청됐는데 `tools.lock` `pict: null`) 엔드포인트와 무관한 슬롯 1건이다.
 - 산출물 `pairwise.json`(스키마 `td/schemas/pairwise.schema.json`, 버전 1, `_COMPLETE` 체크섬 대상, 사이트에는 게시하지 않음):
