@@ -555,6 +555,9 @@ class _Deriver:
                 rows.append(row)
                 if valid is not None and all(label == "v0" for label in labels.values()):
                     self.baseline_rows.append((row, valid))  # id는 마무리 때 정해진다
+                    assumes = pairwise_mod.row_assumes_for(model, labels)
+                    if assumes:
+                        row["assumes"] = assumes  # 병합으로 사라지는 행의 가정을 잃지 않도록 pairwise.json에 남긴다
                     continue
                 self._pairwise_draft(ep, model, params, rels, sources, index, labels, row)
 

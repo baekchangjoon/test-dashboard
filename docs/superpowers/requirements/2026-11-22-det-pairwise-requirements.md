@@ -21,7 +21,7 @@
 
 ### REQ-302 S00 실패 격리 (Must, Int)
 - det 미요청 run의 S00은 pict를 준비하지 않는다(pict 저장소·`pict-src`를 대상으로 한 git 호출 0, make 호출 0; proxy shim이 그 밖의 git은 실제 바이너리로 넘긴다).
-- pict 준비는 독립 함수(`pipeline/lib/pict.sh`의 `td_prepare_pict <tools_dir> <out_json>`)로 테스트한다. 준비 실패 3종(pict 대상 git만 실패시키는 proxy shim, make 실패 shim, `TD_PICT_SMOKE_EXPECTED_OVERRIDE`로 스모크 불일치)에서 S00은 passed이고 `tools.lock`에 `pict: null`, `pictFailureReason`(300자 이하, 가림 적용)이 있다.
+- pict 준비는 독립 함수(`pipeline/lib/pict.sh`의 `td_prepare_pict <tools_dir> <out_json>`)로 테스트한다. 준비 실패 3종(pict 대상 git만 실패시키는 proxy shim, make 실패 shim, `TD_PICT_SMOKE_EXPECTED_OVERRIDE`로 스모크 불일치)에서 S00은 passed이고 `tools.lock`에 `pict: null`, `pictFailureReason`(고정 코드 `clone-failed|build-failed|smoke-mismatch`; 상세는 300자 이하·가림 적용으로 `S00/pict.json`에만)이 있다.
 
 ### REQ-303 pict 없음 상태 (Must, Int)
 - det가 요청됐는데 `tools.lock`이 없거나 `pict` 키가 없거나 `pict: null`인 run에서 det generation은 `degraded`(사유 `pairwise-unavailable`)이고, `cases.json` `unresolved`에 `{source: "tool:pict", reason: "pairwise-unavailable", endpoint: null, rule: "pairwise"}` 1건이 있다.
@@ -57,7 +57,7 @@
 
 ### REQ-308 pairwise 케이스 (Must, Unit)
 - 케이스: 규칙 `pairwise`, 기대 `{strict: "2xx", class: "2xx", source: "rule"}`, oracle `status`, `sources`는 번들 주소만(상위 REQ-105 검증기 통과), 케이스 키 `pairwise: {order, labels}`. 값 `transform`은 후보의 것을 그대로 둔다.
-- 정렬상 pairwise 초안은 기존 초안 뒤다. 라벨이 모두 baseline인 행: 같은 요청의 baseline-valid(없으면 happy)가 있으면 `mergedInto`에 그 id, 없으면 pairwise 케이스로 남는다(pairwise-kinds의 enum 전용 엔드포인트로 확인).
+- 정렬상 pairwise 초안은 기존 초안 뒤다. 라벨이 모두 v0(= baseline)인 행은 같은 엔드포인트의 baseline-valid(없으면 happy) 케이스로 병합한다(라벨 기준, `mergedInto`에 그 id). v0는 baseline 값이고 고정 필드도 baseline이라 요청이 같다는 전제이며, uniq·spread 자리표시는 케이스 id로만 달라진다(`test_req308_label_merge_premise`로 확인). 병합 행에 행 가정이 있으면 `pairwise.json` `rows[].assumes`에 남는다(`test_req308_merged_row_assumes_recorded`). 병합 대상이 없으면 pairwise 케이스로 남는다(pairwise-kinds의 enum 전용 엔드포인트로 확인).
 - rel 상대편 필드가 baseline이 아닌 케이스 `assumes`에 `rel-combined:<addr>`, 종속 필드의 기존 가정이 실린다.
 - `pairwise-row-invalid`는 controlled·mutated·petclinic·pairwise-kinds에서 0건이다.
 - `REASONS`·`_REASON_PRIORITY` 끝에 새 사유 4개(`pairwise-unavailable, pairwise-too-large, pairwise-infeasible, pairwise-row-invalid`)가 이 순서로 있고, unavailable·available의 `byReason`에 나온다. 기존 테스트 중 갱신 대상: `test_unit_detgen.py`의 케이스 키 집합 검사(`pairwise` 선택 키 허용), det 키 기대식.
@@ -117,7 +117,7 @@
 | REQ-305 | 후보 모델 | test_unit_pairwise.py::test_req305_candidate_sources (행별)<br>test_unit_pairwise.py::test_req305_kinds<br>test_unit_pairwise.py::test_req305_filter_and_fixed<br>test_unit_pairwise.py::test_req305_petclinic_model<br>test_unit_pairwise.py::test_req305_candidate_floor | Unit | 🟢 passed |
 | REQ-306 | 배제 조합 | test_unit_pairwise.py::test_req306_partial_evaluation (행별)<br>test_unit_pairwise.py::test_req306_petclinic_vip_exclusion<br>test_unit_pairwise.py::test_req306_exclusions_justified<br>test_unit_pairwise.py::test_req306_undetermined | Unit | 🟢 passed |
 | REQ-307 | 실행·분류 | test_unit_pairwise.py::test_req307_field_count<br>test_unit_pairwise.py::test_req307_rc_and_output_contract<br>test_unit_pairwise.py::test_req307_size_caps<br>test_det_pairwise_tool.py::test_req307_timeout_fails<br>test_unit_pairwise.py::test_req307_neutral_model_and_cleanup | Unit/Int | 🟢 passed |
-| REQ-308 | pairwise 케이스 | test_unit_pairwise.py::test_req308_case_shape<br>test_unit_pairwise.py::test_req308_order_and_merge<br>test_unit_pairwise.py::test_req308_rel_combined<br>test_unit_pairwise.py::test_req308_no_row_invalid<br>test_unit_pairwise.py::test_req308_reasons | Unit | 🟢 passed |
+| REQ-308 | pairwise 케이스 | test_unit_pairwise.py::test_req308_case_shape<br>test_unit_pairwise.py::test_req308_order_and_merge<br>test_unit_pairwise.py::test_req308_label_merge_premise<br>test_unit_pairwise.py::test_req308_merged_row_assumes_recorded<br>test_unit_pairwise.py::test_req308_rel_combined<br>test_unit_pairwise.py::test_req308_no_row_invalid<br>test_unit_pairwise.py::test_req308_reasons | Unit | 🟢 passed |
 | REQ-309 | 실현 가능 상호작용 | test_unit_pairwise.py::test_req309_feasible_interactions<br>test_det_pairwise.py::test_req309_feasible_interactions_real | Unit/E2E | 🟢 passed |
 | REQ-310 | 오류 회피 | test_unit_pairwise.py::test_req310_no_error_condition<br>test_det_pairwise.py::test_req310_real | Unit/E2E | 🟢 passed |
 | REQ-311 | 결정성 | test_unit_pairwise.py::test_req311_deterministic<br>test_unit_pairwise.py::test_req311_pict_rows_deterministic<br>test_unit_pairwise.py::test_req311_key_tag | Unit | 🟢 passed |
