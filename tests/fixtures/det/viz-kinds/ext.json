@@ -1,0 +1,79 @@
+{
+ "calls": [
+  {
+   "endpoint": "endpoint:POST /vk/items",
+   "handler": "ex.kinds.ItemController#put",
+   "method": "put",
+   "service": "ex.kinds.ItemService"
+  }
+ ],
+ "constants": [
+  {
+   "name": "SLOT_LIMIT",
+   "owner": "ex.kinds.ItemService",
+   "type": "int",
+   "value": 3
+  }
+ ],
+ "dtos": {
+  "ex.kinds.ItemForm": {
+   "fields": [
+    {
+     "name": "code",
+     "type": "java.lang.String"
+    },
+    {
+     "name": "note",
+     "type": "java.lang.String"
+    },
+    {
+     "name": "q",
+     "type": "java.lang.String"
+    },
+    {
+     "name": "qty",
+     "type": "int"
+    },
+    {
+     "name": "slot",
+     "type": "int"
+    }
+   ]
+  }
+ },
+ "endpoints": {
+  "endpoint:GET /vk/ping": {
+   "params": [],
+   "responseDto": null
+  },
+  "endpoint:POST /vk/items": {
+   "params": [
+    {
+     "defaultValue": null,
+     "index": 0,
+     "kind": "RequestBody",
+     "name": null,
+     "required": null,
+     "type": "ex.kinds.ItemForm"
+    },
+    {
+     "defaultValue": null,
+     "index": 1,
+     "kind": "RequestParam",
+     "name": null,
+     "required": false,
+     "type": "java.lang.String"
+    }
+   ],
+   "responseDto": null
+  }
+ },
+ "enums": {},
+ "exceptions": {
+  "ex.kinds.ItemInvalidException": {
+   "handler": "ex.kinds.ItemController#onInvalid",
+   "status": 400
+  }
+ },
+ "schema": 1
+}

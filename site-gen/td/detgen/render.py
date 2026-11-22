@@ -16,6 +16,8 @@
 - `empty-body` 규칙은 본문 없이 보낸다(`And the request has no body`). 그 밖의 POST/PUT/PATCH는 본문 필드가 없어도 `{}`를 보낸다(glue).
 - `cases.json`: 키 정렬·들여쓰기 2·끝 줄바꿈. values는 `body.<f>`/`query.<f>`/`path.<f>` 키(통제 fixture의 기대 목록과 같은 표기)로
   모으고, 재현에 필요한 `auth`와 `setup`을 덧붙인다.
+- `factors.json`(det-viz 설계 §5.3): `Derivation.factors`가 비어 있지 않을 때만 쓴다. 키 정렬·들여쓰기 2·끝 줄바꿈.
+  `cases.json`과 feature 내용에는 영향이 없다.
 
 이 모듈에는 SUT 이름·값을 두지 않는다. 모든 이름과 값은 `Derivation`에서 온다.
 """
@@ -37,6 +39,7 @@ GLUE_DIR = Path(__file__).resolve().parents[3] / "e2e" / "det-glue"
 FEATURES_DIR = "features"
 GLUE_OUT_DIR = "glue"
 CASES_FILE = "cases.json"
+FACTORS_FILE = "factors.json"
 _CASE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")
 _FIELD_NAME = re.compile(r'^[^"\s]+$')
 _PATH_VARIABLE = re.compile(r"\{([^}/]+)}")
@@ -226,7 +229,7 @@ def _cases_text(derivation: Derivation) -> str:
 # --- 진입점 ----------------------------------------------------------------------------------------
 
 def render(derivation: Derivation, out_dir: Path) -> list[str]:
-    """generation 디렉터리(`out_dir`)에 feature, glue, cases.json을 쓰고 쓴 파일의 상대 경로(정렬)를 돌려준다.
+    """generation 디렉터리(`out_dir`)에 feature, glue, cases.json(그리고 factors.json)을 쓰고 쓴 파일의 상대 경로(정렬)를 돌려준다.
     모든 내용을 먼저 만든 뒤 쓴다(규약 위반이면 RenderError로 아무것도 쓰지 않는다)."""
     ids = [case.id for case in derivation.cases]
     if len(ids) != len(set(ids)):
@@ -240,6 +243,8 @@ def render(derivation: Derivation, out_dir: Path) -> list[str]:
     for label in sorted(by_endpoint):
         contents[f"{FEATURES_DIR}/{names[label]}"] = _feature_text(label, by_endpoint[label], timezone_step).encode("utf-8")
     contents[CASES_FILE] = _cases_text(derivation).encode("utf-8")
+    if derivation.factors:
+        contents[FACTORS_FILE] = (json.dumps(derivation.factors, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
     glue = _glue_files(GLUE_DIR)
     if not glue:
         raise RenderError(f"고정 glue가 없다: {GLUE_DIR.name}")
