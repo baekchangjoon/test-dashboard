@@ -878,6 +878,9 @@ def test_req209_rerender_error(tmp_path, monkeypatch):
     compare.validate(document)
     assert document["deterministic"]["viz"]["status"] == "failed"
     assert "compare/det.html" not in index
+    # 이미 그린 공통 띠(compare·coverage·sonar 등 게시 사본의 모든 HTML)에도 사라진 det.html 링크가 없다
+    for page_path in site.rglob("*.html"):
+        assert "det.html" not in page_path.read_text(encoding="utf-8"), page_path
     # 원본 run 디렉터리는 건드리지 않는다
     assert _compare_doc(out)["deterministic"]["viz"]["status"] == "ok" and (out / "det.html").is_file()
 
@@ -931,13 +934,10 @@ def test_req209_missing_viz_key(tmp_path, monkeypatch):
 HOSTILE_EXTRA = '<img src=x onerror="window.__pwned=1"> <b onclick="window.__pwned=2">x</b></script>'
 
 
-@pytest.fixture(scope="module")
-def det_browser():
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        instance = playwright.chromium.launch()
-        yield instance
-        instance.close()
+@pytest.fixture
+def det_browser(browser):
+    """세션 공용 chromium(conftest `browser`). sync_playwright를 따로 열면 같은 세션의 다른 브라우저 테스트와 충돌한다."""
+    return browser
 
 
 def _open_det(browser, html_path: Path, **context_kwargs):

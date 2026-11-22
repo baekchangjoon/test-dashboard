@@ -565,13 +565,17 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"status": "failed", "reason": str(exc).splitlines()[0][:1500]}, ensure_ascii=False))
         return 0
     out_dir.mkdir(parents=True, exist_ok=True)
-    _build_det_viz(Path(args.run_dir), out_dir, document)   # viz ok일 때만 build 1회
-    render_page(out_dir, document)                           # det.html(실패 시 viz failed) → compare.html
-    viz = _viz_block(document)
-    if viz is None or viz.get("status") != "ok":
-        _remove_det_files(out_dir)   # absent·failed·det 블록 null·failed 변형: 이전 run의 낡은 파일 방지
-    validate(document)
-    write_document(out_dir, document)
+    try:
+        _build_det_viz(Path(args.run_dir), out_dir, document)   # viz ok일 때만 build 1회
+        render_page(out_dir, document)                           # det.html(실패 시 viz failed) → compare.html
+        viz = _viz_block(document)
+        if viz is None or viz.get("status") != "ok":
+            _remove_det_files(out_dir)   # absent·failed·det 블록 null·failed 변형: 이전 run의 낡은 파일 방지
+        validate(document)
+        write_document(out_dir, document)
+    except BaseException:
+        _remove_det_files(out_dir)   # S12가 실패로 끝나면 이번 run의 det 파일을 남기지 않는다
+        raise
     summary = {"generation": document["verdict"]["generation"], "effect": document["verdict"]["effect"],
                "label": document["label"], "arms": {name: entry["status"] for name, entry in document["arms"].items()},
                "endpointDenominator": document["endpoints"]["denominator"], "oracleRules": document["oracle"]["rules"],

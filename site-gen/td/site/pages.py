@@ -281,8 +281,11 @@ def render_run(run_dir, out_dir) -> Path:
                               "note": REPORT_NOTES.get(f"{report_key}{entry}") or REPORT_NOTES.get(report_key, "")})
     rerender_own_reports(rerender_targets, links, sut_name=run.get("sut"), run_id=run.get("runId"))
     # 다시 렌더하다 진입 파일이 지워질 수 있다(예: 게시 사본의 det.html 렌더 실패). 존재 조건부 링크는 렌더 뒤 다시 거른다.
-    links = [link for link in links
-             if not any(link["href"].startswith(rel) for rel in LINK_ONLY_IF_PRESENT) or (out_dir / link["href"]).exists()]
+    kept = [link for link in links
+            if not any(link["href"].startswith(rel) for rel in LINK_ONLY_IF_PRESENT) or (out_dir / link["href"]).exists()]
+    if len(kept) != len(links):   # 이미 그린 공통 띠에 사라진 파일의 링크가 남지 않도록 줄어든 링크로 한 번 더 그린다
+        links = kept
+        rerender_own_reports(rerender_targets, links, sut_name=run.get("sut"), run_id=run.get("runId"))
     nav_missing = inject_nav(out_dir, links, sut_name=run.get("sut"), run_id=run.get("runId"))
     record = out_dir / RENDER_RECORD
     if nav_missing:
