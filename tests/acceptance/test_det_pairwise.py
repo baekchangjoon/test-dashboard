@@ -92,11 +92,8 @@ def _candidate_matches(candidate: dict, values: dict, key: str) -> bool:
         excluded = bounds.get("excluded") or []
         return isinstance(actual, (int, float)) and bounds["lo"] <= actual <= bounds["hi"] and actual not in excluded
     if kind == "literal":
-        if actual == candidate.get("value"):
-            return True
-        # 값 변환(transform)이 붙은 후보는 케이스 값이 변환 결과다: 같은 transform이 기록된 경우만 인정한다
-        transform = candidate.get("transform")
-        return bool(transform) and isinstance(entry, dict) and entry.get("transform") == transform
+        expected = candidate.get("value")
+        return type(actual) is type(expected) and actual == expected  # bool과 int는 같지 않다
     raise AssertionError(f"알 수 없는 후보 종류: {kind}")
 
 
@@ -143,7 +140,7 @@ def _oracle(gen_dir: Path, order: int | None = None) -> dict:
         if doc.get("skipped") or not doc.get("rows"):
             result[label] = {"feasible": 0, "covered": 0, "uncovered": [], "skipped": doc.get("skipped")}
             continue
-        effective = min(order, doc.get("effectiveOrder") or order, len(doc["params"]))
+        effective = min(order, len(doc["params"]))  # 문서의 effectiveOrder를 믿지 않고 독립 계산
         feasible = _feasible_tuples(doc, effective)
         candidates = {p["param"]: {c["label"]: c for c in p["candidates"]} for p in doc["params"]}
         keys = {p["param"]: f"{p['loc']}.{p['field']}" for p in doc["params"]}
@@ -188,10 +185,14 @@ def test_req304_inputs_identical_real(run_dir, run3_bundle_dir, run3_run_dir):
     bundle = run_dir / "S06" / "bundles" / "det"
     names = sorted(p.name for p in bundle.iterdir() if p.is_file())
     assert names == sorted(p.name for p in run3_bundle_dir.iterdir() if p.is_file()), "번들 파일 목록이 run3과 다르다"
+    # STAMP.json은 harness 다이제스트·input_hash를 품으므로 바이트 비교에서 빼고 files 항목으로 비교한다
     for name in names:
-        if name == "harness.json":
+        if name in ("harness.json", "STAMP.json"):
             continue
         assert _sha256(bundle / name) == _sha256(run3_bundle_dir / name), f"{name}이 run3 번들과 다르다"
+    stamp_files = lambda directory: {k: v for k, v in _read_json(directory / "STAMP.json")["files"].items()  # noqa: E731
+                                     if k != "harness.json"}
+    assert stamp_files(bundle) == stamp_files(run3_bundle_dir), "STAMP.json files 항목(harness.json 제외)이 run3과 다르다"
     current = _read_json(bundle / "harness.json")
     assert "pairwiseOrder" in current, "harness.json에 pairwiseOrder가 없다"
     current.pop("pairwiseOrder")
@@ -281,6 +282,8 @@ class _Evaluator:
         return self.pos < len(self.tokens) and self.tokens[self.pos][1] in values
 
     def _take(self):
+        if self.pos >= len(self.tokens):
+            raise Unsupported("조건식이 중간에 끝났다")
         token = self.tokens[self.pos]
         self.pos += 1
         return token
@@ -330,7 +333,7 @@ class _Evaluator:
         if name == "req" and self._peek("."):
             self._take()
             field = self._take()[1]
-            if not (self._peek("(") and self.tokens[self.pos + 1][1] == ")"):
+            if not (self._peek("(") and self.pos + 1 < len(self.tokens) and self.tokens[self.pos + 1][1] == ")"):
                 raise Unsupported("req 접근은 req.x() 형태만 지원한다")
             self.pos += 2
             if self._peek("."):
@@ -389,6 +392,8 @@ class _Evaluator:
         return {"<": left < right, "<=": left <= right, ">": left > right, ">=": left >= right}[kind]
 
 
+# 주의: `req.nights() != null`(update) 같은 원자식 하나짜리 오류 조건은 의도된 것이다. 생성기는 그 조건을 참으로 만드는
+# 후보를 버리므로(설계 5.2 후보 필터) 평가기가 그 조건을 위반으로 보고하는 것이 정상 동작이다.
 _ERROR_EXPECTED = re.compile(r"Exception|code=4\d\d")
 
 
@@ -424,6 +429,19 @@ def _evaluate_error_conditions(run: Path, pairwise_cases: list[dict]) -> tuple[l
                 if evaluator.evaluate(case["values"]) is True:
                     violations.append((case["id"], entry["condition"]))
     return evaluated, skipped, violations
+
+
+def test_req310_evaluator_self_check():
+    """평가기 자체 점검(세션 불필요): VIP×포인트 조건이 위반 값에서 True, 정상 값에서 False, 잘린 조건은 Unsupported."""
+    condition = "req.priceTier() == PriceTier.VIP && req.loyaltyPoints() < 500"
+    make = lambda text: _Evaluator(text, {"priceTier", "loyaltyPoints"}, {}, {"PriceTier": {"BASIC", "VIP"}})  # noqa: E731
+    evaluator = make(condition)
+    assert evaluator.evaluate({"body.priceTier": {"value": "VIP"}, "body.loyaltyPoints": {"value": 499}}) is True
+    assert evaluator.evaluate({"body.priceTier": {"value": "VIP"}, "body.loyaltyPoints": {"value": 500}}) is False
+    assert evaluator.evaluate({"body.priceTier": {"value": "BASIC"}, "body.loyaltyPoints": {"value": 1}}) is False
+    for truncated in ("req.priceTier() ==", "req.priceTier(", "req.priceTier() == PriceTier.", "req."):
+        with pytest.raises(Unsupported):
+            make(truncated)
 
 
 @pytest.mark.det_pairwise_e2e
@@ -466,6 +484,8 @@ def test_req314_report_real(run_dir):
     pairwise_cases = [c for c in cases_doc["cases"] if c["rule"] == "pairwise"]
     assert len([c for c in pairwise_cases if c["endpoint"] == ENDPOINT_POST_RESERVATIONS]) >= 1
     assert summary["byRule"]["pairwise"]["generated"] == len(pairwise_cases)
+    passed = summary["byRule"]["pairwise"]["passedStrict"]
+    assert isinstance(passed, int) and not isinstance(passed, bool) and 0 <= passed <= summary["byRule"]["pairwise"]["generated"]
     # 교차 검증: 독립 오라클 값, assumes 접두 개수
     oracle = _oracle(gen_dir)
     feasible = sum(i["feasible"] for i in oracle.values())
@@ -478,8 +498,9 @@ def test_req314_report_real(run_dir):
     assert block["relCombined"] == count_prefix("rel-combined:")
     # compare.html det 표: pairwise 텍스트 행과 covered/feasible 숫자
     html = (run_dir / "S12" / "compare" / "compare.html").read_text(encoding="utf-8")
-    assert "pairwise" in html and f"{covered}/{feasible}" in re.sub(r"\s*/\s*", "/", html), \
-        "compare.html에 pairwise 행 또는 interactionsCovered/interactionsFeasible 숫자가 없다"
+    assert re.search(r"\bpairwise\b", html), "compare.html에 pairwise 행이 없다"
+    assert re.search(rf"(?<!\d){covered}\s*/\s*{feasible}(?!\d)", html), \
+        f"compare.html에 interactionsCovered/interactionsFeasible 숫자 {covered}/{feasible}가 없다"
 
 
 # --- REQ-315 -----------------------------------------------------------------------------------------
@@ -489,8 +510,11 @@ def test_req315_not_published_real(run_dir):
     assert site.is_dir(), f"게시 미러가 없다: {site}"
     assert not list(site.rglob("pairwise.json")), "게시 미러에 pairwise.json이 있다"
     gen_dir = _det_generation_dir(run_dir)
-    for path in (gen_dir / "cases.json", gen_dir / "pairwise.json", run_dir / "S06" / "bdd-gen.json"):
-        assert redact.find_leaks(path.read_text(encoding="utf-8")) == [], f"{path.name}에 누출이 있다"
+    targets = sorted(p for p in gen_dir.rglob("*") if p.is_file()) + [run_dir / "S06" / "bdd-gen.json"]
+    assert {"cases.json", "pairwise.json"} <= {p.name for p in targets}, [p.name for p in targets]
+    for path in targets:
+        text = path.read_text(encoding="utf-8", errors="replace")
+        assert redact.find_leaks(text) == [], f"{path.relative_to(path.anchor)}에 누출이 있다"
 
 
 # --- REQ-318 -----------------------------------------------------------------------------------------
@@ -500,5 +524,8 @@ def test_req318_three_way_real(order3_run_dir):
     assert harness["pairwiseOrder"] == 3, harness
     gen_dir = _det_generation_dir(order3_run_dir)
     assert _read_json(gen_dir / "pairwise.json")["order"] == 3
+    post = _read_json(gen_dir / "pairwise.json")["endpoints"][ENDPOINT_POST_RESERVATIONS]
+    assert len(post["params"]) >= 3, f"POST /api/reservations 모델 파라미터가 3개 미만이다: {len(post['params'])}"
+    assert post["effectiveOrder"] == 3, post["effectiveOrder"]
     oracle = _assert_full_coverage(gen_dir, order=3)
     assert oracle[ENDPOINT_POST_RESERVATIONS]["feasible"] > 0, "3-way 실현 가능 튜플이 0개다(공허)"
