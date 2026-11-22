@@ -179,12 +179,14 @@ A를 고른다. B는 반목표에 걸리고, C는 S12가 이미 det 블록을 �
   `det.html`을 지운다. `det.html` 렌더 예외는 `render_page` 안에서 잡아 `det.html`을 지우고, 메모리 문서의 `viz`를 failed로 바꾼 뒤
   `compare.html`을 그린다(링크 없음). RERENDER 경로에서 이렇게 바뀌면 게시 사본의 `compare.json`도 바뀐 문서로 다시 쓴다.
 - 링크 조건: `compare.html`과 run 페이지 모두 `det.html` 파일이 있을 때만 링크한다(`viz.status == ok`와 동치가 되도록 위 흐름이 보장).
+  사이트 조립(`pages.render_run`)은 링크를 모은 뒤 리포트를 다시 렌더하므로, 다시 렌더하다 `det.html`이 지워지면 존재 조건부 링크를 다시 거르고 공통 띠를 한 번 더 그린다.
+  S12 자체가 예외로 끝나면 이번 run의 `det-viz.json`·`det.html`을 지운다.
 - 스키마: `compare.schema.json` `deterministic` measured 변형에 `viz: {status: ok|absent|failed, reason: string|null}`(필수)를
   추가한다. failed 변형에는 넣지 않는다(det 집계 자체가 실패하면 viz도 없다). `absent` = `factors.json` 없음.
 - 링크: `compare.html` det 블록에 `viz.status == ok`일 때 `det.html` 링크를 단다. run 페이지는 `REPORTS_EXTRA["compare/"]`에
   `("det 조합 시각화", "det.html")`을 더하고 `LINK_ONLY_IF_PRESENT`에 `"compare/"`를 추가해 파일이 있을 때만 링크한다.
 - 자산: 온톨로지 화면과 같이 `cytoscape.min.js`와 `site/static/detviz.js`를 `det.html`에 인라인한다(단독 열람본·게시본 모두 동작).
-  CSS는 `css_href`(게시 시 `site.css`) 링크 + 화면 전용 규칙 인라인. 데이터는 `pages.json_for_script`로 `<script type="application/json">`에
+  CSS는 `css_href`(게시 시 `static/v2/app.css`, 단독 열람 시 같은 디렉터리의 `app.css`) 링크 + 화면 전용 규칙 인라인. 게시 사본에는 사이트 공통 띠(`nav_html`)를 넣는다. 데이터는 `pages.json_for_script`로 `<script type="application/json">`에
   싣고, 상세 패널 등 화면 문자열은 `textContent`로만 넣는다(`innerHTML` 금지).
 
 화면 구성(위에서 아래):
@@ -224,7 +226,7 @@ A를 고른다. B는 반목표에 걸리고, C는 S12가 이미 det 블록을 �
 
 `detviz.js`는 렌더를 마치면 `window.__td_ready = true`를 설정한다(Playwright 대기용, 온톨로지 화면과 같은 규약).
 
-라이트/다크는 `site.css` 토큰을 따르고, 격자·히트맵은 `.scroll` 안에 둬 모바일 폭에서 페이지 가로 스크롤이 생기지 않게 한다.
+라이트/다크는 v2 `app.css` 토큰(`--fg`, `--muted`, `--line`, `--surface`, `--accent`)을 따르고, 격자·히트맵은 `.scroll` 안에 둬 모바일 폭에서 페이지 가로 스크롤이 생기지 않게 한다.
 
 ### 5.5 문서 갱신 범위
 

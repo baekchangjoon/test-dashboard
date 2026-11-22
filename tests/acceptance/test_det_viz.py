@@ -385,13 +385,10 @@ def test_req210_no_leaks():
 
 
 # --- REQ-211 ----------------------------------------------------------------------------------------------------
-@pytest.fixture(scope="module")
-def viz_browser():
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        instance = playwright.chromium.launch()
-        yield instance
-        instance.close()
+@pytest.fixture
+def viz_browser(browser):
+    """세션 공용 chromium(conftest `browser`). sync_playwright를 따로 열면 같은 세션의 다른 브라우저 테스트와 충돌한다."""
+    return browser
 
 
 def _open_det_page(browser, html_path: Path, **context_kwargs):
