@@ -58,7 +58,11 @@ A를 고른다. B는 반목표에 걸리고, C는 S12가 이미 det 블록을 �
   `_disjunct`(변환된 원자식, 변환 못 한 원자식의 raw 키), `_contradictions` 처리(모순 항목), count 인자 기록 지점에서 함께 채운다.
   count 인자 기록(`Constraints.con`)에는 주소를 넘길 수 없으므로, `_disjunct`가 원자식 순회 중 count 원자식의 필드에 주소를 기록한다.
 - 클래스 키는 지금 `_universe`의 키와 같다: 변환된 원자식 `(op, str(value), length, date)`, count `("count",)`, 그 밖 `("raw", …)`.
-  `_field_classes(ep, fld) -> dict[classKey, (kind, sources)]` 하나를 `_universe`(개수)와 `factors.json`(목록)이 같이 쓴다.
+  `_field_classes(ep, fld) -> dict[classKey, (kind, sources)]`(valid 제외) 하나를 `_universe`(`1 + len`)와 `factors.json`(valid를 앞에 붙인 목록)이 같이 쓴다.
+  필드 식별은 기존 매칭 의미를 그대로 둔다(개수 불변). 클래스 id·칸 키의 필드 문자열은 `loc.name`(예: `body.nights`)이다.
+  출처 주소는 `rstrip("~")` 후 기록한다. 모순 항목의 키는 지금처럼 raw 꼴 `("raw", op, str(value), length)`이고 kind는 `contradicted`다.
+  미변환 원자식의 raw 키를 칸 계산에 넘기도록 `_disjunct`는 원자식별 `(Con | 사유, rawKey | None)`을 돌려준다.
+  미해결 count의 필드는 `Constraints.con` 호출 전후 `ep.count_fields` 차이로 얻어 그 원자식 주소와 함께 기록한다.
   개수 불변은 E3·E4로 지킨다(레지스트리는 기존 집합의 상위 정보이고 키 집합은 같아야 한다).
 - `kind` 결정 규칙(우선순위 순):
 
@@ -71,7 +75,7 @@ A를 고른다. B는 반목표에 걸리고, C는 S12가 이미 det 블록을 �
   | 변환 못 한 원자식(필드만 앎) | `raw` |
 
   한 키가 여러 조건에 걸리면 표의 위쪽이 이긴다. 필드마다 `kind: "valid"` 클래스 1개가 맨 앞에 붙는다. 그 classKey는 `("valid",)`이다.
-- 클래스 id: `"c" + sha256(json.dumps([endpoint, field, list(classKey)], ensure_ascii=False))[:12]`. 사람이 읽는 `label`은 따로 둔다
+- 클래스 id: `"c" + sha256(json.dumps([endpoint, field, list(classKey)], ensure_ascii=False))[:12]`(field = `f"{loc}.{name}"`). 사람이 읽는 `label`은 따로 둔다
   (예: `< 1`, `length < 1`, `== null`, `count ≥ 2`, `raw: isAfter(today)`). 조건식의 `||`와 구분자가 충돌하지 않는다.
 
 ### 5.2 케이스·슬롯 칸 규칙
@@ -97,7 +101,7 @@ A를 고른다. B는 반목표에 걸리고, C는 S12가 이미 det 블록을 �
   - `false`: auth(요청을 보내지 않는 인증 차원), no-data(경로 변수에 없는 id, 공식에 클래스 없음), empty-body(본문 자체 없음),
     filter-empty(query 필드에 모델에 없는 센티널 값). `outReason`에 이 사유를 남긴다.
 - 병합(`_dedupe`): 살아남은 케이스의 `boundaries`는 병합된 초안들과의 합집합, `mergedRules`에 병합된 규칙을 적는다.
-  `cells`가 서로 다르면 살아남은 쪽을 유지하고 `cellConflicts`에 적는다(같은 요청이므로 정상이라면 비어 있다. 테스트로 확인).
+  칸 비교는 적지 않은 필드를 valid로 채운 뒤 한다. 다르면 살아남은 쪽을 유지하고 `cellConflicts`에 `{field, kept, merged, mergedRule}`로 적는다(같은 요청이므로 정상이라면 비어 있다. 테스트로 확인).
   `inModel`은 살아남은 케이스 규칙으로 정한다.
 - 생성 불가 슬롯의 위치: `_skip`이 항목과 함께 칸 정보(`cells`, `draftKey`)를 내부 쌍으로 들고, `cases.json` `unresolved`와
   같은 정렬(`source, rule, reason, endpoint`, 안정 정렬)을 쌍 목록에 적용한다. 그래서 `index`가 `cases.json` 위치와 일치한다.
@@ -121,7 +125,7 @@ A를 고른다. B는 반목표에 걸리고, C는 S12가 이미 det 블록을 �
   "sources": {"<addr>": {"kind": "plan", "methods": ["ReservationService#create"], "condition": "…", "expected": "…"}},
   "cases": {"<caseId>": {"rule": "violation", "cells": {"body.nights": "c…"}, "boundaries": [], "stored": [],
                          "enumValue": null, "inModel": true, "outReason": null, "mergedRules": [], "cellConflicts": []}},
-  "unresolved": [{"index": 0, "rule": "branch-entry", "reason": "unresolved-operand", "draftKey": [0, 0, 0],
+  "unresolved": [{"index": 0, "source": "<addr>", "rule": "branch-entry", "reason": "unresolved-operand", "draftKey": [0, 0, 0],
                   "cells": {"body.x": "c…"}}]
 }
 ```
@@ -159,14 +163,19 @@ A를 고른다. B는 반목표에 걸리고, C는 S12가 이미 det 블록을 �
   - 요약 띠: 엔드포인트 수, 필드 수, 클래스 수(valid 포함), 덮인 클래스 수(covered-* 셋의 합), pairsCovered/pairsTotal,
     모델 밖 케이스 수(규칙별).
   - `universe.theoretical.factors[]` 중 `fields`가 없는 항목(`concurrency-race`)은 대상이 아니다.
-- 데이터 흐름: `_deterministic`(collect 안)은 `factors.json` 유무를 보고 `viz: {status, reason}`만 블록에 적는다.
-  `absent`면 그대로, 있으면 `detviz.build`를 시험 호출해 예외면 `failed`와 사유를 적는다(이때 만든 dict는 버린다).
-  `compare.main`은 `validate`와 `out_dir` 생성 뒤, 블록이 `viz.status == ok`면 `detviz.build(gen_dir, s07_dir)`를 다시 불러
-  `det-viz.json`을 쓰고(같은 입력이라 결과가 같다), 아니면 기존 `det-viz.json`을 지운다(낡은 파일 방지).
-  이 쓰기 중 예외가 나면 `det-viz.json`을 지우고 compare는 계속한다(블록은 이미 검증됨, stderr에 사유).
+- 데이터 흐름(build는 한 번만, `main`에서): `_deterministic`(collect 안)은 파일을 쓰지 않고 `factors.json` 유무만 보아
+  블록에 `viz: {status: ok|absent, reason}`을 적는다(`ok`는 "만들 예정"이다). `collect`의 출력은 지금처럼 스키마를 그대로 통과한다.
+  `compare.main`은 `validate` 뒤에 다음 순서로 진행한다.
+  1. `out_dir` 생성. `viz.status == ok`면 `detviz.build(gen_dir, s07_dir)`를 한 번 불러 `det-viz.json`을 쓰고, `render_page`가 `det.html`을 그린다.
+  2. build·쓰기·렌더 중 예외가 나면 `det-viz.json`·`det.html`을 지우고 `viz`를 `{status: failed, reason}`으로 바꾼다.
+  3. `viz.status != ok`면(absent·failed·det 블록 null·failed 변형 포함) 기존 `det-viz.json`·`det.html`을 지운다(낡은 파일 방지).
+  4. 바뀐 문서를 다시 `validate`하고 `compare.json`·`compare.html`을 쓴다.
+  따라서 `compare.json`의 `viz.status == ok`이면 `det-viz.json`과 `det.html`이 반드시 있다.
 - 렌더 책임: `det.html`은 `compare.render_page` 안에서만 그린다(`main`과 `RERENDER["compare/"]`가 모두 `render_page`를 부른다).
-  `render_page`는 `det-viz.json`이 있으면 `det.html`을 그리고, 없으면 `det.html`을 지운다. `det.html` 렌더 예외는
-  `render_page` 안에서 잡아 `det.html`을 지우고 `compare.html`은 계속 그린다.
+  `render_page`는 `det.html`을 `compare.html`보다 먼저 그린다. `det-viz.json`이 있고 `viz.status == ok`일 때만 그리고, 그 밖에는
+  `det.html`을 지운다. `det.html` 렌더 예외는 `render_page` 안에서 잡아 `det.html`을 지우고, 메모리 문서의 `viz`를 failed로 바꾼 뒤
+  `compare.html`을 그린다(링크 없음). RERENDER 경로에서 이렇게 바뀌면 게시 사본의 `compare.json`도 바뀐 문서로 다시 쓴다.
+- 링크 조건: `compare.html`과 run 페이지 모두 `det.html` 파일이 있을 때만 링크한다(`viz.status == ok`와 동치가 되도록 위 흐름이 보장).
 - 스키마: `compare.schema.json` `deterministic` measured 변형에 `viz: {status: ok|absent|failed, reason: string|null}`(필수)를
   추가한다. failed 변형에는 넣지 않는다(det 집계 자체가 실패하면 viz도 없다). `absent` = `factors.json` 없음.
 - 링크: `compare.html` det 블록에 `viz.status == ok`일 때 `det.html` 링크를 단다. run 페이지는 `REPORTS_EXTRA["compare/"]`에
@@ -209,6 +218,8 @@ A를 고른다. B는 반목표에 걸리고, C는 S12가 이미 det 블록을 �
 `matrix[].counts[i][j]`는 필드 a의 i번째 클래스(목록 순서)와 필드 b의 j번째 클래스를 동시에 가진 inModel 케이스 수다.
 `summary.fields`와 `classes`는 `fields`가 있는 엔드포인트의 필드·클래스(valid 포함) 합이다. 숫자 0은 자리표시다.
 
+`detviz.js`는 렌더를 마치면 `window.__td_ready = true`를 설정한다(Playwright 대기용, 온톨로지 화면과 같은 규약).
+
 라이트/다크는 `site.css` 토큰을 따르고, 격자·히트맵은 `.scroll` 안에 둬 모바일 폭에서 페이지 가로 스크롤이 생기지 않게 한다.
 
 ### 5.5 문서 갱신 범위
@@ -232,7 +243,7 @@ A를 고른다. B는 반목표에 걸리고, C는 S12가 이미 det 블록을 �
 - 단위·통합: 클래스 레지스트리 kind 규칙, 칸 규칙 표의 행마다, 병합 케이스(boundaries 합집합·`cellConflicts` 빈 목록),
   생성 불가 슬롯 index·칸, 결정성, `</script>` 포함 조건식 fixture의 이스케이프, 실패 격리(factors 없음 → viz absent·링크 없음,
   viz 예외 → viz failed·S12 통과·`validate` 통과, 재실행 시 낡은 det.html 제거, RERENDER 예외 격리).
-- 브라우저 확인: `_test/` 게시본에서 그래프·격자·히트맵이 그려지고 콘솔 오류 0, 라이트/다크·390px 폭 확인(수동, 결과 보고에 첨부).
+- 브라우저 확인(자동): 기존 `test_ontology.py`의 Playwright 패턴으로 네트워크 차단 열람, 콘솔 오류 0, 노드·칸·행렬 수, 상호작용, 라이트/다크·390px, 적대적 문자열 DOM 안전성을 확인한다.
 
 ## 7. 빌더 재량
 
