@@ -13,8 +13,8 @@ import jsonschema
 import pytest
 import yaml
 
-from helpers import COMMIT, SUT_FILE, _handlers, collect, make_compare_run
-from td import bundle, compare
+from helpers import BASE_COVERED, COMMIT, SUT_FILE, _handlers, _write_xml, collect, make_compare_run
+from td import bundle, compare, state
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ORACLE_FILE = REPO_ROOT / "suts" / "petclinic" / "oracle.yaml"
