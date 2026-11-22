@@ -69,13 +69,9 @@
     return info ? shortField(info.field) + ": " + info.klass.label : classId;
   }
   function slotEndpoint(position) {
+    // cases.json의 엔드포인트만 쓴다. 없으면(null) 어느 그래프에도 두지 않는다(칸으로 추정하지 않는다).
     var endpoint = (trace.unresolvedEndpoints || [])[position];
-    if (typeof endpoint === "string") return endpoint;
-    var cells = factors.unresolved[position].cells || {};
-    for (var field in cells) {
-      if (Object.prototype.hasOwnProperty.call(cells, field) && classInfo[cells[field]]) return classInfo[cells[field]].endpoint;
-    }
-    return null;
+    return typeof endpoint === "string" ? endpoint : null;
   }
 
   // --- 1. 요약 띠 ---
