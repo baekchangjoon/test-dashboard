@@ -1,0 +1,226 @@
+{
+ "calls": [
+  {
+   "endpoint": "endpoint:POST /svc/kits",
+   "handler": "ex.kit.KitController#make",
+   "method": "make",
+   "service": "ex.kit.KitService"
+  },
+  {
+   "endpoint": "endpoint:PUT /svc/kits/{kitId}",
+   "handler": "ex.kit.KitController#patch",
+   "method": "patch",
+   "service": "ex.kit.KitService"
+  },
+  {
+   "endpoint": "endpoint:PATCH /svc/kits/{kitId}",
+   "handler": "ex.kit.KitController#trim",
+   "method": "trim",
+   "service": "ex.kit.KitService"
+  }
+ ],
+ "constants": [
+  {
+   "name": "SLOT_LIMIT",
+   "owner": "ex.kit.KitService",
+   "type": "int",
+   "value": 2
+  }
+ ],
+ "dtos": {
+  "ex.kit.KitForm": {
+   "fields": [
+    {
+     "name": "code",
+     "type": "java.lang.String"
+    },
+    {
+     "name": "credit",
+     "type": "int"
+    },
+    {
+     "name": "deposit",
+     "type": "double"
+    },
+    {
+     "name": "depth",
+     "type": "int"
+    },
+    {
+     "name": "grade",
+     "type": "ex.kit.Grade"
+    },
+    {
+     "name": "legacy",
+     "type": "java.lang.String"
+    },
+    {
+     "name": "phase",
+     "type": "ex.kit.Phase"
+    },
+    {
+     "name": "shade",
+     "type": "ex.kit.Shade"
+    },
+    {
+     "name": "size",
+     "type": "int"
+    },
+    {
+     "name": "slot",
+     "type": "int"
+    }
+   ]
+  },
+  "ex.kit.KitView": {
+   "fields": [
+    {
+     "name": "id",
+     "type": "java.lang.Long"
+    },
+    {
+     "name": "size",
+     "type": "int"
+    }
+   ]
+  },
+  "ex.kit.PatchForm": {
+   "fields": [
+    {
+     "name": "height",
+     "type": "int"
+    },
+    {
+     "name": "width",
+     "type": "int"
+    }
+   ]
+  },
+  "ex.kit.TagForm": {
+   "fields": [
+    {
+     "name": "grade",
+     "type": "ex.kit.Grade"
+    },
+    {
+     "name": "shade",
+     "type": "ex.kit.Shade"
+    }
+   ]
+  },
+  "ex.kit.TrimForm": {
+   "fields": [
+    {
+     "name": "grade",
+     "type": "ex.kit.Grade"
+    },
+    {
+     "name": "trim",
+     "type": "int"
+    }
+   ]
+  }
+ },
+ "endpoints": {
+  "endpoint:PATCH /svc/kits/{kitId}": {
+   "params": [
+    {
+     "defaultValue": null,
+     "index": 0,
+     "kind": "PathVariable",
+     "name": null,
+     "required": null,
+     "type": "java.lang.Long"
+    },
+    {
+     "defaultValue": null,
+     "index": 1,
+     "kind": "RequestBody",
+     "name": null,
+     "required": null,
+     "type": "ex.kit.TrimForm"
+    }
+   ],
+   "responseDto": "ex.kit.KitView"
+  },
+  "endpoint:POST /svc/kits": {
+   "params": [
+    {
+     "defaultValue": null,
+     "index": 0,
+     "kind": "RequestBody",
+     "name": null,
+     "required": null,
+     "type": "ex.kit.KitForm"
+    }
+   ],
+   "responseDto": "ex.kit.KitView"
+  },
+  "endpoint:POST /svc/tags": {
+   "params": [
+    {
+     "defaultValue": null,
+     "index": 0,
+     "kind": "RequestBody",
+     "name": null,
+     "required": null,
+     "type": "ex.kit.TagForm"
+    }
+   ],
+   "responseDto": null
+  },
+  "endpoint:PUT /svc/kits/{kitId}": {
+   "params": [
+    {
+     "defaultValue": null,
+     "index": 0,
+     "kind": "PathVariable",
+     "name": null,
+     "required": null,
+     "type": "java.lang.Long"
+    },
+    {
+     "defaultValue": null,
+     "index": 1,
+     "kind": "RequestBody",
+     "name": null,
+     "required": null,
+     "type": "ex.kit.PatchForm"
+    }
+   ],
+   "responseDto": "ex.kit.KitView"
+  }
+ },
+ "enums": {
+  "ex.kit.Grade": {
+   "constants": [
+    "PLAIN",
+    "GOLD",
+    "RUBY"
+   ]
+  },
+  "ex.kit.Phase": {
+   "constants": [
+    "OPEN",
+    "SHUT"
+   ]
+  },
+  "ex.kit.Shade": {
+   "constants": [
+    "DARK",
+    "LIGHT"
+   ]
+  }
+ },
+ "exceptions": {
+  "ex.kit.KitErrors$KitClashException": {
+   "handler": "ex.kit.KitController#onClash",
+   "status": 409
+  },
+  "ex.kit.KitErrors$KitInvalidException": {
+   "handler": "ex.kit.KitController#onInvalid",
+   "status": 422
+  }
+ },
+ "schema": 1
+}

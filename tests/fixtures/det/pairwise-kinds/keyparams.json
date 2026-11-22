@@ -1,0 +1,83 @@
+[
+ {
+  "class": "KitService",
+  "file": "KitService_make.json",
+  "method": "make",
+  "parameters": [
+   {
+    "accessor": "form",
+    "http_name": "",
+    "java_type": "KitForm",
+    "name": "form",
+    "reasons": [
+     {
+      "detail": "",
+      "type": "ERROR_TRIGGER"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "class": "KitService",
+  "file": "KitService_patch.json",
+  "method": "patch",
+  "parameters": [
+   {
+    "accessor": "kitId",
+    "http_name": "kitId",
+    "java_type": "Long",
+    "name": "kitId",
+    "reasons": [
+     {
+      "detail": "repository.findById(kitId)",
+      "type": "DB_WHERE"
+     }
+    ]
+   },
+   {
+    "accessor": "patch",
+    "http_name": "",
+    "java_type": "PatchForm",
+    "name": "patch",
+    "reasons": [
+     {
+      "detail": "",
+      "type": "ERROR_TRIGGER"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "class": "KitService",
+  "file": "KitService_trim.json",
+  "method": "trim",
+  "parameters": [
+   {
+    "accessor": "kitId",
+    "http_name": "kitId",
+    "java_type": "Long",
+    "name": "kitId",
+    "reasons": [
+     {
+      "detail": "repository.findById(kitId)",
+      "type": "DB_WHERE"
+     }
+    ]
+   },
+   {
+    "accessor": "cut",
+    "http_name": "",
+    "java_type": "TrimForm",
+    "name": "cut",
+    "reasons": [
+     {
+      "detail": "",
+      "type": "ERROR_TRIGGER"
+     }
+    ]
+   }
+  ]
+ }
+]
