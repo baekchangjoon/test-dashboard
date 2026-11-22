@@ -130,4 +130,4 @@
 | REQ-318 | 3-way | test_det_pairwise.py::test_req318_three_way_real<br>test_unit_pairwise.py::test_req318_whitepaper | E2E/Unit | 🟢 passed |
 | REQ-319 | 문서 갱신 | test_unit_pairwise.py::test_req319_docs | Unit | 🟢 passed |
 
-커버리지 대상: REQ-301~319(19건). 제외: 없음. 상태 기준: order 2 run `20261122-075628Z-b6f9393-manual-06cbd507`(게시 `_test/det-pairwise-20261122/`, det `det-7cac5644-r1`), order 3 run `20261122-083102Z-b6f9393-manual-dac4592a`(게시 `_test/det-pairwise-o3-20261122/`, det `det-7cdf5b29-r1`), E2E 15 passed(det_pairwise_e2e 8 + det_e2e 7), 단위·통합 테스트. 매트릭스 커버리지 19/19.
+커버리지 대상: REQ-301~319(19건). 제외: 없음. 상태 기준: order 2 run `20261122-090040Z-b6f9393-manual-317f39ea`(게시 `_test/det-pairwise-20261122b/`, det `det-db8f978f-r1`), order 3 run `20261122-091719Z-b6f9393-manual-0984b273`(게시 `_test/det-pairwise-o3-20261122b/`, det `det-42c48e40-r1`), E2E 15 passed(det_pairwise_e2e 8 + det_e2e 7), 단위·통합 테스트. 매트릭스 커버리지 19/19.
