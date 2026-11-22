@@ -65,6 +65,8 @@ PICT 확보는 brew가 아니라 **고정 커밋 소스 빌드**로 한다(`micr
   `td/prepare.py`(`build_lock`/`write-lock` 인자), README 전제 조건(Xcode CLT의 `clang++`, `make`).
 - 연결: `stage.generate_det`가 `<run>/tools.lock`에서 pict 항목을 읽고 실행 직전 바이너리 sha256을 다시 대조한 뒤
   `derive(bundle, pict=PictTool(path, commit, sha256))`로 넘긴다. 이것은 상위 설계의 "detgen은 번들만 읽는다"의 **명시적 예외**이며 상위 설계에 주석한다.
+- 관계식 상대편 필드: `Con`(rel)에 상대편 요청 필드 튜플 `others`를 더하고 `Constraints._relation`이 상대편 원문에서 요청 필드를 찾아 채운다(`rel-combined` 판정용). disabled 출력에는 영향이 없다.
+- order는 번들 `harness.json` `pairwiseOrder` 한 곳에서만 읽는다. `Pairwise.available(tool, work_dir, timeout)`은 도구·임시 위치·시간 상한만 담는다.
   경로는 번들·산출물에 쓰지 않는다(누출 게이트).
 - 상태 모델(`td/detgen/pairwise.py`): `PictTool`(frozen dataclass `path: Path, commit: str, binary_sha256: str`)와 세 상태
   `Pairwise.disabled()`(기본값, 단위 테스트·기존 호출), `Pairwise.unavailable(reason)`(det가 요청됐는데 `tools.lock` `pict: null`),
@@ -140,10 +142,11 @@ rel 가정: 종속 필드는 고정 극단값(예: 1,000,000)을 그대로 쓰�
 - 모델 필드 수 0~1: PICT를 부르지 않는다(슬롯 없음, `pairwise.json`에 `skipped: "fields<2"`).
   모델 필드 수 < order: 유효 order = 필드 수로 낮추고 `pairwise.json` `effectiveOrder`에 기록한다.
 - 엔드포인트마다 모델 파일을 `work/` 아래 임시 디렉터리에 쓰고(finally에서 삭제) `pict <model> /o:<effectiveOrder>`를 부른다. `/r`은 쓰지 않는다.
-  - rc=0: 출력 계약을 검사한다(헤더 = 모델 파라미터 집합과 정확히 같음, 각 행은 파라미터마다 알려진 후보 라벨 하나, 1행 이상, 중복 열 없음). 위반이면 `pairwise-error`. 통과하면 행을 라벨→후보로 되돌린다.
+  - rc=0: 출력 계약을 검사한다(헤더 = 모델 파라미터 집합과 정확히 같음, 각 행은 파라미터마다 알려진 후보 라벨 하나, 1행 이상, 중복 열 없음). 위반이면 **det generation failed**(스냅샷 없음). 통과하면 행을 라벨→후보로 되돌린다.
   - rc=5(`Too restrictive constraints`): 생성 불가 슬롯 `pairwise-infeasible` 1건.
-  - rc=4(입력 오류, 예: order > 파라미터 수)는 위의 유효 order 조정으로 생기지 않아야 한다. 생기면 생성기 결함이므로 `pairwise-error`로 기록한다.
-  - 그 밖의 rc·실행 실패: 슬롯 `pairwise-error` 1건과 stderr 첫 줄(가림 적용).
+  - rc=4(입력 오류, 예: order > 파라미터 수)는 위의 유효 order 조정으로 생기지 않아야 한다. 생기면 생성기 결함이므로 det generation failed(스냅샷 없음).
+  - 그 밖의 rc·실행 시작 실패: det generation failed(스냅샷 없음), 사유에 rc와 stderr 첫 줄(가림 적용).
+  - 원칙: 스냅샷에 남는 결과는 모델에서 결정적으로 정해지는 것(크기 초과, rc=5, 필드 수 부족)뿐이다. 환경에 따라 달라질 수 있는 실패는 스냅샷으로 고정하지 않는다.
   - 프로세스 상한 120초(안전장치, 테스트용으로 `TD_DET_PICT_TIMEOUT` 초로 바꿀 수 있다). 넘으면 **det generation 전체를 failed로 하고 스냅샷을 만들지 않는다**(시간 의존 결과를 고정하지 않기 위해).
 - order: `run-all --det-pairwise-order 2|3`(기본 2, 그 밖이면 `die`). run-all이 `TD_DET_PAIRWISE_ORDER`로 내보내고
   `inputs.project`가 det 번들 `harness.json`의 `pairwiseOrder`로 싣는다(입력 해시에 들어간다).
@@ -156,8 +159,7 @@ rel 가정: 종속 필드는 고정 극단값(예: 1,000,000)을 그대로 쓰�
 - 기존 케이스 우선: 정렬 키 앞에 규칙 우선순위(`pairwise`만 1, 나머지 0)를 둬 pairwise 초안이 항상 뒤에 온다. 따라서 기존 dedupe에서 기존 케이스가 남고
   기존 id·pair는 바뀌지 않는다. 라벨이 모두 baseline인 행은 같은 엔드포인트의 기존 유효 케이스(baseline-valid, 없으면 happy) 중 요청이 같은 것이 있으면 만들지 않고 `rows[].mergedInto`에 그 id를 적는다. 없으면 pairwise 케이스로 남긴다.
 - 방어선: `_materialize`가 행을 거부하면(다른 조건 위반) 슬롯 `pairwise-row-invalid`. 기대값은 0건이고 E3·단위 테스트가 0건을 단언한다.
-- REASONS에 `pairwise-infeasible`, `pairwise-error`, `pairwise-too-large`, `pairwise-row-invalid`, `pairwise-unavailable`을 더하고
-  `_REASON_PRIORITY` 끝에 `pairwise-unavailable, pairwise-too-large, pairwise-infeasible, pairwise-error, pairwise-row-invalid` 순으로 둔다. `pairwise-unavailable`은 pict가 없을 때(det가 요청됐는데 `tools.lock` `pict: null`) 엔드포인트와 무관한 슬롯 1건이다.
+- `REASONS`와 `_REASON_PRIORITY` 끝에 모두 `pairwise-unavailable, pairwise-too-large, pairwise-infeasible, pairwise-row-invalid` 순으로 4개를 더한다. `pairwise-unavailable`은 pict가 없을 때(det가 요청됐는데 `tools.lock` `pict: null`) 엔드포인트와 무관한 슬롯 1건이다.
 - 산출물 `pairwise.json`(스키마 `td/schemas/pairwise.schema.json`, 버전 1, `_COMPLETE` 체크섬 대상, 사이트에는 게시하지 않음):
   엔드포인트별 `{params: [{param, loc, field, candidates[]}], fixed: {field: label}, dropped: [...], exclusions: [...], order, effectiveOrder,
   skipped, rows: [{labels, caseId | null, mergedInto | null}]}`.
@@ -179,7 +181,8 @@ rel 가정: 종속 필드는 고정 극단값(예: 1,000,000)을 그대로 쓰�
 | det 미요청 | pict 준비 안 함 | 없음 | 영향 없음 |
 | pict 준비 실패 | passed(경고), `pict: null`·`pictFailureReason` | degraded: 기존 케이스만 + `pairwise-unavailable` 1슬롯, 키에 `none` | 영향 없음 |
 | 실행 직전 sha256 불일치 | – | failed(사유 기록), 스냅샷 없음 | 영향 없음 |
-| PICT rc=5 / 기타 rc / 크기 초과 | – | 그 엔드포인트 슬롯 1건, 나머지 정상 | 영향 없음 |
+| PICT rc=5 / 크기 초과 | – | 그 엔드포인트 슬롯 1건, 나머지 정상 | 영향 없음 |
+| PICT 기타 rc·시작 실패·출력 계약 위반 | – | failed, 스냅샷 없음 | 영향 없음 |
 | PICT 120초 초과 | – | failed, 스냅샷 없음 | 영향 없음 |
 | 산출물 누출 방지 | – | pict 경로·홈 경로가 산출물(`cases.json`, `pairwise.json`, `bdd-gen.json`)에 없다(`redact.find_leaks`). `pairwise.json`은 사이트에 게시하지 않는다 | – |
 
