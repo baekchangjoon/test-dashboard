@@ -186,7 +186,7 @@ rel 가정: 종속 필드는 고정 극단값(예: 1,000,000)을 그대로 쓰�
 | PICT rc=5 / 크기 초과 | – | 그 엔드포인트 슬롯 1건, 나머지 정상 | 영향 없음 |
 | PICT 기타 rc·시작 실패·출력 계약 위반 | – | failed, 스냅샷 없음 | 영향 없음 |
 | PICT 120초 초과 | – | failed, 스냅샷 없음 | 영향 없음 |
-| 산출물 누출 방지 | – | pict 경로·홈 경로가 산출물(`cases.json`, `pairwise.json`, `bdd-gen.json`)에 없다(`redact.find_leaks`). `pairwise.json`은 사이트에 게시하지 않는다 | – |
+| 산출물 누출 방지 | – | generation 산출물(`cases.json`, `pairwise.json` 등)에 홈·로컬 경로가 없고(`redact.find_leaks`), 게시하지 않는 run 기록 `bdd-gen.json`에도 pict 경로가 없다. `pairwise.json`은 사이트에 게시하지 않는다 | – |
 
 ## 6. 수용 테스트(E2E 우선, 이중 루프)
 

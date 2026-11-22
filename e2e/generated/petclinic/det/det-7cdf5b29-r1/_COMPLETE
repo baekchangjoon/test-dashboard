@@ -1,0 +1,115 @@
+{
+  "files": [
+    {
+      "path": "cases.json",
+      "sha256": "01f295c5c6554887a635bb5ffd2a08a78c22e9ec9e345a5f462766c4da35373e"
+    },
+    {
+      "path": "features/delete-api-reservations-id.feature",
+      "sha256": "7f3fab4bf2390b639930f7bb82eb4b04ae96ddd3beac50870986e6ca0a2765c8"
+    },
+    {
+      "path": "features/get-api-owners-ownerid.feature",
+      "sha256": "e7d01c863b0912c90fb1ea97fdaccb8aeff14e8f2a0c6122693cfebdb61eb570"
+    },
+    {
+      "path": "features/get-api-owners.feature",
+      "sha256": "547115a84568bd067592121c728511dd061664ff12483b3f426c0613b427e8c7"
+    },
+    {
+      "path": "features/get-api-pets-petid.feature",
+      "sha256": "9ffa6c4ebcea8f21461127748515dafff3258288a5d1d835a3b20687ccaceed1"
+    },
+    {
+      "path": "features/get-api-pets-types.feature",
+      "sha256": "3cddcad22f0fa45fe56548f962c53cb99feb73f43827233d6ad16502cbddb97e"
+    },
+    {
+      "path": "features/get-api-reservations-id.feature",
+      "sha256": "68ca80a220fae215eecb466a43e02f2575e9c8285566e71d07225c13efcfe49b"
+    },
+    {
+      "path": "features/get-api-reservations.feature",
+      "sha256": "7630442b9de9e798c6e1a097cdb5b0ab182510db5af11e909f3621c1992ed719"
+    },
+    {
+      "path": "features/get-api-vets-vetid.feature",
+      "sha256": "ae2880095497e811319083b265fa555135aca0f69f833ac6149e95c1c39d766b"
+    },
+    {
+      "path": "features/get-api-vets.feature",
+      "sha256": "a0bd43de30d6fddc86bc4e4046b599f61d3580b4664c784c3ba1056c1702dd77"
+    },
+    {
+      "path": "features/post-api-auth-login.feature",
+      "sha256": "91118b9817b1c4e10a20a84193330b9983bdf0889cc49586d08d63c17d3838c0"
+    },
+    {
+      "path": "features/post-api-auth-validate.feature",
+      "sha256": "981c1da55613203b4cd6bcad27fa4eb6b10d9a884da5e22237f9a46cc4308045"
+    },
+    {
+      "path": "features/post-api-owners.feature",
+      "sha256": "d0ce3aa91beb5fcd004e8d91760eb37fe391313cec90cc9ee0566545ad865eb1"
+    },
+    {
+      "path": "features/post-api-pets.feature",
+      "sha256": "321f7e33acafefd83a47f2cb21874b9aacb8f40f77c6c62e0b9d532c0d5c3f9f"
+    },
+    {
+      "path": "features/post-api-reservations.feature",
+      "sha256": "7a05429bf284c2d04dfbf4120729e2fb01f3f0a3c782c594136e2e2486ffb232"
+    },
+    {
+      "path": "features/put-api-owners-ownerid.feature",
+      "sha256": "d924e68f96de329c275670a857b7282720a284a7177510589ca81b02a2b91b63"
+    },
+    {
+      "path": "features/put-api-pets-petid.feature",
+      "sha256": "f7e60f9d22bee97f3232128dc91486d331f4dcb5fc160c17b860247409c596f2"
+    },
+    {
+      "path": "features/put-api-reservations-id.feature",
+      "sha256": "8735d5d2679fc64c9bf14367023594b5d76a6a0163aea6ffe979bd837fac1897"
+    },
+    {
+      "path": "glue/support/DetSteps.java",
+      "sha256": "c57e8c9d9e778b0bfea578055d6983267efafb7ad8954dd1a61ab14d3f0eb741"
+    },
+    {
+      "path": "glue/support/DetValues.java",
+      "sha256": "b646e3dd26d5d5368b1ff1310b8404cee3ab2adad9e79c94c6b6b6fb84af7f22"
+    },
+    {
+      "path": "pairwise.json",
+      "sha256": "5daf7a549c15d2b746a6325e87b5399adbd4686fb0b4f9fcdb65f9c1a2838a95"
+    }
+  ],
+  "genId": "det-7cdf5b29-r1",
+  "inputHash": "7cdf5b29c4877164c85a76c6bb5d4c74b4026f6f59124fac8eee050dc819636c",
+  "meta": {
+    "arm": "det",
+    "bundleHash": "7c8dde1a3dc6993f4124e5edc663cb5b9bb3929191b9a2719b06e57c564a0fed",
+    "cases": 98,
+    "dir": null,
+    "genId": "det-7cdf5b29-r1",
+    "generator": {
+      "glueChecksum": "87032d28b06acdd75fefe8379aa8c03611d05e928e0132d11e1683caa0706194",
+      "name": "td.detgen",
+      "pict": {
+        "binarySha256": "4288a6ee252379ffd67d0298e77af9501ca2496196eb6140b6f6556d77b6d25f",
+        "commit": "d529bb1535b725c8f29704f183b23dd344895d02"
+      },
+      "sourceChecksum": "3e043f4fad35466a556a0b93617f35f5b261d459ab2bf83f314897e37fa94354",
+      "version": "1"
+    },
+    "inputHash": "7cdf5b29c4877164c85a76c6bb5d4c74b4026f6f59124fac8eee050dc819636c",
+    "reason": null,
+    "rep": 1,
+    "reused": false,
+    "seconds": 9.537,
+    "status": "passed",
+    "unresolved": 50
+  },
+  "schema": 1
+}
