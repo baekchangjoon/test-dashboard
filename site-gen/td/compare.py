@@ -406,17 +406,17 @@ def _remove_det_files(out_dir: Path) -> None:
         (out_dir / name).unlink(missing_ok=True)
 
 
-def render_det_html(viz_doc: dict, css_href: str) -> str:
+def render_det_html(viz_doc: dict, css_href: str, nav_html: str | None = None) -> str:
     """det-viz 문서 → 단독으로 열리는 det.html 문자열. Cytoscape와 detviz.js를 인라인하고 데이터는 JSON 스크립트에 싣는다."""
     from td.site.pages import STATIC_DIR, jinja_env, json_for_script
     summary = viz_doc["aggregates"]["summary"]
     return jinja_env().get_template("det.html.j2").render(
-        gen_id=viz_doc.get("genId"), summary=summary, css_href=css_href, data_json=json_for_script(viz_doc),
+        gen_id=viz_doc.get("genId"), summary=summary, css_href=css_href, nav_html=nav_html, data_json=json_for_script(viz_doc),
         cytoscape_js=(STATIC_DIR / "vendor" / "cytoscape.min.js").read_text(encoding="utf-8"),
         viz_js=(STATIC_DIR / "detviz.js").read_text(encoding="utf-8"))
 
 
-def _render_det_page(out_dir: Path, document: dict, css_href: str) -> None:
+def _render_det_page(out_dir: Path, document: dict, css_href: str, nav_html: str | None = None) -> None:
     """det.html을 그리거나 지운다. det-viz.json이 있고 viz ok일 때만 그린다. viz 키가 없으면 absent로 보고 문서는 그대로 둔다.
     렌더 실패(또는 ok인데 det-viz.json이 없음)는 det 파일을 지우고 메모리 문서의 viz를 failed로 바꾼다(compare.html은 계속)."""
     viz = _viz_block(document)
@@ -430,7 +430,7 @@ def _render_det_page(out_dir: Path, document: dict, css_href: str) -> None:
         from td import detviz
         viz_doc = json.loads(data_path.read_text(encoding="utf-8"))
         detviz.validate(viz_doc)
-        (out_dir / DET_HTML_FILE).write_text(render_det_html(viz_doc, css_href), encoding="utf-8")
+        (out_dir / DET_HTML_FILE).write_text(render_det_html(viz_doc, css_href, nav_html), encoding="utf-8")
     except Exception as exc:  # noqa: BLE001 - 시각화 실패는 compare 결과를 실패시키지 않는다(REQ-209)
         _remove_det_files(out_dir)
         _mark_viz_failed(document, _failure_reason("det 조합 시각화 렌더 실패", exc))
@@ -465,7 +465,7 @@ def render_page(out_dir, document: dict, css_href: str = "app.css", copy_css: bo
     out_dir = Path(out_dir)
     if copy_css:
         copy_app_css(out_dir)
-    _render_det_page(out_dir, document, css_href)
+    _render_det_page(out_dir, document, css_href, nav_html)
     template = jinja_env().get_template("compare.html.j2")
     html = template.render(doc=document, css_href=css_href, static_href=static_href_of(css_href), nav_html=nav_html,
                            rows=display_rows(document), dots=dot_plots(document),

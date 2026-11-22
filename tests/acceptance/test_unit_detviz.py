@@ -770,13 +770,13 @@ def test_req209_ok_baseline(tmp_path, monkeypatch):
     assert document["deterministic"]["viz"] == {"status": "ok", "reason": None}
     detviz.validate(json.loads((out / "det-viz.json").read_text(encoding="utf-8")))
     html = (out / "det.html").read_text(encoding="utf-8")
-    assert 'href="site.css"' in html and "Cytoscape Consortium" in html
+    assert 'href="app.css"' in html and "Cytoscape Consortium" in html
     assert 'href="det.html"' in (out / "compare.html").read_text(encoding="utf-8")
     site = tmp_path / "site"
     index = pages.render_run(run_dir, site).read_text(encoding="utf-8")
     assert 'href="compare/det.html"' in index and 'href="compare/compare.html"' in index
     assert (site / "compare" / "det.html").is_file()
-    assert "static/site.css" in (site / "compare" / "det.html").read_text(encoding="utf-8")
+    assert "static/v2/app.css" in (site / "compare" / "det.html").read_text(encoding="utf-8")
     assert 'href="det.html"' in (site / "compare" / "compare.html").read_text(encoding="utf-8")
 
 
@@ -843,7 +843,7 @@ def test_req209_render_error(tmp_path, monkeypatch):
     """(d) det.html 템플릿 예외 → compare.html은 생기고 링크 없음, det.html 없음, viz failed."""
     from td import compare
 
-    def broken(viz_doc, css_href):
+    def broken(viz_doc, css_href, nav_html=None):
         raise RuntimeError("template exploded")
     monkeypatch.setattr(compare, "render_det_html", broken)
     run_dir, _gen = _det_compare_run(tmp_path, monkeypatch)
@@ -864,7 +864,7 @@ def test_req209_rerender_error(tmp_path, monkeypatch):
     out = _run_compare(run_dir)
     assert (out / "det.html").is_file()
 
-    def broken(viz_doc, css_href):
+    def broken(viz_doc, css_href, nav_html=None):
         raise RuntimeError("rerender exploded")
     monkeypatch.setattr(compare, "render_det_html", broken)
     assert layout.RERENDER["compare/"] is layout._rerender_compare
