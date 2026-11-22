@@ -13,7 +13,7 @@
   kind 우선순위는 count > contradicted > violation > branch > raw. 클래스 id는
   `"c" + sha256(json.dumps([엔드포인트 라벨, "loc.name", list(classKey)], ensure_ascii=False))[:12]`.
 - 칸(`CellInfo`): 초안마다 필드(`loc.name`) → 클래스 id. 위반한 원자식은 그 클래스, 뒤집은 원자식(flip)은 `valid`와 `boundaries`,
-  저장 상태 원자식은 `stored` 라벨, enum-value는 `valid`와 `enumValue`. 같은 필드에 원자식이 둘 이상이면 뒤집은 원자식, 그다음
+  저장 상태 원자식은 위반 쪽이면 `stored`, 유효 경계로 뒤집었으면 `storedBoundaries` 라벨, enum-value는 `valid`와 `enumValue`. 같은 필드에 원자식이 둘 이상이면 뒤집은 원자식, 그다음
   앞선 원자식이 칸을 갖는다. 모순 항목의 슬롯은 raw 꼴 키로 잇는다. 적지 않은 필드는 `valid`로 해석한다.
 - 병합된 초안은 살아남은 케이스에 `mergedRules`·boundaries 합집합·`cellConflicts`(valid로 채워 비교한 차이)로 남는다.
 - 생성 불가 슬롯의 칸은 `cases.json` `unresolved`와 같은 안정 정렬을 거친 병렬 목록에 둔다(`cases.json` 항목은 바뀌지 않는다).
@@ -85,10 +85,11 @@ class Derivation:
 
 @dataclass
 class CellInfo:
-    """초안 하나의 칸: 필드(`loc.name`) → 클래스 id, 유효 경계로 밟은 클래스 id, 저장 상태 라벨, enum 대상."""
+    """초안 하나의 칸: 필드(`loc.name`) → 클래스 id, 유효 경계로 밟은 클래스 id, 저장 상태 라벨(위반·경계), enum 대상."""
     cells: dict = field(default_factory=dict)
     boundaries: list = field(default_factory=list)
     stored: list = field(default_factory=list)
+    stored_boundaries: list = field(default_factory=list)
     enum_value: dict | None = None
 
 
@@ -290,9 +291,10 @@ class _Deriver:
             fld = self.catalog.lookup(ep, left.name) if left.kind == "request" else None
             if atom.op == "countGe":  # count 원자식마다 하나(논리곱 위치.원자식 위치)
                 self.races.append((ep.label, addr, f"{d_index}.{a_index}"))
-                if fld is not None:  # `Constraints.con`이 count_fields에 넣는 조건과 같다(해석 여부 무관)
-                    self._register(ep, fld.name, COUNT_KEY, "count", addr)
-                    raw_key = None if isinstance(con, Con) else (fld.name, COUNT_KEY)
+                counted = self.cons.count_field(atom, ep, scalars)  # count_fields에 들어간 필드(해석 여부 무관)
+                if counted is not None:
+                    self._register(ep, counted.name, COUNT_KEY, "count", addr)
+                    raw_key = None if isinstance(con, Con) else (counted.name, COUNT_KEY)
                 if isinstance(con, Con) and con.op == "count" and not con.stored:
                     limit = self.count_limits.get((ep.id, con.field))
                     self.count_limits[(ep.id, con.field)] = con.value if limit is None else min(limit, con.value)
@@ -403,9 +405,10 @@ class _Deriver:
         모순 항목의 슬롯은 raw 꼴 키(kind contradicted)로 잇는다."""
         info = CellInfo()
         contradicted = draft.reason == "input-contradiction"
-        for con, _ in atoms:
-            if isinstance(con, Con) and con.stored:  # 저장 상태는 요청 칸이 아니다
-                info.stored.append(_label(_class_key(con), con.value if con.op == "count" else None))
+        for index, (con, _) in enumerate(atoms):
+            if isinstance(con, Con) and con.stored:  # 저장 상태는 요청 칸이 아니다(뒤집었으면 경계 쪽에 적는다)
+                target = info.stored_boundaries if index == flip else info.stored
+                target.append(_label(_class_key(con), con.value if con.op == "count" else None))
         order = ([flip] if flip is not None else []) + [i for i in range(len(atoms)) if i != flip]
         boundaries = set()
         for index in order:
@@ -690,8 +693,9 @@ class _Deriver:
         out = {}
         for key in keys:
             kinds = ep.class_kinds.get((fld.name, key), set())
-            kind = "count" if key == COUNT_KEY else next((k for k in _KIND_PRIORITY if k in kinds),
-                                                         "raw" if key[0] == "raw" else "violation")
+            kind = "count" if key == COUNT_KEY else next((k for k in _KIND_PRIORITY if k in kinds), None)
+            if kind is None:  # 모수 계산의 키는 모두 레지스트리를 거친다. 빠졌다면 생성기 버그다
+                raise RuntimeError(f"클래스 레지스트리에 kind가 없다: {ep.label} {fld.loc}.{fld.name} {key!r}")
             out[key] = (kind, frozenset(ep.class_sources.get((fld.name, key), ())))
         return out
 
@@ -729,7 +733,8 @@ class _Deriver:
         for draft in made:
             info, out = draft.cell_info, draft.rule in _OUT_OF_MODEL
             cases[draft.case.id] = {"rule": draft.rule, "cells": dict(info.cells), "boundaries": list(info.boundaries),
-                                    "stored": list(info.stored), "enumValue": info.enum_value, "inModel": not out,
+                                    "stored": list(info.stored),
+                                    "storedBoundaries": list(info.stored_boundaries), "enumValue": info.enum_value, "inModel": not out,
                                     "outReason": draft.rule if out else None, "mergedRules": list(draft.merged_rules),
                                     "cellConflicts": list(draft.cell_conflicts)}
             addresses |= {source.rstrip("~") for source in draft.case.sources}

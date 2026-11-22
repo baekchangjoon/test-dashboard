@@ -226,7 +226,8 @@ def _num(op, value):
 
 
 # (fixture, 대상(case id | (출처 접두, rule, draftKey)), 엔드포인트, 기대 cells(필드 → 클래스 키 | "valid"),
-#  boundaries((필드, 키) 목록), stored, enumValue). 생성 불가 슬롯은 cells만 본다
+#  boundaries((필드, 키) 목록), stored, enumValue). 생성 불가 슬롯은 cells만 본다.
+# storedBoundaries는 STORED_BOUNDARIES에 없으면 []를 기대한다
 CELL_ROWS = {
     "violation": ("controlled", "place-violation-1", ORDERS, {"body.quantity": _num("<", 1)}, [], [], None),
     "violation-conjunction": ("controlled", "place-violation-5", ORDERS,
@@ -243,7 +244,7 @@ CELL_ROWS = {
     "omitted-baseline": ("controlled", "place-baseline-valid-1", ORDERS, {}, [], [], None),
     "rel": ("petclinic", "create-violation-1", RESERVATION, {"body.depositAmount": ("rel", "(0, 1000000)", False, False)},
             [], [], None),
-    "stored": ("petclinic", "update-valid-boundary-1", UPDATE, {}, [], ["<= today"], None),
+    "stored": ("petclinic", "update-valid-boundary-1", UPDATE, {}, [], [], None),
     "raw": ("petclinic", ("plan-tests-ReservationService.update.json#5@", "violation", [0, 0, 0]), UPDATE,
             {"body.nights": ("raw", "!=", "nights", False)}, None, None, None),
     "unresolved-count": ("petclinic", ("plan-tests-ReservationService.create.json#11@", "violation", [0, 0, 0]),
@@ -251,6 +252,10 @@ CELL_ROWS = {
     "contradicted": ("petclinic", ("plan-tests-ReservationService.update.json#3@", "violation", [0, 0, 0]), UPDATE,
                      {"body.nights": ("raw", "notnull", "None", False)}, None, None, None),
 }
+
+
+# 유효 경계로 뒤집은 저장 상태 원자식은 stored가 아니라 storedBoundaries에 적는다
+STORED_BOUNDARIES = {"stored": ["<= today"]}
 
 
 @pytest.mark.parametrize("row", list(CELL_ROWS))
@@ -264,6 +269,7 @@ def test_req204_cells(generated, row):
         assert entry["cells"] == expected_cells
         assert entry["boundaries"] == sorted(_cid(endpoint, field, key) for field, key in boundaries)
         assert entry["stored"] == stored
+        assert entry["storedBoundaries"] == STORED_BOUNDARIES.get(row, [])
         assert entry["enumValue"] == enum_value
         assert entry["inModel"] is True and entry["outReason"] is None
     else:
@@ -276,7 +282,7 @@ def test_req204_cells(generated, row):
         assert gen.factors["cases"]["place-violation-1"]["cells"].keys() == {"body.quantity"}
 
 
-@pytest.mark.parametrize("name", ("controlled", "petclinic"))
+@pytest.mark.parametrize("name", ALL)
 def test_req204_references_and_in_model(generated, name):
     gen = generated(name)
     ids = {e["endpoint"]: {f["field"]: {k["id"] for k in f["classes"]} for f in e["fields"]}
@@ -318,7 +324,7 @@ def test_req204_merge(generated):
                                 cell_info=dataclasses.replace(source.cell_info, boundaries=["cA"]))
     second = dataclasses.replace(source, rule="valid-boundary", case=copy.deepcopy(source.case), merged=False,
                                  survivor=None, merged_rules=[], cell_conflicts=[],
-                                 cell_info=derive_module.CellInfo(cells={}, boundaries=["cB"], stored=[],
+                                 cell_info=derive_module.CellInfo(cells={}, boundaries=["cB"], stored=[], stored_boundaries=[],
                                                                   enum_value=None))
     kept = deriver._dedupe([first, second])
     assert kept == [first] and second.merged and second.survivor is first
@@ -332,6 +338,14 @@ def test_req204_unresolved_index(generated):
     gen = generated("petclinic")
     unresolved = gen.factors["unresolved"]
     assert len(unresolved) == len(gen.cases_doc["unresolved"])
+    # 생성 불가 초안: (출처, 규칙, 엔드포인트, key 뒤 세 값) → 초안. 겹치지 않아야 역대응이 성립한다
+    drafts = {}
+    for draft in gen.deriver.drafts:
+        if draft.reason is not None:
+            address = (draft.sources[0], draft.rule, draft.ep.label, tuple(draft.key[1:]))
+            assert address not in drafts, address
+            drafts[address] = draft
+    matched = set()
     for index, (item, source) in enumerate(zip(unresolved, gen.cases_doc["unresolved"], strict=True)):
         assert item["index"] == index
         assert (item["rule"], item["reason"], item["source"]) == (source["rule"], source["reason"], source["source"])
@@ -341,7 +355,13 @@ def test_req204_unresolved_index(generated):
         if item["draftKey"] is None:
             assert item["cells"] == {}
         else:
-            assert len(item["draftKey"]) == 3 and all(isinstance(n, int) for n in item["draftKey"])
+            address = (source["source"], source["rule"], source["endpoint"], tuple(item["draftKey"]))
+            draft = drafts[address]
+            assert item["cells"] == draft.cell_info.cells and item["draftKey"] == list(draft.key[1:])
+            assert address not in matched
+            matched.add(address)
+    assert matched == set(drafts)  # 초안에서 온 슬롯은 모두 draftKey를 갖고, 나머지는 초안 이전 건너뜀이다
+    assert sum(1 for item in unresolved if item["draftKey"] is None) == len(unresolved) - len(drafts)
     # 같은 정렬 키가 겹치는 슬롯(enum-value 4건): 위치가 cases.json과 맞고 draftKey가 초안 순서를 따른다
     duplicates = [item for item in unresolved
                   if item["source"] == f"graph:endpoint:{UPDATE}" and item["rule"] == "enum-value"]
