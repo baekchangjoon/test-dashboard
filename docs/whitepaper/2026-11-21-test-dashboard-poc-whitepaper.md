@@ -520,7 +520,7 @@ det 결과에서 추가로 확인한 것:
 
 | 항목 | det(run3, 9장) | det + 2-way | det + 3-way |
 |---|---|---|---|
-| run | 20261121-201248Z-…-9d5ee1f4 | 20261122-075628Z-…-06cbd507 | 20261122-083102Z-…-dac4592a |
+| run | 20261121-201248Z-…-9d5ee1f4 | 20261122-090040Z-…-317f39ea | 20261122-091719Z-…-0984b273 |
 | 케이스 | 80 | 88(pairwise 8개) | 98(pairwise 18개) |
 | pairwise 케이스 통과 | – | 8/8 | 3-way 18개 중 18개 통과 |
 | 실현 가능 조합 덮음 | – | 2-way 69/69 | 3-way 192/192 |
@@ -528,7 +528,7 @@ det 결과에서 추가로 확인한 것:
 | 라인(TC 귀속) | 31.06% | 31.06% | 31.06% |
 | 브랜치(TC 귀속) | 37.15% | 37.15% | 37.15% |
 
-- 조합이 늘어난 곳은 POST /api/reservations 하나다. 나머지 16개 엔드포인트는 조합할 필드가 2개 미만이었다(2-way 생성의 `pairwise.json`, `det-7cac5644-r1`에서 확인).
+- 조합이 늘어난 곳은 POST /api/reservations 하나다. 나머지 16개 엔드포인트는 조합할 필드가 2개 미만이었다(2-way 생성의 `pairwise.json`, `det-db8f978f-r1`에서 확인).
   - 12개는 body·query 필드가 아예 없다(DELETE/GET/PUT 경로 변수만 쓰는 조회·수정, 로그인 검증, POST /api/owners, POST /api/pets 등).
   - 나머지 4개(GET /api/reservations, GET /api/reservations/{id}, POST /api/auth/login, PUT /api/reservations/{id})는 대부분 후보가 하나뿐이라 고정됐고(`single-candidate` 3필드, 저장 상태 전용 `stored-or-unresolved-only` 1필드), 상태 전이 필드(`state-field`)가 고정된 곳은 PUT 예약 하나다.
   - count 필드(`count-field`)와 관계식 종속 필드(`rel-dependent`)를 고정한 곳은 POST /api/reservations 안에서만 일어났다.
@@ -573,7 +573,7 @@ det 결과에서 추가로 확인한 것:
 | 사람이 정한 기준 | `suts/petclinic/{oracle,expected-endpoints,expected-tests}.yaml`, `sut.yaml` |
 | 설계·요구사항·계획 | `docs/superpowers/{specs,requirements,plans}/2026-11-18-test-dashboard-poc*.md` |
 | det arm 산출물 | `e2e/generated/petclinic/det/det-da70932c-r1/{features/,glue/support/,cases.json}`, `work/runs/<runId>/S06/bundles/det/`, `S03/ontology-jqa-ext.json` |
-| det pairwise 산출물 | `e2e/generated/petclinic/det/{det-7cac5644-r1,det-7cdf5b29-r1}/pairwise.json`(2-way, 3-way 스냅샷 디렉터리. 후보·고정·배제·행 기록, 사이트에는 게시하지 않음) |
+| det pairwise 산출물 | `e2e/generated/petclinic/det/{det-db8f978f-r1,det-42c48e40-r1}/pairwise.json`(2-way, 3-way 스냅샷 디렉터리. 후보·고정·배제·행 기록, 사이트에는 게시하지 않음) |
 | det arm 설계·요구사항·계획 | `docs/superpowers/{specs,requirements,plans}/2026-11-22-deterministic-arm*.md` |
 
 `work/`는 저장소에 포함되지 않는다(로컬 실행 상태). 같은 내용이 게시 사이트의 run 페이지에 있다.
