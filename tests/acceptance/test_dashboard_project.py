@@ -60,7 +60,9 @@ def test_req115_tabs_hash_keyboard(proj, page_of):
     assert page.locator('button[role=tab][aria-selected="true"]').count() == 1
     assert [t.get_attribute("tabindex") for t in page.locator("button[role=tab]").all()].count("0") == 1
     assert page.locator("#tab-coverage").get_attribute("tabindex") == "0"
-    assert all(t.get_attribute("tabindex") == "-1" for t in page.locator('button[role=tab][aria-selected="false"]').all())
+    unselected = page.locator('button[role=tab][aria-selected="false"]')
+    assert unselected.count() == len(ALL_TABS) - 1, "선택되지 않은 탭이 없으면 아래 단언이 빈 목록으로 통과한다"
+    assert all(t.get_attribute("tabindex") == "-1" for t in unselected.all())
     for tab_id in ALL_TABS:
         tab = page.locator(f"#tab-{tab_id}")
         panel = page.locator(f"#panel-{tab_id}")
@@ -481,3 +483,14 @@ def test_project_page_has_no_external_requests(proj, page_of):
         assert not page.evaluate("document.documentElement.scrollWidth > document.documentElement.clientWidth"), path
         narrow = page_of(proj + path, width=390)
         assert not narrow.evaluate("document.documentElement.scrollWidth > document.documentElement.clientWidth"), path
+
+
+def test_overview_tab_link_only_when_target_tab_is_rendered(tmp_path, proj_dir):
+    """'한눈에'의 "위험 지점 전체 →"는 위험 지점 탭이 그려질 때만 있다(없는 구역을 가리키지 않는다)."""
+    assert 'href="#panel-hotspot"' in (proj_dir / PET).read_text()
+    project = json.loads(json.dumps(dashboard_config.empty().project))
+    project["tabs"] = ["overview", "trend", "runs"]
+    site = proj_site(tmp_path, project=project)
+    html = (site / PET).read_text()
+    assert 'id="panel-overview"' in html and 'id="panel-hotspot"' not in html
+    assert "#panel-hotspot" not in html and 'data-tab-link="hotspot"' not in html

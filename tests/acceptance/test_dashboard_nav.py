@@ -85,7 +85,9 @@ def test_req124_strip_links_resolve_under_prefix(tmp_path, browser):
 
 def test_req126_external_reports_still_work(tmp_path, browser):
     run_dir = make_local_run_with_reports(tmp_path)
-    originals = snapshot_bytes(run_dir, ["S09", "S10"])
+    stage_dirs = ["S04", "S07", "S09", "S10"]        # 띠를 끼우는 리포트(온톨로지, Cucumber, hotspot, TIA)의 원본
+    originals = snapshot_bytes(run_dir, stage_dirs)
+    assert {path.split("/")[0] for path in originals} == set(stage_dirs), "네 단계 모두 원본 파일이 있어야 비교가 뜻이 있다"
     with serve(render_site(tmp_path, run_dir)) as url:
         page = browser.new_page(viewport={"width": 1280, "height": 900})
         errors = []
@@ -121,7 +123,7 @@ def test_req126_external_reports_still_work(tmp_path, browser):
             assert errors == []
         finally:
             page.close()
-    assert snapshot_bytes(run_dir, ["S09", "S10"]) == originals
+    assert snapshot_bytes(run_dir, stage_dirs) == originals
 
 
 def test_req126_nav_markup_contract():
@@ -152,6 +154,17 @@ def test_req127_inject_finds_first_body_case_insensitively(tmp_path):
     plain = tmp_path / "b.html"
     plain.write_text("<html><p>no body</p></html>")
     assert nav.inject(plain, "<nav>N</nav>") is False and plain.read_text() == "<html><p>no body</p></html>"
+    # <body로 시작하는 다른 태그(<bodyguard>, <body-x>)는 body가 아니다
+    lookalike = tmp_path / "c.html"
+    lookalike.write_text("<html><bodyguard>g</bodyguard><body-x></body-x><body\nid=\"b\"><p>hi</p></html>")
+    assert nav.inject(lookalike, "<nav>N</nav>") is True
+    assert lookalike.read_text() == "<html><bodyguard>g</bodyguard><body-x></body-x><body\nid=\"b\"><nav>N</nav><p>hi</p></html>"
+    only_lookalike = tmp_path / "d.html"
+    only_lookalike.write_text("<html><bodyguard>g</bodyguard></html>")
+    assert nav.inject(only_lookalike, "<nav>N</nav>") is False
+    selfclosing = tmp_path / "e.html"
+    selfclosing.write_text("<html><body/><p>x</p></html>")
+    assert nav.inject(selfclosing, "<nav>N</nav>") is True and selfclosing.read_text() == "<html><body/><nav>N</nav><p>x</p></html>"
 
 
 def test_req127_no_body_degraded(tmp_path):

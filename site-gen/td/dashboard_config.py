@@ -477,6 +477,28 @@ def _condition_text(condition: dict) -> str:
     return f"{CATALOG[metric].label} {OPERATOR_SYMBOLS[condition['op']]} {format_value(metric, condition['value'])}"
 
 
+SOURCE_NAMES = {"ci": "CI", "sonar": "Sonar", "repo": "저장소 정보"}
+RUN_SOURCE_NAME = "파이프라인 실행"     # run에서 오는 지표(tests.*, coverage.* 등)의 출처 이름
+
+
+def none_sources(cfg: Config) -> list[str]:
+    """`status.none.allMissing` 지표들의 출처 이름(첫 등장 순서, 중복 없음). "측정 없음" 문장이 이 이름으로 만들어진다."""
+    names: list[str] = []
+    for metric in cfg.status["none"]["allMissing"]:
+        name = SOURCE_NAMES.get(metric.split(".", 1)[0], RUN_SOURCE_NAME)
+        if name not in names:
+            names.append(name)
+    return names
+
+
+def none_advice(cfg: Config) -> str:
+    """"측정 없음" 과제의 상세에 붙는 안내 문장."""
+    names = none_sources(cfg)
+    if len(names) == 1:
+        return f"{names[0]} 기록이 있어야 상태를 판정할 수 있습니다."
+    return f"{'·'.join(names)} 중 하나의 기록이 있어야 상태를 판정할 수 있습니다."
+
+
 def rules_text(cfg: Config) -> list[str]:
     """각주: 수준마다 한 줄. 규칙이 없는 수준은 줄이 없다."""
     lines = []

@@ -6,7 +6,7 @@
 <div class="home-head">
   <div class="eyebrow">전체 품질 현황</div>
   <h1 id="headline">{% if headline.total and headline.parts %}과제 {{ headline.total }}개 중 {% for part in headline.parts %}{% if part.level == "crit" %}<em>{{ part.text }}</em>{% else %}<i>{{ part.text }}</i>{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}입니다{% else %}{{ headline_text }}{% endif %}</h1>
-  {% if none_count %}<p class="lede" id="lede">{{ none_count }}개는 CI와 Sonar 기록이 모두 없어 판정할 수 없습니다.</p>{% endif %}
+  {% if none_count %}<p class="lede" id="lede">{{ none_count }}개는 {{ none_sources }} 기록이 모두 없어 판정할 수 없습니다.</p>{% endif %}
 </div>
 <div class="sum" id="summary">
 {% for metric, item in summary.items() %}

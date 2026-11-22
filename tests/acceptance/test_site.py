@@ -53,7 +53,7 @@ def test_req049_home_sut_run_pages(tmp_path):
     assert f'data-run="{R1}"' in table and f'data-run="{R2}"' in table
     assert f'href="../../suts/petclinic/runs/{R2}/index.html"' in table
     trend = trend_panel(project_page)
-    assert trend.count("<svg") >= 2 and "<title" in trend
+    assert trend.count("<svg") >= 2 and "<title" in trend and "<desc" in trend
 
     # SUT 페이지는 그 과제 페이지로 안내한다.
     sut = (tmp_path / "suts/petclinic/index.html").read_text()

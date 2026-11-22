@@ -141,7 +141,7 @@ DETAIL_METRICS_CI = ("ci.successRate",)
 DETAIL_METRICS_SONAR = ("sonar.gate", "sonar.coverage", "sonar.bugs", "sonar.vulnerabilities", "sonar.codeSmells")
 DETAIL_METRICS_PIPELINE = ("tests.passRate", "coverage.line", "e2e.passRate", "hotspot.topName")
 DETAIL_ADVICE = {"crit": "이 사유부터 확인하세요.", "warn": "당장 막힌 것은 아니지만 사유를 확인해 두세요.",
-                 "good": "지금 할 일은 없습니다.", "none": "CI나 Sonar를 연결해야 상태를 판정할 수 있습니다."}
+                 "good": "지금 할 일은 없습니다."}   # "none"의 안내는 설정(status.none.allMissing)에서 만든다
 ZERO_COVERAGE_NOTE = "0.0%는 커버리지 리포트를 Sonar에 보내지 않는다는 뜻일 수도 있습니다"
 EMPTY_TEXT = "등록된 과제가 없습니다"
 
@@ -237,7 +237,8 @@ def _home_rows(projects: list[dict], cfg: Config) -> list[dict]:
         rows.append({
             "project": project, "cells": cells, "detail": detail,
             "stale": f"{stale[:4]}-{stale[4:6]}-{stale[6:8]}" if stale else None,
-            "advice": DETAIL_ADVICE[project["verdict"]["level"]],
+            "advice": (dashboard_config.none_advice(cfg) if project["verdict"]["level"] == "none"
+                       else DETAIL_ADVICE[project["verdict"]["level"]]),
             "href": project_href(project["name"]),
         })
     return rows
@@ -257,7 +258,7 @@ def render_home(env, projects: list[dict], cfg: Config, document: dict, test_ind
     return env.get_template("home.html.j2").render(
         static_href="static/v2/", projects=projects, rows=_home_rows(projects, cfg), columns=columns,
         filters=filters, headline=headline, headline_text=headline_text(headline),
-        none_count=counts["none"], summary=document["summary"], rules=document["rules"],
+        none_count=counts["none"], none_sources="·".join(dashboard_config.none_sources(cfg)), summary=document["summary"], rules=document["rules"],
         zero_coverage=zero_coverage, zero_note=ZERO_COVERAGE_NOTE, empty_text=EMPTY_TEXT,
         data_date=f"{data_date[:4]}-{data_date[4:6]}-{data_date[6:8]}" if data_date else None,
         data_json=json_for_script(document), test_index_href=test_index_href)

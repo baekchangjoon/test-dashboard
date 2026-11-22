@@ -34,7 +34,7 @@ _RUN_TO_ROOT = "../../../../"
 # run 디렉터리 -> SUT 안내 페이지(바뀌지 않는 주소 suts/<sut>/index.html)
 _RUN_TO_SUT = "../../index.html"
 
-_BODY_OPEN = re.compile(r"<body[^>]*>", re.IGNORECASE)
+_BODY_OPEN = re.compile(r"<body(?=[\s/>])[^>]*>", re.IGNORECASE)   # <bodyguard>·<body-x> 같은 다른 태그는 제외
 _CURRENT = ' aria-current="page"'
 
 # 띠 스타일: 외부 리포트는 app.css를 읽지 않으므로 색을 여기에 직접 둔다(값은 app.css의 토큰과 같다).

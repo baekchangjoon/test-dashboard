@@ -7,7 +7,7 @@
 </div>
 {% if view.kind == "run" %}
 <div class="grid g2">
-  <div class="card"><h3>먼저 손볼 곳 <a href="#panel-hotspot" data-tab-link="hotspot">위험 지점 전체 →</a></h3>
+  <div class="card"><h3>먼저 손볼 곳{% if tabs | selectattr("id", "equalto", "hotspot") | list %} <a href="#panel-hotspot" data-tab-link="hotspot">위험 지점 전체 →</a>{% endif %}</h3>
 {% if view.top %}
     <ol class="bars hot">
 {% for row in view.top %}

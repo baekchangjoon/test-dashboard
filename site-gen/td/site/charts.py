@@ -66,6 +66,16 @@ def _numeric(value) -> float | None:
     return float(value)
 
 
+def _description(metric: Metric, shown: list[dict], numbers: list[float | None]) -> str:
+    """차트의 글 설명(<desc>): 그린 점 수와 마지막 값. 값이 없으면 그 사실."""
+    measured = [(point, number) for point, number in zip(shown, numbers) if number is not None]
+    if not measured:
+        return f"{metric.label}: 측정된 값이 없습니다"
+    last_point = measured[-1][0]
+    return (f"{metric.label}: 점 {len(measured)}개, 마지막 값 {format_value(metric.name, last_point.get('value'))}"
+            f" ({last_point.get('id', '')})")
+
+
 def trend_svg(metric: Metric, points: list[dict], max_points: int = 30) -> str:
     """지표 하나의 추이 차트. 점은 `{"id", "at", "value", "href"(run만)}`이고 오래된 것부터다."""
     shown = points[-max_points:] if max_points > 0 else []
@@ -80,7 +90,7 @@ def trend_svg(metric: Metric, points: list[dict], max_points: int = 30) -> str:
     label = f"{metric.label} 추이"
     parts = [f'<svg class="trend" role="img" viewBox="0 0 {CHART_W} {CHART_H}" width="{CHART_W}" '
              f'data-metric="{_attr(metric.name)}" aria-label="{_attr(label)}">',
-             f"<title>{_attr(label)}</title>"]
+             f"<title>{_attr(label)}</title>", f"<desc>{_attr(_description(metric, shown, numbers))}</desc>"]
     for tick in (0.0, top / 2, top):
         y = y_for(tick, 0.0, top)
         parts.append(f'<line class="axis" x1="{PAD_L}" y1="{y:.1f}" x2="{CHART_W - PAD_R}" y2="{y:.1f}"/>')

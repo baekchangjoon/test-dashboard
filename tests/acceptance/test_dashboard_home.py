@@ -369,3 +369,20 @@ def test_home_has_no_external_requests(home, page_of):
     page.wait_for_load_state("load")
     assert requests and all(url.startswith(home) for url in requests), requests
     assert not page.evaluate("document.documentElement.scrollWidth > document.documentElement.clientWidth")
+
+
+# --- 최종 리뷰 수정: "측정 없음" 문장은 status.none.allMissing을 따른다 --------------------------------------------
+
+def test_none_sentences_follow_all_missing(home_dir, tmp_path):
+    html = (home_dir / "index.html").read_text()
+    assert "1개는 CI·Sonar·파이프라인 실행 기록이 모두 없어 판정할 수 없습니다." in html
+    assert "CI·Sonar·파이프라인 실행 중 하나의 기록이 있어야 상태를 판정할 수 있습니다." in html
+    status = dashboard_config.empty().status
+    status["none"] = {"allMissing": ["ci.runs"]}
+    site = make_site(tmp_path, snapshots={"quiet": [snap(ci_runs=0, sonar=None)]},
+                     config=cfg_with(plain="quiet", status=status))
+    rebuild_site(site)
+    custom = (site / "index.html").read_text()
+    assert "1개는 CI 기록이 모두 없어 판정할 수 없습니다." in custom
+    assert "CI 기록이 있어야 상태를 판정할 수 있습니다." in custom
+    assert "Sonar" not in custom.split('id="lede"')[1].split("</p>")[0]
