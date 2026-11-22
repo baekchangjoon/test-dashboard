@@ -667,6 +667,14 @@ def test_validate_composes_factors_schema(tmp_path):
     with pytest.raises(jsonschema.ValidationError):
         detviz.validate(broken)
     broken = copy.deepcopy(doc)
+    broken["factors"]["endpoints"][0]["fields"][0]["classes"][0]["id"] = "BOGUS"   # valid 자리(prefixItems)도 class 정의를 따른다
+    with pytest.raises(jsonschema.ValidationError):
+        detviz.validate(broken)
+    broken = copy.deepcopy(doc)
+    broken["factors"]["endpoints"][0]["fields"][0]["classes"][0] = {"id": "BOGUS", "kind": "valid"}
+    with pytest.raises(jsonschema.ValidationError):
+        detviz.validate(broken)
+    broken = copy.deepcopy(doc)
     broken["factors"]["version"] = 2
     with pytest.raises(jsonschema.ValidationError):
         detviz.validate(broken)
@@ -1032,3 +1040,43 @@ def test_req211_static_rules(tmp_path):
     assert "<script src=" not in html and not re.search(r"<script[^>]*\bsrc\s*=", html)
     assert "Cytoscape Consortium" in html and script.strip()[:200] in html
     assert html.count('<script type="application/json"') == 1
+
+
+def _scroll_widths(page) -> list[int]:
+    return page.evaluate("[document.documentElement.scrollWidth, document.documentElement.clientWidth]")
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+def test_req211_no_page_scroll_390(tmp_path, generated, det_browser, scheme):
+    """390px 폭(라이트·다크): 처음 화면과 필드가 가장 많은 엔드포인트 선택 뒤 페이지 가로 스크롤이 없다(petclinic 빌드).
+    대조: .scroll 밖에 2000px 요소를 넣으면 scrollWidth가 커진다(검사가 가려지지 않았음을 보인다)."""
+    import shutil
+    from td import compare, detviz
+    made = generated("petclinic")
+    gen_dir = tmp_path / "det-0000cafe-r1"
+    shutil.copytree(made.out, gen_dir)
+    (tmp_path / "S07").mkdir()
+    doc = detviz.build(gen_dir, tmp_path / "S07")
+    out = tmp_path / "compare"
+    out.mkdir()
+    html_path = out / "det.html"
+    html_path.write_text(compare.render_det_html(doc, "site.css"), encoding="utf-8")
+    shutil.copy2(REPO_ROOT / "site-gen" / "td" / "site" / "static" / "site.css", out / "site.css")
+    widest = max(doc["factors"]["endpoints"], key=lambda e: (len(e["fields"]), e["endpoint"]))["endpoint"]
+    context, page, blocked, errors = _open_det(det_browser, html_path, color_scheme=scheme, viewport={"width": 390, "height": 800})
+    try:
+        initial = _scroll_widths(page)
+        assert initial[0] <= initial[1], ("initial", initial)
+        page.locator("select").first.select_option(value=widest)
+        page.wait_for_function("window.__td_ready === true")
+        for details in page.locator("details").all():
+            details.locator("summary").first.click()
+        selected = _scroll_widths(page)
+        assert selected[0] <= selected[1], (widest, selected)
+        page.evaluate("""() => { const d = document.createElement('div'); d.style.width = '2000px'; d.style.height = '1px';
+                                 document.querySelector('main').appendChild(d); }""")
+        control = _scroll_widths(page)
+        assert control[0] > control[1], ("control", control)
+        assert blocked == [] and errors == []
+    finally:
+        context.close()
