@@ -55,6 +55,14 @@
      "type": "java.lang.String"
     },
     {
+     "name": "memo",
+     "type": "java.lang.String"
+    },
+    {
+     "name": "nick",
+     "type": "java.lang.String"
+    },
+    {
      "name": "phase",
      "type": "ex.kit.Phase"
     },

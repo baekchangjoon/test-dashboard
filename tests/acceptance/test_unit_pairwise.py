@@ -122,7 +122,7 @@ def test_req305_candidate_sources(tmp_path, row):
         assert _values(model, "size") == [1, 8]
         assert _values(model, "legacy") == ["<omit>", None]  # `legacy != null`의 유효 경계는 null
     elif row == "multi-atom":  # 다원자 논리곱: 유효 경계 + 위반값(violations[0]), 출처 순서
-        assert _values(model, "credit") == [45, 40, 39, 44]
+        assert _values(model, "credit") == [45, 40, 39, 44, 42, 41]
         assert _values(model, "code") == ["<uniq>", "VIPKIT", "PROMO"]
     elif row == "enum":  # 상태 전이 필드가 아닌 enum은 모든 상수(RUBY는 `~` 필터로 빠진다)
         assert _values(model, "grade") == ["PLAIN", "GOLD"]
@@ -157,7 +157,7 @@ def test_req305_kinds(tmp_path):
     lt10 = next(c for a, cs in ep.error_disjuncts for c in cs if c.field == "slot" and c.op == "<")
     assert pw.truth(lt10, slot) is False
     eqlit = next(c for a, cs in ep.error_disjuncts for c in cs if c.op == "eqlit")
-    assert pw.truth(eqlit, code[0]) is None
+    assert pw.truth(eqlit, code[0]) is False  # uniq:<caseId>는 리터럴 VIPKIT과 같지 않다
     # 직렬화: value | range, provenance, source, transform
     doc = pw.model_json(model)
     slot_doc = doc["fixed"]["body.slot"]
@@ -192,16 +192,18 @@ def test_req305_filter_and_fixed(tmp_path):
             ("depth", "7", "single-atom"), ("depth", "6", "single-atom")} <= dropped
     # (b) 미해결 논리곱의 부분 제약(`~`)
     assert ("grade", '"RUBY"', "partial-constraint") in dropped
+    assert ("legacy", '"OLD"', "single-atom") in dropped  # #14 위반값 OLD는 #4 `legacy != null`을 참으로 만든다
     assert all(d["address"].startswith("plan-tests-KitService.make.json#") and not d["address"].endswith("~")
                for d in model.dropped)
     fixed = {name: entry["reason"] for name, entry in model.fixed.items()}
     assert fixed == {"body.phase": "state-field", "body.slot": "count-field", "body.deposit": "rel-dependent",
-                     "body.shade": "stored-or-unresolved-only", "body.depth": "single-candidate"}
+                     "body.shade": "stored-or-unresolved-only", "body.depth": "single-candidate",
+                     "body.nick": "single-candidate"}
     assert model.fixed["body.deposit"]["candidate"].value.transform == "relation-satisfy"
     assert model.fixed["body.depth"]["candidate"].value.value == 4
     assert model.fixed["body.shade"]["candidate"].value.value == "LIGHT"  # baseline
-    assert [p["field"] for p in model.params] == ["code", "credit", "grade", "legacy", "size"]
-    assert [p["param"] for p in model.params] == ["p0", "p1", "p2", "p3", "p4"]
+    assert [p["field"] for p in model.params] == ["code", "credit", "grade", "legacy", "memo", "size"]
+    assert [p["param"] for p in model.params] == ["p0", "p1", "p2", "p3", "p4", "p5"]
 
 
 def test_req305_rel_others(tmp_path):
@@ -277,11 +279,11 @@ def test_req306_partial_evaluation(tmp_path, row):
         _, model = _model(deriver, PATCH_PUT)
         height, width = _param(model, "height")["param"], _param(model, "width")["param"]
         assert model.exclusions == [{height: _label_of(model, "height", 7), width: _label_of(model, "width", 7)}]
-    else:  # 판단 불가 고정 원자식은 참으로 본다: 선행 baseline code는 uniq → `"X".equals(existing.code)` 판단 불가
+    else:  # 판단 불가 고정 원자식은 참으로 본다: 선행 baseline legacy는 생략 → `"Z".equals(existing.legacy)` 판단 불가
         def add(docs):
             items = next(p for p in docs["plans.json"] if p["method"] == "patch")["items"]
             items.append(dict(items[0], index=len(items),
-                              condition='"X".equals(existing.getCode()) && patch.width() > 6 && patch.height() > 5'))
+                              condition='"Z".equals(existing.getLegacy()) && patch.width() > 6 && patch.height() > 5'))
         deriver = _kinds(tmp_path, add)
         ep, model = _model(deriver, PATCH_PUT)
         stored = next(c for _, cs in ep.error_disjuncts for c in cs if c.stored and c.op == "eqlit")
@@ -290,6 +292,68 @@ def test_req306_partial_evaluation(tmp_path, row):
         w7 = _label_of(model, "width", 7)
         assert model.exclusions == [{height: _label_of(model, "height", 7), width: w7},
                                     {height: _label_of(model, "height", 6), width: w7}]
+
+
+def test_req306_uniq_literal_is_determinable(tmp_path):
+    """선행 baseline이 uniq인 저장 필드의 `"X".equals(...)`는 거짓으로 판단 가능 → 논리곱을 버린다."""
+    def add(docs):
+        items = next(p for p in docs["plans.json"] if p["method"] == "patch")["items"]
+        items.append(dict(items[0], index=len(items),
+                          condition='"X".equals(existing.getCode()) && patch.width() > 6 && patch.height() > 5'))
+    deriver = _kinds(tmp_path, add)
+    ep, model = _model(deriver, PATCH_PUT)
+    stored = next(c for _, cs in ep.error_disjuncts for c in cs if c.stored and c.op == "eqlit")
+    assert pw.fixed_truth(deriver.cons, ep, stored, None) is False
+    assert len(model.exclusions) == 1
+
+
+def test_req306_zero_atoms_undetermined(tmp_path):
+    """모델 원자식 0개로 줄었지만 고정 원자식이 판단 불가면 infeasible이 아니라 모든 행에 undetermined."""
+    def add(docs):
+        items = next(p for p in docs["plans.json"] if p["method"] == "patch")["items"]
+        items.append(dict(items[0], index=len(items), condition='"Z".equals(existing.getLegacy())'))
+    _, model = _model(_kinds(tmp_path, add), PATCH_PUT)
+    assert model.reason is None and len(model.exclusions) == 1
+    assert len(model.row_undetermined) == 1 and model.row_undetermined[0].startswith("plan-tests-KitService.patch.json#3@")
+    row = {p["param"]: "v0" for p in model.params}
+    assert pw.row_assumes_for(model, row) == [f"undetermined:{model.row_undetermined[0]}"]
+
+
+def test_req306_probe_fixed_uniq_single_atom(tmp_path):
+    """고정 uniq 필드(nick) + 단일 원자 `"BAD".equals(nick)`: uniq ≠ BAD로 판단 가능 → infeasible 아님(리뷰 probe)."""
+    _, model = _model(_kinds(tmp_path), MAKE)
+    nick = model.fixed["body.nick"]
+    assert (nick["reason"], nick["candidate"].kind) == ("single-candidate", "uniq")
+    assert model.reason is None and model.skipped is None and model.row_undetermined == []
+
+
+def test_req306_exact_exclusions(tmp_path):
+    """MAKE 배제 집합 전체(완전성): GOLD×39, VIPKIT×{40,39,44,42,41}, memo uniq×{40,39,41}(neqlit 위반 uniq, 리뷰 probe)."""
+    _, model = _model(_kinds(tmp_path), MAKE)
+    code, credit, grade, memo = (_param(model, f)["param"] for f in ("code", "credit", "grade", "memo"))
+
+    def c(raw):
+        return _label_of(model, "credit", raw)
+    expected = [{credit: c(39), grade: _label_of(model, "grade", "GOLD")}]
+    expected += [{code: _label_of(model, "code", "VIPKIT"), credit: c(raw)} for raw in (40, 39, 44, 42, 41)]
+    expected += [{credit: c(raw), memo: _label_of(model, "memo", "<uniq>")} for raw in (40, 39, 41)]
+    assert model.exclusions == expected
+
+
+def test_req306_baseline_never_filtered(tmp_path):
+    """baseline이 필터 조건을 참으로 만들어도 버리지 않고 `baseline-filter:<addr>`로 남긴다(dropped에는 없음)."""
+    def add(docs):
+        items = next(p for p in docs["plans.json"] if p["method"] == "make")["items"]
+        items.append(dict(items[0], index=len(items),
+                          condition="form.shade() != Shade.DARK && form.credit() > ledger.cap()"))
+    _, model = _model(_kinds(tmp_path, add), MAKE)
+    shade = model.fixed["body.shade"]["candidate"]
+    assert shade.value.value == "DARK"  # baseline이 `!= DARK` 강제로 DARK가 되어 #10 `~`(shade == DARK)를 참으로 만든다
+    assert not any(d["field"] == "shade" and d["candidate"].get("value") == "DARK" for d in model.dropped)
+    hits = [e for e in model.row_assumes if e["field"] == "body.shade"]
+    assert hits and all(e["assume"].startswith("baseline-filter:plan-tests-KitService.make.json#10@") for e in hits)
+    row = {p["param"]: "v0" for p in model.params}
+    assert hits[0]["assume"] in pw.row_assumes_for(model, row)
 
 
 def test_req306_petclinic_vip_exclusion(tmp_path):
@@ -302,11 +366,15 @@ def test_req306_petclinic_vip_exclusion(tmp_path):
 
 
 def _mini_eval(op, value, operand, length=False):
-    """테스트 자체 평가기(지원: < <= > >= == != eqlit null notnull). 판단 불가면 None."""
+    """테스트 자체 평가기(지원: < <= > >= == != eqlit neqlit null notnull). 판단 불가면 None."""
     if op == "null":
         return value is None
     if op == "notnull":
-        return value is not None
+        return value is not None and value != "<omit>"
+    if value == "<uniq>" and op in ("eqlit", "neqlit") and not operand.startswith("uniq:"):
+        return op == "neqlit"
+    if op == "neqlit" and isinstance(value, str) and not value.startswith("<"):
+        return value != operand
     if value is None or value in ("<omit>", "<uniq>") or isinstance(value, tuple):
         return None
     if op == "eqlit":
@@ -344,22 +412,38 @@ def test_req306_exclusions_justified(tmp_path, which):
 
 
 def test_req306_undetermined(tmp_path):
-    """holds가 None인 조합(uniq ∧ credit<45)은 배제에 없다. 확정 조합(VIPKIT ∧ credit<45)만 배제된다."""
+    """holds가 None인 조합(legacy 생략·null ∧ credit<42, `"OLD".equals`)은 배제에 없다."""
     deriver = _kinds(tmp_path)
     _, model = _model(deriver, MAKE)
-    code, credit = _param(model, "code")["param"], _param(model, "credit")["param"]
-    uniq = _label_of(model, "code", "<uniq>")
-    vipkit = _label_of(model, "code", "VIPKIT")
-    assert not any(e.get(code) == uniq for e in model.exclusions)
-    pairs = sorted((e[code], e[credit]) for e in model.exclusions if code in e)
-    assert pairs == sorted((vipkit, _label_of(model, "credit", raw)) for raw in (40, 39, 44))
+    code, credit, legacy = (_param(model, f)["param"] for f in ("code", "credit", "legacy"))
+    assert not any(legacy in e for e in model.exclusions)
+    assert not any(e.get(code) == _label_of(model, "code", "<uniq>") for e in model.exclusions)
     # 판단 불가 조합은 행 평가로 알 수 있다(Task 4가 assumes `undetermined:<addr>`로 싣는다)
     row = {p["param"]: "v0" for p in model.params}
     row[credit] = _label_of(model, "credit", 39)
     undetermined = pw.undetermined(model, row)
-    assert len(undetermined) == 1 and undetermined[0].startswith("plan-tests-KitService.make.json#11@")
-    row[code] = _label_of(model, "code", "PROMO")
+    assert len(undetermined) == 1 and undetermined[0].startswith("plan-tests-KitService.make.json#14@")
+    assert pw.row_assumes_for(model, row) == [f"undetermined:{undetermined[0]}"]
+    row[credit] = _label_of(model, "credit", 45)
     assert pw.undetermined(model, row) == []
+
+
+def test_truth_uniq_and_spread():
+    uniq = pw.Candidate("v0", "uniq", Value(Uniq(), "generic-sentinel"))
+    def con(**kw):
+        return pw.Con(field="f", **kw)
+    assert pw.truth(con(op=">", value=3, length=True), uniq) is False  # 길이는 baseline 형식
+    assert pw.truth(con(op="fmt", value="EMAIL"), uniq) is False
+    assert pw.truth(con(op="<", value=3), uniq) is None
+    assert pw.truth(con(op="eqlit", value="BAD"), uniq) is False
+    assert pw.truth(con(op="neqlit", value="BAD"), uniq) is True
+    assert pw.truth(con(op="eqlit", value="uniq:x"), uniq) is None
+    assert pw.truth(con(op="null"), uniq) is False and pw.truth(con(op="notnull"), uniq) is True
+    for spread in (Spread(10, 20, (10, 20)), Spread(10, 20, (10, 11, 20)), Spread(5, 9, (5, 6, 7, 9))):
+        rep = pw._representative(spread)
+        assert spread.lo < rep < spread.hi and rep not in spread.excluded
+    candidate = pw.Candidate("v0", "spread", Value(Spread(10, 20, (10, 20)), "derived"))
+    assert pw.truth(con(op="<", value=11), candidate) is False and pw.truth(con(op="<", value=12), candidate) is True
 
 
 # --- REQ-307 실행·분류 ------------------------------------------------------------------------------
@@ -422,28 +506,45 @@ def test_req307_rc_and_output_contract(tmp_path):
     assert _work_leftovers(work) == []
 
 
+@pytest.mark.parametrize("count, allowed", [(12, True), (13, False)])
+def test_req307_candidate_cap_boundary(tmp_path, count, allowed):
+    def constants(docs):
+        docs["ext.json"]["enums"]["ex.kit.Grade"]["constants"] = [f"C{i:02d}" for i in range(count)]
+    _, tags = _model(_kinds(tmp_path, constants), TAGS)
+    assert len(_param(tags, "grade")["candidates"]) == count
+    assert tags.reason == (None if allowed else "pairwise-too-large")
+
+
+@pytest.mark.parametrize("count, allowed", [(24, True), (25, False)])
+def test_req307_param_cap_boundary(tmp_path, count, allowed):
+    def fields(docs):
+        docs["ext.json"]["dtos"]["ex.kit.TagForm"]["fields"] = [{"name": f"g{i:02d}", "type": "ex.kit.Shade"} for i in range(count)]
+    _, wide = _model(_kinds(tmp_path, fields), TAGS)
+    assert len(wide.params) == count
+    assert wide.reason == (None if allowed else "pairwise-too-large")
+
+
 def test_req307_size_caps(tmp_path, monkeypatch):
-    # 후보 > 12: 필드 값을 13개로 만드는 enum
-    def many_constants(docs):
-        docs["ext.json"]["enums"]["ex.kit.Grade"]["constants"] = [f"C{i:02d}" for i in range(13)]
-    _, tags = _model(_kinds(tmp_path / "a", many_constants), TAGS)
-    assert tags.reason == "pairwise-too-large" and tags.exclusions == []
-
-    # 파라미터 > 24
-    def many_fields(docs):
-        dto = docs["ext.json"]["dtos"]["ex.kit.TagForm"]
-        dto["fields"] = [{"name": f"g{i:02d}", "type": "ex.kit.Shade"} for i in range(25)]
-    _, wide = _model(_kinds(tmp_path / "b", many_fields), TAGS)
-    assert wide.reason == "pairwise-too-large" and len(wide.params) == 25
-
-    # 배제 곱 상한: 열거 전에 곱(Σ Π 후보 수)으로 판정한다 → 열거 함수가 불리지 않는다
+    # 배제 곱 상한: 열거 전에 곱(Σ Π 후보 수)으로 판정한다 → 상한 초과면 열거 함수가 불리지 않는다
     calls = []
     original = pw._iter_exclusions
     monkeypatch.setattr(pw, "_iter_exclusions", lambda checks: calls.append(1) or original(checks))
-    monkeypatch.setattr(pw, "MAX_EXCLUSIONS", 3)
-    _, put = _model(_kinds(tmp_path / "c"), PATCH_PUT)  # width 3 × height 4 = 12 > 3
+    monkeypatch.setattr(pw, "MAX_EXCLUSIONS", 12)  # PUT: width 3 × height 4 = 12 → 정확히 상한이면 허용
+    _, put = _model(_kinds(tmp_path / "c"), PATCH_PUT)
+    assert put.reason is None and len(put.exclusions) == 1 and calls == [1]
+    monkeypatch.setattr(pw, "MAX_EXCLUSIONS", 11)
+    calls.clear()
+    _, put = _model(_kinds(tmp_path / "d"), PATCH_PUT)
     assert put.reason == "pairwise-too-large" and calls == [] and put.exclusions == []
     monkeypatch.setattr(pw, "MAX_EXCLUSIONS", 20000)
+    monkeypatch.setattr(pw, "_iter_exclusions", original)
+
+    # 실제 상한 20,000: 곱 정확히 20,000은 모두 모이고 20,001은 거절된다
+    def checks(n):
+        return [("a", [("p0", {f"v{i}": True for i in range(n)}), ("p1", {"v0": True, "v1": True})])]
+    assert pw._bound(checks(10000)) == 20000 and len(pw._collect_exclusions(checks(10000))) == 20000
+    odd = [("a", [("p0", {f"v{i}": True for i in range(20001)}), ("p1", {"v0": True})])]
+    assert pw._bound(odd) == 20001 and pw._collect_exclusions(odd) is None
 
     # 열거는 스트리밍이고 MAX_EXCLUSIONS+1에서 멈춘다
     produced = []
@@ -456,6 +557,11 @@ def test_req307_size_caps(tmp_path, monkeypatch):
     assert pw._collect_exclusions([]) is None
     assert len(produced) == pw.MAX_EXCLUSIONS + 1 == 20001
     assert (pw.MAX_CANDIDATES, pw.MAX_PARAMS, pw.MAX_EXCLUSIONS) == (12, 24, 20000)
+
+
+def test_distinct_fields_asserted():
+    with pytest.raises(AssertionError):
+        list(pw._iter_exclusions([("a", [("p0", {"v0": True}), ("p0", {"v1": True})])]))
 
 
 def test_req307_neutral_model_and_cleanup(tmp_path):

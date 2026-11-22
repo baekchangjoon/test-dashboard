@@ -28,6 +28,7 @@ PICT_RC_TOO_RESTRICTIVE = 5
 INFEASIBLE = "pairwise-infeasible"
 TOO_LARGE = "pairwise-too-large"
 FEW_FIELDS = "fields<2"
+UNIQ_PREFIX = "uniq:"  # 케이스 확정 때 uniq 자리표시가 되는 값의 접두사(derive._finalize)
 
 Kind = Literal["literal", "omit", "null", "uniq", "spread"]
 
@@ -85,6 +86,11 @@ class EndpointModel:
     reason: str | None
     # 행 평가용(직렬화하지 않음): (주소, [(param, {label: True|False|None})]) — 배제 줄을 만든 논리곱과 한 원자식으로 줄어든 논리곱
     checks: list = field(default_factory=list, repr=False, compare=False)
+    # 모든 행에 붙는 `undetermined:<addr>`: 모델 원자식 0개로 줄었지만 고정 원자식에 판단 불가가 섞인 논리곱(설계 §5.3)
+    row_undetermined: list[str] = field(default_factory=list)
+    # baseline이 필터 조건을 참으로 만들어도 버리지 않고 남긴 기록: [{field: "<loc>.<name>", label, assume: "baseline-filter:<addr>"}]
+    # 모델 필드면 그 라벨을 쓴 행에만, 고정 필드면 모든 행에 붙는다(row_assumes_for)
+    row_assumes: list[dict] = field(default_factory=list)
 
 
 # --- 후보 종류·동치·평가 -----------------------------------------------------------------------------
@@ -116,8 +122,9 @@ def _key(value) -> tuple:
 
 
 def _representative(spread: Spread) -> int:
-    """범위 대표: 경계(제외 집합) 밖의 첫 내부 값."""
-    return next(n for n in range(spread.lo, spread.hi + 1) if n not in spread.excluded)
+    """범위 대표: lo·hi와 제외 집합을 뺀 첫 내부 값(내부가 비면 제외 집합 밖 첫 값)."""
+    inner = (n for n in range(spread.lo + 1, spread.hi) if n not in spread.excluded)
+    return next(inner, next((n for n in range(spread.lo, spread.hi + 1) if n not in spread.excluded), spread.lo))
 
 
 def truth(con: Con, candidate: Candidate) -> bool | None:
@@ -127,10 +134,16 @@ def truth(con: Con, candidate: Candidate) -> bool | None:
     if con.op == "rel":
         return False  # 종속 필드는 고정 극단값이고 그 가정(assumes)을 케이스에 싣는다
     value = candidate.value
+    if con.op in ("null", "notnull"):
+        return Constraints.holds(con, value)  # null 여부는 종류만으로 정해진다(uniq·spread는 null이 아니다)
     if candidate.kind == "spread":
         return Constraints.holds(con, Value(_representative(value.value), value.provenance))
     if candidate.kind == "uniq":
-        return False if con.length or con.op == "fmt" else None  # 길이·형식은 baseline이 만족시킨 형식으로 본다
+        if con.length or con.op == "fmt":
+            return False  # 길이·형식은 baseline이 만족시킨 형식으로 본다
+        if con.op in ("eqlit", "neqlit") and not str(con.value).startswith(UNIQ_PREFIX):
+            return con.op == "neqlit"  # `uniq:<caseId>`는 `uniq:`로 시작하지 않는 리터럴과 같지 않다
+        return None
     return Constraints.holds(con, value)
 
 
@@ -235,15 +248,23 @@ def build_model(ep: Endpoint, cons: Constraints, catalog: Catalog, order: int) -
     rel_sides = {name for _, cs in resolved for c in cs if c.op == "rel" for name in c.side}
 
     dropped: list[dict] = []
+    baseline_hits: list[tuple] = []  # ((loc, name), addr): baseline이 참으로 만든 필터·축소 조건
     pools: dict[tuple, list[Candidate]] = {}
     for fld in fields:
         kept = []
-        for value in _raw_candidates(ep, cons, fld):
+        for index, value in enumerate(_raw_candidates(ep, cons, fld)):
             candidate = _candidate("", value)
-            hit = next(((addr, "single-atom") for addr, cs in resolved if len(cs) == 1
-                        for c in _request_atoms(cs, fld.name) if truth(c, candidate) is True), None)
-            hit = hit or next(((addr, "partial-constraint") for addr, cs in partial
-                               for c in _request_atoms(cs, fld.name) if truth(c, candidate) is True), None)
+            hits = [addr for addr, cs in resolved if len(cs) == 1
+                    for c in _request_atoms(cs, fld.name) if truth(c, candidate) is True]
+            reason = "single-atom"
+            if not hits:
+                hits = [addr for addr, cs in partial for c in _request_atoms(cs, fld.name) if truth(c, candidate) is True]
+                reason = "partial-constraint"
+            if hits and index == 0:  # baseline(첫 후보)은 버리지 않는다. 가정으로 남긴다
+                baseline_hits += [((fld.loc, fld.name), addr) for addr in dict.fromkeys(hits)]
+                kept.append(candidate)
+                continue
+            hit = (hits[0], reason) if hits else None
             if hit:
                 dropped.append({"loc": fld.loc, "field": fld.name, "candidate": _candidate_json(candidate, False),
                                 "address": hit[0], "reason": hit[1]})
@@ -263,19 +284,25 @@ def build_model(ep: Endpoint, cons: Constraints, catalog: Catalog, order: int) -
             value = pool[0].value if reason == "single-candidate" and pool else baseline[(fld.loc, fld.name)][0]
             fixed[f"{fld.loc}.{fld.name}"] = {"reason": reason, "candidate": _candidate("v0", value)}
         model_names = {f.name for f in model_fields}
-        reduced, infeasible, removed = [], False, False
+        reduced, infeasible, removed, row_undetermined = [], False, False, []
         for addr, cs in resolved:
             fixed_atoms = [c for c in cs if c.stored or c.op in ("count", "rel") or c.field not in model_names]
-            if any(fixed_truth(cons, ep, c, (fixed.get(_fixed_key(ep, c)) or {}).get("candidate")) is False
-                   for c in fixed_atoms):
+            fixed_values = [fixed_truth(cons, ep, c, (fixed.get(_fixed_key(ep, c)) or {}).get("candidate"))
+                            for c in fixed_atoms]
+            if any(v is False for v in fixed_values):
                 continue  # 고정 원자식 하나라도 거짓 → 어떤 행에서도 참이 될 수 없다(판단 불가는 참으로 본다)
             atoms = [c for c in cs if c not in fixed_atoms]
             if not atoms:
-                infeasible = True
+                if all(v is True for v in fixed_values):
+                    infeasible = True  # 판단 가능하게 모두 참 → 모든 행이 오류
+                else:
+                    row_undetermined.append(addr)  # 판단 불가가 섞이면 모든 행에 undetermined
             elif len(atoms) == 1:
                 fld = cons.catalog.lookup(ep, atoms[0].field)
                 pool = pools[(fld.loc, fld.name)]
-                for candidate in [c for c in pool if truth(atoms[0], c) is True]:
+                if pool and truth(atoms[0], pool[0]) is True and ((fld.loc, fld.name), addr) not in baseline_hits:
+                    baseline_hits.append(((fld.loc, fld.name), addr))  # baseline은 남기고 가정으로 기록
+                for candidate in [c for c in pool[1:] if truth(atoms[0], c) is True]:
                     pool.remove(candidate)
                     removed = True
                     dropped.append({"loc": fld.loc, "field": fld.name, "candidate": _candidate_json(candidate, False),
@@ -295,7 +322,10 @@ def build_model(ep: Endpoint, cons: Constraints, catalog: Catalog, order: int) -
                       for c in atoms])
               for addr, atoms in reduced]
     effective = min(order, len(params))
-    model = EndpointModel(params, fixed, dropped, [], order, effective, None, None, checks)
+    model = EndpointModel(params, fixed, dropped, [], order, effective, None, None, checks,
+                          sorted(set(row_undetermined)),
+                          [{"field": f"{loc}.{name}", "label": "v0", "assume": f"baseline-filter:{addr}"}
+                           for (loc, name), addr in baseline_hits])
     if len(params) < 2:
         model.skipped = FEW_FIELDS
     elif infeasible:
@@ -334,6 +364,8 @@ def _bound(checks) -> int:
 def _iter_exclusions(checks):
     """배제 조합을 하나씩 낸다: 원자식마다 필드가 달라 조합이 참인 것은 원자식별 참 후보의 곱과 같다."""
     for _, atoms in checks:
+        # 한 논리곱의 원자식은 서로 다른 필드다(같은 필드를 두 번 묶는 논리곱은 derive가 `~` 부분 제약으로 강등한다)
+        assert len({param for param, _ in atoms}) == len(atoms), "conjunction atoms must be on distinct fields"
         trues = [[(param, label) for label, value in truths.items() if value is True] for param, truths in atoms]
         yield from itertools.product(*trues)
 
@@ -361,6 +393,18 @@ def undetermined(model: EndpointModel, labels: dict[str, str]) -> list[str]:
         if all(v is not False for v in values) and any(v is None for v in values):
             hits.append(addr)
     return sorted(set(hits))
+
+
+def row_assumes_for(model: EndpointModel, labels: dict[str, str]) -> list[str]:
+    """행에 붙일 가정: 모든 행 공통 `undetermined:` + 그 행이 쓴 baseline 라벨의 `baseline-filter:` + 행별 `undetermined:`."""
+    params = {f"{p['loc']}.{p['field']}": p["param"] for p in model.params}
+    out = [f"undetermined:{addr}" for addr in model.row_undetermined]
+    for entry in model.row_assumes:
+        param = params.get(entry["field"])
+        if param is None or labels.get(param) == entry["label"]:
+            out.append(entry["assume"])
+    out += [f"undetermined:{addr}" for addr in undetermined(model, labels)]
+    return sorted(set(out))
 
 
 def model_json(model: EndpointModel) -> dict:
