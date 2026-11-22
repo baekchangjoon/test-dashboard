@@ -1221,3 +1221,40 @@ def test_config_error_text_stays_out_of_s13_publish_log(exec_env, capsys):
     for text in (log_text, stage_text):
         assert "hush" not in text and publish.CONFIG_ERROR_REASON in text
     assert SECRET_REPO in capsys.readouterr().err
+
+
+def test_run_collect_kill_path_reaps_the_whole_child_group(tmp_path, monkeypatch, restore_signals):
+    """collect.sh가 SIGTERM을 무시하면 기다린 뒤 SIGKILL을 그 자식의 프로세스 그룹 전체에 보낸다(손자 td.collect도 남지 않는다)."""
+    pid_file = tmp_path / "child.pid"
+    write_fake_collect(tmp_path, f"""\
+        trap '' TERM
+        echo $$ > "{pid_file}"
+        sleep 30 & echo $! > "{pid_file}.grandchild"
+        wait
+        """)
+    cfg = _collect_cfg(tmp_path, cfg_with(plain="alpha"))
+    monkeypatch.setattr(publish, "COLLECT_STOP_WAIT", 1)
+    _signal.signal(_signal.SIGALRM, publish._raise_interrupted)
+    _signal.setitimer(_signal.ITIMER_REAL, 1.5)
+    pids: list[int] = []
+    try:
+        with pytest.raises(publish.PublishInterrupted):
+            publish.run_collect({"TD_ROOT": str(tmp_path), "PATH": os.environ["PATH"]}, cfg, tmp_path / "site")
+        pids = [int(pid_file.read_text()), int(Path(f"{pid_file}.grandchild").read_text())]
+        for pid in pids:
+            deadline = time.monotonic() + 5
+            while _alive(pid) and time.monotonic() < deadline:
+                time.sleep(0.1)
+            assert not _alive(pid), f"pid {pid}가 남았다"
+    finally:
+        for pid in pids:
+            if _alive(pid):
+                os.kill(pid, _signal.SIGKILL)
+
+
+def _alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True

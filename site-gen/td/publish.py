@@ -754,7 +754,9 @@ def _parse_collect_output(text: str) -> dict | None:
 
 
 def _stop_child(proc: subprocess.Popen) -> None:
-    """자식(collect.sh)에 SIGTERM을 보내고 COLLECT_STOP_WAIT초까지 기다린다. 넘으면 SIGKILL. 기다리는 동안 다시 온 신호는 무시한다."""
+    """자식(collect.sh)에 SIGTERM을 보내고 COLLECT_STOP_WAIT초까지 기다린다(토큰 정리는 collect.sh의 trap이 한다).
+    넘으면 그 자식이 이끄는 프로세스 그룹(자식을 새 세션으로 띄웠다) 전체에 SIGKILL을 보내 손자(td.collect, gh)도 남기지 않는다.
+    다른 그룹에는 신호를 보내지 않는다. 기다리는 동안 다시 온 신호는 무시한다."""
     with contextlib.suppress(ProcessLookupError):
         proc.terminate()
     deadline = time.monotonic() + COLLECT_STOP_WAIT
@@ -763,6 +765,9 @@ def _stop_child(proc: subprocess.Popen) -> None:
             proc.wait(timeout=max(0.0, deadline - time.monotonic()))
             return
         except subprocess.TimeoutExpired:
+            # 아직 거두지 않은 자식의 pid = 그 그룹 번호(start_new_session)라 다른 프로세스를 가리킬 수 없다
+            with contextlib.suppress(ProcessLookupError, PermissionError):
+                os.killpg(proc.pid, signal.SIGKILL)
             with contextlib.suppress(ProcessLookupError):
                 proc.kill()
             proc.wait()
@@ -787,7 +792,7 @@ def run_collect(env: dict, cfg, site_dir: Path) -> dict:
                "--suts-dir", str(suts_dir)]
     Path(site_dir).mkdir(parents=True, exist_ok=True)
     try:
-        proc = subprocess.Popen(command, env=env, stdout=subprocess.PIPE, text=True)
+        proc = subprocess.Popen(command, env=env, stdout=subprocess.PIPE, text=True, start_new_session=True)
     except OSError as exc:
         print(f"[td] 수집: collect.sh를 띄우지 못했다: {exc}", file=sys.stderr)
         return _collect_result("degraded", [COLLECT_FAILED_REASON])
