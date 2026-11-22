@@ -165,3 +165,37 @@ def test_main_returns_nonzero_when_index_publish_failed(default_file, monkeypatc
     monkeypatch.setattr(run_baseline, "run_index_publish", lambda prefix: {"status": "failed", "reason": "잠금", "exitCode": 1})
     assert run_baseline.main(["--session-file", str(default_file)]) == 1
     assert json.loads(default_file.read_text())["indexPublish"]["status"] == "failed"
+
+
+@pytest.mark.parametrize("status, expected", [("passed", 0), ("degraded", 0), ("failed", 1), (None, 1),
+                                              ("interrupted", 1), ("", 1)])
+def test_main_exit_code_accepts_only_passed_or_degraded(default_file, monkeypatch, status, expected):
+    monkeypatch.setattr(run_baseline, "run_pipeline", lambda label, prefix, args: _record(label))
+    monkeypatch.setattr(run_baseline, "published_etags", lambda prefix, run_id: {})
+    monkeypatch.setattr(run_baseline, "run_index_publish", lambda prefix: {"status": status, "reason": None, "exitCode": 0})
+    assert run_baseline.main(["--session-file", str(default_file)]) == expected
+
+
+class _FakeS3:
+    def __init__(self, error_code=None, modified=None, body=b'{"status": "passed", "reason": null}'):
+        self.error_code, self.modified, self.body = error_code, modified, body
+
+    def get_object(self, Bucket, Key):
+        import io
+        from botocore.exceptions import ClientError
+        if self.error_code:
+            raise ClientError({"Error": {"Code": self.error_code, "Message": "x"}}, "GetObject")
+        return {"LastModified": self.modified, "Body": io.BytesIO(self.body)}
+
+
+def test_read_index_log_reports_client_error_code(monkeypatch):
+    import datetime as dt
+    now = dt.datetime(2026, 11, 22, 1, 0, tzinfo=dt.timezone.utc)
+    monkeypatch.setattr(run_baseline, "_s3_and_bucket", lambda: (_FakeS3("AccessDenied"), "bucket"))
+    document, problem = run_baseline.read_index_log("", now)
+    assert document is None and "AccessDenied" in problem
+    monkeypatch.setattr(run_baseline, "_s3_and_bucket", lambda: (_FakeS3(modified=now - dt.timedelta(seconds=5)), "b"))
+    document, problem = run_baseline.read_index_log("", now)
+    assert document is None and "이전" in problem
+    monkeypatch.setattr(run_baseline, "_s3_and_bucket", lambda: (_FakeS3(modified=now), "b"))
+    assert run_baseline.read_index_log("", now) == ({"status": "passed", "reason": None}, None)

@@ -143,17 +143,19 @@ def pipeline_env(prefix: str) -> dict[str, str]:
     return env
 
 
-def read_index_log(prefix: str, not_before: dt.datetime) -> dict | None:
-    """S3의 `<접두>publish-log/index.json`을 읽는다. 없거나 not_before보다 먼저 쓴 것(이번 게시가 쓰지 않은 기록)이면 None."""
+def read_index_log(prefix: str, not_before: dt.datetime) -> tuple[dict | None, str | None]:
+    """S3의 `<접두>publish-log/index.json`을 읽어 (기록, 문제)를 돌려준다. 읽지 못했거나(오류 코드를 문제에 담는다)
+    not_before보다 먼저 쓴 것(이번 게시가 쓰지 않은 기록)이면 기록은 None이고 문제에 까닭을 적는다."""
     from botocore.exceptions import ClientError
     s3, bucket = _s3_and_bucket()
     try:
         response = s3.get_object(Bucket=bucket, Key=f"{prefix}publish-log/index.json")
-    except ClientError:
-        return None
+    except ClientError as exc:
+        code = exc.response.get("Error", {}).get("Code") or "?"
+        return None, f"publish-log/index.json을 읽지 못했다(S3 {code})"
     if response["LastModified"] < not_before:
-        return None
-    return json.loads(response["Body"].read())
+        return None, "publish-log/index.json이 이번 게시 시작 이전에 쓴 것이다(이번 게시가 기록을 쓰지 않았다)"
+    return json.loads(response["Body"].read()), None
 
 
 def run_index_publish(prefix: str) -> dict:
@@ -173,10 +175,10 @@ def run_index_publish(prefix: str) -> dict:
         except KeyboardInterrupt:
             stop_group(proc, signal.SIGINT)
             raise
-    document = read_index_log(prefix, started)
+    document, problem = read_index_log(prefix, started)
     record = {"exitCode": proc.returncode, "log": str(log_path.relative_to(REPO_ROOT))}
     if document is None:
-        record.update(status=None, reason="이번 게시가 쓴 publish-log/index.json을 읽지 못했다")
+        record.update(status=None, reason=problem)
     else:
         record.update(status=document.get("status"), reason=document.get("reason"))
     print(f"index: status={record['status']} exit={proc.returncode} reason={record['reason']}", file=sys.stderr)
@@ -252,8 +254,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     record_index_publish(args.prefix, session_file, session)
     print(f"session written: {session_file}", file=sys.stderr)
-    # 인덱스 전용 게시가 failed이거나 그 기록을 읽지 못했으면 세션은 남기되 0이 아닌 코드로 알린다
-    return 1 if session["indexPublish"]["status"] in (None, "failed") else 0
+    # 인덱스 전용 게시가 passed·degraded가 아니거나(baseline_site fixture와 같은 기준) 그 기록을 읽지 못했으면
+    # 세션은 남기되 0이 아닌 코드로 알린다
+    return 0 if session["indexPublish"]["status"] in ("passed", "degraded") else 1
 
 
 if __name__ == "__main__":
