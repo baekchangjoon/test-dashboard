@@ -440,78 +440,78 @@
 
 | REQ-ID | 요구사항 | 수용 테스트 | Level | Status |
 |---|---|---|---|---|
-| REQ-076 | 설정 스키마 검증 | test_dashboard_config.py::test_req076_schema_violation_fails | Unit | 🔴 planned |
-| REQ-077 | 과제 등록 검증 | test_dashboard_config.py::test_req077_project_registration_rules | Unit | 🔴 planned |
-| REQ-078 | 지표 카탈로그 대조 | test_dashboard_config.py::test_req078_unknown_metric_or_operator | Unit | 🔴 planned |
-| REQ-079 | 접두 실행의 설정 격리 | test_dashboard_publish.py::test_req079_prefix_run_uses_only_given_config | E2E-inj | 🔴 planned |
-| REQ-080 | 설정으로 화면 구성 | test_dashboard_project.py::test_req080_config_changes_show | Int | 🔴 planned |
-| REQ-081 | 규칙별 판정 | test_dashboard_status.py::test_req081_rule_levels_and_reasons | Unit | 🔴 planned |
-| REQ-082 | 없는 값과 경계 | test_dashboard_status.py::test_req082_missing_and_boundaries | Unit | 🔴 planned |
-| REQ-083 | 임계값 변경 반영 | test_dashboard_status.py::test_req083_threshold_change_changes_verdict | Int | 🔴 planned |
-| REQ-084 | 결론 문장 | test_dashboard_status.py::test_req084_headline_selection<br>test_dashboard_project.py::test_req084_headline_rendered | Int | 🔴 planned |
-| REQ-085 | GitHub CI 수집 | test_dashboard_collect.py::test_req085_ci_conclusion_classes | Int | 🔴 planned |
-| REQ-086 | 최신 커밋 검사 | test_dashboard_collect.py::test_req086_latest_check_per_name | Int | 🔴 planned |
-| REQ-087 | SonarQube 수집 | test_dashboard_collect.py::test_req087_sonar_values_and_404 | Int | 🔴 planned |
-| REQ-088 | 스냅숏 파일 | test_dashboard_collect.py::test_req088_snapshot_files_and_schema | Int | 🔴 planned |
-| REQ-089 | 비공개 제외 | test_dashboard_collect.py::test_req089_private_repo_excluded<br>test_dashboard_home.py::test_req089_excluded_project_absent_from_site | Int | 🔴 planned |
-| REQ-090 | 수집 부분 실패 | test_dashboard_collect.py::test_req090_partial_failure_null_not_carried<br>test_dashboard_home.py::test_req090_failed_source_cell | Int | 🔴 planned |
-| REQ-091 | 수집 시간 예산과 재시도 | test_dashboard_collect.py::test_req091_budget_and_retry | Int | 🔴 planned |
-| REQ-092 | 수집 토큰 정리 | test_dashboard_collect.py::test_req092_token_removed_on_all_exits | Int | 🔴 planned |
-| REQ-093 | 토큰 정리 실패 표시 | test_dashboard_collect.py::test_req093_cleanup_failure_warns_degraded | Int | 🔴 planned |
-| REQ-094 | 토큰 비노출·미발급 | test_dashboard_collect.py::test_req094_token_not_leaked_and_not_issued_when_unneeded | Int | 🔴 planned |
-| REQ-095 | 파이프라인 과제의 Sonar 출처 | test_dashboard_collect.py::test_req095_pipeline_project_sonar_from_run | Int | 🔴 planned |
-| REQ-096 | 수집 텍스트 가리기 | test_dashboard_collect.py::test_req096_external_text_redacted | Int | 🔴 planned |
-| REQ-097 | 토큰 공존 | test_dashboard_collect.py::test_req097_s11_and_collect_tokens_coexist | Int | 🔴 planned |
-| REQ-098 | 인덱스 전용 게시 | test_dashboard_publish.py::test_req098_index_only_publish | E2E-inj | 🔴 planned |
-| REQ-099 | 수집 문제와 게시 상태 | test_dashboard_publish.py::test_req099_collect_trouble_still_publishes | E2E-inj | 🔴 planned |
-| REQ-100 | 빠진 과제의 삭제 | test_dashboard_publish.py::test_req100_removed_or_private_project_deleted<br>test_unit_publish.py::test_req100_delete_prefix_guard_and_lightsail_degraded | E2E-inj | 🔴 planned |
-| REQ-101 | 무효화 경로 묶기 | test_unit_publish.py::test_req101_projects_invalidation_wildcard | Unit | 🔴 planned |
-| REQ-102 | run 지표 추출 | test_dashboard_index.py::test_req102_run_metrics | Unit | 🔴 planned |
-| REQ-103 | 시계열 파일 | test_dashboard_index.py::test_req103_series_points | Unit | 🔴 planned |
-| REQ-104 | 판정 결과 파일 | test_dashboard_home.py::test_req104_projects_json_matches_home | Int | 🔴 planned |
-| REQ-105 | 기존 인덱스 파일 호환 | test_dashboard_index.py::test_req105_legacy_fields_kept | Unit | 🔴 planned |
-| REQ-106 | 재생성 멱등 | test_dashboard_index.py::test_req106_idempotent_all_outputs | Unit | 🔴 planned |
-| REQ-107 | 암묵 과제 | test_dashboard_publish.py::test_req107_unregistered_sut_listed | E2E-inj | 🔴 planned |
-| REQ-108 | SUT 안내 페이지 | test_dashboard_project.py::test_req108_sut_page_leads_to_project | Int | 🔴 planned |
-| REQ-109 | 과제 표와 결론 문장 | test_dashboard_home.py::test_req109_rows_order_headline | Int | 🔴 planned |
-| REQ-110 | 거르기와 정렬 | test_dashboard_home.py::test_req110_filter_search_sort | Int | 🔴 planned |
-| REQ-111 | 행 펼침 | test_dashboard_home.py::test_req111_inline_expand | Int | 🔴 planned |
-| REQ-112 | 스크립트 없는 첫 화면 | test_dashboard_home.py::test_req112_no_script | Int | 🔴 planned |
-| REQ-113 | 없는 값의 표기 | test_dashboard_home.py::test_req113_missing_not_zero | Int | 🔴 planned |
-| REQ-114 | 표시와 각주 | test_dashboard_home.py::test_req114_badges_footnote_links | Int | 🔴 planned |
-| REQ-115 | 탭 전환과 주소 | test_dashboard_project.py::test_req115_tabs_hash_keyboard | Int | 🔴 planned |
-| REQ-116 | 스크립트 없는 과제 페이지 | test_dashboard_project.py::test_req116_no_script_all_panels | Int | 🔴 planned |
-| REQ-117 | 탭마다 읽는 법 | test_dashboard_project.py::test_req117_tab_guides | Int | 🔴 planned |
-| REQ-118 | 탭 내용 | test_dashboard_project.py::test_req118_tab_contents_match_fixture | Int | 🔴 planned |
-| REQ-119 | 파이프라인 없는 과제 | test_dashboard_project.py::test_req119_snapshot_only_project | Int | 🔴 planned |
-| REQ-120 | 시계열 점과 끊김 | test_dashboard_project.py::test_req120_trend_points_gaps_cap | Int | 🔴 planned |
-| REQ-121 | 시계열 점 정보와 링크 | test_dashboard_project.py::test_req121_trend_tooltip_links | Int | 🔴 planned |
-| REQ-122 | 세로축 규칙 | test_dashboard_index.py::test_req122_chart_axis_rules | Unit | 🔴 planned |
-| REQ-123 | 차트와 표의 값 일치 | test_dashboard_project.py::test_req123_trend_table_equals_series | Int | 🔴 planned |
-| REQ-124 | run 페이지 | test_dashboard_nav.py::test_req124_run_page | Int | 🔴 planned |
-| REQ-125 | 공통 띠 | test_dashboard_publish.py::test_req125_nav_on_all_reports_under_prefix | E2E-inj | 🔴 planned |
-| REQ-126 | 띠 뒤 기능 유지 | test_dashboard_nav.py::test_req126_external_reports_still_work | Int | 🔴 planned |
-| REQ-127 | 띠를 넣을 수 없는 파일 | test_dashboard_nav.py::test_req127_no_body_degraded | Int | 🔴 planned |
-| REQ-128 | 직접 만드는 리포트의 새 틀 | test_dashboard_nav.py::test_req128_own_reports_new_frame | Int | 🔴 planned |
-| REQ-129 | hotspot 커밋 고정 빌드 | test_prepare.py::test_req129_hotspot_commit_build<br>test_unit_tools.py::test_req129_short_hotspot_commit_fails | Int | 🔴 planned |
-| REQ-130 | 새 hotspot 리포트 | test_baseline.py::test_req130_hotspot_map_published | E2E | 🔴 planned |
-| REQ-131 | 새 TIA 리포트 | test_baseline.py::test_req131_tia_report_published | E2E | 🔴 planned |
-| REQ-132 | 외부 요청 없음 | test_dashboard_common.py::test_req132_no_external_requests | Int | 🔴 planned |
-| REQ-133 | 좁은 화면 | test_dashboard_common.py::test_req133_responsive_360 | Int | 🔴 planned |
-| REQ-134 | 어두운 테마 | test_dashboard_common.py::test_req134_dark_theme | Int | 🔴 planned |
-| REQ-135 | 색에 기대지 않는 상태 표시 | test_dashboard_common.py::test_req135_status_not_color_only | Int | 🔴 planned |
-| REQ-136 | 옛 자산 불변 | test_dashboard_common.py::test_req136_legacy_assets_unchanged | Int | 🔴 planned |
-| REQ-137 | 새 자산 경로 | test_dashboard_common.py::test_req137_v2_asset_paths | Unit | 🔴 planned |
-| REQ-138 | 움직임 줄이기 | test_dashboard_common.py::test_req138_reduced_motion | Int | 🔴 planned |
-| REQ-139 | 운영 사이트의 경로 | test_baseline.py::test_req139_production_site_paths | E2E | 🔴 planned |
-| REQ-140 | 운영 사이트의 값 | test_baseline.py::test_req140_production_site_values | E2E | 🔴 planned |
-| REQ-141 | 집계 지표 계산 | test_dashboard_index.py::test_req141_aggregate_metrics | Unit | 🔴 planned |
-| REQ-142 | 요약 칸·버튼 개수·CI 이력 | test_dashboard_home.py::test_req142_summary_counts_history | Int | 🔴 planned |
-| REQ-143 | 공개 여부 미확인 과제 | test_dashboard_collect.py::test_req143_visibility_unknown_keeps_last_public | Int | 🔴 planned |
-| REQ-144 | 게시 중단 시 수집 정리 | test_dashboard_publish.py::test_req144_interrupt_cleans_collect_token_and_lock | E2E-inj | 🔴 planned |
-| REQ-145 | 두 게시의 잠금 공유 | test_dashboard_publish.py::test_req145_index_only_and_s13_share_lock | E2E-inj | 🔴 planned |
+| REQ-076 | 설정 스키마 검증 | test_dashboard_config.py::test_req076_cli_fails_before_writing<br>test_dashboard_config.py::test_req076_schema_violation_fails | Unit | 🟢 passed |
+| REQ-077 | 과제 등록 검증 | test_dashboard_config.py::test_req077_project_registration_rules | Unit | 🟢 passed |
+| REQ-078 | 지표 카탈로그 대조 | test_dashboard_config.py::test_req078_unknown_metric_or_operator | Unit | 🟢 passed |
+| REQ-079 | 접두 실행의 설정 격리 | test_dashboard_publish.py::test_req079_prefix_run_uses_only_given_config | E2E-inj | 🟢 passed |
+| REQ-080 | 설정으로 화면 구성 | test_dashboard_project.py::test_req080_home_columns_and_summary_from_config<br>test_dashboard_project.py::test_req080_none_all_missing_from_config<br>test_dashboard_project.py::test_req080_status_labels_and_order_from_config<br>test_dashboard_project.py::test_req080_tabs_and_trend_from_config | Int | 🟢 passed |
+| REQ-081 | 규칙별 판정 | test_dashboard_status.py::test_req081_rule_levels_and_reasons | Unit | 🟢 passed |
+| REQ-082 | 없는 값과 경계 | test_dashboard_status.py::test_req082_missing_and_boundaries | Unit | 🟢 passed |
+| REQ-083 | 임계값 변경 반영 | test_dashboard_status.py::test_req083_threshold_change_changes_verdict | Int | 🟢 passed |
+| REQ-084 | 결론 문장 | test_dashboard_project.py::test_req084_headline_rendered<br>test_dashboard_status.py::test_req084_headline_selection | Int | 🟢 passed |
+| REQ-085 | GitHub CI 수집 | test_dashboard_collect.py::test_req085_ci_conclusion_classes | Int | 🟢 passed |
+| REQ-086 | 최신 커밋 검사 | test_dashboard_collect.py::test_req086_latest_check_per_name | Int | 🟢 passed |
+| REQ-087 | SonarQube 수집 | test_dashboard_collect.py::test_req087_sonar_values_and_404 | Int | 🟢 passed |
+| REQ-088 | 스냅숏 파일 | test_dashboard_collect.py::test_req088_snapshot_files_and_schema | Int | 🟢 passed |
+| REQ-089 | 비공개 제외 | test_dashboard_collect.py::test_req089_invalid_repo_is_config_error<br>test_dashboard_collect.py::test_req089_private_repo_excluded<br>test_dashboard_home.py::test_req089_excluded_project_absent_from_site | Int | 🟢 passed |
+| REQ-090 | 수집 부분 실패 | test_dashboard_collect.py::test_req090_partial_failure_null_not_carried<br>test_dashboard_home.py::test_req090_failed_source_cell_title | Int | 🟢 passed |
+| REQ-091 | 수집 시간 예산과 재시도 | test_dashboard_collect.py::test_req091_at_most_three_attempts<br>test_dashboard_collect.py::test_req091_budget_and_retry<br>test_dashboard_collect.py::test_req091_retry_after_beyond_budget_not_awaited<br>test_dashboard_collect.py::test_req091_retry_after_is_honoured | Int | 🟢 passed |
+| REQ-092 | 수집 토큰 정리 | test_dashboard_collect.py::test_req092_token_removed_on_all_exits | Int | 🟢 passed |
+| REQ-093 | 토큰 정리 실패 표시 | test_dashboard_collect.py::test_req093_cleanup_failure_warns_degraded | Int | 🟢 passed |
+| REQ-094 | 토큰 비노출·미발급 | test_dashboard_collect.py::test_req094_token_not_leaked_and_not_issued_when_unneeded | Int | 🟢 passed |
+| REQ-095 | 파이프라인 과제의 Sonar 출처 | test_dashboard_collect.py::test_req095_pipeline_project_sonar_from_run | Int | 🟢 passed |
+| REQ-096 | 수집 텍스트 가리기 | test_dashboard_collect.py::test_req096_external_text_redacted | Int | 🟢 passed |
+| REQ-097 | 토큰 공존 | test_dashboard_collect.py::test_req097_named_issue_and_revoke_need_no_stage_state<br>test_dashboard_collect.py::test_req097_named_revoke_after_lost_insert_reply<br>test_dashboard_collect.py::test_req097_named_revoke_failure_warns_once<br>test_dashboard_collect.py::test_req097_named_revoke_hook_stage<br>test_dashboard_collect.py::test_req097_s11_and_collect_tokens_coexist<br>test_dashboard_collect.py::test_req097_s11_wrapper_leaves_collect_rows | Int | 🟢 passed |
+| REQ-098 | 인덱스 전용 게시 | test_dashboard_publish.py::test_req098_index_only_publish | E2E-inj | 🟢 passed |
+| REQ-099 | 수집 문제와 게시 상태 | test_dashboard_collect.py::test_req099_collect_sh_injection_points<br>test_dashboard_publish.py::test_req099_collect_trouble_still_publishes | E2E-inj | 🟢 passed |
+| REQ-100 | 빠진 과제의 삭제 | test_dashboard_publish.py::test_req100_removed_or_private_project_deleted<br>test_unit_publish.py::test_req100_delete_prefix_batches_and_reports_errors_without_names<br>test_unit_publish.py::test_req100_delete_prefix_guard<br>test_unit_publish.py::test_req100_delete_prefix_guard_and_lightsail_degraded<br>test_unit_publish.py::test_req100_failed_listing_is_degraded_without_removals<br>test_unit_publish.py::test_req100_lightsail_list_command_guard<br>test_unit_publish.py::test_req100_lightsail_remove_command_guard<br>test_unit_publish.py::test_req100_missing_remote_projects_dir_is_not_an_error<br>test_unit_publish.py::test_req100_no_prune_when_keep_set_cannot_be_computed<br>test_unit_publish.py::test_req100_preflight_error_skips_prune_and_next_publish_catches_up<br>test_unit_publish.py::test_req100_remote_prune_keeps_excluded_out_of_keep_set<br>test_unit_publish.py::test_req100_remote_prune_never_passes_unsafe_names_to_rm<br>test_unit_publish.py::test_req100_remote_prune_retries_failed_removal_on_next_publish | E2E-inj | 🟢 passed |
+| REQ-101 | 무효화 경로 묶기 | test_unit_publish.py::test_req101_projects_invalidation_wildcard | Unit | 🟢 passed |
+| REQ-102 | run 지표 추출 | test_dashboard_index.py::test_req102_run_metrics | Unit | 🟢 passed |
+| REQ-103 | 시계열 파일 | test_dashboard_index.py::test_req103_series_points | Unit | 🟢 passed |
+| REQ-104 | 판정 결과 파일 | test_dashboard_home.py::test_req104_projects_json_matches_table | Int | 🟢 passed |
+| REQ-105 | 기존 인덱스 파일 호환 | test_dashboard_index.py::test_req105_legacy_fields_kept | Unit | 🟢 passed |
+| REQ-106 | 재생성 멱등 | test_dashboard_index.py::test_req106_idempotent_all_outputs | Unit | 🟢 passed |
+| REQ-107 | 암묵 과제 | test_dashboard_publish.py::test_req107_unregistered_sut_listed | E2E-inj | 🟢 passed |
+| REQ-108 | SUT 안내 페이지 | test_dashboard_project.py::test_req108_sut_landing | Int | 🟢 passed |
+| REQ-109 | 과제 표와 결론 문장 | test_dashboard_home.py::test_req109_headline_omits_zero_side<br>test_dashboard_home.py::test_req109_rows_order_headline | Int | 🟢 passed |
+| REQ-110 | 거르기와 정렬 | test_dashboard_home.py::test_req110_filter_keeps_sort_and_hides_detail<br>test_dashboard_home.py::test_req110_filter_search_sort | Int | 🟢 passed |
+| REQ-111 | 행 펼침 | test_dashboard_home.py::test_req111_inline_expand<br>test_dashboard_home.py::test_req111_name_link_expands_with_script | Int | 🟢 passed |
+| REQ-112 | 스크립트 없는 첫 화면 | test_dashboard_home.py::test_req112_without_javascript | Int | 🟢 passed |
+| REQ-113 | 없는 값의 표기 | test_dashboard_home.py::test_req113_failed_ci_source_cells<br>test_dashboard_home.py::test_req113_missing_not_zero | Int | 🟢 passed |
+| REQ-114 | 표시와 각주 | test_dashboard_home.py::test_req114_tags_rules_links | Int | 🟢 passed |
+| REQ-115 | 탭 전환과 주소 | test_dashboard_project.py::test_req115_tabs_hash_keyboard | Int | 🟢 passed |
+| REQ-116 | 스크립트 없는 과제 페이지 | test_dashboard_project.py::test_req116_without_javascript | Int | 🟢 passed |
+| REQ-117 | 탭마다 읽는 법 | test_dashboard_project.py::test_req117_one_guide_per_panel | Int | 🟢 passed |
+| REQ-118 | 탭 내용 | test_dashboard_project.py::test_req118_other_tabs<br>test_dashboard_project.py::test_req118_overview<br>test_dashboard_project.py::test_req118_report_links_resolve | Int | 🟢 passed |
+| REQ-119 | 파이프라인 없는 과제 | test_dashboard_project.py::test_req119_snapshot_only_project | Int | 🟢 passed |
+| REQ-120 | 시계열 점과 끊김 | test_dashboard_project.py::test_req120_trend_points_gaps_cap | Int | 🟢 passed |
+| REQ-121 | 시계열 점 정보와 링크 | test_dashboard_project.py::test_req121_point_tooltip_highlight_links | Int | 🟢 passed |
+| REQ-122 | 세로축 규칙 | test_dashboard_index.py::test_req122_chart_axis_rules | Unit | 🟢 passed |
+| REQ-123 | 차트와 표의 값 일치 | test_dashboard_project.py::test_req123_table_matches_series | Int | 🟢 passed |
+| REQ-124 | run 페이지 | test_dashboard_nav.py::test_req124_run_page<br>test_dashboard_nav.py::test_req124_run_page_without_javascript_shows_every_stage<br>test_dashboard_nav.py::test_req124_strip_links_resolve_under_prefix | Int | 🟢 passed |
+| REQ-125 | 공통 띠 | test_dashboard_publish.py::test_req125_nav_on_all_reports_under_prefix | E2E-inj | 🟢 passed |
+| REQ-126 | 띠 뒤 기능 유지 | test_dashboard_nav.py::test_req126_external_reports_still_work<br>test_dashboard_nav.py::test_req126_nav_markup_contract | Int | 🟢 passed |
+| REQ-127 | 띠를 넣을 수 없는 파일 | test_dashboard_nav.py::test_req127_clean_run_is_passed<br>test_dashboard_nav.py::test_req127_inject_finds_first_body_case_insensitively<br>test_dashboard_nav.py::test_req127_no_body_degraded<br>test_dashboard_nav.py::test_req127_render_json_is_not_published | Int | 🟢 passed |
+| REQ-128 | 직접 만드는 리포트의 새 틀 | test_dashboard_nav.py::test_req128_own_reports_new_frame<br>test_dashboard_nav.py::test_req128_standalone_reports_copy_app_css | Int | 🟢 passed |
+| REQ-129 | hotspot 커밋 고정 빌드 | test_prepare.py::test_req129_hotspot_commit_build<br>test_unit_tools.py::test_req129_short_hotspot_commit_fails | Int | 🟢 passed |
+| REQ-130 | 새 hotspot 리포트 | test_baseline.py::test_req130_hotspot_map_published | E2E | 🔴 planned (기준 run 세션 필요) |
+| REQ-131 | 새 TIA 리포트 | test_baseline.py::test_req131_tia_report_published | E2E | 🔴 planned (기준 run 세션 필요) |
+| REQ-132 | 외부 요청 없음 | test_dashboard_common.py::test_req132_no_external_requests | Int | 🟢 passed |
+| REQ-133 | 좁은 화면 | test_dashboard_common.py::test_req133_responsive_360 | Int | 🟢 passed |
+| REQ-134 | 어두운 테마 | test_dashboard_common.py::test_req134_dark_theme | Int | 🟢 passed |
+| REQ-135 | 색에 기대지 않는 상태 표시 | test_dashboard_common.py::test_req135_status_not_color_only | Int | 🟢 passed |
+| REQ-136 | 옛 자산 불변 | test_dashboard_common.py::test_req136_legacy_assets_unchanged | Int | 🟢 passed |
+| REQ-137 | 새 자산 경로 | test_dashboard_common.py::test_req137_app_css_tokens_and_no_external_requests<br>test_dashboard_common.py::test_req137_v2_asset_paths | Unit | 🟢 passed |
+| REQ-138 | 움직임 줄이기 | test_dashboard_common.py::test_req138_reduced_motion | Int | 🟢 passed |
+| REQ-139 | 운영 사이트의 경로 | test_baseline.py::test_req139_production_site_paths | E2E | 🔴 planned (기준 run 세션 필요) |
+| REQ-140 | 운영 사이트의 값 | test_baseline.py::test_req140_production_site_values | E2E | 🔴 planned (기준 run 세션 필요) |
+| REQ-141 | 집계 지표 계산 | test_dashboard_index.py::test_req141_aggregate_metrics<br>test_dashboard_index.py::test_req141_none_count_counts_unmeasured_projects | Unit | 🟢 passed |
+| REQ-142 | 요약 칸·버튼 개수·CI 이력 | test_dashboard_home.py::test_req142_summary_counts_history | Int | 🟢 passed |
+| REQ-143 | 공개 여부 미확인 과제 | test_dashboard_collect.py::test_req143_visibility_unknown_keeps_last_public | Int | 🟢 passed |
+| REQ-144 | 게시 중단 시 수집 정리 | test_dashboard_collect.py::test_req144_collect_sh_signal_revokes_token<br>test_dashboard_collect.py::test_req144_signal_during_revoke_still_removes_token<br>test_dashboard_publish.py::test_req144_interrupt_cleans_collect_token_and_lock | E2E-inj | 🟢 passed |
+| REQ-145 | 두 게시의 잠금 공유 | test_dashboard_publish.py::test_req145_index_only_and_s13_share_lock | E2E-inj | 🟢 passed |
 
-Coverage: 0/70 green (0%) — target 100% (대상: Must 65 + Should 5. Could 0, 연기 없음)
+Coverage: 66/70 green (94%) — target 100% (대상: Must 65 + Should 5. Could 0, 연기 없음). 판정 근거: 2026-11-22 비기준 전체 실행(`pytest tests/acceptance -m "not baseline"`, 세션 `t13a`)에서 표의 테스트가 모두 passed. REQ-130, 131, 139, 140은 운영 기준 run 세션(계획 Task 14) 뒤에 확인한다.
 
 ## 3. PoC 요구사항과 테스트의 개정
 

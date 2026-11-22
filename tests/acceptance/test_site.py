@@ -9,8 +9,10 @@ from pathlib import Path
 
 import pytest
 
+from td import dashboard_config
 from td.site import index, pages
 from helpers import make_site_run
+from test_publish import linked_project, projects_island, runs_table, trend_panel
 
 R1 = "20261101-010000Z-aaaaaaa-manual-00000001"
 R2 = "20261102-010000Z-bbbbbbb-manual-00000002"
@@ -22,28 +24,48 @@ def test_req049_home_sut_run_pages(tmp_path):
                            stages={"S00": "passed", "S01": "passed", "S08": "passed", "S09": "degraded"},
                            kpis={"tests": {"passRate": 0.97}, "blackbox": {"line": 0.61}, "sonar": {"gate": "OK"}},
                            s09_top10=[{"name": "OwnerController.processFindForm"}])
+    # 커버리지 단계가 단독 열람용으로 옆에 두는 스타일 사본은 이제 `app.css`다(게시 사본에는 들어가지 않는다).
+    (latest / "S08" / "app.css").write_text("/*dup*/")
     site_dir = pages.render_run(latest, latest).parent
     assert site_dir == latest / "site"
-    index.rebuild(tmp_path)
+    # 게시된 배치처럼 run 페이지를 run 디렉터리 바로 아래에도 둔다(과제 페이지 실행 이력의 run 링크 대상).
+    (latest / "index.html").write_text((site_dir / "index.html").read_text())
+    # 등록된 과제가 없는 설정: petclinic은 SUT 이름의 암묵 과제로 그려진다(요구사항명세 2026-11-22 §3 REQ-049).
+    index.rebuild(tmp_path, config=dashboard_config.empty())
 
+    # 홈의 과제 데이터(`projects.json`과 페이지 안 JSON 블록)에 그 SUT와 이어진 과제의 최신 run 값 네 가지가 있다.
     home = (tmp_path / "index.html").read_text()
-    for needle in ("97.0%", "61.0%", "OK", "OwnerController.processFindForm", 'href="suts/petclinic/index.html"',
-                   'href="_test/index.html"'):
-        assert needle in home, needle
-    assert home.count('class="kpi-item"') == 4
+    document = json.loads((tmp_path / "projects.json").read_text())
+    assert projects_island(home) == document
+    project = linked_project(document, "petclinic")
+    expected_values = {"tests.passRate": 0.97, "coverage.line": 0.61, "sonar.gate": "OK",
+                       "hotspot.topName": "OwnerController.processFindForm"}
+    assert {name: project["values"][name] for name in expected_values} == expected_values
+    assert f'href="{project["href"]}"' in home and 'href="_test/index.html"' in home
 
+    # 과제 페이지: '한눈에'에 그 값이 서버 렌더로 보이고, 실행 이력 구역에 두 run, 추이 구역에 서버가 그린 SVG가 있다.
+    project_page = (tmp_path / project["href"]).read_text()
+    for metric, text in (("tests.passRate", "97.0%"), ("coverage.line", "61.0%"), ("sonar.gate", "통과")):
+        assert re.search(rf'class="card kpi[^"]*" data-metric="{re.escape(metric)}"><div><span>[^<]*</span><b>{re.escape(text)}</b>',
+                         project_page), metric
+    assert "OwnerController.processFindForm" in project_page
+    table = runs_table(project_page)
+    assert f'data-run="{R1}"' in table and f'data-run="{R2}"' in table
+    assert f'href="../../suts/petclinic/runs/{R2}/index.html"' in table
+    trend = trend_panel(project_page)
+    assert trend.count("<svg") >= 2 and "<title" in trend
+
+    # SUT 페이지는 그 과제 페이지로 안내한다.
     sut = (tmp_path / "suts/petclinic/index.html").read_text()
-    assert R1 in sut and R2 in sut and sut.count("<svg") >= 2
-    assert f'href="runs/{R2}/index.html"' in sut
-    assert "<title" in sut and "<desc" in sut
+    assert 'id="to-project" href="../../projects/petclinic/index.html"' in sut
 
     run = (site_dir / "index.html").read_text()
     assert 'href="coverage/coverage.html"' in run
     assert "../../publish-log/" + R2 + ".json" in run
     assert (site_dir / "coverage/coverage.html").read_text() != "<html>stale</html>"
     assert not list((site_dir / "coverage").rglob("*.exec"))
-    assert not (site_dir / "coverage/site.css").exists()
-    for html in (home, sut, run):
+    assert not (site_dir / "coverage/app.css").exists()
+    for html in (project_page, sut, run):
         title = re.search(r"<title>(.*?)</title>", html).group(1)
         assert 2 <= len(title.split()) <= 4, title
     assert R2 not in re.search(r"<title>(.*?)</title>", run).group(1) and R2 in run
@@ -182,7 +204,7 @@ def _s3_bytes(s3, bucket, key):
 
 
 def test_req050_multi_sut(injected_petclinic_run, mini_sut_run, s3_client, bucket, site_prefix):
-    """같은 접두에 petclinic run이 먼저 게시된 상태에서 mini-sut(설명 파일만 다름)를 게시하면 홈에 SUT 2개가 나온다."""
+    """같은 접두에 petclinic run이 먼저 게시된 상태에서 mini-sut(설명 파일만 다름)를 게시하면 홈 과제 표에 두 SUT의 과제가 나온다."""
     pet, mini = injected_petclinic_run, mini_sut_run
     for label, result in (("petclinic", pet), ("mini-sut", mini)):
         assert result.returncode == 0, f"{label} run 실패(exit {result.returncode}): {result.stderr[-2000:]}"
@@ -196,22 +218,24 @@ def test_req050_multi_sut(injected_petclinic_run, mini_sut_run, s3_client, bucke
     assert {entry["name"] for entry in summary} >= {"petclinic", "mini-sut"}
     for sut, result in (("petclinic", pet), ("mini-sut", mini)):
         assert _s3_bytes(s3_client, bucket, f"{site_prefix}suts/{sut}/runs/{result.run_id}/_COMPLETE")
+    # 홈의 과제 표에 두 SUT의 암묵 과제(SUT 이름)가 나오고, 각 과제 페이지에 그 SUT의 runId가 있다.
+    # 같은 세션 접두에 다른 테스트가 다른 SUT 이름으로도 게시하므로, 두 SUT의 행만 골라 본다.
     home = _s3_bytes(s3_client, bucket, f"{site_prefix}index.html").decode()
-    assert 'href="suts/petclinic/index.html"' in home and 'href="suts/mini-sut/index.html"' in home
-    # 같은 세션 접두에 다른 테스트가 다른 SUT 이름으로도 게시하므로, 두 SUT 카드만 잘라 KPI를 센다(카드당 4칸).
     for sut in ("petclinic", "mini-sut"):
-        card = _sut_card(home, sut)
-        assert card.count('class="kpi-item"') == 4, f"{sut} 카드 KPI 4칸"
-    mini_page = _s3_bytes(s3_client, bucket, f"{site_prefix}suts/mini-sut/index.html").decode()
+        row = _project_row(home, sut)
+        assert f'href="projects/{sut}/index.html"' in row, f"{sut} 행에 과제 페이지 링크"
+    pet_page = _s3_bytes(s3_client, bucket, f"{site_prefix}projects/petclinic/index.html").decode()
+    mini_page = _s3_bytes(s3_client, bucket, f"{site_prefix}projects/mini-sut/index.html").decode()
+    assert pet.run_id in pet_page and mini.run_id not in pet_page
     assert mini.run_id in mini_page and pet.run_id not in mini_page
 
 
-def _sut_card(home: str, sut: str) -> str:
-    """홈 HTML에서 `href="suts/<sut>/index.html"` 제목이 속한 카드(다음 카드 시작 전까지)를 잘라낸다."""
-    start = home.index(f'<h3><a href="suts/{sut}/index.html">')
-    card_start = home.rfind("<div", 0, start)
-    next_card = home.find('<h3><a href="suts/', start + 1)
-    return home[card_start:next_card if next_card != -1 else len(home)]
+def _project_row(home: str, name: str) -> str:
+    """홈 HTML의 과제 표에서 `tr.proj[data-name=<name>]` 행(그 행의 `</tr>`까지)을 잘라낸다. 없으면 실패한다."""
+    marker = f'<tr class="proj" data-name="{name}"'
+    assert home.count(marker) == 1, f"홈 과제 표에 {name} 행이 하나여야 한다"
+    start = home.index(marker)
+    return home[start:home.index("</tr>", start)]
 
 
 def test_req050_no_sut_hardcode_in_pipeline_code():

@@ -14,6 +14,7 @@ from botocore.stub import Stubber
 from td import route53
 
 import helpers
+from test_publish import linked_project, runs_table
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 INFRA_WORK = REPO_ROOT / "work" / "infra"
@@ -100,8 +101,8 @@ def test_hosting_reports_domain_serves_https(local_env):
 # --- 게시 후 검사(Task 10): 세션 접두(`_test/<sessionId>/`)에 실제로 게시한 두 run을 두 호스트에서 확인한다. ---
 # 운영 루트(reports.<domain>/ 자체) 크롤링은 Task 25의 기준 run 게시 뒤에 한다.
 def _scope(site_prefix: str) -> tuple[str, ...]:
-    if not site_prefix:  # 운영 루트: 홈, SUT, 공용 정적 파일과 호스팅 비교만 따라가고 `_test/` 보존 기록은 뺀다
-        return ("/index.html", "/suts/", "/static/", "/hosting.", "/suts.json")
+    if not site_prefix:  # 운영 루트: 홈, 과제, SUT, 공용 정적 파일과 호스팅 비교만 따라가고 `_test/` 보존 기록은 뺀다
+        return ("/index.html", "/projects/", "/projects.json", "/suts/", "/static/", "/hosting.", "/suts.json")
     return (f"/{site_prefix}", "/_test/index.html", "/_test/static/")
 
 
@@ -128,8 +129,15 @@ def test_req047_static_host_crawl(published_runs, local_env, site_prefix):
         assert f"/{site_prefix}suts/{sut}/runs/{run_id}/index.html" in seen, "새 run 페이지까지 도달해야 한다"
     status, _, body = helpers.https_fetch(f"reports.{domain}", domain, f"/{site_prefix}index.html")
     assert status == 200 and sut in body.decode()
-    sut_page = helpers.https_fetch(f"reports.{domain}", domain, f"/{site_prefix}suts/{sut}/index.html")[2].decode()
-    assert published_runs["runs"][-1][0] in sut_page, "SUT 페이지에 최신 runId가 보여야 한다"
+    # 최신 runId가 `runs.json`과, 그 SUT와 이어진 과제 페이지의 실행 이력(`#panel-runs table#runs`)에 보인다.
+    latest_id = published_runs["runs"][-1][0]
+    status, _, runs_body = helpers.https_fetch(f"reports.{domain}", domain, f"/{site_prefix}suts/{sut}/runs.json")
+    assert status == 200 and latest_id in [entry["runId"] for entry in json.loads(runs_body)], "runs.json에 최신 runId가 있어야 한다"
+    status, _, projects_body = helpers.https_fetch(f"reports.{domain}", domain, f"/{site_prefix}projects.json")
+    assert status == 200, status
+    project = linked_project(json.loads(projects_body), sut)
+    status, _, project_body = helpers.https_fetch(f"reports.{domain}", domain, f"/{site_prefix}{project['href']}")
+    assert status == 200 and f'data-run="{latest_id}"' in runs_table(project_body.decode()), "과제 페이지 실행 이력에 최신 runId가 보여야 한다"
 
 
 def test_req048_lightsail_crawl(published_runs, local_env, site_prefix, s3_client, bucket):

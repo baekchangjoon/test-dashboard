@@ -552,23 +552,41 @@ def test_req073_baseline_qualitative(prod_published, local_env):
 
 
 def test_req049_baseline_home_sut_run_pages(baseline_run, second_run, local_env):
+    """홈의 과제 데이터와 과제 페이지(요구사항명세 2026-11-22 §3 REQ-049). 값은 최신 run(두 번째 run)에서 온다."""
+    from markupsafe import escape
+    from test_publish import linked_project, projects_island, runs_table, trend_panel
     domain = local_env["TD_DOMAIN"]
     prefix = baseline_run.prefix
+    top = second_run.stage("S09")["top10"][0]["name"]
     for host in (f"reports.{domain}", f"dash.{domain}"):
         status, home = helpers.https_get(host, domain, f"/{prefix}index.html")
         home = home.decode()
-        assert status == 200 and 'href="suts/petclinic/index.html"' in home, host
-        assert home.count('class="kpi-item"') >= 4, host
-        # 네 KPI 모두 값이 있다(값이 없으면 템플릿이 "—"를 쓴다)
-        values = re.findall(r'<div class="kpi-item"><span class="muted">([^<]+)</span><b>([^<]*)</b>', home)
-        assert len(values) >= 4 and all(v.strip() not in ("", "—") for _, v in values), (host, values)
+        assert status == 200, host
+        status, projects_body = helpers.https_get(host, domain, f"/{prefix}projects.json")
+        assert status == 200, host
+        document = json.loads(projects_body)
+        assert projects_island(home) == document, host
+        # 그 SUT와 이어진 과제의 네 값(테스트 통과율, 귀속 라인 커버리지, Sonar 게이트, hotspot 1위)이 모두 있다
+        project = linked_project(document, "petclinic")
+        values = {name: project["values"][name] for name in ("tests.passRate", "coverage.line", "sonar.gate", "hotspot.topName")}
+        assert all(value is not None for value in values.values()), (host, values)
+        assert values["hotspot.topName"] == top, (host, values)
+        assert f'href="{project["href"]}"' in home, host
+        status, project_page = helpers.https_get(host, domain, f"/{prefix}{project['href']}")
+        project_page = project_page.decode()
+        assert status == 200, host
+        # '한눈에'에 그 값이 서버 렌더로 보인다(값이 없으면 템플릿이 "—"를 쓴다)
+        for metric in ("tests.passRate", "coverage.line", "sonar.gate"):
+            shown = re.search(rf'data-metric="{re.escape(metric)}"><div><span>[^<]*</span><b>([^<]*)</b>', project_page)
+            assert shown and shown.group(1).strip() not in ("", "—"), (host, metric)
+        assert str(escape(top)) in project_page, host
+        # 실행 이력 구역에 두 run, 추이 구역에 서버가 그린 SVG
+        table = runs_table(project_page)
+        assert f'data-run="{baseline_run.run_id}"' in table and f'data-run="{second_run.run_id}"' in table, host
+        assert trend_panel(project_page).count("<svg") >= 2, host
+        # SUT 페이지는 그 과제 페이지로 안내한다
         status, sut_page = helpers.https_get(host, domain, f"/{prefix}suts/petclinic/index.html")
-        sut_page = sut_page.decode()
-        assert status == 200 and baseline_run.run_id in sut_page and second_run.run_id in sut_page, host
-        assert sut_page.count("<svg") >= 2, host
-    top = baseline_run.stage("S09")["top10"][0]["name"]
-    status, home = helpers.https_get(f"reports.{domain}", domain, f"/{prefix}index.html")
-    assert top in home.decode()
+        assert status == 200 and f'id="to-project" href="../../{project["href"]}"' in sut_page.decode(), host
     # run 페이지: 성공(passed/degraded)한 리포트 단계마다 링크가 있다
     links = {"S04": "ontology/jqa.html", "S08": "coverage/coverage.html", "S09": "hotspot/hotspots.html",
              "S10": "tia/tia.html", "S11": "sonar/sonar.html", "S12": "compare/compare.html"}
