@@ -582,6 +582,65 @@ def test_req307_size_caps(tmp_path, monkeypatch):
     assert (pw.MAX_CANDIDATES, pw.MAX_PARAMS, pw.MAX_EXCLUSIONS) == (12, 24, 20000)
 
 
+BOUNDARY_COUNTS = {20000: [5, 5, 6, 6, 7, 8, 8, 9, 9, 9, 10, 10, 10, 10, 11, 11, 11, 12, 12, 12, 12, 12],
+                   20001: [2, 2, 3, 3, 5, 5, 7, 8, 8, 8, 9, 10, 10, 10, 11, 11, 11, 11, 11, 12, 12, 12, 12, 12]}
+
+
+def _wide_tags(counts):
+    """TAGS 본문을 enum 필드(필드 i의 상수 counts[i]개)로 바꾼다. 오류 조건이 없어 후보 = 상수 전부."""
+    def mutate(docs):
+        enums = docs["ext.json"]["enums"]
+        fields = []
+        for index, count in enumerate(counts):
+            enums[f"ex.kit.W{index:02d}"] = {"constants": [f"K{index:02d}x{j:02d}" for j in range(count)]}
+            fields.append({"name": f"w{index:02d}", "type": f"ex.kit.W{index:02d}"})
+        docs["ext.json"]["dtos"]["ex.kit.TagForm"]["fields"] = fields
+    return mutate
+
+
+@pytest.mark.parametrize("tuples, allowed", [(20000, True), (20001, False)])
+def test_req307_interaction_cap_boundary(tmp_path, tuples, allowed):
+    counts = BOUNDARY_COUNTS[tuples]
+    assert pw.interaction_bound(counts, 2) == tuples and pw.MAX_INTERACTIONS == 20000
+    _, wide = _model(_kinds(tmp_path, _wide_tags(counts)), TAGS)
+    assert [len(p["candidates"]) for p in wide.params] == counts
+    assert wide.reason == (None if allowed else "pairwise-too-large")
+
+
+def test_req307_interaction_bound_saturates():
+    assert pw.interaction_bound([3, 2], 2) == 6 and pw.interaction_bound([3, 2, 4], 3) == 24
+    assert pw.interaction_bound([2, 2, 2], 2) == 12 and pw.interaction_bound([5], 2) == 0
+    assert pw.interaction_bound([12] * 24, 2) == pw.MAX_INTERACTIONS + 1  # 39,744 → 포화
+    assert pw.interaction_bound([12] * 24, 3) == pw.MAX_INTERACTIONS + 1
+
+
+@pytest.mark.parametrize("order", [2, 3])
+def test_req307_near_cap_is_too_large_fast(tmp_path, order):
+    """24 파라미터 × 12 후보 모델은 상호작용 상한으로 PICT·통계 계산 전에 too-large가 된다(존재하지 않는 pict로 미호출 확인)."""
+    def mutate(docs):
+        _wide_tags([12] * 24)(docs)
+        docs["harness.json"]["pairwiseOrder"] = order
+    bundle = _kinds_bundle(tmp_path, mutate)
+    missing = pw.Pairwise.available(pw.PictTool(tmp_path / "no-such-pict", "f" * 40, "0" * 64), tmp_path / "w", 120)
+    started = time.monotonic()
+    with pytest.raises(pw.PictFatal):  # 다른 엔드포인트(MAKE 등)는 PICT를 부르므로 시작 실패가 난다
+        derive_module.derive(bundle, pairwise=missing)
+    _, tags = _model(_kinds(tmp_path / "m", mutate), TAGS, order=order)
+    assert tags.reason == "pairwise-too-large" and tags.exclusions == []
+    assert time.monotonic() - started < 10
+
+
+def test_req307_near_cap_slot(tmp_path, pict_tool):
+    def mutate(docs):
+        _wide_tags([12] * 24)(docs)
+    started = time.monotonic()
+    _, doc, pairwise_doc = _derive_render(_kinds_bundle(tmp_path, mutate), tmp_path, _available(tmp_path, pict_tool))
+    assert time.monotonic() - started < 30
+    assert [e for e in doc["unresolved"] if e["endpoint"] == TAGS and e["rule"] == "pairwise"] == [
+        {"source": f"graph:endpoint:{TAGS}", "reason": "pairwise-too-large", "endpoint": TAGS, "rule": "pairwise"}]
+    assert pairwise_doc["endpoints"][TAGS]["rows"] == [] and TAGS not in doc["universe"]["pairwise"]["byEndpoint"]
+
+
 def test_distinct_fields_asserted():
     with pytest.raises(AssertionError):
         list(pw._iter_exclusions([("a", [("p0", {"v0": True}), ("p0", {"v1": True})])]))
@@ -818,7 +877,26 @@ def test_req308_case_shape(tmp_path, pict_tool):
             assert ref is None or ref in by_id
 
 
+def _assert_slot_identity(doc, base_doc, pairwise_doc):
+    """행 = 케이스 + 병합(dedupe 흡수·라벨 기준 모두-baseline) + row-invalid. 병합 행은 bySlot.deduplicated 증가분과 같다."""
+    rows = [r for e in pairwise_doc["endpoints"].values() for r in e["rows"]]
+    cases = sum(1 for r in rows if r["caseId"])
+    merged = sum(1 for r in rows if r["mergedInto"])
+    invalid = sum(1 for r in rows if not r["caseId"] and not r["mergedInto"])
+    assert len(rows) == cases + merged + invalid
+    assert cases == len(_pairwise_cases(doc))
+    assert invalid == doc["universe"]["bySlot"]["byReason"]["pairwise-row-invalid"]
+    assert doc["universe"]["bySlot"]["deduplicated"] == base_doc["universe"]["bySlot"]["deduplicated"] + merged
+    by_endpoint = doc["universe"]["pairwise"]["byEndpoint"]
+    for label, entry in pairwise_doc["endpoints"].items():
+        if label in by_endpoint:
+            assert by_endpoint[label]["rows"] == len(entry["rows"])
+            assert by_endpoint[label]["cases"] == sum(1 for r in entry["rows"] if r["caseId"])
+    return merged
+
+
 def test_req308_order_and_merge(tmp_path, pict_tool, monkeypatch):
+    _, base_kinds, _ = _derive_render(_kinds_bundle(tmp_path), tmp_path, None, "kinds-disabled")
     # (a) 정렬: pairwise 케이스는 기존 케이스 뒤
     _, doc, pairwise_doc = _derive_render(_kinds_bundle(tmp_path), tmp_path, _available(tmp_path, pict_tool))
     rules = [c["rule"] for c in doc["cases"]]
@@ -838,6 +916,7 @@ def test_req308_order_and_merge(tmp_path, pict_tool, monkeypatch):
             assert row["caseId"] is None and by_id[row["mergedInto"]]["rule"] == "enum-value", row
         elif changed == 2:
             assert row["mergedInto"] is None and by_id[row["caseId"]]["rule"] == "pairwise", row
+    assert _assert_slot_identity(doc, base_kinds, pairwise_doc) >= 3  # TAGS enum-value 흡수 3 (+ 다른 엔드포인트)
     # (c) 라벨 기준 모두-baseline(uniq 값이 있어 값 서명으로는 병합되지 않는 MAKE) → baseline-valid id
     real_run = pw.run_pict
 
@@ -855,6 +934,7 @@ def test_req308_order_and_merge(tmp_path, pict_tool, monkeypatch):
     assert not any(set(c["pairwise"]["labels"].values()) == {"v0"} for c in _pairwise_cases(doc2) if c["endpoint"] == MAKE)
     # baseline-valid 케이스 자체는 그대로(출처도 늘지 않는다)
     assert next(c for c in doc2["cases"] if c["id"] == baseline_valid[0]) == next(c for c in doc["cases"] if c["id"] == baseline_valid[0])
+    _assert_slot_identity(doc2, base_kinds, pairwise_doc2)  # 라벨 기준 병합 행도 deduplicated에 들어간다
     monkeypatch.setattr(pw, "run_pict", real_run)
     # (d) _materialize가 거부한 행은 종류와 무관하게 pairwise-row-invalid(배제를 지운 모델 → VIP×499 행이 오류 조건 위반)
     real_build = pw.build_model
@@ -871,6 +951,13 @@ def test_req308_order_and_merge(tmp_path, pict_tool, monkeypatch):
     assert doc3["universe"]["bySlot"]["byReason"]["pairwise-row-invalid"] == len(invalid)
     rows = pairwise_doc3["endpoints"][CREATE]["rows"]
     assert sum(1 for r in rows if r["caseId"] is None and r["mergedInto"] is None) == len(invalid)
+    _, base_real, _ = _derive_render(_real_bundle(tmp_path / "r0"), tmp_path, None, "real-disabled")
+    _assert_slot_identity(doc3, base_real, pairwise_doc3)
+    # row-invalid로 빠진 행의 튜플(VIP×499)은 커버되지 않는다: covered < feasible, universe 값 = 테스트 자체 오라클
+    oracle = _oracle(doc3, pairwise_doc3)[CREATE]
+    stats = doc3["universe"]["pairwise"]["byEndpoint"][CREATE]
+    assert (stats["interactionsFeasible"], stats["interactionsCovered"]) == (oracle["feasible"], oracle["covered"])
+    assert oracle["covered"] < oracle["feasible"]
 
 
 def test_req308_rel_combined(tmp_path, pict_tool):
@@ -937,7 +1024,9 @@ def test_req308_reasons(tmp_path, pict_tool, monkeypatch):
 # 독립 오라클(td.detgen.pairwise를 쓰지 않는다): pairwise.json의 params·candidates·exclusions만 읽는다
 
 def _feasible_tuples(endpoint, order):
+    """order는 문서 최상위 order. 유효 order는 문서 effectiveOrder를 믿지 않고 min(order, 파라미터 수)로 따로 계산한다."""
     params = [p["param"] for p in endpoint["params"]]
+    order = min(order, len(params))
     labels = [[c["label"] for c in p["candidates"]] for p in endpoint["params"]]
     exclusions = [tuple(sorted(e.items())) for e in endpoint["exclusions"]]
     feasible = set()
@@ -964,41 +1053,52 @@ def _matches(candidate, key, values) -> bool:
     if kind == "spread":
         rng = candidate["range"]
         return isinstance(value, int) and rng["lo"] <= value <= rng["hi"] and value not in rng["excluded"]
-    return value == candidate["value"] and value is not None
+    expected = candidate["value"]
+    return value is not None and isinstance(value, bool) == isinstance(expected, bool) and \
+        isinstance(value, str) == isinstance(expected, str) and value == expected
+
+
+def _oracle(cases_doc, pairwise_doc) -> dict:
+    """엔드포인트별 {feasible, covered, uncovered}: 실현 가능 튜플 중 행 케이스(caseId·mergedInto)의 cases.json 값에 나타난 것."""
+    by_id = {c["id"]: c for c in cases_doc["cases"]}
+    out = {}
+    for label, endpoint in sorted(pairwise_doc["endpoints"].items()):
+        if endpoint["skipped"] or endpoint["reason"]:
+            continue
+        feasible = _feasible_tuples(endpoint, pairwise_doc["order"])
+        by_param = {p["param"]: p for p in endpoint["params"]}
+        row_cases = [by_id[r["caseId"] or r["mergedInto"]] for r in endpoint["rows"] if r["caseId"] or r["mergedInto"]]
+
+        def hit(case, combo):
+            return all(_matches(next(c for c in by_param[param]["candidates"] if c["label"] == lab),
+                                f"{by_param[param]['loc']}.{by_param[param]['field']}", case["values"])
+                       for param, lab in combo)
+        uncovered = sorted(combo for combo in feasible if not any(hit(case, combo) for case in row_cases))
+        out[label] = {"feasible": len(feasible), "covered": len(feasible) - len(uncovered), "uncovered": uncovered}
+    return out
 
 
 def test_req309_feasible_interactions(tmp_path, pict_tool):
     _, doc, pairwise_doc = _derive_render(_real_bundle(tmp_path), tmp_path, _available(tmp_path, pict_tool))
-    by_id = {c["id"]: c for c in doc["cases"]}
     universe = doc["universe"]["pairwise"]
     assert universe["order"] == pairwise_doc["order"] == 2
     totals = {"feasible": 0, "covered": 0}
     checked = []
+    oracle = _oracle(doc, pairwise_doc)
     for label, endpoint in sorted(pairwise_doc["endpoints"].items()):
         if endpoint["skipped"] or endpoint["reason"]:
-            assert label not in universe["byEndpoint"]
+            assert label not in universe["byEndpoint"] and label not in oracle
             continue
         checked.append(label)
-        order = endpoint["effectiveOrder"]
-        feasible = _feasible_tuples(endpoint, order)
-        by_param = {p["param"]: p for p in endpoint["params"]}
-        row_cases = [by_id[r["caseId"] or r["mergedInto"]] for r in endpoint["rows"] if r["caseId"] or r["mergedInto"]]
-        uncovered = []
-        for combo in feasible:
-            def hit(case):
-                return all(_matches(next(c for c in by_param[param]["candidates"] if c["label"] == lab),
-                                    f"{by_param[param]['loc']}.{by_param[param]['field']}", case["values"])
-                           for param, lab in combo)
-            if not any(hit(case) for case in row_cases):
-                uncovered.append(combo)
-        assert uncovered == [], (label, uncovered[:5])
+        feasible = oracle[label]["feasible"]
+        assert oracle[label]["uncovered"] == [], (label, oracle[label]["uncovered"][:5])
         stats = universe["byEndpoint"][label]
-        assert stats["interactionsFeasible"] == len(feasible) == stats["interactionsCovered"], label
+        assert stats["interactionsFeasible"] == feasible == stats["interactionsCovered"], label
         assert stats["params"] == len(endpoint["params"])
         assert stats["candidates"] == sum(len(p["candidates"]) for p in endpoint["params"])
         assert stats["rows"] == len(endpoint["rows"]) and stats["cases"] == sum(1 for r in endpoint["rows"] if r["caseId"])
         assert stats["interactionsTotal"] >= stats["interactionsFeasible"]
-        totals["feasible"] += len(feasible)
+        totals["feasible"] += feasible
         totals["covered"] += stats["interactionsCovered"]
     assert CREATE in checked and universe["byEndpoint"][CREATE]["interactionsFeasible"] > 0
     assert set(universe["byEndpoint"]) == set(checked)
@@ -1079,9 +1179,12 @@ def test_req310_no_error_condition(tmp_path, pict_tool):
                     assert result is False, (case["id"], condition)
     assert checks >= 1 and len(evaluated) >= 1
     assert any("VIP" in c and "loyaltyPoints" in c for c in evaluated)
-    # 평가하지 못한 조건(원자식 일부가 지원 밖: 날짜·형식·함수·관계식·count·길이)은 목록으로 남긴다
-    assert unevaluated <= conditions
-    print("unevaluated:", sorted(unevaluated))
+    # 평가하지 못한 조건(원자식 일부가 지원 밖: 형식·날짜·관계식·count·길이)은 목록으로 남긴다
+    recorded = sorted(unevaluated)
+    assert set(recorded) <= conditions
+    for marker in ("matcher(", "isAfter(", "getNightlyRate()", "countByRoomNumberAndStatus(", "length()"):
+        assert any(marker in condition for condition in recorded), (marker, recorded)
+    assert not any("VIP" in condition for condition in recorded)  # VIP×포인트 조건은 평가됐다
 
 
 def test_req311_deterministic(tmp_path, pict_tool):

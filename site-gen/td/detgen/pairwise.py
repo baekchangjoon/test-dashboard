@@ -23,6 +23,8 @@ from td.redact import redact_text
 MAX_CANDIDATES = 12
 MAX_PARAMS = 24
 MAX_EXCLUSIONS = 20000
+# 상호작용 수 상한: effective-order 값 튜플 수(Σ_파라미터 조합 Π 후보 수). 실현 가능 튜플 판정(interaction_stats)의 실행 시간을 크기로 묶는다
+MAX_INTERACTIONS = 20000
 # PICT 종료 코드: 제약이 모든 조합을 막음(3.7.4에서 확인)
 PICT_RC_TOO_RESTRICTIVE = 5
 INFEASIBLE = "pairwise-infeasible"
@@ -332,6 +334,8 @@ def build_model(ep: Endpoint, cons: Constraints, catalog: Catalog, order: int) -
         model.reason = INFEASIBLE
     elif len(params) > MAX_PARAMS or any(len(p["candidates"]) > MAX_CANDIDATES for p in params):
         model.reason = TOO_LARGE
+    elif interaction_bound([len(p["candidates"]) for p in params], effective) > MAX_INTERACTIONS:
+        model.reason = TOO_LARGE  # 상호작용 튜플 수로 판정한다(PICT·통계 계산 전)
     elif _bound(checks) > MAX_EXCLUSIONS:
         model.reason = TOO_LARGE  # 열거 전에 곱으로 판정한다
     else:
@@ -346,6 +350,16 @@ def build_model(ep: Endpoint, cons: Constraints, catalog: Catalog, order: int) -
 def _fixed_key(ep: Endpoint, con: Con) -> str:
     fld = (ep.body or {}).get(con.field) or ep.query.get(con.field)
     return f"{fld.loc}.{fld.name}" if fld is not None else ""
+
+
+def interaction_bound(counts: list[int], order: int) -> int:
+    """order-way 값 튜플 수 = 후보 수의 order차 기본 대칭 다항식(동적 계획). MAX_INTERACTIONS+1에서 포화한다."""
+    cap = MAX_INTERACTIONS + 1
+    sums = [1] + [0] * order  # sums[k] = 지금까지 본 파라미터에서 k개를 고른 곱의 합
+    for count in counts:
+        for k in range(order, 0, -1):
+            sums[k] = min(sums[k] + sums[k - 1] * count, cap)
+    return sums[order] if order >= 0 else 0
 
 
 def _bound(checks) -> int:
@@ -409,7 +423,8 @@ def row_assumes_for(model: EndpointModel, labels: dict[str, str]) -> list[str]:
 
 def _completable(params: list[str], labels: dict[str, list[str]], by_param: dict[str, list[dict]],
                  assign: dict[str, str]) -> bool:
-    """부분 배정(assign)을 배제를 모두 피하는 전체 행으로 채울 수 있는가(깊이 우선 탐색, 배정이 끝난 배제만 검사)."""
+    """부분 배정(assign)을 배제를 모두 피하는 전체 행으로 채울 수 있는가(깊이 우선 탐색, 배정이 끝난 배제만 검사).
+    params에는 배제에 나오는 파라미터만 넘긴다(나머지는 어떤 라벨이든 배제와 무관하다)."""
     def clash(param: str) -> bool:
         return any(all(assign.get(k) == v for k, v in exclusion.items()) for exclusion in by_param.get(param, ()))
 
@@ -441,6 +456,8 @@ def interaction_stats(model: EndpointModel, emitted_rows: list[dict[str, str]]) 
         for param in exclusion:
             by_param.setdefault(param, []).append(exclusion)
     order = model.effective_order
+    constrained = [param for param in params if param in by_param]  # 탐색은 배제에 나오는 파라미터로만 한다
+    memo: dict[tuple, bool] = {}  # 배제에 걸린 파라미터의 부분 배정 → 완성 가능 여부
     total, feasible = 0, set()
     for names in itertools.combinations(params, order):
         product = 1
@@ -449,7 +466,10 @@ def interaction_stats(model: EndpointModel, emitted_rows: list[dict[str, str]]) 
         total += product
         for combo in itertools.product(*(labels[name] for name in names)):
             assign = dict(zip(names, combo))
-            if _completable(params, labels, by_param, assign):
+            key = tuple(sorted((k, v) for k, v in assign.items() if k in by_param))
+            if key not in memo:
+                memo[key] = _completable(constrained, labels, by_param, dict(key))
+            if memo[key]:
                 feasible.add(tuple(sorted(assign.items())))
     seen = {tuple(sorted((name, row[name]) for name in names))
             for row in emitted_rows for names in itertools.combinations(params, order)}
