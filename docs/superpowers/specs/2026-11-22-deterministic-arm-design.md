@@ -172,6 +172,15 @@ A1과의 관계: 상위 설계의 A1은 "LLM 호출의 생성 입력"에 대한 
 - reps: det는 요청 reps와 무관하게 항상 1이다. run.json과 compare에 `requestedRepsByArm`(예: `{base:3, jqa:3, owl:3, det:1}`)을 기록하고, 화면은 arm별 분모를 쓴다. `--reps`는 det에 적용되지 않는다.
 - 스냅샷: 기존 `.reserve` 예약, 임시 디렉터리, 원자적 rename, `_COMPLETE` 검증 프로토콜을 그대로 쓴다. `--regenerate`를 주면 det도 다시 만들고, 기존 스냅샷과 체크섬이 다르면 경고를 기록한다(결정성 위반 신호).
 
+### 5.4.1 Pairwise 확장
+
+pairwise 케이스 생성은 별도 설계 `docs/superpowers/specs/2026-11-22-det-pairwise-design.md`가 정한다. 이 문서에 영향을 주는 점만 적는다.
+
+- `derive`는 `Pairwise` 상태 모델을 받는다. 상태는 `disabled`(기본값, 기존 출력과 동일), `unavailable`(det를 요청했지만 `tools.lock`의 `pict`가 null), `available`(PICT 사용 가능) 세 가지다.
+- §3.1의 "detgen은 번들만 읽는다"에 명시적 예외가 하나 있다. stage가 `tools.lock`의 PictTool을 `Pairwise`로 detgen에 넘긴다. 번들 밖 파일을 detgen이 직접 열지는 않는다.
+- 생성 디렉터리에 `pairwise.json`을 함께 쓴다.
+- det 스냅샷 키에 `pict_tag`가 들어간다. available이면 `<commit>:<binary sha256>`, unavailable이면 `none`이다.
+
 ### 5.5 통합 변경 목록
 
 - arm 목록·패턴: `site-gen/td/bundle.py`(ARMS — det 번들 없음, det는 번들 조립 대상에서 제외), `testid.py`, `compare.py`(ARMS_ORDER, DOT_COLORS, 입력 체제 표기; `verdict.judge`에는 base·jqa·owl만 명시적으로 넘기고, det는 별도 `deterministic` 결과 블록으로 보고), `state.py`(ARMS_DEFAULT=base,jqa,owl 기본 유지 / ARMS_KNOWN=+det, `ARM_DEPENDENCIES["det"]=("S03",)` — S02는 모든 arm 공통으로 앞에 붙는다), `scenarios.py`·`tia.py`(genId 정규식), `pipeline/run-all.sh`(arms 검증), `site-gen/td/schemas/bdd-gen.schema.json`(genId 패턴, arm enum, det 분기: LLM 필드 대신 `generator{name,version,glueChecksum,sourceChecksum}`), `site-gen/td/schemas/compare.schema.json`, `e2e/harness/.../TestIds.java`와 `TestIdsTest`, `site.css`(`--arm-det` 토큰).

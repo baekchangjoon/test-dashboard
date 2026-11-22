@@ -1383,3 +1383,42 @@ def test_req317_comparability(tmp_path):
     shutil.rmtree(broken / "S12")
     verdict = det_results.coverage_comparison(broken, run3)
     assert verdict["comparable"] is False and "compare.json" in verdict["reason"]
+
+
+# ---- Task 6: 문서·백서 문자열 검사 (REQ-317·318·319) ----
+
+_WHITEPAPER = REPO_ROOT / "docs" / "whitepaper" / "2026-11-21-test-dashboard-poc-whitepaper.md"
+
+
+def _whitepaper_97() -> str:
+    text = _WHITEPAPER.read_text(encoding="utf-8")
+    match = re.search(r"^#{2,4} 9\.7 pairwise 추가 결과\s*$", text, re.M)
+    assert match, "백서에 '9.7 pairwise 추가 결과' 제목이 없다"
+    heading_96 = re.search(r"^#{2,4} 9\.6 ", text, re.M)
+    assert heading_96 and heading_96.start() < match.start(), "9.7은 9.6 뒤에 와야 한다"
+    rest = text[match.end():]
+    following = re.search(r"^#{1,3} ", rest, re.M)
+    return rest[:following.start()] if following else rest
+
+
+def test_req319_docs():
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    for needle in ("Xcode Command Line Tools", "clang++", "make", "--det-pairwise-order"):
+        assert needle in readme, needle
+    parent = (REPO_ROOT / "docs/superpowers/specs/2026-11-22-deterministic-arm-design.md").read_text(encoding="utf-8")
+    for needle in ("Pairwise", "disabled", "unavailable", "available", "pairwise.json", "pict_tag",
+                   "tools.lock", "2026-11-22-det-pairwise-design.md"):
+        assert needle in parent, needle
+
+
+def test_req317_whitepaper():
+    section = _whitepaper_97()
+    table_row = re.search(r"^\|.*라인.*\|.*$", section, re.M) and re.search(r"^\|.*브랜치.*\|.*$", section, re.M)
+    assert table_row or "비교 불가" in section, "9.7에 라인·브랜치 비교 표 또는 '비교 불가'가 없다"
+
+
+def test_req318_whitepaper():
+    section = _whitepaper_97()
+    assert "3-way" in section
+    assert re.search(r"3-way[^\n]*\d+\s*(개|건)", section), "3-way 케이스 수가 없다"
+    assert re.search(r"3-way[^\n]*통과[^\n]*\d|3-way[^\n]*\d[^\n]*통과", section), "3-way 통과율이 없다"
