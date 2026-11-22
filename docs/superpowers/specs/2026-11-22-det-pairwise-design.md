@@ -58,14 +58,22 @@ PICT 확보는 brew가 아니라 **고정 커밋 소스 빌드**로 한다(`micr
   `fetch_git_tool`(https)로 `work/tools/pict-src`에 받고 커밋을 확인한 뒤 `td_run 300 -- make -j4`로 빌드해 `work/tools/pict/pict`에 둔다.
   `work/tools/pict/.commit` 스탬프가 고정 커밋과 같고 바이너리가 있으면 다시 빌드하지 않는다. 빌드 후 내장 스모크 모델(3필드, 제약 1개)의
   출력이 내장 기대 행과 같아야 한다.
-- 준비 실패(clone·빌드·스모크)는 S00을 실패시키지 않는다. `tools.lock`에 `pict: null`과 사유를 적고 경고만 남긴다(다른 arm 무영향).
+- 준비 실패(clone·빌드·스모크)는 S00을 실패시키지 않는다. `tools.lock`에 `pict: null`, `pictFailureReason: <가림 적용, 300자 이하>`를 적고 경고만 남긴다(다른 arm 무영향).
+- 캐시 무결성: `.commit` 스탬프는 `{commit, binarySha256}`을 담는다. 스탬프 커밋이 pin과 같고 현재 바이너리 sha256이 스탬프 값과 같을 때만 재사용하고, 다르면 소스를 `git clean -fdx` 후 다시 빌드한다.
+  플랫폼별 기대 sha256은 pin하지 않는다(로컬 단일 맥 실증 범위; 잔여 위험으로 기록).
   성공하면 `tools.lock`에 `pict: {commit, binarySha256, path}`. 수정 대상: `tools.pin.yaml`, `pipeline/S00-prepare.sh`,
   `td/prepare.py`(`build_lock`/`write-lock` 인자), README 전제 조건(Xcode CLT의 `clang++`, `make`).
 - 연결: `stage.generate_det`가 `<run>/tools.lock`에서 pict 항목을 읽고 실행 직전 바이너리 sha256을 다시 대조한 뒤
   `derive(bundle, pict=PictTool(path, commit, sha256))`로 넘긴다. 이것은 상위 설계의 "detgen은 번들만 읽는다"의 **명시적 예외**이며 상위 설계에 주석한다.
   경로는 번들·산출물에 쓰지 않는다(누출 게이트).
-- `PictTool`(`td/detgen/pairwise.py`의 frozen dataclass): `path: Path, commit: str, binary_sha256: str`. `derive(bundle, pict: PictTool | None = None)`.
-- det 키: `sha256(input_hash + GENERATOR_VERSION + source_checksum + glue_checksum + pict_tag)`이고 `pict_tag`는 `f"{commit}:{binary_sha256}"` 또는 문자열 리터럴 `"none"`.
+- 상태 모델(`td/detgen/pairwise.py`): `PictTool`(frozen dataclass `path: Path, commit: str, binary_sha256: str`)와 세 상태
+  `Pairwise.disabled()`(기본값, 단위 테스트·기존 호출), `Pairwise.unavailable(reason)`(det가 요청됐는데 `tools.lock` `pict: null`),
+  `Pairwise.available(tool, order)`. `derive(bundle, pairwise: Pairwise = Pairwise.disabled())`.
+  - disabled: `cases.json` 전체가 지금과 바이트 동일하다(새 사유 키·`universe.pairwise`를 쓰지 않는다).
+  - unavailable: 기존 케이스만 만들고, `unresolved`에 `{source: "tool:pict", reason: "pairwise-unavailable", endpoint: null, rule: "pairwise"}` 1건. generation은 `degraded`(사유 `pairwise-unavailable`).
+  - available: pairwise 케이스를 더한다.
+  - unavailable·available에서는 `byReason`에 새 사유 5개 키가 생기고 `universe.pairwise`가 생긴다. 그 밖의 `cases[]`·`unresolved[]` 항목(규칙 ≠ pairwise)은 disabled와 같다.
+- det 키: `sha256(input_hash + GENERATOR_VERSION + source_checksum + glue_checksum + pict_tag)`이고 `pict_tag`는 available이면 `f"{commit}:{binary_sha256}"`, unavailable이면 문자열 리터럴 `"none"`. 실제 run의 stage는 det가 요청되면 항상 둘 중 하나다.
   pict가 없을 때와 있을 때 genId가 겹치지 않는다. `_base_record.generator`에 `pict: {commit, binarySha256} | null`을 더한다(`bdd-gen.schema.json` 갱신).
 - `pict=None`이면 `derive` 출력은 지금과 바이트 동일하다(기존 테스트 불변).
 
@@ -122,7 +130,7 @@ rel 가정: 종속 필드는 고정 극단값(예: 1,000,000)을 그대로 쓰�
   모두 참이면(또는 고정 원자식이 없으면) 남은 모델 원자식만으로 논리곱을 줄인다. 고정 원자식이 판단 불가면 보수적으로 "참"으로 본다.
 - 줄인 논리곱의 필드 후보 데카르트 곱을 열거해, `holds`로 모든 원자식이 참이 되는 조합마다 PICT 제약
   `IF [p0] = "v1" AND [p2] = "v0" THEN [p3] <> "v2";` 한 줄을 쓴다(PICT는 단독 `NOT (...)` 문장을 받지 않는다. 3.7.4에서 확인).
-  원자식 하나로 줄어든 논리곱은 그 후보를 필드에서 뺀다(필터와 같은 효과).
+  모델 원자식이 0개로 줄면(고정 원자식만으로 참) 그 엔드포인트의 모든 행이 오류이므로 `pairwise-infeasible`. 1개로 줄면 그 원자식을 참으로 만드는 후보를 필드에서 빼고 `dropped`에 `{address, reason: "reduced-single-atom"}`로 남긴다. 2개 이상이면 배제 줄을 만든다.
 - `holds`가 None인 조합은 배제하지 않는다. 그 조합을 담은 행은 `assumes`에 `undetermined:<addr>`를 달고 보고에서 따로 센다.
 - 복잡도 상한(결정적): 필드당 후보 ≤ 12, 모델 파라미터 ≤ 24, 엔드포인트당 배제 줄 ≤ 20,000(`Σ_논리곱 Π_필드 후보 수`).
   넘으면 그 엔드포인트는 PICT를 부르지 않고 생성 불가 슬롯 `pairwise-too-large` 1건. 시간이 아니라 크기로 끊으므로 결과가 결정적이다.
@@ -132,20 +140,21 @@ rel 가정: 종속 필드는 고정 극단값(예: 1,000,000)을 그대로 쓰�
 - 모델 필드 수 0~1: PICT를 부르지 않는다(슬롯 없음, `pairwise.json`에 `skipped: "fields<2"`).
   모델 필드 수 < order: 유효 order = 필드 수로 낮추고 `pairwise.json` `effectiveOrder`에 기록한다.
 - 엔드포인트마다 모델 파일을 `work/` 아래 임시 디렉터리에 쓰고(finally에서 삭제) `pict <model> /o:<effectiveOrder>`를 부른다. `/r`은 쓰지 않는다.
-  - rc=0: 행을 라벨→후보로 되돌린다.
+  - rc=0: 출력 계약을 검사한다(헤더 = 모델 파라미터 집합과 정확히 같음, 각 행은 파라미터마다 알려진 후보 라벨 하나, 1행 이상, 중복 열 없음). 위반이면 `pairwise-error`. 통과하면 행을 라벨→후보로 되돌린다.
   - rc=5(`Too restrictive constraints`): 생성 불가 슬롯 `pairwise-infeasible` 1건.
   - rc=4(입력 오류, 예: order > 파라미터 수)는 위의 유효 order 조정으로 생기지 않아야 한다. 생기면 생성기 결함이므로 `pairwise-error`로 기록한다.
   - 그 밖의 rc·실행 실패: 슬롯 `pairwise-error` 1건과 stderr 첫 줄(가림 적용).
-  - 프로세스 상한 120초(안전장치). 넘으면 **det generation 전체를 failed로 하고 스냅샷을 만들지 않는다**(시간 의존 결과를 고정하지 않기 위해).
+  - 프로세스 상한 120초(안전장치, 테스트용으로 `TD_DET_PICT_TIMEOUT` 초로 바꿀 수 있다). 넘으면 **det generation 전체를 failed로 하고 스냅샷을 만들지 않는다**(시간 의존 결과를 고정하지 않기 위해).
 - order: `run-all --det-pairwise-order 2|3`(기본 2, 그 밖이면 `die`). run-all이 `TD_DET_PAIRWISE_ORDER`로 내보내고
   `inputs.project`가 det 번들 `harness.json`의 `pairwiseOrder`로 싣는다(입력 해시에 들어간다).
 - 행마다 초안 하나: 규칙 `pairwise`, 기대 `{strict: "2xx", class: "2xx", source: "rule"}`, oracle `status`(오류 조건을 모두 피한 요청의 2xx 단정은
-  상태 코드로 판정 가능하다. 분기 진입 값이 섞여도 예외가 없는 분기이므로 같다), 출처 = 모델에 기여한 주소 + `pict:<order>-way`.
+  상태 코드로 판정 가능하다. 분기 진입 값이 섞여도 예외가 없는 분기이므로 같다), 출처 = 모델에 기여한 번들 주소(상위 REQ-105 형식 유지).
+  order 정보는 출처가 아니라 케이스 키 `pairwise: {order, labels: {param: label}}`에 둔다. 값의 `transform`은 바꾸지 않는다.
   `pairwise`는 `_VALID_RULES` 끝에 넣는다. 경로 변수·setup은 `_materialize`가 baseline-valid와 같이 채운다.
-- 케이스 칸: 케이스에 `pairwise: {param: label}`을 `cases.json` 케이스 항목의 새 선택 키로 싣는다(기존 케이스에는 없음 → 기존 80개 바이트 불변 조건과 충돌하지 않도록,
+- 케이스 키 `pairwise`는 `cases.json` 케이스 항목의 새 선택 키다(기존 케이스에는 없음 → 기존 80개 바이트 불변 조건과 충돌하지 않도록,
   `_case_entry`는 pairwise 라벨이 없으면 키 자체를 쓰지 않는다).
 - 기존 케이스 우선: 정렬 키 앞에 규칙 우선순위(`pairwise`만 1, 나머지 0)를 둬 pairwise 초안이 항상 뒤에 온다. 따라서 기존 dedupe에서 기존 케이스가 남고
-  기존 id·pair는 바뀌지 않는다. 라벨이 모두 baseline인 행은 baseline-valid와 같은 요청이므로 만들지 않고 `pairwise.json` `rows[].mergedInto`에 그 case id를 적는다.
+  기존 id·pair는 바뀌지 않는다. 라벨이 모두 baseline인 행은 같은 엔드포인트의 기존 유효 케이스(baseline-valid, 없으면 happy) 중 요청이 같은 것이 있으면 만들지 않고 `rows[].mergedInto`에 그 id를 적는다. 없으면 pairwise 케이스로 남긴다.
 - 방어선: `_materialize`가 행을 거부하면(다른 조건 위반) 슬롯 `pairwise-row-invalid`. 기대값은 0건이고 E3·단위 테스트가 0건을 단언한다.
 - REASONS에 `pairwise-infeasible`, `pairwise-error`, `pairwise-too-large`, `pairwise-row-invalid`, `pairwise-unavailable`을 더하고
   `_REASON_PRIORITY` 끝에 `pairwise-unavailable, pairwise-too-large, pairwise-infeasible, pairwise-error, pairwise-row-invalid` 순으로 둔다. `pairwise-unavailable`은 pict가 없을 때(det가 요청됐는데 `tools.lock` `pict: null`) 엔드포인트와 무관한 슬롯 1건이다.
@@ -155,9 +164,10 @@ rel 가정: 종속 필드는 고정 극단값(예: 1,000,000)을 그대로 쓰�
 
 ### 5.5 보고
 
-- `universe.pairwise = {order, byEndpoint: {label: {params, candidates, pairsTotal, pairsFeasible, rows, cases}}}`. `theoretical`은 바꾸지 않는다.
+- `universe.pairwise = {order, byEndpoint: {label: {params, candidates, interactionsTotal, interactionsFeasible, interactionsCovered, rows, cases}}}`. `theoretical`은 바꾸지 않는다.
 - 통과율은 기존 `byRule.pairwise`(`generated`, `passedStrict`)를 쓴다. compare det 블록에는 `byRule`에 없는 것만 `pairwise` 객체로 더한다:
-  `{order, pairsFeasible, pairsCovered, undetermined, relCombined}`(모두 정수, order는 2|3; `detSummary`에 선택이 아닌 필수 속성 `pairwise: object|null`로 추가, pict 미사용이면 null). 수정 대상: `compare.schema.json`(`detSummary`), `compare.html.j2`, `results.summarize`, 관련 테스트.
+  `{order, interactionsFeasible, interactionsCovered, undetermined, relCombined}`(모두 정수, order는 2|3. interactions는 order-way 값 튜플 수,
+  undetermined·relCombined는 해당 `assumes` 접두를 하나 이상 가진 pairwise 케이스 수; `detSummary`에 선택이 아닌 필수 속성 `pairwise: object|null`로 추가, pict 미사용이면 null). 수정 대상: `compare.schema.json`(`detSummary`), `compare.html.j2`, `results.summarize`, 관련 테스트.
 - 커버리지 변화: 비교 기준은 run3(det 단독, 라인 31.1%, 브랜치 37.2%; 백서 `docs/whitepaper/2026-11-21-test-dashboard-poc-whitepaper.md` §9).
   새 run의 SUT 커밋과 `tools.lock`의 jacoco 항목이 run3과 같을 때만 차이를 적고, 다르면 "비교 불가"로 적는다. pairwise만의 기여는 같은 커밋에서
   pairwise 포함 generation과 run3 generation의 귀속 커버리지 차이로 본다(같은 bbtg·jQA 입력이 전제, E2가 입력 동일성을 확인).
@@ -167,10 +177,11 @@ rel 가정: 종속 필드는 고정 극단값(예: 1,000,000)을 그대로 쓰�
 | 상황 | S00 | det generation | 다른 arm |
 |---|---|---|---|
 | det 미요청 | pict 준비 안 함 | 없음 | 영향 없음 |
-| pict 준비 실패 | passed(경고), `pict: null` | 기존 케이스만 + `pairwise-unavailable` 1슬롯, 키에 `none` | 영향 없음 |
+| pict 준비 실패 | passed(경고), `pict: null`·`pictFailureReason` | degraded: 기존 케이스만 + `pairwise-unavailable` 1슬롯, 키에 `none` | 영향 없음 |
 | 실행 직전 sha256 불일치 | – | failed(사유 기록), 스냅샷 없음 | 영향 없음 |
 | PICT rc=5 / 기타 rc / 크기 초과 | – | 그 엔드포인트 슬롯 1건, 나머지 정상 | 영향 없음 |
 | PICT 120초 초과 | – | failed, 스냅샷 없음 | 영향 없음 |
+| 산출물 누출 방지 | – | pict 경로·홈 경로가 산출물(`cases.json`, `pairwise.json`, `bdd-gen.json`)에 없다(`redact.find_leaks`). `pairwise.json`은 사이트에 게시하지 않는다 | – |
 
 ## 6. 수용 테스트(E2E 우선, 이중 루프)
 
