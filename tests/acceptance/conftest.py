@@ -31,6 +31,10 @@ DET_SESSION_FILE = Path(os.environ.get("TD_DET_SESSION_FILE") or REPO_ROOT / "wo
 # det 조합 시각화 E2E 증거. 형식 {"runDir", "previousCasesDir", "publishedDir", "publishedUrl"}(모두 필수).
 DET_VIZ_SESSION_FILE = Path(os.environ.get("TD_DET_VIZ_SESSION_FILE", REPO_ROOT / "work" / "det-viz-session.json"))
 DET_VIZ_SESSION_KEYS = ("runDir", "previousCasesDir", "publishedDir", "publishedUrl")
+# det pairwise(PICT) E2E 증거. TD_DET_PAIRWISE_SESSION_FILE로 바꿔 끼울 수 있다.
+DET_PAIRWISE_SESSION_FILE = Path(os.environ.get("TD_DET_PAIRWISE_SESSION_FILE")
+                                 or REPO_ROOT / "work" / "det-pairwise-session.json")
+DET_PAIRWISE_SESSION_KEYS = ("runDir", "order3RunDir", "previousCasesDir", "run3BundleDir", "run3RunDir")
 LOCAL_ENV_PATH = REPO_ROOT / "infra" / "local.env"
 
 _SESSION_ID = os.environ.get("TD_TEST_SESSION_ID") or uuid.uuid4().hex[:8]
@@ -49,6 +53,10 @@ def pytest_configure(config):
     )
     config.addinivalue_line(
         "markers",
+        "det_pairwise_e2e: det pairwise 실제 run 증거(work/det-pairwise-session.json)가 필요한 E2E 테스트. 없으면 실패한다.",
+    )
+    config.addinivalue_line(
+        "markers",
         "det_e2e: det arm 실제 run 증거(work/det-session.json)가 필요한 E2E 테스트. 없으면 실패한다.",
     )
     config.addinivalue_line(
@@ -60,6 +68,7 @@ def pytest_configure(config):
 def pytest_runtest_setup(item):
     _require_det_session(item)
     _require_det_viz_session(item)
+    _require_det_pairwise_session(item)
     if item.get_closest_marker("baseline") and not SESSION_FILE.exists():
         pytest.fail(
             "baseline 테스트는 work/acceptance-session.json(기준 run 증거)이 필요하다. "
@@ -93,6 +102,19 @@ def _require_det_viz_session(item):  # pragma: no cover - 위 훅에서 호출
     missing = [key for key in DET_VIZ_SESSION_KEYS if not isinstance(session, dict) or not session.get(key)]
     if missing:
         pytest.fail(f"{DET_VIZ_SESSION_FILE}에 필수 키가 없다: {missing}", pytrace=False)
+def _require_det_pairwise_session(item):  # pragma: no cover - 위 훅에서 호출
+    if not item.get_closest_marker("det_pairwise_e2e"):
+        return
+    if not DET_PAIRWISE_SESSION_FILE.exists():
+        pytest.fail(
+            f"det_pairwise_e2e 테스트는 {DET_PAIRWISE_SESSION_FILE}(실제 pairwise run을 가리키는 세션 파일)이 필요하다. "
+            f"키: {list(DET_PAIRWISE_SESSION_KEYS)}. skip하지 않고 실패한다.",
+            pytrace=False,
+        )
+    session = json.loads(DET_PAIRWISE_SESSION_FILE.read_text(encoding="utf-8"))
+    missing = [key for key in DET_PAIRWISE_SESSION_KEYS if not session.get(key)]
+    if missing:
+        pytest.fail(f"det pairwise 세션 파일에 필수 키가 없다: {missing}", pytrace=False)
 
 
 # --- 세션 식별 -------------------------------------------------------------------
