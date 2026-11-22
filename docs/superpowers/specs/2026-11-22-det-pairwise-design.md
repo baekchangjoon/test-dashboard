@@ -74,7 +74,7 @@ PICT 확보는 brew가 아니라 **고정 커밋 소스 빌드**로 한다(`micr
   - disabled: `cases.json` 전체가 지금과 바이트 동일하다(새 사유 키·`universe.pairwise`를 쓰지 않는다).
   - unavailable: 기존 케이스만 만들고, `unresolved`에 `{source: "tool:pict", reason: "pairwise-unavailable", endpoint: null, rule: "pairwise"}` 1건. generation은 `degraded`(사유 `pairwise-unavailable`).
   - available: pairwise 케이스를 더한다.
-  - unavailable·available에서는 `byReason`에 새 사유 5개 키가 생기고 `universe.pairwise`가 생긴다. 그 밖의 `cases[]`·`unresolved[]` 항목(규칙 ≠ pairwise)은 disabled와 같다.
+  - unavailable·available에서는 `byReason`에 새 사유 4개 키가 생기고 `universe.pairwise`가 생긴다. 그 밖의 `cases[]`·`unresolved[]` 항목(규칙 ≠ pairwise)은 disabled와 같다.
 - det 키: `sha256(input_hash + GENERATOR_VERSION + source_checksum + glue_checksum + pict_tag)`이고 `pict_tag`는 available이면 `f"{commit}:{binary_sha256}"`, unavailable이면 문자열 리터럴 `"none"`. 실제 run의 stage는 det가 요청되면 항상 둘 중 하나다.
   pict가 없을 때와 있을 때 genId가 겹치지 않는다. `_base_record.generator`에 `pict: {commit, binarySha256} | null`을 더한다(`bdd-gen.schema.json` 갱신).
 - `pict=None`이면 `derive` 출력은 지금과 바이트 동일하다(기존 테스트 불변).
@@ -162,11 +162,12 @@ rel 가정: 종속 필드는 고정 극단값(예: 1,000,000)을 그대로 쓰�
 - 방어선: `_materialize`가 행을 거부하면(다른 조건 위반) 슬롯 `pairwise-row-invalid`. 기대값은 0건이고 E3·단위 테스트가 0건을 단언한다.
 - `REASONS`와 `_REASON_PRIORITY` 끝에 모두 `pairwise-unavailable, pairwise-too-large, pairwise-infeasible, pairwise-row-invalid` 순으로 4개를 더한다. `pairwise-unavailable`은 pict가 없을 때(det가 요청됐는데 `tools.lock` `pict: null`) 엔드포인트와 무관한 슬롯 1건이다.
 - 산출물 `pairwise.json`(스키마 `td/schemas/pairwise.schema.json`, 버전 1, `_COMPLETE` 체크섬 대상, 사이트에는 게시하지 않음):
-  엔드포인트별 `{params: [{param, loc, field, candidates[]}], fixed: {field: label}, dropped: [...], exclusions: [...], order, effectiveOrder,
+  최상위 `{schema: 1, order, endpoints}`, 엔드포인트별 `{params: [{param, loc, field, candidates[]}], fixed: {field: 후보+reason}, dropped: [...], exclusions: [...], effectiveOrder,
   skipped, rows: [{labels, caseId | null, mergedInto | null}]}`.
 
 ### 5.5 보고
 
+- `universe.pairwise.byEndpoint`에는 skipped·reason(too-large, infeasible)이 없는 엔드포인트만 들어간다. pairwise 케이스의 `sources`는 그 엔드포인트의 오류·분기 조건 주소 전체다(행별 기여 주소를 따로 계산하지 않는다).
 - `universe.pairwise = {order, byEndpoint: {label: {params, candidates, interactionsTotal, interactionsFeasible, interactionsCovered, rows, cases}}}`. `theoretical`은 바꾸지 않는다.
 - 통과율은 기존 `byRule.pairwise`(`generated`, `passedStrict`)를 쓴다. compare det 블록에는 `byRule`에 없는 것만 `pairwise` 객체로 더한다:
   `{order, interactionsFeasible, interactionsCovered, undetermined, relCombined}`(모두 정수, order는 2|3. interactions는 order-way 값 튜플 수,
