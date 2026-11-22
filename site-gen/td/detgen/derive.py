@@ -573,11 +573,34 @@ class _Deriver:
                 assumes.append(f"rel-combined:{addr}")
         draft = _Draft(ep, PAIRWISE_RULE, list(sources), (PAIRWISE_RULE, index, 0, 0), targets=targets, expect=dict(_VALID),
                        assumes=sorted(set(assumes)), pairwise={"order": model.effective_order, "labels": dict(labels)}, row=row)
+        draft.cell_info = self._pairwise_cells(ep, targets)
         self._materialize(draft)
         if draft.reason is not None:
             draft.reason, draft.cause = ROW_INVALID, None  # 다른 조건 위반 등 거부 사유와 무관하게 방어선 슬롯
         self.drafts.append(draft)
         return draft
+
+    def _pairwise_cells(self, ep, targets) -> CellInfo:
+        """pairwise 케이스의 칸(det-viz REQ-215): 값이 그 필드의 원자식(오류·분기, `~` 제외)을 참으로 만들면 그 클래스,
+        원자식의 유효 경계값과 같으면 valid + boundaries, 그 밖은 valid. 판정은 기존 `Constraints.holds`·`sides`를 쓴다."""
+        info, boundaries = CellInfo(), set()
+        atoms = [(addr, con) for addr, cons in ep.error_disjuncts + ep.branch_disjuncts if not addr.endswith("~")
+                 for con in cons if isinstance(con, Con) and not con.stored and con.op not in ("count", "rel")]
+        for (loc, name), value in sorted(targets.items(), key=lambda item: item[0]):
+            field_name = f"{loc}.{name}"
+            hit = None
+            for addr, con in atoms:
+                if _con_field(con) != name:
+                    continue
+                if hit is None and self.cons.holds(con, value) is True:
+                    hit = class_id(ep.label, field_name, _class_key(con))
+                sides = self.cons.sides(ep, con, addr)
+                if not isinstance(sides, str) and isinstance(sides[1], Value) and isinstance(value, Value) \
+                        and sides[1].value == value.value and type(sides[1].value) is type(value.value):
+                    boundaries.add(class_id(ep.label, field_name, _class_key(con)))
+            info.cells[field_name] = hit or class_id(ep.label, field_name, VALID_KEY)
+        info.boundaries = sorted(boundaries)
+        return info
 
     def _pairwise_finish(self, case_of) -> dict | None:
         """행의 caseId·mergedInto를 채우고 `pairwise.json` 문서와 universe.pairwise를 만든다(disabled면 None)."""

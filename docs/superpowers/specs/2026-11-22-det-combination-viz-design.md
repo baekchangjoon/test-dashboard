@@ -110,6 +110,9 @@ A를 고른다. B는 반목표에 걸리고, C는 S12가 이미 det 블록을 �
   `cases.json`에 쓰는 항목에는 칸 정보를 넣지 않으므로 순서와 내용이 바뀌지 않는다.
 - 칸은 의도한 클래스 기준이다. 한 값이 다른 클래스도 함께 위반할 수 있다(`also-violates:` 가정). 현 스냅샷에는 0건이다.
 
+- pairwise 케이스(det pairwise 브랜치 병합 후, REQ-215): 초안 경로가 아니라 PICT 행이므로 `_cells`를 쓰지 않고,
+  값마다 그 필드의 원자식(오류·분기, `~` 제외)을 `Constraints.holds`로 평가해 참이면 그 클래스, 유효 경계값과 같으면 valid + `boundaries`, 그 밖은 valid로 둔다.
+
 ### 5.3 `factors.json`(generation 디렉터리, 스키마 `td/schemas/factors.schema.json`)
 
 ```json
