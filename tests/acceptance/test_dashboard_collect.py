@@ -214,8 +214,9 @@ def test_req085_ci_conclusion_classes(tmp_path, collect_env):
 def test_req086_latest_check_per_name(tmp_path, collect_env):
     noise = [{"name": "lint", "status": "in_progress", "conclusion": None, "started_at": "2026-11-20T03:00:00Z"},
              {"name": "docs", "conclusion": "cancelled", "started_at": "2026-11-20T01:30:00Z"}]
-    recovered = [{"name": "build", "conclusion": "failure", "started_at": "2026-11-20T01:00:00Z"},
-                 {"name": "build", "conclusion": "success", "started_at": "2026-11-20T02:00:00Z"}] + noise
+    # 목록 순서가 두 과제에서 반대다(recovered는 최신이 앞, regressed는 최신이 뒤). 목록의 처음·마지막을 고르는 구현은 한쪽에서 틀린다.
+    recovered = [{"name": "build", "conclusion": "success", "started_at": "2026-11-20T02:00:00Z"},
+                 {"name": "build", "conclusion": "failure", "started_at": "2026-11-20T01:00:00Z"}] + noise
     regressed = [{"name": "build", "conclusion": "success", "started_at": "2026-11-20T01:00:00Z"},
                  {"name": "build", "conclusion": "failure", "started_at": "2026-11-20T02:00:00Z"}] + noise
     gh = fake_gh(tmp_path, {"o/a": {"checks": recovered}, "o/b": {"checks": regressed, "default_branch": "dev"}})
@@ -342,8 +343,8 @@ def test_req143_visibility_unknown_keeps_last_public(tmp_path, collect_env):
 # --- REQ-091: 시간 예산과 재시도 ------------------------------------------------------------------------
 
 def test_req091_budget_and_retry(tmp_path, collect_env):
-    assert (collect.CONNECT_TIMEOUT_SEC, collect.READ_TIMEOUT_SEC, collect.RETRIES, collect.RETRY_DELAYS_SEC,
-            collect.BUDGET_SEC) == (10, 30, 2, (2, 4), 300)
+    assert (collect.READ_TIMEOUT_SEC, collect.RETRIES, collect.RETRY_DELAYS_SEC, collect.BUDGET_SEC) == (30, 2, (2, 4), 300)
+    assert not hasattr(collect, "CONNECT_TIMEOUT_SEC"), "따로 쓰지 않는 연결 제한 상수를 두지 않는다(설계 §6.3)"
     gh = fake_gh(tmp_path, {"o/a": {"hang": 30, "hang_on": "runs"}, "o/b": {}})
     started = time.monotonic()
     out = run_collect(tmp_path, cfg_with(plain=["a", "b"]), gh=gh, env={**collect_env, "TD_COLLECT_BUDGET_SEC": "3"})
@@ -359,12 +360,13 @@ def test_req091_budget_and_retry(tmp_path, collect_env):
 
 @pytest.mark.parametrize("status", [429, 403])
 def test_req091_retry_after_is_honoured(tmp_path, collect_env, status):
-    env = {key: value for key, value in collect_env.items() if key != "TD_COLLECT_RETRY_DELAYS"}
+    # 재시도 간격은 짧게(0.1초) 둔다. 간격이 1초를 넘으면 Retry-After를 따른 것이다. 위 한계는 헤더보다 크게 기다리지 않음을 본다.
+    assert collect_env["TD_COLLECT_RETRY_DELAYS"] == "0.1,0.2"
     gh = fake_gh(tmp_path, {"o/a": {"runs": ["success"],
                                     "fail": {"status": status, "retry_after": 1, "times": 1, "on": "runs"}}})
-    out = run_collect(tmp_path, cfg_with(plain="a"), gh=gh, env=env)
+    out = run_collect(tmp_path, cfg_with(plain="a"), gh=gh, env=collect_env)
     calls = _calls_to(gh, "repos/o/a/actions/runs")
-    assert len(calls) == 2 and calls[1].at - calls[0].at >= 1.0
+    assert len(calls) == 2 and 1.0 <= calls[1].at - calls[0].at < 3.0, [call.at for call in calls]
     assert snapshot(tmp_path, "a")["ci"]["runs"] == 1 and out["status"] == "ok"
 
 
@@ -428,6 +430,7 @@ def test_req094_token_not_leaked_and_not_issued_when_unneeded(tmp_path, collect_
     token = observed.read_text()
     assert token.startswith("squ_") and token != collect_env["SONAR_TOKEN"]
     assert token not in proc.stdout and token not in proc.stderr
+    assert ssh.log() and token not in ssh.log(), "ssh로 보내는 원격 명령에 토큰 평문이 없다"
     for path in (p for p in (root / "site").rglob("*") if p.is_file()):
         assert token not in path.read_text(errors="replace"), path
     gh_args = (root / "fake-gh" / "calls.jsonl").read_text()
