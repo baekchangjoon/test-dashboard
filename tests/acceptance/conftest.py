@@ -28,6 +28,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SESSION_FILE = Path(os.environ.get("TD_ACCEPTANCE_SESSION_FILE") or REPO_ROOT / "work" / "acceptance-session.json")
 # det arm E2E 증거(실제 run을 가리키는 세션 파일). TD_DET_SESSION_FILE로 바꿔 끼울 수 있다.
 DET_SESSION_FILE = Path(os.environ.get("TD_DET_SESSION_FILE") or REPO_ROOT / "work" / "det-session.json")
+# det 조합 시각화 E2E 증거. 형식 {"runDir", "previousCasesDir", "publishedDir", "publishedUrl"}(모두 필수).
+DET_VIZ_SESSION_FILE = Path(os.environ.get("TD_DET_VIZ_SESSION_FILE", REPO_ROOT / "work" / "det-viz-session.json"))
+DET_VIZ_SESSION_KEYS = ("runDir", "previousCasesDir", "publishedDir", "publishedUrl")
 LOCAL_ENV_PATH = REPO_ROOT / "infra" / "local.env"
 
 _SESSION_ID = os.environ.get("TD_TEST_SESSION_ID") or uuid.uuid4().hex[:8]
@@ -48,10 +51,15 @@ def pytest_configure(config):
         "markers",
         "det_e2e: det arm 실제 run 증거(work/det-session.json)가 필요한 E2E 테스트. 없으면 실패한다.",
     )
+    config.addinivalue_line(
+        "markers",
+        "det_viz_e2e: det 조합 시각화 실제 run 증거(work/det-viz-session.json)가 필요한 E2E 테스트. 없으면 실패한다.",
+    )
 
 
 def pytest_runtest_setup(item):
     _require_det_session(item)
+    _require_det_viz_session(item)
     if item.get_closest_marker("baseline") and not SESSION_FILE.exists():
         pytest.fail(
             "baseline 테스트는 work/acceptance-session.json(기준 run 증거)이 필요하다. "
@@ -67,6 +75,24 @@ def _require_det_session(item):  # pragma: no cover - 아래 훅에서 호출
             "형식: {\"runDir\": \"<abs>\", \"baselineRunDir\": \"<abs>\"}. skip하지 않고 실패한다.",
             pytrace=False,
         )
+
+
+def _require_det_viz_session(item):  # pragma: no cover - 위 훅에서 호출
+    if not item.get_closest_marker("det_viz_e2e"):
+        return
+    if not DET_VIZ_SESSION_FILE.exists():
+        pytest.fail(
+            f"det_viz_e2e 테스트는 {DET_VIZ_SESSION_FILE}(실제 det 시각화 run을 가리키는 세션 파일)이 필요하다. "
+            "형식: {\"runDir\", \"previousCasesDir\", \"publishedDir\", \"publishedUrl\"}. skip하지 않고 실패한다.",
+            pytrace=False,
+        )
+    try:
+        session = json.loads(DET_VIZ_SESSION_FILE.read_text(encoding="utf-8"))
+    except ValueError as error:
+        pytest.fail(f"{DET_VIZ_SESSION_FILE}이 JSON이 아니다: {error}", pytrace=False)
+    missing = [key for key in DET_VIZ_SESSION_KEYS if not isinstance(session, dict) or not session.get(key)]
+    if missing:
+        pytest.fail(f"{DET_VIZ_SESSION_FILE}에 필수 키가 없다: {missing}", pytrace=False)
 
 
 # --- 세션 식별 -------------------------------------------------------------------
