@@ -50,6 +50,7 @@ details.heat-ep summary { cursor: pointer; overflow-wrap: anywhere; }
 </style>
 </head>
 <body>
+{% if nav_html %}{{ nav_html | safe }}{% endif %}
 <header class="site-header"><div class="wrap"><strong>test-dashboard</strong> / <a href="compare.html">arm 비교 판정</a></div></header>
 <main class="wrap">
 <h1>det 조합 시각화</h1>
