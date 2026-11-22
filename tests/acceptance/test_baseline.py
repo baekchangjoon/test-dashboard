@@ -16,6 +16,7 @@ from pathlib import Path
 import jsonschema
 import pytest
 import yaml
+from playwright.sync_api import expect
 
 import helpers
 from conftest import token_rows
@@ -646,12 +647,15 @@ def test_req131_tia_report_published(baseline_site, browser):
     try:
         tabs = page.locator("#seg [role=tab]")
         assert tabs.count() == 4 and "변경 영향" in tabs.first.inner_text()
+        # 리포트는 탭을 바꾸면 새 페이지를 비동기로 다시 그린다(클릭 직후에는 목록이 비어 있다). count()는 기다리지 않으므로
+        # 다시 그려질 때까지 재시도하는 expect로 같은 값을 단언한다.
         for i in range(4):
             tabs.nth(i).click()
-            assert page.locator(TIA_GUIDE_SELECTOR + ":visible").count() == 1, i
+            expect(tabs.nth(i)).to_have_attribute("aria-selected", "true")
+            expect(page.locator(TIA_GUIDE_SELECTOR + ":visible")).to_have_count(1)
         tabs.first.click()
         changed = json.loads((baseline_site.run_dir / "S10" / "impact.json").read_text())["changedFiles"]
-        assert page.locator(TIA_CHANGED_FILE_SELECTOR).count() == len(changed)
+        expect(page.locator(TIA_CHANGED_FILE_SELECTOR)).to_have_count(len(changed))
     finally:
         page.context.close()
 
