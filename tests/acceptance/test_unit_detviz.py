@@ -452,3 +452,177 @@ def test_factors_omitted_when_empty(tmp_path, generated):
     assert "factors.json" not in written and not (tmp_path / "bare" / "factors.json").exists()
     positional = derive_module.Derivation(derivation.cases, derivation.unresolved, derivation.universe, "UTC")
     assert positional.factors == {}
+
+
+# --- Task 3: td.detviz 결합·집계(REQ-206, 208, 212, 213) ---------------------------------------------------------
+def _vid(endpoint: str, field: str, name: str) -> str:
+    return _cid(endpoint, field, ("count", name))
+
+
+def _small_rows():
+    """(case, endpoint, rule, strict, class, pair, bbtg, graph, status, code). a-vb는 undefined(notRun)로 바꾼다."""
+    from test_unit_detgen import _SUMMARY_CASES
+    rows = [list(row) for row in _SUMMARY_CASES]
+    for row in rows:
+        if row[0] == "a-vb":
+            row[8] = "undefined"
+    return [tuple(row) for row in rows]
+
+
+def _small_factors():
+    """POST /a: body.x(valid,x1,x2) × body.y(valid,y1) → 쌍 6. PUT /b: body.z(valid,z1,z2). GET /c: 필드 없음."""
+    ids = {}
+    endpoints = []
+    for label, field, names in (("POST /a", "body.x", ["x1", "x2"]), ("POST /a", "body.y", ["y1"]),
+                                ("PUT /b", "body.z", ["z1", "z2"])):
+        ids[(field, label)] = (_valid(label, field), {name: _vid(label, field, name) for name in names})
+    def klasses(label, field):
+        valid, rest = ids[(field, label)]
+        out = [{"id": valid, "kind": "valid", "label": "valid", "sources": []}]
+        for name, class_id in sorted(rest.items(), key=lambda item: item[1]):
+            out.append({"id": class_id, "kind": "count", "label": name, "sources": []})
+        return out
+    endpoints = [
+        {"endpoint": "POST /a", "methods": [], "fields": [{"field": "body.x", "classes": klasses("POST /a", "body.x")},
+                                                          {"field": "body.y", "classes": klasses("POST /a", "body.y")}]},
+        {"endpoint": "PUT /b", "methods": [], "fields": [{"field": "body.z", "classes": klasses("PUT /b", "body.z")}]},
+        {"endpoint": "GET /c", "methods": [], "fields": []}]
+    x1, x2 = ids[("body.x", "POST /a")][1]["x1"], ids[("body.x", "POST /a")][1]["x2"]
+    y1 = ids[("body.y", "POST /a")][1]["y1"]
+    z1 = ids[("body.z", "PUT /b")][1]["z1"]
+
+    def case(cells, boundaries=(), out=None):
+        return {"rule": "r", "cells": cells, "boundaries": list(boundaries), "stored": [], "storedBoundaries": [],
+                "enumValue": None, "inModel": out is None, "outReason": out, "mergedRules": [], "cellConflicts": []}
+    cases = {"a-base": case({}), "a-vb": case({"body.x": x1}, [x1]), "a-v1": case({"body.y": y1}, [y1, x1]),
+             "a-v2": case({}), "a-v3": case({}, out="auth"), "b-base": case({}), "b-v1": case({}), "b-vb": case({}),
+             "b-v2": case({}, out="no-data"), "c-h": case({})}
+    unresolved = [{"index": 0, "source": "src:u", "rule": "r", "reason": "unparsed", "draftKey": None,
+                   "cells": {"body.z": z1}},
+                  {"index": 1, "source": "src:v", "rule": "r", "reason": "unresolved-operand", "draftKey": None,
+                   "cells": {"body.x": x2}}]
+    return {"version": 1, "endpoints": endpoints, "sources": {}, "cases": cases, "unresolved": unresolved}, \
+        {"x1": x1, "x2": x2, "y1": y1, "z1": z1, "z2": ids[("body.z", "PUT /b")][1]["z2"]}
+
+
+def _small(tmp_path):
+    from test_unit_detgen import make_det_results
+    gen_dir, s07_dir = make_det_results(tmp_path, rows=_small_rows())
+    factors, ids = _small_factors()
+    # 케이스 파일의 unresolved도 엔드포인트를 갖게 한다(시각화는 칸의 클래스로 판단하지만 형식은 실제와 같게).
+    (gen_dir / "factors.json").write_text(json.dumps(factors, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+    return gen_dir, s07_dir, factors, ids
+
+
+def test_build_aggregates_small(tmp_path):
+    from td import detviz
+    gen_dir, s07_dir, factors, ids = _small(tmp_path)
+    doc = detviz.build(gen_dir, s07_dir)
+    assert doc["version"] == 1 and doc["genId"] == gen_dir.name and doc["factors"] == factors
+    a = doc["aggregates"]["byEndpoint"]["POST /a"]
+    valid_x, valid_y = _valid("POST /a", "body.x"), _valid("POST /a", "body.y")
+    state = {class_id: info["state"] for class_id, info in a["classes"].items()}
+    assert state[valid_x] == "covered-pass" and state[valid_y] == "covered-pass"
+    assert state[ids["x1"]] == "covered-notrun"    # a-vb만(undefined)
+    assert state[ids["y1"]] == "covered-fail"      # a-v1만(failed)
+    assert state[ids["x2"]] == "unresolved"        # 케이스 없음 + 생성 불가 슬롯 1
+    b = doc["aggregates"]["byEndpoint"]["PUT /b"]
+    assert b["classes"][ids["z1"]]["state"] == "unresolved" and b["classes"][ids["z2"]]["state"] == "empty"
+    assert {info["state"] for info in [*a["classes"].values(), *b["classes"].values()]} == {
+        "covered-pass", "covered-fail", "covered-notrun", "unresolved", "empty"}
+    assert a["classes"][ids["x2"]]["unresolved"] == [{"index": 1, "reason": "unresolved-operand"}]
+    # valid는 칸이 비었거나 valid인 inModel 케이스: a-base, a-vb(x=x1이라 제외), a-v1, a-v2 → x: a-base, a-v1, a-v2
+    assert a["classes"][valid_x]["cases"] == ["a-base", "a-v1", "a-v2"]      # a-v3은 모델 밖
+    assert a["classes"][ids["x1"]]["cases"] == ["a-vb"]
+    assert a["classes"][ids["x1"]]["boundaryCases"] == 2 and a["classes"][ids["y1"]]["boundaryCases"] == 1
+    assert a["classes"][valid_x]["boundaryCases"] == 0
+    # 쌍: x(valid,x1,x2) × y(valid,y1)
+    assert a["pairs"]["total"] == 6 and a["pairs"]["covered"] == 3
+    order = [klass["id"] for klass in factors["endpoints"][0]["fields"][0]["classes"]]   # valid 다음은 id 순
+    counts = [[0, 0] for _ in order]
+    counts[0] = [2, 1]
+    counts[order.index(ids["x1"])] = [1, 0]
+    assert a["pairs"]["matrix"] == [{"a": "body.x", "b": "body.y", "counts": counts}]
+    assert b["pairs"] == {"total": 0, "covered": 0, "matrix": []}
+    assert doc["aggregates"]["byEndpoint"]["GET /c"] == {"classes": {}, "pairs": {"total": 0, "covered": 0, "matrix": []}}
+    summary = doc["aggregates"]["summary"]
+    assert summary == {"endpoints": 3, "fields": 3, "classes": 8, "classesCovered": 5, "pairsCovered": 3, "pairsTotal": 6,
+                       "outOfModel": {"auth": 1, "no-data": 1}}
+
+
+def test_req213_status_mapping(tmp_path):
+    from td import detviz
+    from test_unit_detgen import make_det_results
+    rows = [("p", "POST /a", "happy", 201, "2xx", None, None, None, "passed", None),
+            ("p2", "POST /a", "happy", "2xx", "2xx", None, None, None, "passed", None),
+            ("f", "POST /a", "violation", 400, "4xx", None, None, None, "failed", 422),
+            ("f2", "POST /a", "violation", 400, "4xx", None, None, None, "failed", None),
+            ("u", "POST /a", "happy", 200, "2xx", None, None, None, "undefined", None),
+            ("c", "POST /a", "happy", 200, "2xx", None, None, None, "uncompilable", None),
+            ("m", "GET /m", "happy", 200, "2xx", None, None, None, "passed", None)]
+    gen_dir, s07_dir = make_det_results(tmp_path, rows=rows)
+    # 결과 줄 없음: m의 결과 줄을 지운다
+    lines = (s07_dir / "scenario-results.json").read_text(encoding="utf-8").splitlines()
+    from td import scenarios
+    ident = scenarios.GenIdent.from_gen_id(gen_dir.name)
+    missing = next(ref.test_id for ref in scenarios.pickle_refs(gen_dir, ident) if ref.name == "m")
+    kept = [line for line in lines if json.loads(line)["testId"] != missing]
+    assert len(kept) == len(lines) - 1
+    (s07_dir / "scenario-results.json").write_text("\n".join(kept) + "\n", encoding="utf-8")
+    factors = {"version": 1, "endpoints": [], "sources": {}, "cases": {}, "unresolved": []}
+    (gen_dir / "factors.json").write_text(json.dumps(factors), encoding="utf-8")
+    results = detviz.build(gen_dir, s07_dir)["caseResults"]
+    assert results["p"] == {"endpoint": "POST /a", "status": "passed", "observed": 201, "expectStrict": 201}
+    assert results["p2"] == {"endpoint": "POST /a", "status": "passed", "observed": None, "expectStrict": None}
+    assert results["f"] == {"endpoint": "POST /a", "status": "failed", "observed": 422, "expectStrict": 400}
+    assert results["f2"]["status"] == "failed" and results["f2"]["observed"] is None
+    for case_id in ("u", "c", "m"):
+        assert results[case_id]["status"] == "notRun" and results[case_id]["observed"] is None, case_id
+    assert results["m"]["endpoint"] == "GET /m"
+
+
+def test_build_factors_missing(tmp_path):
+    from td import detviz
+    from test_unit_detgen import make_det_results
+    gen_dir, s07_dir = make_det_results(tmp_path)
+    with pytest.raises(detviz.FactorsMissing):
+        detviz.build(gen_dir, s07_dir)
+
+
+def test_build_schema(tmp_path):
+    from td import detviz
+    gen_dir, s07_dir, _factors, _ids = _small(tmp_path)
+    doc = detviz.build(gen_dir, s07_dir)
+    detviz.validate(doc)
+    broken = copy.deepcopy(doc)
+    broken["aggregates"]["summary"]["extra"] = 1
+    with pytest.raises(jsonschema.ValidationError):
+        detviz.validate(broken)
+    broken = copy.deepcopy(doc)
+    next(iter(broken["caseResults"].values()))["status"] = "undefined"
+    with pytest.raises(jsonschema.ValidationError):
+        detviz.validate(broken)
+
+
+def test_req206_build_path_independent(tmp_path):
+    import shutil
+    from td import detviz
+    gen_dir, s07_dir, _factors, _ids = _small(tmp_path / "one")
+    # genId는 디렉터리 이름이라 같은 이름을 다른 상위 경로에 복사한다.
+    other = tmp_path / "two" / "deeper"
+    shutil.copytree(tmp_path / "one", other)
+    first = detviz.build(gen_dir, s07_dir)
+    second = detviz.build(other / "generated" / gen_dir.name, other / "S07" / s07_dir.name)
+    assert first == second
+    assert json.dumps(first, sort_keys=True) == json.dumps(second, sort_keys=True)
+    assert str(tmp_path) not in json.dumps(first)
+
+
+def test_req212_source_checksum_unaffected():
+    from td.detgen import stage
+    names = {path.name for path in stage.SOURCE_DIR.glob("*.py")}
+    assert "detviz.py" not in names
+    assert not (stage.SOURCE_DIR / "detviz.py").exists()
+    detviz_py = Path(stage.__file__).resolve().parents[1] / "detviz.py"
+    assert detviz_py.is_file() and detviz_py.parent != stage.SOURCE_DIR
+    assert not any(name in ("detviz.js", "det.html.j2") for name in names)

@@ -1,0 +1,561 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "det 조합 시각화(det-viz.json)",
+  "type": "object",
+  "required": [
+    "version",
+    "genId",
+    "factors",
+    "caseResults",
+    "aggregates"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "genId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "factors": {
+      "$ref": "#/$defs/factors"
+    },
+    "caseResults": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "endpoint",
+          "status",
+          "observed",
+          "expectStrict"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "endpoint": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "passed",
+              "failed",
+              "notRun"
+            ]
+          },
+          "observed": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "expectStrict": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "aggregates": {
+      "type": "object",
+      "required": [
+        "summary",
+        "byEndpoint"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "summary": {
+          "type": "object",
+          "required": [
+            "endpoints",
+            "fields",
+            "classes",
+            "classesCovered",
+            "pairsCovered",
+            "pairsTotal",
+            "outOfModel"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "endpoints": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "fields": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "classes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "classesCovered": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "pairsCovered": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "pairsTotal": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "outOfModel": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "byEndpoint": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "classes",
+              "pairs"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "classes": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "required": [
+                    "state",
+                    "cases",
+                    "boundaryCases",
+                    "unresolved"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "state": {
+                      "enum": [
+                        "covered-pass",
+                        "covered-fail",
+                        "covered-notrun",
+                        "unresolved",
+                        "empty"
+                      ]
+                    },
+                    "cases": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "boundaryCases": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "unresolved": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "index",
+                          "reason"
+                        ],
+                        "additionalProperties": false,
+                        "properties": {
+                          "index": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "pairs": {
+                "type": "object",
+                "required": [
+                  "total",
+                  "covered",
+                  "matrix"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "total": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "covered": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "matrix": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "a",
+                        "b",
+                        "counts"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "a": {
+                          "type": "string"
+                        },
+                        "b": {
+                          "type": "string"
+                        },
+                        "counts": {
+                          "type": "array",
+                          "items": {
+                            "type": "array",
+                            "items": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "factors": {
+      "type": "object",
+      "required": [
+        "version",
+        "endpoints",
+        "sources",
+        "cases",
+        "unresolved"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "endpoints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "endpoint",
+              "methods",
+              "fields"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "endpoint": {
+                "type": "string",
+                "minLength": 1
+              },
+              "methods": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[^#]+#[^#]+$"
+                }
+              },
+              "fields": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "field",
+                    "classes"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "pattern": "^(path|query|body)\\..+$"
+                    },
+                    "classes": {
+                      "type": "array",
+                      "minItems": 1,
+                      "prefixItems": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "const": "valid"
+                            }
+                          }
+                        }
+                      ],
+                      "items": {
+                        "$ref": "#/$defs/class"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "sources": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "kind",
+              "methods",
+              "condition",
+              "expected"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "enum": [
+                  "plan",
+                  "keyparams",
+                  "graph",
+                  "harness",
+                  "input"
+                ]
+              },
+              "methods": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "condition": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "expected": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        "cases": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "rule",
+              "cells",
+              "boundaries",
+              "stored",
+              "storedBoundaries",
+              "enumValue",
+              "inModel",
+              "outReason",
+              "mergedRules",
+              "cellConflicts"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "rule": {
+                "type": "string"
+              },
+              "cells": {
+                "$ref": "#/$defs/cells"
+              },
+              "boundaries": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/classId"
+                }
+              },
+              "stored": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "storedBoundaries": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "enumValue": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "field",
+                      "constant"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                      "field": {
+                        "type": "string"
+                      },
+                      "constant": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                ]
+              },
+              "inModel": {
+                "type": "boolean"
+              },
+              "outReason": {
+                "enum": [
+                  null,
+                  "auth",
+                  "no-data",
+                  "empty-body",
+                  "filter-empty"
+                ]
+              },
+              "mergedRules": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "cellConflicts": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "field",
+                    "kept",
+                    "merged",
+                    "mergedRule"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "field": {
+                      "type": "string"
+                    },
+                    "kept": {
+                      "$ref": "#/$defs/classId"
+                    },
+                    "merged": {
+                      "$ref": "#/$defs/classId"
+                    },
+                    "mergedRule": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "unresolved": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "index",
+              "source",
+              "rule",
+              "reason",
+              "draftKey",
+              "cells"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "index": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "source": {
+                "type": "string",
+                "minLength": 1
+              },
+              "rule": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "draftKey": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    },
+                    "minItems": 3,
+                    "maxItems": 3
+                  }
+                ]
+              },
+              "cells": {
+                "$ref": "#/$defs/cells"
+              }
+            }
+          }
+        }
+      }
+    },
+    "classId": {
+      "type": "string",
+      "pattern": "^c[0-9a-f]{12}$"
+    },
+    "cells": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/classId"
+      }
+    },
+    "class": {
+      "type": "object",
+      "required": [
+        "id",
+        "kind",
+        "label",
+        "sources"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/classId"
+        },
+        "kind": {
+          "enum": [
+            "valid",
+            "violation",
+            "branch",
+            "count",
+            "raw",
+            "contradicted"
+          ]
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}
