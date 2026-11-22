@@ -55,7 +55,32 @@ def _describe_flags() -> list[str]:
 CLAUDE_FLAGS = _describe_flags()
 ARTIFACT_TOOLS = ("pjacoco", "jacococli", "jqassistant", "jqassistantSpring")
 # 고정 커밋을 소스에서 빌드하는 도구(S00-prepare.sh가 clone·빌드한다). pin의 commit은 40자 전체 sha여야 한다.
-SOURCE_TOOLS = ("hotspot", "tia", "bbtg")
+SOURCE_TOOLS = ("hotspot", "tia", "bbtg", "pict")
+# PICT 준비 실패 코드(tools.lock pictFailureReason). lock에는 고정 코드만 적고 상세는 S00/pict.json에만 둔다
+# (상세 문구가 바뀌어도 같은 run 재실행의 불변 비교가 흔들리지 않게).
+PICT_FAILURE_CODES = ("clone-failed", "build-failed", "smoke-mismatch")
+PICT_DETAIL_MAX_CHARS = 300
+PICT_SMOKE_TIMEOUT_SEC = 30
+# 스모크 모델: 3필드(2~3값)와 IF/THEN 제약 1개. 기대 출력은 고정 커밋 빌드의 실제 stdout이다(PICT 기본 시드, /r 없음).
+PICT_SMOKE_MODEL = (
+    "p0: v0, v1, v2\n"
+    "p1: v0, v1\n"
+    "p2: v0, v1, v2\n"
+    "\n"
+    'IF [p0] = "v1" THEN [p1] <> "v0";\n'
+)
+PICT_SMOKE_EXPECTED = (
+    "p0\tp1\tp2\n"
+    "v0\tv0\tv2\n"
+    "v2\tv1\tv2\n"
+    "v1\tv1\tv0\n"
+    "v2\tv0\tv0\n"
+    "v0\tv1\tv1\n"
+    "v2\tv0\tv1\n"
+    "v1\tv1\tv1\n"
+    "v1\tv1\tv2\n"
+    "v0\tv1\tv0\n"
+)
 
 
 class PrepareError(RuntimeError):
@@ -356,10 +381,64 @@ def hotspot_lock_entry(pin: dict, commit: str, jar: Path) -> dict:
     return {"commit": commit, "sha256": sha256_file(jar), "path": str(jar)}
 
 
+def pict_smoke(binary: Path, expected: str | None = None) -> None:
+    """고정 커밋으로 빌드한 pict에 내장 스모크 모델을 돌려 stdout이 기대와 바이트 같은지 본다. 다르면 PrepareError.
+
+    `TD_PICT_SMOKE_EXPECTED_OVERRIDE`가 있으면 그 값을 기대로 쓴다(불일치 경로 테스트 전용)."""
+    import subprocess
+    if expected is None:
+        expected = os.environ.get("TD_PICT_SMOKE_EXPECTED_OVERRIDE", PICT_SMOKE_EXPECTED)
+    with tempfile.TemporaryDirectory(prefix="td-pict-smoke.") as tmp:
+        model = Path(tmp) / "smoke.txt"
+        model.write_text(PICT_SMOKE_MODEL)
+        try:
+            proc = subprocess.run([str(binary), str(model)], capture_output=True, text=True,
+                                  timeout=PICT_SMOKE_TIMEOUT_SEC, cwd=tmp)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise PrepareError(f"pict 스모크 실행 실패: {type(exc).__name__}") from exc
+    if proc.returncode != 0:
+        raise PrepareError(f"pict 스모크 종료 코드 {proc.returncode}: {proc.stderr.strip()[:200]}")
+    if proc.stdout != expected:
+        raise PrepareError(f"pict 스모크 출력이 내장 기대와 다르다(행 {len(proc.stdout.splitlines())}개, "
+                           f"기대 {len(expected.splitlines())}개)")
+
+
+def pict_result_json(*, failure: str | None = None, detail: str = "", commit: str | None = None,
+                     binary_sha256: str | None = None, path: str | None = None) -> dict:
+    """td_prepare_pict의 결과(S00/pict.json). 성공 {commit, binarySha256, path} | 실패 {failure, detail}.
+    상세는 가림(redact) 뒤 300자 이하로 자른다(마지막 300자, 원인은 대개 끝에 있다)."""
+    if failure is not None:
+        if failure not in PICT_FAILURE_CODES:
+            raise PrepareError(f"알 수 없는 pict 실패 코드: {failure}")
+        from td import redact
+        text = redact.redact_text(detail.strip(), repo_root=Path(__file__).resolve().parents[2])
+        return {"failure": failure, "detail": text[-PICT_DETAIL_MAX_CHARS:]}
+    if not (commit and binary_sha256 and path):
+        raise PrepareError("pict 성공 결과에는 commit, binarySha256, path가 모두 필요하다")
+    return {"commit": commit, "binarySha256": binary_sha256, "path": path}
+
+
+def pict_lock_fields(pin: dict, result: dict | None) -> dict:
+    """tools.lock에 더할 pict 필드. None(det 미요청) → {}; 성공 → {pict: {commit, binarySha256, path}};
+    실패 → {pict: None, pictFailureReason: <고정 코드>}(상세는 넣지 않는다)."""
+    if result is None:
+        return {}
+    if "failure" in result:
+        if result["failure"] not in PICT_FAILURE_CODES:
+            raise PrepareError(f"pict 결과의 실패 코드가 알 수 없는 값이다: {result['failure']}")
+        return {"pict": None, "pictFailureReason": result["failure"]}
+    entry = {key: result.get(key) for key in ("commit", "binarySha256", "path")}
+    if entry["commit"] != pin["pict"]["commit"]:
+        raise PrepareError(f"pict: 빌드 커밋 {entry['commit']}이 pin {pin['pict']['commit']}과 다르다")
+    if not re.fullmatch(r"[0-9a-f]{64}", str(entry["binarySha256"])) or not entry["path"]:
+        raise PrepareError(f"pict 결과가 올바르지 않다: {sorted(result)}")
+    return {"pict": entry}
+
+
 def build_lock(pin: dict, artifacts: dict, *, run_id: str, sut_name: str, sut_commit: str, tia_commit: str,
                bbtg_commit: str, bbtg_requirements_sha256: str, claude_version: str, model: str,
                jqa_plugins: list[str], jqa_resolved_jar: str, jqa_spring_verified: bool, claude_verified: bool,
-               python_version: str) -> dict:
+               python_version: str, pict_result: dict | None = None) -> dict:
     lock = {
         "schema": 1,
         "runId": run_id,
@@ -376,6 +455,7 @@ def build_lock(pin: dict, artifacts: dict, *, run_id: str, sut_name: str, sut_co
                 "gradleTask": pin["tia"]["gradleTask"], "version": tia_commit[:7], "sha256": None},
         "bbtg": {"repo": pin["bbtg"]["repo"], "commit": bbtg_commit, "python": python_version,
                  "requirementsSha256": bbtg_requirements_sha256, "version": bbtg_commit[:7], "sha256": None},
+        **pict_lock_fields(pin, pict_result),
         "libraries": dict(pin.get("libraries") or {}),
         "claude": {"version": claude_version, "model": model, "flags": list(CLAUDE_FLAGS), "verified": claude_verified},
         "model": model,
@@ -388,13 +468,20 @@ def build_lock(pin: dict, artifacts: dict, *, run_id: str, sut_name: str, sut_co
 
 def write_lock(run_dir: Path, lock: dict) -> Path:
     """run별 tools.lock을 쓴다(읽기 전용 0444). 같은 run에서 S00을 다시 돌려 이미 있으면
-    generatedAt을 뺀 내용이 같을 때만 그대로 두고, 다르면 불변 위반으로 실패한다."""
+    generatedAt을 뺀 내용이 같을 때만 그대로 두고, 다르면 불변 위반으로 실패한다.
+    예외: pict 항목(pict, pictFailureReason)만 다르면 기존 lock을 유지하고 경고만 한다
+    (pict 준비 실패는 S00을 실패시키지 않는다는 원칙, 설계 §5.6)."""
     path = Path(run_dir) / "tools.lock"
     if path.exists():
         existing = yaml.safe_load(path.read_text())
-        strip = lambda data: {k: v for k, v in data.items() if k != "generatedAt"}
-        if strip(existing) != strip(lock):
-            raise PrepareError(f"tools.lock이 이미 있고 내용이 다르다(불변이라 덮어쓰지 않는다): {path}")
+        strip = lambda data, drop: {k: v for k, v in data.items() if k not in drop}
+        if strip(existing, {"generatedAt"}) != strip(lock, {"generatedAt"}):
+            pict_keys = {"generatedAt", "pict", "pictFailureReason"}
+            if strip(existing, pict_keys) != strip(lock, pict_keys):
+                raise PrepareError(f"tools.lock이 이미 있고 내용이 다르다(불변이라 덮어쓰지 않는다): {path}")
+            print(f"prepare: 경고: 이번 pict 상태가 기존 tools.lock과 다르다(기존 lock 유지): "
+                  f"기존 pict={'없음' if 'pict' not in existing else existing.get('pictFailureReason') or 'ok'}, "
+                  f"이번 pict={'없음' if 'pict' not in lock else lock.get('pictFailureReason') or 'ok'}", file=sys.stderr)
         return path
     path.write_text("# run별 도구 잠금(불변 사본). 기준은 tools.pin.yaml이다.\n" + yaml.safe_dump(lock, sort_keys=False, allow_unicode=True))
     path.chmod(0o444)
@@ -482,9 +569,23 @@ def _cmd_write_lock(args) -> int:
         bbtg_requirements_sha256=args.bbtg_requirements_sha256, claude_version=args.claude_version,
         model=args.model, jqa_plugins=jqa["plugins"], jqa_resolved_jar=jqa["resolvedJar"],
         jqa_spring_verified=jqa.get("verified") is True, claude_verified=args.claude_verified == "true",
-        python_version=args.python_version)
+        python_version=args.python_version,
+        pict_result=json.loads(Path(args.pict_json).read_text()) if args.pict_json else None)
     path = write_lock(Path(args.run_dir), lock)
     print(path)
+    return 0
+
+
+def _cmd_pict_smoke(args) -> int:
+    pict_smoke(Path(args.binary))
+    return 0
+
+
+def _cmd_pict_result(args) -> int:
+    detail = Path(args.detail_file).read_text(errors="replace") if args.detail_file else ""
+    result = pict_result_json(failure=args.failure, detail=detail, commit=args.commit,
+                              binary_sha256=args.binary_sha256, path=args.path)
+    Path(args.out).write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     return 0
 
 
@@ -513,7 +614,10 @@ def main(argv: list[str] | None = None) -> int:
     add("jqa-plugins", _cmd_jqa_plugins, "file", repo=True)
     add("write-lock", _cmd_write_lock, run_dir=True, run_id=True, sut=True, sut_commit=True, artifacts=True,
         tia_commit=True, hotspot_commit=True, hotspot_jar=True, bbtg_commit=True, bbtg_requirements_sha256=True,
-        claude_version=True, model=True, jqa_plugins=True, python_version=True, claude_verified=True)
+        claude_version=True, model=True, jqa_plugins=True, python_version=True, claude_verified=True, pict_json=False)
+    add("pict-smoke", _cmd_pict_smoke, "binary")
+    add("pict-result", _cmd_pict_result, out=True, failure=False, detail_file=False, commit=False,
+        binary_sha256=False, path=False)
     args = parser.parse_args(argv)
     try:
         return args.func(args)
