@@ -140,6 +140,7 @@ S13과 `publish-index.sh`는 같은 접두에서 같은 게시 잠금을 잡는�
 | Terraform | `infra/static/apply.sh` |
 | AWS 자격 증명(boto3가 읽는 기본 자격) | S3 업로드, CloudFront 무효화, Route53 조회 |
 | `gh` CLI 로그인(`gh auth login`) | 비공개 저장소 `baekchangjoon/bbtg`를 받는다(S00). 게시할 때 과제의 GitHub 값을 읽는다 |
+| Xcode Command Line Tools(`clang++`, `make`) | det arm을 요청할 때만 필요하다. S00이 고정한 PICT를 빌드한다 |
 | `claude` CLI 로그인 | S05·S06 생성(`pipeline/config.yaml`의 `llm.model`, `TD_LLM_MODEL`로 바꿀 수 있다) |
 | Lightsail 서버 SSH 키(`TD_SSH_KEY_PATH`) | dash 사이트 게시, Sonar 토큰 관리(S11, 게시할 때의 수집) |
 
@@ -173,10 +174,11 @@ S00은 `tools.pin.yaml`에 고정한 커밋의 bbtg를 `gh`로 받는다. 이 �
 ### 주요 옵션
 
 ```
-pipeline/run-all.sh <sut> [--sut-file F] [--only IDS] [--arms base,jqa,owl[,det]] [--reps 1..9] [--regenerate]
+pipeline/run-all.sh <sut> [--sut-file F] [--only IDS] [--arms base,jqa,owl[,det]] [--reps 1..9] [--regenerate] [--det-pairwise-order 2|3]
 ```
 
-- `--arms`: 실행할 arm 목록(기본 `base,jqa,owl`). `det`를 더하면 LLM 없이 bbtg 조건식과 jQA 그래프(보강 질의 `S03/ontology-jqa-ext.json` 포함)만으로 케이스를 펼치는 결정적 arm이 함께 돈다. det는 `--reps`와 무관하게 1회만 생성하고, 비교 화면에는 참고 열(입력 체제: LLM 없음, 조건식 포함)로 나오며 판정 계산에서는 빠진다. 설계: `docs/superpowers/specs/2026-11-22-deterministic-arm-design.md`.
+- `--arms`: 실행할 arm 목록(기본 `base,jqa,owl`). `det`를 더하면 LLM 없이 bbtg 조건식과 jQA 그래프(보강 질의 `S03/ontology-jqa-ext.json` 포함)만으로 케이스를 펼치는 결정적 arm이 함께 돈다. det는 `--reps`와 무관하게 1회만 생성하고, 비교 화면에는 참고 열(입력 체제: LLM 없음, 조건식 포함)로 나오며 판정 계산에서는 빠진다. det는 기본 케이스에 더해 PICT로 만든 pairwise 케이스도 낸다. 유효한 후보 값(bbtg 조건식과 jQA 그래프에서 얻은 값)의 2-way 조합만 쓰고, 무효 클래스는 기존처럼 한 번에 한 필드만 어긴다. 설계: `docs/superpowers/specs/2026-11-22-deterministic-arm-design.md`.
+- `--det-pairwise-order 2|3`: det의 pairwise 조합 차수(기본 2). 3을 주면 3-way 조합을 만든다. det를 요청하지 않으면 쓰이지 않는다.
 
 - `--reps`: arm별 생성 반복 횟수(기본 3). 줄이면 `compare.html`에 실제 횟수가 표시된다.
 - `--regenerate`: 같은 입력이어도 새 generation(`-g<n>`)을 추가한다. 기존 스냅샷은 바꾸지 않는다. det arm은 같은 genId로 다시 만들고, 내용이 달라졌으면 `checksum-changed` 경고를 남긴다.
