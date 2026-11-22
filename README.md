@@ -7,6 +7,7 @@ Spring Boot SUT(기본: spring-petclinic fork)를 대상으로 테스트·분석
 - 세 가지 입력 조건(arm)으로 BDD E2E 테스트 생성과 실행
 - hotspot, TIA, SonarQube 리포트
 - arm 비교 판정과 게시
+- det 조합 시각화(`compare/det.html`): 조건식에서 나온 팩터·클래스, 케이스와 통과 여부, 비어 있는 조합(2-way 히트맵)
 
 ## 빠른 시작
 
@@ -164,7 +165,7 @@ S00은 `tools.pin.yaml`에 고정한 커밋의 bbtg를 `gh`로 받는다. 이 �
 | S09 | `S09-hotspot.sh` | hotspot 리포트 | `S09/hotspot/` |
 | S10 | `S10-tia.sh` | TIA(base = first-parent `HEAD~10`) | `S10/tia/tia.html`, `S10/tia.db` |
 | S11 | `S11-sonar.sh` | 전용 프로젝트 `spring-petclinic-td` 분석과 결과 export | `S11/sonar/sonar.json`, `S11/sonar/sonar.html` |
-| S12 | `S12-compare.sh` | arm 비교 지표와 판정 | `S12/compare/compare.json`, `S12/compare/compare.html` |
+| S12 | `S12-compare.sh` | arm 비교 지표와 판정, det 조합 시각화 | `S12/compare/compare.json`, `S12/compare/compare.html`, det를 돌렸으면 `S12/compare/det-viz.json`·`det.html` |
 | S13 | `S13-publish.sh` | S3 게시, 과제 수집과 인덱스 재생성, CloudFront 무효화, Lightsail 미러 | `stages/S13.json` |
 
 단계 상태는 `passed`, `failed`, `degraded`, `skipped` 중 하나이고 `stages/<ID>.json`에 남는다. `run-all.sh`의 종료 코드는 S00이나 S13이 실패하면 1, 다른 단계가 실패하면 2, 실패가 없으면 0이다.

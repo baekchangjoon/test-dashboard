@@ -109,19 +109,19 @@
 
 | REQ-ID | 요약 | 검증 테스트 | 레벨 | 상태 |
 |---|---|---|---|---|
-| REQ-201 | factors.json·클래스 목록 | test_unit_detviz.py::test_req201_factors_schema<br>test_unit_detviz.py::test_req201_valid_first_and_ids<br>test_unit_detviz.py::test_req201_kind_rules<br>test_unit_detviz.py::test_req201_qualified_field_ids<br>test_unit_detviz.py::test_req201_hostile_strings<br>test_det_viz.py::test_req201_factors_real | Unit/E2E | ⚪ |
-| REQ-202 | 클래스 수 | test_unit_detviz.py::test_req202_class_counts<br>test_det_viz.py::test_req202_class_counts_real | Unit/E2E | ⚪ |
-| REQ-203 | 생성 결과 불변 | test_unit_detviz.py::test_req203_petclinic_bytes<br>test_det_viz.py::test_req203_cases_unchanged | Unit/E2E | ⚪ |
-| REQ-204 | 칸 규칙 | test_unit_detviz.py::test_req204_cells (행별 parametrize)<br>test_unit_detviz.py::test_req204_merge<br>test_unit_detviz.py::test_req204_unresolved_index<br>test_det_viz.py::test_req204_cells_real | Unit/E2E | ⚪ |
-| REQ-205 | 출처 원문 | test_unit_detviz.py::test_req205_sources | Unit | ⚪ |
-| REQ-206 | 결정성 | test_unit_detviz.py::test_req206_deterministic<br>test_unit_detviz.py::test_req206_build_path_independent | Unit | ⚪ |
-| REQ-207 | det.html·링크 | test_det_viz.py::test_req207_page_and_links | E2E | ⚪ |
-| REQ-208 | 숫자 재계산 | test_det_viz.py::test_req208_recount | E2E | ⚪ |
-| REQ-209 | 실패 격리 | test_unit_detviz.py::test_req209_absent<br>test_unit_detviz.py::test_req209_build_error<br>test_unit_detviz.py::test_req209_write_error<br>test_unit_detviz.py::test_req209_render_error<br>test_unit_detviz.py::test_req209_rerender_error<br>test_unit_detviz.py::test_req209_stale_removed<br>test_unit_detviz.py::test_req209_missing_viz_key | Int | ⚪ |
-| REQ-210 | 누출 없음 | test_det_viz.py::test_req210_no_leaks | E2E | ⚪ |
-| REQ-211 | 화면 동작 | test_det_viz.py::test_req211_browser<br>test_unit_detviz.py::test_req211_hostile_dom<br>test_unit_detviz.py::test_req211_static_rules | E2E/Unit | ⚪ |
-| REQ-212 | 모듈 경계 | test_unit_detviz.py::test_req212_source_checksum_unaffected | Unit | ⚪ |
-| REQ-213 | 결과 결합 | test_unit_detviz.py::test_req213_status_mapping<br>test_det_viz.py::test_req213_passed_matches_summary | Unit/E2E | ⚪ |
-| REQ-214 | 문서 갱신 | test_unit_detviz.py::test_req214_docs | Unit | ⚪ |
+| REQ-201 | factors.json·클래스 목록 | test_unit_detviz.py::test_req201_factors_schema<br>test_unit_detviz.py::test_req201_valid_first_and_ids<br>test_unit_detviz.py::test_req201_kind_rules<br>test_unit_detviz.py::test_req201_qualified_field_ids<br>test_unit_detviz.py::test_req201_hostile_strings<br>test_det_viz.py::test_req201_factors_real | Unit/E2E | 🟢 passed |
+| REQ-202 | 클래스 수 | test_unit_detviz.py::test_req202_class_counts<br>test_det_viz.py::test_req202_class_counts_real | Unit/E2E | 🟢 passed |
+| REQ-203 | 생성 결과 불변 | test_unit_detviz.py::test_req203_petclinic_bytes<br>test_det_viz.py::test_req203_cases_unchanged | Unit/E2E | 🟢 passed |
+| REQ-204 | 칸 규칙 | test_unit_detviz.py::test_req204_cells (행별 parametrize)<br>test_unit_detviz.py::test_req204_merge<br>test_unit_detviz.py::test_req204_unresolved_index<br>test_unit_detviz.py::test_req204_references_and_in_model<br>test_det_viz.py::test_req204_cells_real | Unit/E2E | 🟢 passed |
+| REQ-205 | 출처 원문 | test_unit_detviz.py::test_req205_sources | Unit | 🟢 passed |
+| REQ-206 | 결정성 | test_unit_detviz.py::test_req206_deterministic<br>test_unit_detviz.py::test_req206_build_path_independent | Unit | 🟢 passed |
+| REQ-207 | det.html·링크 | test_det_viz.py::test_req207_page_and_links | E2E | 🟢 passed |
+| REQ-208 | 숫자 재계산 | test_det_viz.py::test_req208_recount | E2E | 🟢 passed |
+| REQ-209 | 실패 격리 | test_unit_detviz.py::test_req209_ok_baseline<br>test_unit_detviz.py::test_req209_absent<br>test_unit_detviz.py::test_req209_build_error<br>test_unit_detviz.py::test_req209_write_error<br>test_unit_detviz.py::test_req209_render_error<br>test_unit_detviz.py::test_req209_rerender_error<br>test_unit_detviz.py::test_req209_stale_removed<br>test_unit_detviz.py::test_req209_missing_viz_key | Int | 🟢 passed |
+| REQ-210 | 누출 없음 | test_det_viz.py::test_req210_no_leaks | E2E | 🟢 passed |
+| REQ-211 | 화면 동작 | test_det_viz.py::test_req211_browser<br>test_unit_detviz.py::test_req211_hostile_dom<br>test_unit_detviz.py::test_req211_static_rules<br>test_unit_detviz.py::test_req211_no_page_scroll_390 | E2E/Unit | 🟢 passed |
+| REQ-212 | 모듈 경계 | test_unit_detviz.py::test_req212_source_checksum_unaffected | Unit | 🟢 passed |
+| REQ-213 | 결과 결합 | test_unit_detviz.py::test_req213_status_mapping<br>test_det_viz.py::test_req213_passed_matches_summary | Unit/E2E | 🟢 passed |
+| REQ-214 | 문서 갱신 | test_unit_detviz.py::test_req214_docs | Unit | 🟢 passed |
 
-커버리지 대상: REQ-201~214(14건). 제외: 없음.
+커버리지 대상: REQ-201~214(14건). 제외: 없음. 상태 기준: run `20261122-061141Z-b6f9393-manual-f4f4d51f`(게시 `_test/det-viz-20261122b/`, det generation `det-a6397f85-r1`), E2E 16 passed(det_viz_e2e 10 + det_e2e 6), 단위·통합 테스트. 매트릭스 커버리지 14/14.

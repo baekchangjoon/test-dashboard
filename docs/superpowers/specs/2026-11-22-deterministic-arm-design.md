@@ -160,7 +160,7 @@ A1과의 관계: 상위 설계의 A1은 "LLM 호출의 생성 입력"에 대한 
 
 ### 5.4 산출물과 실행 규약
 
-- 위치: `e2e/generated/<sut>/det/det-<hash8>-r1/{features/, glue/support/, cases.json, _COMPLETE}`.
+- 위치: `e2e/generated/<sut>/det/det-<hash8>-r1/{features/, glue/support/, cases.json, factors.json, _COMPLETE}`. `factors.json`은 조합 시각화용 팩터·클래스·케이스 칸이다(`2026-11-22-det-combination-viz-design.md`). S12는 이것과 S07 결과를 합쳐 `S12/compare/det-viz.json`·`det.html`을 만든다.
 - `features/`: 엔드포인트별 feature 파일. 시나리오 태그 `@case:<id>`. 모든 feature는 `Background:`에 `Given the SUT timezone is "<tz>"`를 둔다(tz는 번들 harness.json). glue는 이 값으로 `today±N`을 풀고 기본 타임존은 두지 않는다(없으면 step 실패).
 - `glue/support/`: 저장소 고정 소스 `e2e/det-glue/`를 복사하고 체크섬을 기록한다. feature별 Steps 클래스는 만들지 않는다(중복 step 방지). 이는 `e2e/harness/CONTRACT.md`의 "feature마다 Steps 클래스" 규약에 대한 det 전용 예외이며, `glue/support/` 아래 배치만 허용하는 `td.scenarios.layout_violations`는 그대로 통과한다. 이 예외는 `e2e/det-glue/README.md`에 적는다(CONTRACT.md는 LLM arm 번들에 들어가므로 바꾸지 않는다, REQ-102). 하네스 API(`baseUrl/authed/anonymous`)와 허용 의존성(Cucumber 8.1.0, REST Assured 5.5.1, AssertJ)만 쓴다. `@Before`/`@After`는 쓰지 않는다. 기호 해석(`today±N`은 SUT 타임존, `ref:`, `uniq:`)은 glue가 맡는다.
 - S06 det 경로: `td.detgen`이 생성한 뒤 기존 `td.scenarios` 컴파일 확인과 dry-run을 돌린다. undefined step 0과 컴파일 성공일 때만 `_COMPLETE`를 기록한다. 입력 누락, 스키마 불일치, 파서 예외가 나면 det arm은 failed이고 사유를 기록한다. 다른 arm에는 영향이 없다.
