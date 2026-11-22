@@ -8,7 +8,7 @@ controlled와 같은 형식의 합성 det 번들이다. 실제 SUT와 무관한 
 
 | 엔드포인트 | 본문 | 쓰임 |
 |---|---|---|
-| `POST /svc/kits` | `KitForm` 10필드 | 후보 출처 5행, 종류 5종, 필터 2종, 고정 5행, 고정 거짓 부분 평가, 판단 불가 조합 |
+| `POST /svc/kits` | `KitForm` 12필드 | 후보 출처 5행, 종류 5종, 필터 2종, 고정 5행, 고정 거짓 부분 평가, 판단 불가 조합 |
 | `PUT /svc/kits/{kitId}` | `PatchForm`(height, width) | 부분 평가: 고정 원자식 거짓, 1개로 줄어듦, 2개 이상 |
 | `PATCH /svc/kits/{kitId}` | `TrimForm`(grade, trim) | 부분 평가: 모델 원자식 0개 → `pairwise-infeasible` |
 | `POST /svc/tags` | `TagForm`(grade, shade) | enum 전용 엔드포인트: 오류 조건 없음, baseline-valid 없음, GET이 아니라 happy도 없음(Task 4: 모두-baseline 행이 pairwise 케이스로 남는다) |
@@ -30,11 +30,15 @@ controlled와 같은 형식의 합성 det 번들이다. 실제 SUT와 무관한 
 | 8 | `deposit * 1.5 < size * grade.getWeight()` | rel: deposit 종속 → 고정(relation-satisfy), `Con.others = (size, grade)` |
 | 9 | `!existing.getPhase().canMoveTo(phase)` | phase는 상태 전이 enum → 고정 |
 | 10 | `grade == RUBY && shade == DARK && credit > ledger.cap()` | 미해결 논리곱(`~`): 필터 (b)로 grade RUBY 빠짐, shade는 미해결 원자식만 걸려 고정(baseline LIGHT) |
-| 11 | `"VIPKIT".equals(code) && credit < 45` | 판단 불가: uniq ∧ credit<45는 배제하지 않음, VIPKIT ∧ {40, 39, 44}만 배제 |
+| 11 | `"VIPKIT".equals(code) && credit < 45` | eqlit 다원자: uniq ≠ VIPKIT은 판단 가능(거짓) → VIPKIT ∧ {40, 39, 44, 42, 41}만 배제 |
+| 12 | `"BAD".equals(nick)` | 리뷰 probe: nick은 후보 uniq 하나라 고정. uniq ≠ BAD로 판단 가능 → infeasible이 아님 |
+| 13 | `!"X".equals(memo) && credit < 42` | 리뷰 probe: neqlit 위반값 uniq가 참으로 판단됨 → memo uniq ∧ {40, 39, 41} 배제(baseline은 X) |
+| 14 | `"OLD".equals(legacy) && credit < 42` | 판단 불가: legacy 생략·null과 eqlit은 None → 배제하지 않고 행 `undetermined:<#14>`. 위반값 OLD는 #4로 필터 |
 
-기대 모델: 파라미터 `p0..p4` = code `[uniq, VIPKIT, PROMO]`, credit `[45, 40, 39, 44]`, grade `[PLAIN, GOLD]`, legacy `[omit, null]`, size `[1, 8]`.
-고정: phase(state-field), slot(count-field), deposit(rel-dependent), shade(stored-or-unresolved-only), depth(single-candidate).
-배제 4줄: `GOLD ∧ 39`, `VIPKIT ∧ 40`, `VIPKIT ∧ 39`, `VIPKIT ∧ 44`.
+기대 모델: 파라미터 `p0..p5` = code `[uniq, VIPKIT, PROMO]`, credit `[45, 40, 39, 44, 42, 41]`, grade `[PLAIN, GOLD]`, legacy `[omit, null]`,
+memo `[X, uniq]`, size `[1, 8]`.
+고정: phase(state-field), slot(count-field), deposit(rel-dependent), shade(stored-or-unresolved-only), depth·nick(single-candidate).
+배제 9줄: `GOLD ∧ 39`, `VIPKIT ∧ {40, 39, 44, 42, 41}`, `memo uniq ∧ {40, 39, 41}`.
 
 ## `PUT /svc/kits/{kitId}` 조건(`plans.json` patch)
 

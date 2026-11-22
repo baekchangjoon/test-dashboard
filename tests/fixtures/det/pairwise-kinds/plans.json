@@ -110,6 +110,33 @@
     "index": 11,
     "param": "(from scenarios)",
     "prefix": "errorPath"
+   },
+   {
+    "branch_value": "400",
+    "condition": "\"BAD\".equals(form.nick())",
+    "conditionSha": "8211f99b6d68ad6a7f86a12dc9150b5f65e54cefd148051d3ec799dcd0fd252d",
+    "expected": "KitInvalidException code=400",
+    "index": 12,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   },
+   {
+    "branch_value": "400",
+    "condition": "!\"X\".equals(form.memo()) && form.credit() < 42",
+    "conditionSha": "e94a81b70ad9942de3428f53a86fec648dbb02ece4cd58a83c694a6a8bd6e19c",
+    "expected": "KitInvalidException code=400",
+    "index": 13,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   },
+   {
+    "branch_value": "400",
+    "condition": "\"OLD\".equals(form.legacy()) && form.credit() < 42",
+    "conditionSha": "17c6c019d192f83caabce187b3ec143f8019df25712802b7432ae135930a29b0",
+    "expected": "KitInvalidException code=400",
+    "index": 14,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
    }
   ],
   "method": "make"
