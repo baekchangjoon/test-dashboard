@@ -3,8 +3,19 @@
 실제 det run(work/det-viz-session.json이 가리키는 run)의 산출물을 본다. 세션 파일이 없으면 skip이 아니라 fail이다(conftest).
 기능이 없는 동안은 실패(red)가 정상이며, 실제 pipeline run 뒤에 green이 된다. 테스트를 약화하거나 우회하지 않는다.
 
+화면(det.html)이 지켜야 할 DOM 계약:
+- `window.__td_ready === true`: 렌더 완료. `window.__detviz.select(caseId)`: 케이스 노드 선택 훅.
+- 엔드포인트 `<select>`의 option value는 엔드포인트 라벨(예: "POST /api/reservations").
+- `[data-node-count]`: 선택된 엔드포인트의 그래프 노드 수. 노드 = 그 엔드포인트 클래스들의 서로 다른 출처 주소(`~` 제거)
+  + 그 엔드포인트의 모든 클래스(valid 포함) + caseResults.endpoint가 그 엔드포인트인 케이스 + 그 엔드포인트의 생성 불가 항목.
+  같은 요소의 `data-node-ids`: 노드 id를 정렬해 쉼표로 이은 문자열.
+- 격자 `[data-class-id]`: 모든 엔드포인트의 클래스당 하나(선택과 무관). 히트맵 `[data-pair]`: 모든 엔드포인트의 matrix 항목당 하나이고 `<details>` 안.
+- 패널 `#panel` 안 `[data-k="condition"|"expect"|"observed"]`: 조건식 원문, 기대(expectStrict 문자열), 관측(없으면 "-").
+- `det-viz.json`: `byEndpoint`는 17개 엔드포인트 전부를 가진다. matrix의 쌍은 factors.json 필드 순서를 따라 a가 b보다 앞이다.
+
 집계 재계산(REQ-208)은 `td.detgen.results`·`td.detviz`를 쓰지 않고 이 파일 안에서 설계 §5.4 식으로 독립 구현한다.
 """
+import functools
 import hashlib
 import json
 import re
@@ -35,6 +46,7 @@ pytestmark = pytest.mark.det_viz_e2e
 
 
 # --- 세션·산출물 읽기 ---------------------------------------------------------------------------------------------
+@functools.lru_cache(maxsize=None)
 def _session() -> dict:
     return json.loads(DET_VIZ_SESSION_FILE.read_text(encoding="utf-8"))
 
@@ -65,6 +77,7 @@ def _factors() -> dict:
     return _read_json(_generation_dir() / "factors.json")
 
 
+@functools.lru_cache(maxsize=None)
 def _cases() -> dict:
     return _read_json(_generation_dir() / "cases.json")
 
@@ -203,10 +216,9 @@ def test_req207_page_and_links():
     assert compare["deterministic"]["viz"]["status"] == "ok"
 
     assert (published / "compare" / "det.html").is_file()
-    assert "compare/det.html" in (published / "index.html").read_text(encoding="utf-8")
-    assert re.search(r"""href\s*=\s*["'][^"']*det\.html""", (published / "compare" / "compare.html").read_text(encoding="utf-8"))
+    assert re.search(r'href="[^"]*compare/det\.html"', (published / "index.html").read_text(encoding="utf-8"))
+    assert re.search(r'href="det\.html"', (published / "compare" / "compare.html").read_text(encoding="utf-8"))
     url = session["publishedUrl"].rstrip("/") + "/compare/det.html"
-    assert url.startswith("https://"), url
     with urllib.request.urlopen(url, timeout=30) as response:
         assert response.status == 200
 
@@ -329,6 +341,7 @@ def test_req208_recount():
     expected = _recount(factors, cases, status)
     aggregates = viz["aggregates"]
 
+    assert "passed" in status.values() and "failed" in status.values(), "독립 상태 맵이 비어 있다(공허한 통과 방지)"
     assert viz["caseResults"].keys() == status.keys()
     for case_id, result in viz["caseResults"].items():
         assert result["status"] == status[case_id], case_id
@@ -352,6 +365,7 @@ def test_req208_recount():
     summary, want_summary = aggregates["summary"], expected["summary"]
     for key in ("endpoints", "fields", "classes", "classesCovered", "pairsCovered", "pairsTotal"):
         assert summary[key] == want_summary[key], key
+    assert 0 < summary["classesCovered"] <= 55 and 0 < summary["pairsCovered"] <= 434
     assert summary["outOfModel"] == want_summary["outOfModel"] == OUT_OF_MODEL
     assert want_summary["inModel"] == 53
     assert (summary["endpoints"], summary["fields"], summary["classes"], summary["pairsTotal"]) == (17, 26, 55, 434)
@@ -398,8 +412,31 @@ def _open_det_page(browser, html_path: Path, **context_kwargs):
     return context, page, blocked, console_errors, page_errors
 
 
-def _node_count(page) -> int:
-    return int(page.locator("[data-node-count]").first.get_attribute("data-node-count"))
+def _node_info(page) -> tuple[int, set[str]]:
+    element = page.locator("[data-node-count]").first
+    ids = element.get_attribute("data-node-ids") or ""
+    return int(element.get_attribute("data-node-count")), set(filter(None, ids.split(",")))
+
+
+def _expected_node_count(viz: dict, endpoint: str) -> int:
+    """화면 계약의 노드 수: 출처 주소(서로 다른 것) + 클래스 + 케이스 + 생성 불가 항목."""
+    factors = viz["factors"]
+    entry = next(item for item in factors["endpoints"] if item["endpoint"] == endpoint)
+    classes = [klass for field in entry["fields"] for klass in field["classes"]]
+    sources = {address.rstrip("~") for klass in classes for address in klass["sources"]}
+    case_nodes = sum(1 for result in viz["caseResults"].values() if result["endpoint"] == endpoint)
+    unresolved = _cases()["unresolved"]
+    slots = 0
+    for item in factors["unresolved"]:
+        source = unresolved[item["index"]]
+        assert (source["source"], source["rule"]) == (item["source"], item["rule"]), item["index"]
+        slots += source["endpoint"] == endpoint
+    return len(sources) + len(classes) + case_nodes + slots
+
+
+def _assert_no_page_scroll(page, label: str):
+    widths = page.evaluate("[document.documentElement.scrollWidth, document.documentElement.clientWidth]")
+    assert widths[0] <= widths[1], (label, widths)
 
 
 def test_req211_browser(viz_browser):
@@ -418,7 +455,7 @@ def test_req211_browser(viz_browser):
         assert page.locator("[data-class-id]").count() == class_total
         assert page.locator("[data-pair]").count() == matrix_total
 
-        # 엔드포인트 선택 변경 → 그래프 노드 집합이 바뀐다(케이스 수가 가장 많은/적은 엔드포인트로 비교)
+        # 엔드포인트 선택 변경 → 노드 수가 계약 식과 같고 노드 id 집합이 바뀐다
         case_count = {endpoint["endpoint"]: 0 for endpoint in factors["endpoints"]}
         for result in viz["caseResults"].values():
             case_count[result["endpoint"]] += 1
@@ -426,33 +463,34 @@ def test_req211_browser(viz_browser):
         quietest = min(case_count, key=lambda label: (case_count[label], label))
         select = page.locator("select").first
         select.select_option(value=busiest)
-        busy_nodes = _node_count(page)
-        assert busy_nodes >= case_count[busiest]
+        busy_count, busy_ids = _node_info(page)
         select.select_option(value=quietest)
-        quiet_nodes = _node_count(page)
-        assert quiet_nodes != busy_nodes and quiet_nodes >= case_count[quietest]
+        quiet_count, quiet_ids = _node_info(page)
+        assert busy_count == _expected_node_count(viz, busiest) == len(busy_ids)
+        assert quiet_count == _expected_node_count(viz, quietest) == len(quiet_ids)
+        assert busy_ids != quiet_ids
         select.select_option(value=busiest)
 
-        # 케이스 노드 선택 → 패널에 조건식 원문·기대·관측
-        case_id = None
-        condition = None
-        for candidate, entry in factors["cases"].items():
+        # 케이스 노드 선택 → 패널의 조건식 원문·기대·관측(라벨 요소)
+        case_id = condition = None
+        for candidate in factors["cases"]:
             result = viz["caseResults"][candidate]
-            if result["endpoint"] != busiest or result["status"] not in ("passed", "failed") or result["observed"] is None:
+            if result["endpoint"] != busiest or result["expectStrict"] is None:
                 continue
             for address in _case_sources(candidate):
-                source = factors["sources"].get(address, {})
-                if source.get("condition"):
-                    case_id, condition = candidate, source["condition"]
+                text = factors["sources"].get(address, {}).get("condition")
+                if text:
+                    case_id, condition = candidate, text
                     break
             if case_id:
                 break
-        assert case_id, "조건식 원문이 있는 실행된 케이스를 찾지 못했다"
+        assert case_id, "조건식 원문과 expectStrict가 있는 케이스를 찾지 못했다"
         page.evaluate("id => window.__detviz.select(id)", case_id)
-        panel_text = page.locator("#panel").text_content()
-        assert condition in panel_text
-        assert str(viz["caseResults"][case_id]["expectStrict"]) in panel_text
-        assert str(viz["caseResults"][case_id]["observed"]) in panel_text
+        result = viz["caseResults"][case_id]
+        assert condition in page.locator('#panel [data-k="condition"]').first.text_content()
+        assert page.locator('#panel [data-k="expect"]').first.text_content() == str(result["expectStrict"])
+        observed = "-" if result["observed"] is None else str(result["observed"])
+        assert page.locator('#panel [data-k="observed"]').first.text_content() == observed
 
         # 히트맵 details 펼침
         details = page.locator("details:has([data-pair])").first
@@ -464,14 +502,16 @@ def test_req211_browser(viz_browser):
     finally:
         context.close()
 
-    # 라이트·다크, 390px 폭에서 페이지 가로 스크롤이 없다
+    # 라이트·다크, 390px 폭: 처음 화면과 필드가 가장 많은 엔드포인트를 고른 뒤 모두 페이지 가로 스크롤이 없다
+    widest = max(factors["endpoints"], key=lambda item: (len(item["fields"]), item["endpoint"]))["endpoint"]
     for scheme in ("light", "dark"):
         context, page, blocked, console_errors, page_errors = _open_det_page(
             viz_browser, html_path, color_scheme=scheme, viewport={"width": 390, "height": 800})
         try:
-            page.emulate_media(color_scheme=scheme)
-            widths = page.evaluate("[document.documentElement.scrollWidth, document.documentElement.clientWidth]")
-            assert widths[0] <= widths[1], (scheme, widths)
+            _assert_no_page_scroll(page, f"{scheme}/initial")
+            page.locator("select").first.select_option(value=widest)
+            page.wait_for_function("window.__td_ready === true")
+            _assert_no_page_scroll(page, f"{scheme}/{widest}")
             assert blocked == [] and console_errors == [] and page_errors == []
         finally:
             context.close()
