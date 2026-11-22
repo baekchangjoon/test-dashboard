@@ -960,6 +960,55 @@ def test_req308_order_and_merge(tmp_path, pict_tool, monkeypatch):
     assert oracle["covered"] < oracle["feasible"]
 
 
+def _merged_baseline_fixture(monkeypatch, bundle_dir, tmp_path, pict_tool, extra_undetermined=None):
+    """MAKE 엔드포인트 PICT 출력 앞에 모두-v0 행을 끼워 라벨 기준 병합을 일으킨다(선택: 모든 행에 undetermined 가정)."""
+    real_run, real_build = pw.run_pict, pw.build_model
+
+    def with_baseline_row(model, tool, work_dir, timeout):
+        rows = real_run(model, tool, work_dir, timeout)
+        if any(p["field"] == "credit" for p in model.params) and isinstance(rows, list):
+            rows = [{p["param"]: "v0" for p in model.params}] + rows
+        return rows
+
+    def with_assume(ep, cons, catalog, order):
+        model = real_build(ep, cons, catalog, order)
+        if extra_undetermined and any(p["field"] == "credit" for p in model.params):
+            model.row_undetermined = list(extra_undetermined)
+        return model
+    monkeypatch.setattr(pw, "run_pict", with_baseline_row)
+    monkeypatch.setattr(pw, "build_model", with_assume)
+    return _derive_render(_kinds_bundle(tmp_path, name=bundle_dir), tmp_path, _available(tmp_path, pict_tool), bundle_dir)
+
+
+def test_req308_label_merge_premise(tmp_path, pict_tool, monkeypatch):
+    """모두-v0 행을 baseline-valid로 병합해도 되는 전제(요청 값이 같다)를 후보 종류별로 확인한다."""
+    _, doc, pairwise_doc = _merged_baseline_fixture(monkeypatch, "premise", tmp_path, pict_tool)
+    endpoint = pairwise_doc["endpoints"][MAKE]
+    merged = [r for r in endpoint["rows"] if r["mergedInto"] and set(r["labels"].values()) == {"v0"}]
+    assert len(merged) == 1 and "assumes" not in merged[0]  # 가정이 없으면 키를 쓰지 않는다
+    target = next(c for c in doc["cases"] if c["id"] == merged[0]["mergedInto"])
+    assert target["rule"] == "baseline-valid"
+    kinds_seen = set()
+    for param in endpoint["params"]:  # 모델 필드: all-v0 행이 만드는 값 = param의 v0 후보
+        candidate = next(c for c in param["candidates"] if c["label"] == "v0")
+        key = f"{param['loc']}.{param['field']}"
+        kinds_seen.add(candidate["kind"])
+        assert _matches(candidate, key, target["values"]), (key, candidate, target["values"].get(key))
+    for name, fixed in endpoint["fixed"].items():  # 고정 필드: 모든 행 공통 baseline 값 = 병합 대상의 값
+        assert _matches(fixed, name, target["values"]), (name, fixed, target["values"].get(name))
+    assert "uniq" in kinds_seen  # uniq는 접두(`uniq:`)로만 비교한다 = 케이스 id로만 달라지는 자리표시
+
+
+def test_req308_merged_row_assumes_recorded(tmp_path, pict_tool, monkeypatch):
+    """병합된 모두-v0 행의 가정은 pairwise.json rows[].assumes에 남고, 스키마를 통과한다."""
+    _, doc, pairwise_doc = _merged_baseline_fixture(monkeypatch, "assumed", tmp_path, pict_tool, ["X-addr"])
+    rows = pairwise_doc["endpoints"][MAKE]["rows"]
+    merged = [r for r in rows if set(r["labels"].values()) == {"v0"} and r["mergedInto"]]
+    assert merged and merged[0]["assumes"] == ["undetermined:X-addr"]
+    assert all("assumes" not in r for r in rows if r is not merged[0])  # 병합이 아닌 행의 가정은 케이스 assumes에 있다
+    _schema_check(pairwise_doc)
+
+
 def test_req308_rel_combined(tmp_path, pict_tool):
     bundle = _real_bundle(tmp_path)
     deriver = _deriver(bundle)

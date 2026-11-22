@@ -1163,7 +1163,15 @@ def test_det_gen_id_and_record_shape(tmp_path, pict_tool):
     assert not list((out_root / "det").glob(".tmp-*"))
 
 
-def test_det_reuse_snapshot(tmp_path, pict_tool):
+# 아래 세 테스트는 스냅샷 재사용·변조·재생성 로직만 본다: pict 없는 unavailable 경로로 오프라인에서 돈다.
+def _det_run_offline(tmp_path, name="run"):
+    """tools.lock에 pict 키가 없는 run 사본(unavailable 경로, 네트워크·툴체인 불필요). det generation은 degraded다."""
+    run = _det_run(tmp_path, name)
+    write_tools_lock(run)
+    return run
+
+
+def test_det_reuse_snapshot(tmp_path):
     out_root = tmp_path / "generated" / "petclinic"
     calls = []
 
@@ -1171,31 +1179,31 @@ def test_det_reuse_snapshot(tmp_path, pict_tool):
         calls.append(gen_dir)
         return bddgen.Issues()
 
-    first = det_stage.generate_det(_det_run(tmp_path, "a", pict=pict_tool), SUT_FILE, out_root, False, validator=counting)
+    first = det_stage.generate_det(_det_run_offline(tmp_path, "a"), SUT_FILE, out_root, False, validator=counting)
     before = _snapshot_files(first.dir)
-    second = det_stage.generate_det(_det_run(tmp_path, "b", pict=pict_tool), SUT_FILE, out_root, False, validator=counting)
+    second = det_stage.generate_det(_det_run_offline(tmp_path, "b"), SUT_FILE, out_root, False, validator=counting)
     assert first.reused is False and second.reused is True
-    assert second.gen_id == first.gen_id and second.status == "passed"
+    assert second.gen_id == first.gen_id and second.status == "degraded"  # pict 없음 = unavailable 경로
     assert len(calls) == 1
     assert _snapshot_files(second.dir) == before
 
 
-def test_det_tampered_snapshot_is_failed_not_overwritten(tmp_path, pict_tool):
+def test_det_tampered_snapshot_is_failed_not_overwritten(tmp_path):
     out_root = tmp_path / "generated" / "petclinic"
-    first = det_stage.generate_det(_det_run(tmp_path, "a", pict=pict_tool), SUT_FILE, out_root, False, validator=_clean_validator)
+    first = det_stage.generate_det(_det_run_offline(tmp_path, "a"), SUT_FILE, out_root, False, validator=_clean_validator)
     target = first.dir / "cases.json"
     target.write_text(target.read_text(encoding="utf-8") + " ", encoding="utf-8")
-    second = det_stage.generate_det(_det_run(tmp_path, "b", pict=pict_tool), SUT_FILE, out_root, False, validator=_clean_validator)
+    second = det_stage.generate_det(_det_run_offline(tmp_path, "b"), SUT_FILE, out_root, False, validator=_clean_validator)
     assert second.status == "failed" and "_COMPLETE" in second.reason
     assert target.read_text(encoding="utf-8").endswith(" ")
 
 
-def test_det_regenerate_checksum_warning(tmp_path, monkeypatch, pict_tool):
+def test_det_regenerate_checksum_warning(tmp_path, monkeypatch):
     out_root = tmp_path / "generated" / "petclinic"
-    first = det_stage.generate_det(_det_run(tmp_path, "a", pict=pict_tool), SUT_FILE, out_root, False, validator=_clean_validator)
+    first = det_stage.generate_det(_det_run_offline(tmp_path, "a"), SUT_FILE, out_root, False, validator=_clean_validator)
     # 같은 입력 재생성: 체크섬이 같으면 경고가 없다
-    same = det_stage.generate_det(_det_run(tmp_path, "b", pict=pict_tool), SUT_FILE, out_root, True, validator=_clean_validator)
-    assert same.status == "passed" and same.reused is False and same.gen_id == first.gen_id
+    same = det_stage.generate_det(_det_run_offline(tmp_path, "b"), SUT_FILE, out_root, True, validator=_clean_validator)
+    assert same.status == "degraded" and same.reused is False and same.gen_id == first.gen_id
     assert "warnings" not in same.record or same.record["warnings"] == []
     # 키를 고정한 채(glue_checksum 고정) 렌더 결과를 바꾸면 checksum-changed 경고를 남기고 교체한다
     fixed = render_mod.glue_checksum()
@@ -1205,8 +1213,8 @@ def test_det_regenerate_checksum_warning(tmp_path, monkeypatch, pict_tool):
     java.write_text(java.read_text(encoding="utf-8") + "\n// changed\n", encoding="utf-8")
     monkeypatch.setattr(render_mod, "GLUE_DIR", glue_copy)
     monkeypatch.setattr(render_mod, "glue_checksum", lambda root=None: fixed)
-    changed = det_stage.generate_det(_det_run(tmp_path, "c", pict=pict_tool), SUT_FILE, out_root, True, validator=_clean_validator)
-    assert changed.gen_id == first.gen_id and changed.status == "passed"
+    changed = det_stage.generate_det(_det_run_offline(tmp_path, "c"), SUT_FILE, out_root, True, validator=_clean_validator)
+    assert changed.gen_id == first.gen_id and changed.status == "degraded"
     assert "checksum-changed" in changed.record["warnings"]
     assert java.read_bytes() in {p.read_bytes() for p in changed.dir.rglob("*.java")}
     assert bddgen.complete_problem(changed.dir, changed.record["inputHash"]) is None

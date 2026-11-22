@@ -114,7 +114,8 @@
                 "additionalProperties": {"$ref": "#/$defs/label"}
               },
               "caseId": {"type": ["string", "null"]},
-              "mergedInto": {"type": ["string", "null"]}
+              "mergedInto": {"type": ["string", "null"]},
+              "assumes": {"type": "array", "items": {"type": "string"}}
             }
           }
         }
