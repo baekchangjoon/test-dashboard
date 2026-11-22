@@ -117,6 +117,29 @@ def _require_det_pairwise_session(item):  # pragma: no cover - 위 훅에서 호
         pytest.fail(f"det pairwise 세션 파일에 필수 키가 없다: {missing}", pytrace=False)
 
 
+# --- PICT 고정 빌드(det pairwise) ------------------------------------------------------
+PICT_TEST_TOOLS_DIR = REPO_ROOT / "work" / "test-tools"
+
+
+@pytest.fixture(scope="session")
+def pict_tool(tmp_path_factory) -> dict:
+    """tools.pin.yaml의 고정 커밋 pict를 `work/test-tools/pict`에 `td_prepare_pict`로 빌드한다(스탬프가 맞으면 재사용).
+
+    돌려주는 값은 tools.lock pict 항목과 같은 모양 `{path, commit, binarySha256}`(path는 문자열)이다.
+    공유 캐시 work/tools는 쓰지 않는다. 준비에 실패하면 skip이 아니라 실패한다."""
+    out_json = tmp_path_factory.mktemp("pict-tool") / "pict.json"
+    script = REPO_ROOT / "pipeline" / "lib" / "pict.sh"
+    proc = subprocess.run(["bash", "-c", 'source "$1"; td_prepare_pict "$2" "$3"', "_", str(script),
+                           str(PICT_TEST_TOOLS_DIR), str(out_json)],
+                          capture_output=True, text=True, timeout=900)
+    if proc.returncode != 0 or not out_json.exists():
+        pytest.fail(f"pict_tool: td_prepare_pict 실행 실패(rc={proc.returncode}): {proc.stderr[-1500:]}", pytrace=False)
+    result = json.loads(out_json.read_text())
+    if "failure" in result:
+        pytest.fail(f"pict_tool: 고정 PICT 준비 실패({result['failure']}): {result.get('detail', '')}", pytrace=False)
+    return result
+
+
 # --- 세션 식별 -------------------------------------------------------------------
 @pytest.fixture(scope="session")
 def session_id() -> str:

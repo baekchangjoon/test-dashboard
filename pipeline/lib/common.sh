@@ -53,6 +53,21 @@ from td import state
 sys.exit(0 if sys.argv[2] in state.requested_arms(sys.argv[1]) else 1)' "${TD_RUN_DIR:?TD_RUN_DIR가 필요하다}" "${1:?arm}"
 }
 
+# fetch_git_tool <dir> <gh|https> <repo-slug> <pin-commit>
+# git 도구: 없으면 clone, 고정 커밋이 없으면 fetch, 그리고 detach checkout. 전체 sha를 stdout에 낸다(실패 return 1).
+# (전역 git hook이 clone/checkout마다 .codegraph를 만들어 도구 소스를 오염시키므로 core.hooksPath를 끈다)
+fetch_git_tool() {
+  local dir="$1" mode="$2" slug="$3" pin="$4"
+  if [[ ! -d "$dir/.git" ]]; then
+    if [[ "$mode" == "gh" ]]; then td_run 600 -- gh repo clone "$slug" "$dir" -- --quiet -c core.hooksPath=/dev/null >&2
+    else td_run 600 -- git -c core.hooksPath=/dev/null clone --quiet "https://github.com/$slug.git" "$dir" >&2; fi || return 1
+  elif ! git -C "$dir" cat-file -e "${pin}^{commit}" 2>/dev/null; then
+    td_run 600 -- git -c core.hooksPath=/dev/null -C "$dir" fetch --quiet --tags origin >&2 || return 1
+  fi
+  td_run 120 -- git -c core.hooksPath=/dev/null -C "$dir" checkout --detach --force --quiet "${pin}^{commit}" >&2 || return 1
+  git -C "$dir" rev-parse HEAD
+}
+
 # --- 단계 수명주기 ------------------------------------------------------------------
 td_stage_begin() { td_py -m td.state begin "${TD_RUN_DIR:?TD_RUN_DIR가 필요하다}" "$1"; }
 

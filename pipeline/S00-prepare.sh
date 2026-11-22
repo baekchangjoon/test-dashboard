@@ -4,6 +4,7 @@
 # SUT를 한 번 띄워 비인증 응답 코드를 실측하고 sut.yaml auth.unauthenticated_status와 대조한다(Task 4).
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/common.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/env.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/pict.sh"
 
 TOOLS_DIR="$TD_WORK_DIR/tools"
 SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/td-s00.XXXXXX")"
@@ -50,19 +51,7 @@ s00_py fetch-artifacts "$TOOLS_DIR"
 printf '%s\n' "$S00_OUT" > "$TD_RUN_DIR/S00/artifacts.json"
 td_log "S00 artifacts: $(jq -r 'keys | join(",")' "$TD_RUN_DIR/S00/artifacts.json")"
 
-# git 도구: 없으면 clone, 고정 커밋이 없으면 fetch, 그리고 detach checkout. 전체 sha를 돌려준다.
-fetch_git_tool() { # <dir> <gh|https> <repo-slug> <pin-commit>
-  local dir="$1" mode="$2" slug="$3" pin="$4"
-  if [[ ! -d "$dir/.git" ]]; then
-    if [[ "$mode" == "gh" ]]; then td_run 600 -- gh repo clone "$slug" "$dir" -- --quiet -c core.hooksPath=/dev/null >&2
-    else td_run 600 -- git -c core.hooksPath=/dev/null clone --quiet "https://github.com/$slug.git" "$dir" >&2; fi || return 1
-  elif ! git -C "$dir" cat-file -e "${pin}^{commit}" 2>/dev/null; then
-    td_run 600 -- git -c core.hooksPath=/dev/null -C "$dir" fetch --quiet --tags origin >&2 || return 1
-  fi
-  td_run 120 -- git -c core.hooksPath=/dev/null -C "$dir" checkout --detach --force --quiet "${pin}^{commit}" >&2 || return 1
-  git -C "$dir" rev-parse HEAD
-}
-
+# git 도구는 lib/common.sh의 fetch_git_tool로 받는다(clone/fetch + 고정 커밋 detach checkout).
 s00_py pin-get tia.commit; TIA_PIN="$S00_OUT"
 s00_py pin-get tia.repo; TIA_REPO="$S00_OUT"
 TIA_SRC="$TOOLS_DIR/tia-src"
@@ -124,6 +113,13 @@ if [[ "$(cat "$BBTG_DIR/.venv/.td-stamp" 2>/dev/null)" != "$VENV_STAMP" ]]; then
     || s00_fail "bbtg requirements 설치 실패"
   echo "$VENV_STAMP" > "$BBTG_DIR/.venv/.td-stamp"
 fi
+
+# PICT: det가 요청된 run에서만 고정 커밋을 빌드한다. 실패해도 S00은 계속하고(경고) tools.lock에 pict: null을 적는다.
+PICT_JSON="$TD_RUN_DIR/S00/pict.json"
+rm -f "$PICT_JSON"
+td_s00_prepare_pict "${TD_PICT_TOOLS_DIR:-$TOOLS_DIR}" "$PICT_JSON"
+PICT_LOCK_ARGS=()
+[[ -f "$PICT_JSON" ]] && PICT_LOCK_ARGS=(--pict-json "$PICT_JSON")
 
 # jQA: 설정 파일로 Spring 플러그인을 로딩해 보고 플러그인 목록을 얻는다(Maven Central에서 받아 온다).
 JQA_VERIFY_DIR="$TOOLS_DIR/jqassistant-verify"
@@ -189,7 +185,8 @@ s00_py write-lock --run-dir "$TD_RUN_DIR" --run-id "$TD_RUN_ID" --sut "$TD_SUT_N
   --artifacts "$TD_RUN_DIR/S00/artifacts.json" --tia-commit "$TIA_COMMIT" \
   --hotspot-commit "$HOTSPOT_COMMIT" --hotspot-jar "$HOTSPOT_JAR" --bbtg-commit "$BBTG_COMMIT" \
   --bbtg-requirements-sha256 "$REQ_SHA" --claude-version "$CLAUDE_VERSION" --model "$MODEL" \
-  --jqa-plugins "$TD_RUN_DIR/S00/jqa-plugins.json" --python-version "$PY_VERSION" --claude-verified true
+  --jqa-plugins "$TD_RUN_DIR/S00/jqa-plugins.json" --python-version "$PY_VERSION" --claude-verified true \
+  ${PICT_LOCK_ARGS[@]+"${PICT_LOCK_ARGS[@]}"}
 LOCK_FILE="$S00_OUT"
 TOOLS_SUMMARY="$(jq -c --arg model "$MODEL" --arg cv "$CLAUDE_VERSION" \
   '{pjacoco: .pjacoco.version, jacococli: .jacococli.version, jqassistant: .jqassistant.version,

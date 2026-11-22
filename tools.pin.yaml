@@ -45,6 +45,11 @@ bbtg:
   repo: baekchangjoon/bbtg   # 비공개: gh 인증이 필요하다
   commit: 83ea6fdb51934a6202084aeb660d92de8e0e9b56
   python: '3.12'
+# PICT(pairwise 조합 생성기): det가 요청된 run에서만 S00이 고정 커밋을 소스에서 빌드한다(make, clang++). brew·PATH의 pict는 쓰지 않는다.
+pict:
+  repo: microsoft/pict
+  commit: d529bb1535b725c8f29704f183b23dd344895d02
+  tag: v3.7.4
 libraries:
   cucumber: 8.1.0
   restAssured: 5.5.1

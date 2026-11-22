@@ -233,3 +233,42 @@ def test_write_lock_same_run_retry_allows_identical_only(tmp_path):
     with pytest.raises(prepare.PrepareError) as excinfo:
         prepare.write_lock(tmp_path, _lock(model="different"))
     assert "이미 있고 내용이 다르다" in str(excinfo.value)
+
+
+# --- det pairwise: pict 항목(REQ-301, REQ-302) ---------------------------------------------------------------
+PICT_OK = {"commit": "d529bb1535b725c8f29704f183b23dd344895d02", "binarySha256": "e" * 64, "path": "/t/pict/pict"}
+
+
+def test_req301_short_pict_commit_fails(tmp_path):
+    pin = yaml.safe_load((REPO_ROOT / "tools.pin.yaml").read_text())
+    pin["pict"]["commit"] = "d529bb1"
+    path = tmp_path / "tools.pin.yaml"
+    path.write_text(yaml.safe_dump(pin))
+    with pytest.raises(prepare.PrepareError, match="pict.commit"):
+        prepare.load_pin(path)
+
+
+def test_req301_pict_lock_fields():
+    assert "pict" not in _lock() and "pictFailureReason" not in _lock()  # 미요청: 키 없음
+    lock = _lock(pict_result=PICT_OK)
+    assert lock["pict"] == PICT_OK and "pictFailureReason" not in lock
+    for code in ("clone-failed", "build-failed", "smoke-mismatch"):
+        lock = _lock(pict_result={"failure": code, "detail": "/Users/someone/work/tools 상세는 lock에 들어가지 않는다"})
+        assert lock["pict"] is None and lock["pictFailureReason"] == code
+        assert "상세" not in yaml.safe_dump(lock, allow_unicode=True)
+    with pytest.raises(prepare.PrepareError):  # pin과 다른 커밋
+        _lock(pict_result={**PICT_OK, "commit": "0" * 40})
+    with pytest.raises(prepare.PrepareError):  # 알 수 없는 실패 코드
+        _lock(pict_result={"failure": "weird", "detail": ""})
+
+
+def test_req302_write_lock_pict_change_keeps_existing_and_warns(tmp_path, capsys):
+    path = prepare.write_lock(tmp_path, _lock(pict_result={"failure": "build-failed", "detail": "x"}))
+    before = path.read_text()
+    # 같은 run 재실행에서 pict 상태만 바뀌면(실패→성공, 미요청) S00을 실패시키지 않고 기존 lock을 유지한다
+    assert prepare.write_lock(tmp_path, _lock(pict_result=PICT_OK)) == path
+    assert prepare.write_lock(tmp_path, _lock()) == path
+    assert path.read_text() == before
+    assert "pict" in capsys.readouterr().err
+    with pytest.raises(prepare.PrepareError):  # pict 밖의 차이는 여전히 불변 위반
+        prepare.write_lock(tmp_path, _lock(model="different", pict_result={"failure": "build-failed", "detail": "x"}))
