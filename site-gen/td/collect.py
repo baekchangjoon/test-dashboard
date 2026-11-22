@@ -42,8 +42,7 @@ from td import sonar as sonar_api
 from td.dashboard_config import Config, ConfigError, Project
 from td.site.metrics import COLLECT_STATE_FILE, load_snapshots
 
-CONNECT_TIMEOUT_SEC = 10
-READ_TIMEOUT_SEC = 30
+READ_TIMEOUT_SEC = 30          # 요청당 읽기 제한(남은 전체 예산보다 길면 남은 예산으로 줄인다)
 RETRIES = 2
 RETRY_DELAYS_SEC = (2, 4)
 BUDGET_SEC = 300
@@ -294,7 +293,7 @@ def check_repos(cfg: Config) -> None:
         if project.repo is None:
             continue
         segments = project.repo.split("/")
-        if not REPO_PATTERN.match(project.repo) or any(segment in (".", "..") for segment in segments):
+        if not REPO_PATTERN.fullmatch(project.repo) or any(segment in (".", "..") for segment in segments):
             raise ConfigError(f"{where_file}projects[{index}].repo: 'owner/name' 모양({REPO_PATTERN.pattern})이어야 하고 "
                               f"'.'·'..' 구간은 쓸 수 없다: {project.repo!r}")
 

@@ -118,7 +118,7 @@ def _key_path(parts: Iterable) -> str:
 
 
 def _check_schema(data) -> None:
-    validator = Draft202012Validator(json.loads(SCHEMA_PATH.read_text()))
+    validator = Draft202012Validator(json.loads(SCHEMA_PATH.read_text(encoding="utf-8")))
     errors = sorted(validator.iter_errors(data), key=lambda err: [str(part) for part in err.absolute_path])
     if errors:
         raise ConfigError("; ".join(f"{_key_path(err.absolute_path)}: {err.message}" for err in errors))
@@ -131,7 +131,7 @@ def _check_projects(projects: list[dict], suts_dir: Path) -> None:
     for index, project in enumerate(projects):
         name = project["name"]
         where = f"projects[{index}]"
-        if not NAME_PATTERN.match(name) or ".." in name:
+        if not NAME_PATTERN.fullmatch(name) or ".." in name:
             raise ConfigError(f"{where}.name: 과제 이름은 {NAME_PATTERN.pattern} 이어야 하고 '..'를 포함할 수 없다: {name!r}")
         if name.lower() in seen_names:
             raise ConfigError(f"{where}.name: 대소문자를 무시하면 projects[{seen_names[name.lower()]}]와 같은 이름이다: {name!r}")
@@ -143,7 +143,7 @@ def _check_projects(projects: list[dict], suts_dir: Path) -> None:
             seen_repos[repo] = index
         sut = project.get("sut")
         if sut is not None:
-            if not NAME_PATTERN.match(sut) or ".." in sut or not (suts_dir / sut / "sut.yaml").is_file():
+            if not NAME_PATTERN.fullmatch(sut) or ".." in sut or not (suts_dir / sut / "sut.yaml").is_file():
                 raise ConfigError(f"{where}.sut: {suts_dir / sut / 'sut.yaml'} 파일이 없다: {sut!r}")
             if sut in seen_suts:
                 raise ConfigError(f"{where}.sut: projects[{seen_suts[sut]}]가 이미 가리키는 sut다: {sut!r}")
@@ -248,7 +248,9 @@ def load(path: Path, suts_dir: Path) -> Config:
     """설정 파일을 읽어 스키마, 과제 등록 규칙, 카탈로그 대조를 모두 통과시킨 `Config`를 돌려준다."""
     path = Path(path)
     try:
-        data = yaml.safe_load(path.read_text())
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except UnicodeDecodeError as exc:
+        raise ConfigError(f"{path}: UTF-8로 읽을 수 없다: {exc.reason} (바이트 위치 {exc.start})") from None
     except OSError as exc:
         raise ConfigError(f"{path}: 읽을 수 없다: {exc}") from exc
     except yaml.YAMLError as exc:
@@ -394,6 +396,7 @@ OPERATORS = {"eq": operator.eq, "ne": operator.ne, "lt": operator.lt,
              "le": operator.le, "gt": operator.gt, "ge": operator.ge}
 OPERATOR_SYMBOLS = {"eq": "=", "ne": "≠", "lt": "<", "le": "≤", "gt": ">", "ge": "≥"}
 HEADLINE_NO_METRICS = "측정된 지표가 없습니다"
+HEADLINE_DEFAULT = "판정 규칙에 걸린 항목이 없습니다"   # 설정의 결론 문장이 하나도 맞지 않을 때(빈 <h1>을 내지 않는다)
 
 
 @dataclass(frozen=True)
@@ -462,9 +465,9 @@ def headline(values: Mapping[str, object], verdict: Verdict, cfg: Config) -> str
         if "when" in item and not _holds(item["when"], values):
             continue
         text = _substitute(item["text"], values)
-        if text is not None:
+        if text is not None and text.strip():
             return text
-    return ""
+    return HEADLINE_DEFAULT
 
 
 def _condition_text(condition: dict) -> str:

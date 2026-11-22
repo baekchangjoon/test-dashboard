@@ -62,7 +62,7 @@
       "required": ["summary", "columns"],
       "properties": {
         "summary": {"type": "array", "items": {"type": "string"}},
-        "columns": {"type": "array", "items": {"type": "string"}}
+        "columns": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}
       }
     },
     "project": {
@@ -70,7 +70,7 @@
       "additionalProperties": false,
       "required": ["tabs", "trend"],
       "properties": {
-        "tabs": {"type": "array", "items": {"type": "string"}},
+        "tabs": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
         "trend": {
           "type": "object",
           "additionalProperties": false,

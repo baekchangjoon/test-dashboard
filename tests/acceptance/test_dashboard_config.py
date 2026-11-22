@@ -191,3 +191,57 @@ def test_req076_cli_fails_before_writing(tmp_path, body, where):
     message = proc.stderr.replace(str(bad), "<config>")    # 임시 경로 이름에 영향받지 않게 한다
     assert proc.returncode == 2 and where in message and not (site / "index.html").exists()
     assert sorted(path.relative_to(site) for path in site.rglob("*")) == before
+
+
+# --- 최종 리뷰 수정 --------------------------------------------------------------------------------
+def test_names_with_trailing_newline_are_rejected(tmp_path):
+    """`$`는 끝 줄바꿈 앞에서도 맞는다. 이름·sut는 전체 일치(fullmatch)로 확인한다."""
+    assert "projects[0].name" in failure_text(tmp_path, one_project(name="mini\n"))
+    assert "projects[0].sut" in failure_text(tmp_path, one_project(name="a", sut="petclinic\n"))
+    from td import collect
+    cfg = dashboard_config.empty()
+    import dataclasses
+    newline_repo = dataclasses.replace(cfg, projects=(dashboard_config.Project("a", "o/a\n", None, None),))
+    with pytest.raises(ConfigError, match=r"projects\[0\]\.repo"):
+        collect.check_repos(newline_repo)
+
+
+def test_duplicate_columns_or_tabs_fail(tmp_path):
+    assert "home.columns" in failure_text(tmp_path, COLUMN("status"))
+    assert "project.tabs" in failure_text(tmp_path, TAB("overview"))
+
+
+def test_non_utf8_config_is_config_error(tmp_path):
+    path = tmp_path / "dashboard.yaml"
+    path.write_bytes("schema: 1\nprojects: []\n# 설명\n".encode("euc-kr"))
+    with pytest.raises(ConfigError, match="UTF-8"):
+        dashboard_config.load(path, SUTS_DIR)
+
+
+def test_non_utf8_config_cli_exit_code_2(tmp_path):
+    from dashboard_fixtures import RUN_A, make_site
+    site = make_site(tmp_path, runs={"pet": [RUN_A]})
+    bad = tmp_path / "bad.yaml"
+    bad.write_bytes("schema: 1\nprojects: []\n# 설명\n".encode("euc-kr"))
+    proc = subprocess.run([sys.executable, "-m", "td.site.index", str(site), "--config", str(bad)],
+                          capture_output=True, text=True, cwd=SITE_GEN)
+    assert proc.returncode == 2 and "UTF-8" in proc.stderr and not (site / "index.html").exists()
+
+
+def test_headline_is_never_empty(tmp_path):
+    no_headlines = dashboard_config.load(write(tmp_path, mutated(lambda data: data["project"].update(headline=[]))),
+                                         SUTS_DIR)
+    good = dashboard_config.Verdict("good", (), False)
+    assert dashboard_config.headline({}, good, no_headlines) == dashboard_config.HEADLINE_DEFAULT
+    unmet = dashboard_config.load(write(tmp_path, mutated(lambda data: data["project"].update(headline=[
+        {"when": {"metric": "tests.passRate", "op": "eq", "value": 1}, "text": "x"}, {"text": "{coverage.line}"}]))),
+        SUTS_DIR)
+    assert dashboard_config.headline({"tests.passRate": 0.5}, good, unmet) == dashboard_config.HEADLINE_DEFAULT
+    assert dashboard_config.HEADLINE_DEFAULT.strip()
+
+
+def test_slash_site_prefix_resolves_repo_root_config():
+    for raw in ("/", "//", ""):
+        assert len(dashboard_config.resolve({"TD_SITE_PREFIX": raw}, REPO_ROOT).projects) == 20
+    assert dashboard_config.resolve({"TD_SITE_PREFIX": "/_test/x/"}, REPO_ROOT).projects == ()
+    assert dashboard_config.resolve({"TD_SITE_PREFIX": "/"}, REPO_ROOT, site_prefix="_test/x/").projects == ()
