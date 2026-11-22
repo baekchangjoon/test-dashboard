@@ -1,0 +1,81 @@
+[
+ {
+  "class": "ItemService",
+  "file": "plan-tests-ItemService.put.json",
+  "items": [
+   {
+    "branch_value": "400",
+    "condition": "form.qty() < 1 || form.qty() > 99",
+    "expected": "ItemInvalidException code=400",
+    "index": 0,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   },
+   {
+    "branch_value": "business_branch",
+    "condition": "form.qty() < 1",
+    "expected": "분기 진입: 작은 수량 경로",
+    "index": 1,
+    "param": "(from scenarios)",
+    "prefix": "happyPath"
+   },
+   {
+    "branch_value": "business_branch",
+    "condition": "form.qty() > 50",
+    "expected": "분기 진입: 대량 경로",
+    "index": 2,
+    "param": "(from scenarios)",
+    "prefix": "happyPath"
+   },
+   {
+    "branch_value": "400",
+    "condition": "repository.countBySlot(form.slot()) >= SLOT_LIMIT",
+    "expected": "ItemInvalidException code=400",
+    "index": 3,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   },
+   {
+    "branch_value": "400",
+    "condition": "form.code().length() > maxLen",
+    "expected": "ItemInvalidException code=400",
+    "index": 4,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   },
+   {
+    "branch_value": "400",
+    "condition": "\"</script><img onerror=x>\".equals(form.code())",
+    "expected": "ItemInvalidException code=400",
+    "index": 5,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   },
+   {
+    "branch_value": "400",
+    "condition": "form.note() != null",
+    "expected": "ItemInvalidException code=400",
+    "index": 6,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   },
+   {
+    "branch_value": "400",
+    "condition": "form.note().length() < 2 || form.note().length() > 10",
+    "expected": "ItemInvalidException code=400",
+    "index": 7,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   },
+   {
+    "branch_value": "400",
+    "condition": "form.q() == null",
+    "expected": "ItemInvalidException code=400",
+    "index": 8,
+    "param": "(from scenarios)",
+    "prefix": "errorPath"
+   }
+  ],
+  "method": "put"
+ }
+]

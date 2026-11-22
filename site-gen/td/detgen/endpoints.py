@@ -58,6 +58,9 @@ class Endpoint:
     state_fields: set = field(default_factory=set)  # 미해결 메서드의 인자·수신자로 쓰인 enum 요청 필드
     count_fields: set = field(default_factory=set)  # count 질의 인자로 쓰인 요청 필드(해석 여부와 무관)
     extra_classes: set = field(default_factory=set)  # 변환은 못 했지만 필드는 아는 원자식(모수 계산용)
+    # 클래스 레지스트리(det-viz §5.1). 키는 (필드 이름, classKey). 출처 주소(`~` 제거)와 kind 후보를 모은다
+    class_sources: dict = field(default_factory=dict)
+    class_kinds: dict = field(default_factory=dict)
 
 
 def simple(fqn: str) -> str:

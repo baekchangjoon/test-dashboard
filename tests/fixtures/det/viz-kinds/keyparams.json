@@ -1,0 +1,23 @@
+[
+ {
+  "class": "ItemService",
+  "file": "ItemService_put.json",
+  "method": "put",
+  "parameters": [
+   {
+    "accessor": "form",
+    "http_name": "",
+    "java_type": "ItemForm",
+    "name": "form",
+    "reasons": []
+   },
+   {
+    "accessor": "q",
+    "http_name": "q",
+    "java_type": "String",
+    "name": "q",
+    "reasons": []
+   }
+  ]
+ }
+]

@@ -1,0 +1,39 @@
+{
+ "edges": [],
+ "meta": {},
+ "nodes": [
+  {
+   "id": "endpoint:POST /vk/items",
+   "kind": "Endpoint",
+   "label": "POST /vk/items",
+   "props": {
+    "anyMethod": false,
+    "handler": "ex.kinds.ItemController#put",
+    "method": "POST",
+    "path": "/vk/items",
+    "view": false
+   }
+  },
+  {
+   "id": "endpoint:GET /vk/ping",
+   "kind": "Endpoint",
+   "label": "GET /vk/ping",
+   "props": {
+    "anyMethod": false,
+    "handler": "ex.kinds.PingController#ping",
+    "method": "GET",
+    "path": "/vk/ping",
+    "view": false
+   }
+  },
+  {
+   "id": "exception:ex.kinds.ItemInvalidException",
+   "kind": "Exception",
+   "label": "ItemInvalidException",
+   "props": {
+    "fqn": "ex.kinds.ItemInvalidException",
+    "handlers": []
+   }
+  }
+ ]
+}

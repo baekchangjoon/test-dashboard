@@ -1,0 +1,6 @@
+{
+ "apiInclude": "/vk/**",
+ "login": "POST /vk/session",
+ "timezone": "UTC",
+ "unauthenticatedStatus": 403
+}
