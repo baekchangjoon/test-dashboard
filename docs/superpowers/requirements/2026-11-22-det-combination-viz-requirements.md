@@ -124,4 +124,4 @@
 | REQ-213 | 결과 결합 | test_unit_detviz.py::test_req213_status_mapping<br>test_det_viz.py::test_req213_passed_matches_summary | Unit/E2E | 🟢 passed |
 | REQ-214 | 문서 갱신 | test_unit_detviz.py::test_req214_docs | Unit | 🟢 passed |
 
-커버리지 대상: REQ-201~214(14건). 제외: 없음. 상태 기준: run `20261122-061141Z-b6f9393-manual-f4f4d51f`(게시 `_test/det-viz-20261122b/`, det generation `det-a6397f85-r1`), E2E 16 passed(det_viz_e2e 10 + det_e2e 6), 단위·통합 테스트. 매트릭스 커버리지 14/14.
+커버리지 대상: REQ-201~214(14건). 제외: 없음. 상태 기준: run `20261122-061141Z-b6f9393-manual-f4f4d51f`(게시 `_test/det-viz-20261122b/`, det generation `det-a6397f85-r1`), E2E 16 passed(det_viz_e2e 9 + det_e2e 7), 단위·통합 테스트. 매트릭스 커버리지 14/14.
