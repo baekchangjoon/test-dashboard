@@ -137,8 +137,8 @@ def _oracle(gen_dir: Path, order: int | None = None) -> dict:
     order = order or pairwise["order"]
     result = {}
     for label, doc in pairwise["endpoints"].items():
-        if doc.get("skipped") or not doc.get("rows"):
-            result[label] = {"feasible": 0, "covered": 0, "uncovered": [], "skipped": doc.get("skipped")}
+        if doc.get("skipped") or doc.get("reason"):  # universe.pairwise.byEndpoint도 skipped·reason 엔드포인트를 뺀다
+            result[label] = {"feasible": 0, "covered": 0, "uncovered": [], "skipped": doc.get("skipped") or doc.get("reason")}
             continue
         effective = min(order, len(doc["params"]))  # 문서의 effectiveOrder를 믿지 않고 독립 계산
         feasible = _feasible_tuples(doc, effective)
@@ -230,6 +230,7 @@ def test_req309_feasible_interactions_real(run_dir):
     by_endpoint = universe["byEndpoint"]
     for label, item in oracle.items():
         if item.get("skipped"):
+            assert label not in by_endpoint, label
             continue
         reported = by_endpoint[label]
         assert (item["feasible"], item["covered"]) == (reported["interactionsFeasible"], reported["interactionsCovered"]), \

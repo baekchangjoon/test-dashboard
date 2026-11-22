@@ -546,7 +546,7 @@ class _Deriver:
             sources = [source] + sorted({addr.rstrip("~") for addr, _ in ep.error_disjuncts}
                                         | {addr for addr, _ in ep.branch_disjuncts})
             rels = [(addr, con) for addr, cons in ep.error_disjuncts if not addr.endswith("~") for con in cons if con.op == "rel"]
-            params = {p["field"]: p for p in model.params}
+            params = {f'{p["loc"]}.{p["field"]}': p for p in model.params}  # 같은 이름의 body·query 필드를 구별한다
             # 라벨이 모두 baseline(v0)인 행은 같은 엔드포인트의 기존 유효 케이스(baseline-valid, 없으면 happy)로 병합한다(라벨 기준)
             valid = next((d for rule in ("baseline-valid", "happy") for d in self.drafts
                           if d.ep is ep and d.rule == rule and d.reason is None), None)
@@ -565,7 +565,8 @@ class _Deriver:
             targets[(param["loc"], param["field"])] = candidate.value
         assumes = pairwise_mod.row_assumes_for(model, labels)
         for addr, con in rels:  # 관계식 상대편 필드가 baseline이 아니면 가정이 약해질 수 있다
-            if any(name in params and labels[params[name]["param"]] != "v0" for name in con.others):
+            keys = [f"{fld.loc}.{fld.name}" for fld in (self.catalog.lookup(ep, name) for name in con.others) if fld is not None]
+            if any(key in params and labels[params[key]["param"]] != "v0" for key in keys):
                 assumes.append(f"rel-combined:{addr}")
         draft = _Draft(ep, PAIRWISE_RULE, list(sources), (PAIRWISE_RULE, index, 0, 0), targets=targets, expect=dict(_VALID),
                        assumes=sorted(set(assumes)), pairwise={"order": model.effective_order, "labels": dict(labels)}, row=row)
@@ -785,7 +786,8 @@ class _Deriver:
         self.unresolved[:] = [self.unresolved[i] for i in order]
         self._slot_cells[:] = [self._slot_cells[i] for i in order]
         cases = [d.case for d in made]
-        merged = sum(1 for d in self.drafts if d.merged)
+        # 병합 수: dedupe로 흡수된 초안 + 라벨 기준 모두-baseline이라 기존 유효 케이스로 병합한 pairwise 행
+        merged = sum(1 for d in self.drafts if d.merged) + len(self.baseline_rows)
         timezone = self.harness.get("timezone")
         pairwise_doc = self._pairwise_finish(lambda d: d.survivor.case.id if d.merged else d.case.id)
         return Derivation(cases, self.unresolved, self._universe(cases, merged),
